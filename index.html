@@ -72,7 +72,7 @@ function initFB(c){try{if(firebase.apps.length)firebase.apps.forEach(function(a)
 function loadCfg(){
   try{var v=localStorage.getItem(CFG_KEY);if(v)return JSON.parse(v);}catch(e){}
   return {apiKey:"AIzaSyC1gOlrcw5Cn_TPABn_1zma1nZ_37bNtR8",authDomain:"app-farma-b21e2.firebaseapp.com",projectId:"app-farma-b21e2",storageBucket:"app-farma-b21e2.firebasestorage.app",messagingSenderId:"501312120209",appId:"1:501312120209:web:61ef69faf3daa028562630"};
-}
+} 
 function saveCfg(c){localStorage.setItem(CFG_KEY,JSON.stringify(c));}
 function calcStock(entries){var s={};for(var i=0;i<entries.length;i++){var e=entries[i];if(!e.medicamentoId)continue;if(!s[e.medicamentoId])s[e.medicamentoId]=0;if(e.tipo==='entrada')s[e.medicamentoId]+=(e.quantidade||0);else if(e.tipo==='saida')s[e.medicamentoId]-=(e.quantidade||0);}return s;}
 function calcLatest(entries){var info={};var sorted=[];for(var i=0;i<entries.length;i++){if(entries[i].tipo==='entrada')sorted.push(entries[i]);}sorted.sort(function(a,b){return (a.criadoEm||'').localeCompare(b.criadoEm||'');});for(var j=0;j<sorted.length;j++){var e=sorted[j];if(e.medicamentoId)info[e.medicamentoId]={lote:e.lote||'',validade:e.validade||''};}return info;}
