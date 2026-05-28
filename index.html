@@ -9,7 +9,9 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone@7.23.10/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.23.10/babel.min.js"></script>
 <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
 <style>
 :root{
@@ -54,7 +56,7 @@ select.inp{cursor:pointer}
 .inf{background:var(--blue-50);border:1px solid var(--blue-200);border-radius:var(--r-md);padding:10px 14px;color:var(--blue-700);font-size:13px;margin-bottom:10px;display:flex;align-items:center;gap:8px;font-weight:500}
 
 /* ── CARD ── */
-.card{background:var(--white);border-radius:var(--r-xl);box-shadow:var(--shadow-md);border:1px solid var(--gray-200);overflow:hidden}
+.card{background:var(--white);border-radius:var(--r-xl);box-shadow:var(--shadow-md);border:1px solid var(--gray-200);}
 .ch{padding:14px 20px;border-bottom:1px solid var(--gray-100);display:flex;justify-content:space-between;align-items:center;background:var(--gray-50)}
 .ch-title{font-size:13px;font-weight:700;color:var(--gray-800);text-transform:uppercase;letter-spacing:.04em;display:flex;align-items:center;gap:8px}
 .ch-accent{width:3px;height:16px;background:var(--blue-700);border-radius:2px;flex-shrink:0}
@@ -101,7 +103,7 @@ select.inp{cursor:pointer}
 .tag-e{background:var(--green-50);color:var(--green-700);border:1px solid #86EFAC;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600}
 
 /* ── DROPDOWN ── */
-.sdrop{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--white);border:1.5px solid var(--blue-700);border-radius:var(--r-lg);z-index:20;box-shadow:var(--shadow-lg);overflow:hidden}
+.sdrop{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--white);border:1.5px solid var(--blue-700);border-radius:var(--r-lg);z-index:500;box-shadow:0 8px 32px rgba(0,0,0,0.2);max-height:320px;overflow-y:auto}
 .sdi{padding:12px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--gray-100);transition:background .12s}
 .sdi:hover{background:var(--blue-50)}
 .sdi:last-child{border-bottom:none}
@@ -139,6 +141,15 @@ select.inp{cursor:pointer}
 </style>
 </head>
 <body>
+<script>
+  var env = localStorage.getItem('farmacontrol_env') || 'prod';
+  if(env === 'dev') {
+    var banner = document.createElement('div');
+    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#F59E0B;color:#78350F;padding:12px 16px;font-weight:bold;font-size:13px;z-index:9999;text-align:center;box-shadow:0 2px 10px rgba(0,0,0,0.1)';
+    banner.innerHTML = '🧪 AMBIENTE DE TESTES (DEV) — Dados ficam separados de PRODUÇÃO';
+    document.body.appendChild(banner);
+  }
+</script>
 <div id="root"></div>
 <script type="text/babel" data-presets="react">
 var useState=React.useState,useEffect=React.useEffect,useRef=React.useRef,useMemo=React.useMemo;
@@ -156,7 +167,14 @@ function fmtISO(d){return d.toISOString().slice(0,10);}
 function isShiftTime(){var h=new Date().getHours();return h>=8&&h<20;}
 function getShiftEndHour(role){return role==='diarista'?14:20;}
 function initFB(c){try{if(firebase.apps.length)firebase.apps.forEach(function(a){a.delete();});firebase.initializeApp(c);db=firebase.firestore();auth=firebase.auth();return true;}catch(e){return false;}}
-function loadCfg(){try{var v=localStorage.getItem(CFG_KEY);if(v)return JSON.parse(v);}catch(e){}return {apiKey:"AIzaSyC1gOlrcw5Cn_TPABn_1zma1nZ_37bNtR8",authDomain:"app-farma-b21e2.firebaseapp.com",projectId:"app-farma-b21e2",storageBucket:"app-farma-b21e2.firebasestorage.app",messagingSenderId:"501312120209",appId:"1:501312120209:web:61ef69faf3daa028562630"};}
+function loadCfg(){
+  var env=localStorage.getItem('farmacontrol_env')||'prod';
+  var cfgs={
+    prod:{apiKey:"AIzaSyC1gOlrcw5Cn_TPABn_1zma1nZ_37bNtR8",authDomain:"app-farma-b21e2.firebaseapp.com",projectId:"app-farma-b21e2",storageBucket:"app-farma-b21e2.firebasestorage.app",messagingSenderId:"501312120209",appId:"1:501312120209:web:61ef69faf3daa028562630"},
+    dev:{apiKey:"AIzaSyAqk11M7PhixenCDYnG0INfIElivLmdJyw",authDomain:"farmacontrol-dev-6a3e3.firebaseapp.com",projectId:"farmacontrol-dev-6a3e3",storageBucket:"farmacontrol-dev-6a3e3.firebasestorage.app",messagingSenderId:"553772145358",appId:"1:553772145358:web:06da405d58d0385c7d4e9f"}
+  };
+  return cfgs[env];
+}
 function saveCfg(c){localStorage.setItem(CFG_KEY,JSON.stringify(c));}
 function calcStock(entries){var s={};for(var i=0;i<entries.length;i++){var e=entries[i];if(!e.medicamentoId)continue;if(!s[e.medicamentoId])s[e.medicamentoId]=0;if(e.tipo==='entrada')s[e.medicamentoId]+=(e.quantidade||0);else if(e.tipo==='saida')s[e.medicamentoId]-=(e.quantidade||0);}return s;}
 function calcLatest(entries){var info={};var sorted=[];for(var i=0;i<entries.length;i++){if(entries[i].tipo==='entrada')sorted.push(entries[i]);}sorted.sort(function(a,b){return (a.criadoEm||'').localeCompare(b.criadoEm||'');});for(var j=0;j<sorted.length;j++){var e=sorted[j];if(e.medicamentoId)info[e.medicamentoId]={lote:e.lote||'',validade:e.validade||''};}return info;}
@@ -234,7 +252,9 @@ function Auth(props){
     </div>
   );}
 
-function ShiftScreen(props){var user=props.user;var allUsers=props.allUsers;var onDone=props.onDone;var _team=useState([]);var team=_team[0];var setTeam=_team[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];var eligible=allUsers.filter(function(u){return u.id!==user.uid&&u.status==='approved'&&u.role!=='gestor'&&u.role!=='tecnico';});function toggle(u){setTeam(function(prev){if(prev.some(function(p){return p.id===u.id;}))return prev.filter(function(p){return p.id!==u.id;});return prev.concat([{id:u.id,nome:u.name,cargo:u.role,color:u.color}]);});}function startShift(){setSaving(true);var today=todayStr();var leader={id:user.uid,nome:user.name,cargo:user.role,color:user.color,status:'confirmado'};var members=team.map(function(m){return {id:m.id,nome:m.nome,cargo:m.cargo,color:m.color,status:'pendente'};});var equipe=[leader].concat(members);db.collection('plantoes').doc(today).set({iniciadoPor:user.uid,iniciadoPorNome:user.name,inicio:new Date().toISOString(),equipe:equipe,ativo:true,data:today}).then(function(){var ps=members.map(function(m){return db.collection('plantao_convites').add({para:m.id,de:user.uid,deNome:user.name,data:today,status:'pendente',criadoEm:new Date().toISOString()});});return Promise.all(ps);}).then(function(){onDone({plantao:{equipe:equipe,iniciadoPor:user.uid,iniciadoPorNome:user.name,inicio:new Date().toISOString(),ativo:true},isGuest:false,shiftId:today});setSaving(false);}).catch(function(e){alert('Erro: '+e.message);setSaving(false);});}
+function ShiftScreen(props){var user=props.user;var allUsers=props.allUsers;var onDone=props.onDone;var _team=useState([]);var team=_team[0];var setTeam=_team[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];
+var _carrinho=useState([]);var carrinho=_carrinho[0];var setCarrinho=_carrinho[1];
+var _showCarrinho=useState(false);var showCarrinho=_showCarrinho[0];var setShowCarrinho=_showCarrinho[1];var eligible=allUsers.filter(function(u){return u.id!==user.uid&&u.status==='approved'&&u.role!=='gestor'&&u.role!=='tecnico';});function toggle(u){setTeam(function(prev){if(prev.some(function(p){return p.id===u.id;}))return prev.filter(function(p){return p.id!==u.id;});return prev.concat([{id:u.id,nome:u.name,cargo:u.role,color:u.color}]);});}function startShift(){setSaving(true);var today=todayStr();var leader={id:user.uid,nome:user.name,cargo:user.role,color:user.color,status:'confirmado'};var members=team.map(function(m){return {id:m.id,nome:m.nome,cargo:m.cargo,color:m.color,status:'pendente'};});var equipe=[leader].concat(members);db.collection('plantoes').doc(today).set({iniciadoPor:user.uid,iniciadoPorNome:user.name,inicio:new Date().toISOString(),equipe:equipe,ativo:true,data:today}).then(function(){var ps=members.map(function(m){return db.collection('plantao_convites').add({para:m.id,de:user.uid,deNome:user.name,data:today,status:'pendente',criadoEm:new Date().toISOString()});});return Promise.all(ps);}).then(function(){onDone({plantao:{equipe:equipe,iniciadoPor:user.uid,iniciadoPorNome:user.name,inicio:new Date().toISOString(),ativo:true},isGuest:false,shiftId:today});setSaving(false);}).catch(function(e){alert('Erro: '+e.message);setSaving(false);});}
 return(<div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'linear-gradient(160deg,#0A2D6E,#1351B4)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:500,padding:16,overflowY:'auto'}}><div style={{background:'#fff',borderRadius:24,padding:'28px 22px',maxWidth:440,width:'100%',maxHeight:'90vh',overflowY:'auto',boxShadow:'0 24px 64px rgba(0,0,0,.25)'}}><div style={{textAlign:'center',marginBottom:20}}><div style={{fontSize:18,fontWeight:800,color:B,marginBottom:4}}>Abrir Plantao</div><div style={{fontSize:12,color:'#64748B'}}>Selecione sua equipe para hoje</div></div>{eligible.length>0&&(<div style={{display:'flex',flexDirection:'column',gap:8,marginBottom:16}}>{eligible.map(function(u){var sel=team.some(function(t){return t.id===u.id;});return(<div key={u.id} onClick={function(){toggle(u);}} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 14px',borderRadius:12,border:'1.5px solid '+(sel?B:'#E2E8F0'),background:sel?'#EFF6FF':'#fff',cursor:'pointer',transition:'all .15s'}}><UserAvatar user={u} size={40}/><div style={{flex:1}}><div style={{fontWeight:600,fontSize:14,color:sel?B:'#1E293B'}}>{u.name}</div><div style={{fontSize:12,color:'#64748B'}}>{ROLE_ICON[u.role]} {ROLES[u.role]||u.role}</div></div>{sel&&<div style={{width:22,height:22,borderRadius:'50%',background:B,display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:12,fontWeight:700}}>✓</div>}</div>);})}</div>)}<button onClick={startShift} disabled={saving} className="bp" style={{marginBottom:10,opacity:saving?0.7:1}}>{saving?'Abrindo...':'Abrir Plantao'}</button><button onClick={function(){onDone({plantao:null,isGuest:true,shiftId:null});}} className="bs">Entrar como Convidado</button></div></div>);}
 
 function InviteScreen(props){return(<div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(15,23,42,.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:500,padding:16,backdropFilter:'blur(4px)'}}><div style={{background:'#fff',borderRadius:24,padding:'32px 24px',maxWidth:380,width:'100%',textAlign:'center',boxShadow:'0 24px 64px rgba(0,0,0,.25)'}}><div style={{width:56,height:56,borderRadius:16,background:'#EFF6FF',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px',fontSize:24}}>🏥</div><div style={{fontSize:18,fontWeight:800,color:B,marginBottom:8}}>Convite de Plantao</div><div style={{fontSize:14,color:'#64748B',marginBottom:24,lineHeight:1.7}}><strong style={{color:B}}>{props.invite.deNome}</strong><br/>te adicionou ao plantao de hoje.</div><div style={{display:'flex',gap:10}}><button onClick={function(){props.onDeny(props.invite);}} className="bs" style={{flex:1}}>Recusar</button><button onClick={function(){props.onConfirm(props.invite);}} className="bg" style={{flex:2}}>Aceitar Plantao</button></div></div></div>);}
@@ -288,7 +308,7 @@ return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
                 <div className="av" style={{width:30,height:30,background:a.autorColor||B,fontSize:12,fontWeight:700}}>{a.autorNome?a.autorNome.charAt(0):''}</div>
                 <div><div style={{fontWeight:700,fontSize:13,color:a.autorColor||B}}>{a.autorNome}</div><div style={{fontSize:10,color:'#94A3B8'}}>{fmtD(a.criadoEm)}</div></div>
               </div>
-              {(a.autorNome===user.name||user.role==='gestor')&&<button onClick={function(){del(a.id);}} style={{background:'none',border:'none',color:'#CBD5E1',cursor:'pointer',fontSize:16,padding:'4px',borderRadius:4}}>×</button>}
+              {user.role!=='diarista'&&<button onClick={function(){del(a.id);}} style={{background:'none',border:'none',color:'#CBD5E1',cursor:'pointer',fontSize:16,padding:'4px',borderRadius:4}}>×</button>}
             </div>
             <div style={{fontSize:13,color:'#334155',lineHeight:1.7,paddingLeft:38,borderLeft:'2px solid #F1F5F9',marginLeft:15}}>{a.texto}</div>
           </div>
@@ -297,9 +317,52 @@ return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
   </div>
 </div>);}
 
-function TabSaida(props){var user=props.user;var medications=props.medications;var stock=props.stock;var entries=props.entries;var onSave=props.onSave;var latest=props.latest||{};var isGuest=props.isGuest||false;var canMove=props.canMove!==false;var _search=useState('');var search=_search[0];var setSearch=_search[1];var _sel=useState(null);var sel=_sel[0];var setSel=_sel[1];var _qty=useState('');var qty=_qty[0];var setQty=_qty[1];var _lote=useState('');var lote=_lote[0];var setLote=_lote[1];var _val=useState('');var val=_val[0];var setVal=_val[1];var _obs=useState('');var obs=_obs[0];var setObs=_obs[1];var _err=useState('');var err=_err[0];var setErr=_err[1];var _warn=useState('');var warn=_warn[0];var setWarn=_warn[1];var _ok=useState('');var ok=_ok[0];var setOk=_ok[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];
+function TabSaida(props){var user=props.user;var medications=props.medications;var stock=props.stock;var entries=props.entries;var onSave=props.onSave;var latest=props.latest||{};var isGuest=props.isGuest||false;var canMove=props.canMove!==false;var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};var alert2=props.alert2||function(m){window.alert(m);};var _search=useState('');var search=_search[0];var setSearch=_search[1];var _sel=useState(null);var sel=_sel[0];var setSel=_sel[1];var _qty=useState('');var qty=_qty[0];var setQty=_qty[1];var _lote=useState('');var lote=_lote[0];var setLote=_lote[1];var _val=useState('');var val=_val[0];var setVal=_val[1];var _obs=useState('');var obs=_obs[0];var setObs=_obs[1];var _err=useState('');var err=_err[0];var setErr=_err[1];var _warn=useState('');var warn=_warn[0];var setWarn=_warn[1];var _ok=useState('');var ok=_ok[0];var setOk=_ok[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];var _carrinho=useState([]);var carrinho=_carrinho[0];var setCarrinho=_carrinho[1];var _showCarrinho=useState(false);var showCarrinho=_showCarrinho[0];var setShowCarrinho=_showCarrinho[1];
 var inStock=medications.filter(function(m){return (stock[m.id]||0)>0;});var filtered=[];if(search.trim()){var s=search.toLowerCase();filtered=inStock.filter(function(m){return m.nome.toLowerCase().indexOf(s)>=0;}).slice(0,8);}var cur=sel?(stock[sel.id]||0):0;
-function save(){if(!sel){setErr('Selecione um medicamento.');return;}var q=parseInt(qty);if(!q||q<=0){setErr('Quantidade invalida.');return;}if(q>cur){setErr('Estoque insuficiente! Disponivel: '+cur+' un.');return;}if(q>cur*0.7&&!warn){setWarn('Saida alta: '+q+' de '+cur+' un. disponivel. Confirme clicando novamente.');return;}setSaving(true);setErr('');setWarn('');var lt=lote||(latest[sel.id]?latest[sel.id].lote:'')||'';var vl=val||(latest[sel.id]?latest[sel.id].validade:'')||'';var data={medicamentoId:sel.id,medicamentoNome:sel.nome,ean:sel.ean||'',tipo:'saida',quantidade:q,lote:lt.trim(),validade:vl.trim(),observacao:obs.trim()};var saveFn=(!canMove&&isGuest&&props.onSolicitar)?props.onSolicitar:onSave;saveFn(data).then(function(){if(q>500)db.collection('alertas').add({tipo:'saida_excessiva',medicamentoNome:sel.nome,quantidade:q,estoqueAntes:cur,autorNome:user.name,criadoEm:new Date().toISOString(),lido:false}).catch(function(){});playSound('success');setOk((!canMove&&isGuest)?'Solicitacao enviada!':'Saida de '+q+'x '+sel.nome+' registrada!');setQty('');setLote('');setVal('');setObs('');setWarn('');setTimeout(function(){setOk('');},4000);setSaving(false);}).catch(function(e){setErr('Erro: '+(e.message||'tente novamente'));setSaving(false);});}
+function adicionarCarrinho(){
+    if(!sel){setErr('Selecione um medicamento.');return;}
+    var q=parseInt(qty);if(!q||q<=0){setErr('Quantidade invalida.');return;}
+    if(q>cur){setErr('Estoque insuficiente! Disponivel: '+cur+' un.');return;}
+    var lt=lote||(latest[sel.id]?latest[sel.id].lote:'')||'';
+    var vl=val||(latest[sel.id]?latest[sel.id].validade:'')||'';
+    setCarrinho(function(prev){
+      var exist=prev.findIndex(function(i){return i.medId===sel.id;});
+      if(exist>=0){
+        var arr=prev.slice();
+        arr[exist]=Object.assign({},arr[exist],{qty:arr[exist].qty+q});
+        return arr;
+      }
+      return prev.concat([{medId:sel.id,medNome:sel.nome,qty:q,lote:lt,validade:vl,obs:obs.trim(),estoque:cur}]);
+    });
+    setOk(sel.nome+' adicionado ao carrinho!');
+    setSel(null);setSearch('');setQty('');setLote('');setVal('');setObs('');setWarn('');setErr('');
+    setTimeout(function(){setOk('');},2000);
+  }
+  function confirmarCarrinho(){
+    if(!carrinho.length)return;
+    confirm2('Confirmar saída','Registrar saída de '+carrinho.length+' medicamento(s) do estoque?',_confirmarCarrinhoExec,'danger','Confirmar');
+  }
+  function _confirmarCarrinhoExec(){
+    setSaving(true);
+    var erros=[];
+    var idx=0;
+    var items=carrinho.slice();
+    function next(){
+      if(idx>=items.length){
+        playSound('success');
+        setCarrinho([]);setShowCarrinho(false);setSaving(false);
+        setOk(erros.length?'Saidas com alertas: '+erros.join(', '):'Todas as saidas registradas!');
+        setTimeout(function(){setOk('');},5000);
+        return;
+      }
+      var item=items[idx++];
+      var st=stock[item.medId]||0;
+      if(item.qty>st){erros.push(item.medNome+' sem estoque');next();return;}
+      onSave({medicamentoId:item.medId,medicamentoNome:item.medNome,tipo:'saida',quantidade:item.qty,lote:item.lote,validade:item.validade,observacao:item.obs||''}).then(next).catch(function(e){erros.push(item.medNome+': erro');next();});
+    }
+    next();
+  }
+  function save(){if(!sel){setErr('Selecione um medicamento.');return;}var q=parseInt(qty);if(!q||q<=0){setErr('Quantidade invalida.');return;}if(q>cur){setErr('Estoque insuficiente! Disponivel: '+cur+' un.');return;}if(q>cur*0.7&&!warn){setWarn('Saida alta: '+q+' de '+cur+' un. disponivel. Confirme clicando novamente.');return;}setSaving(true);setErr('');setWarn('');var lt=lote||(latest[sel.id]?latest[sel.id].lote:'')||'';var vl=val||(latest[sel.id]?latest[sel.id].validade:'')||'';var data={medicamentoId:sel.id,medicamentoNome:sel.nome,ean:sel.ean||'',tipo:'saida',quantidade:q,lote:lt.trim(),validade:vl.trim(),observacao:obs.trim()};var saveFn=(!canMove&&isGuest&&props.onSolicitar)?props.onSolicitar:onSave;saveFn(data).then(function(){if(q>500)db.collection('alertas').add({tipo:'saida_excessiva',medicamentoNome:sel.nome,quantidade:q,estoqueAntes:cur,autorNome:user.name,criadoEm:new Date().toISOString(),lido:false}).catch(function(){});playSound('success');setOk((!canMove&&isGuest)?'Solicitacao enviada!':'Saida de '+q+'x '+sel.nome+' registrada!');setQty('');setLote('');setVal('');setObs('');setWarn('');setTimeout(function(){setOk('');},4000);setSaving(false);}).catch(function(e){setErr('Erro: '+(e.message||'tente novamente'));setSaving(false);});}
 var last10=entries.filter(function(e){return e.tipo==='saida';}).slice(-10).reverse();
 return(
 <div style={{maxWidth:600,margin:'0 auto',padding:'16px 14px'}}>
@@ -335,7 +398,7 @@ return(
     <div style={{padding:'16px'}}>
       <Lbl c="Quantidade"/>
       <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:10}}>
-        {[1,5,10,20,30,50,100].map(function(n){return <button key={n} onClick={function(){setQty(String(n));setWarn('');}} className={'qb'+(qty===String(n)?' on':'')}>{n}</button>;})}
+        {[1,2,30,60,90,120].map(function(n){return <button key={n} onClick={function(){var cur2=parseInt(qty)||0;var nov=cur2===n?cur2+n:n;setQty(String(nov));setWarn('');}} className={'qb'+(parseInt(qty)===n?' on':'')}>{n}</button>;})}
       </div>
       <input value={qty} onChange={function(e){setQty(e.target.value.replace(/[^0-9]/g,''));setWarn('');}} placeholder="Ou outra quantidade..." className="inp" style={{fontSize:22,fontWeight:800,textAlign:'center',color:B}}/>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
@@ -348,7 +411,29 @@ return(
       {err&&<div className="er">{err}</div>}
       {ok&&<div className="ok">{ok}</div>}
       {isGuest&&!canMove&&<div className="wn">Modo convidado — sera enviado para aprovacao.</div>}
-      <button onClick={save} disabled={saving} className="br" style={{opacity:saving?0.5:1}}>{isGuest&&!canMove?'Solicitar Saida':'Registrar Saida'}</button>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginTop:4}}>
+        <button onClick={save} disabled={saving} className="br" style={{opacity:saving?0.5:1,margin:0}}>{isGuest&&!canMove?'Solicitar':'Registrar Saida'}</button>
+        <button onClick={adicionarCarrinho} disabled={saving} style={{padding:'14px',background:'#F59E0B',border:'none',borderRadius:12,color:'#fff',fontWeight:800,fontSize:14,cursor:'pointer',opacity:saving?0.5:1}}>+ Carrinho 🛒</button>
+      </div>
+      {carrinho.length>0&&<div style={{marginTop:12,background:'#FFFBEB',border:'2px solid #F59E0B',borderRadius:12,padding:14}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+          <div style={{fontWeight:800,fontSize:14,color:'#92400E'}}>🛒 Carrinho ({carrinho.length} item{carrinho.length>1?'s':''})</div>
+          <button onClick={function(){setShowCarrinho(!showCarrinho);}} style={{background:'none',border:'none',color:'#92400E',cursor:'pointer',fontSize:12,fontWeight:700}}>{showCarrinho?'Fechar':'Ver itens'}</button>
+        </div>
+        {showCarrinho&&carrinho.map(function(item,i){return(
+          <div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',background:'#fff',borderRadius:8,padding:'8px 12px',marginBottom:6,border:'1px solid #FCD34D'}}>
+            <div>
+              <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>{item.medNome}</div>
+              <div style={{fontSize:11,color:'#64748B'}}>{item.qty} un.{item.lote?' · Lote: '+item.lote:''}</div>
+            </div>
+            <button onClick={function(){setCarrinho(function(prev){return prev.filter(function(_,ii){return ii!==i;});});}} style={{background:'#FEE2E2',border:'none',borderRadius:6,width:28,height:28,cursor:'pointer',color:'#DC2626',fontSize:14}}>✕</button>
+          </div>
+        );})}
+        {saving
+          ?<div style={{textAlign:'center',color:'#92400E',fontWeight:700,padding:8}}>Registrando...</div>
+          :<button onClick={confirmarCarrinho} style={{width:'100%',padding:'13px',background:'#059669',border:'none',borderRadius:10,color:'#fff',fontWeight:800,fontSize:15,cursor:'pointer',marginTop:4}}>✅ Confirmar saida de tudo ({carrinho.length})</button>
+        }
+      </div>}
     </div>
   </div>
   {last10.length>0&&(
@@ -364,13 +449,73 @@ return(
     </div>
   )}
 </div>);}
-function TabEntrada(props){var user=props.user;var medications=props.medications;var onSave=props.onSave;var isGuest=props.isGuest||false;var canMove=props.canMove!==false;var _modo=useState('individual');var modo=_modo[0];var setModo=_modo[1];var _search=useState('');var search=_search[0];var setSearch=_search[1];var _sel=useState(null);var sel=_sel[0];var setSel=_sel[1];var _newNome=useState('');var newNome=_newNome[0];var setNewNome=_newNome[1];var _newEan=useState('');var newEan=_newEan[0];var setNewEan=_newEan[1];var _creating=useState(false);var creating=_creating[0];var setCreating=_creating[1];var _showList=useState(false);var showList=_showList[0];var setShowList=_showList[1];var _qty=useState('');var qty=_qty[0];var setQty=_qty[1];var _lote=useState('');var lote=_lote[0];var setLote=_lote[1];var _val=useState('');var val=_val[0];var setVal=_val[1];var _obs=useState('');var obs=_obs[0];var setObs=_obs[1];var _err=useState('');var err=_err[0];var setErr=_err[1];var _ok=useState('');var ok=_ok[0];var setOk=_ok[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];var _filtEntrada=useState('todos');var filtEntrada=_filtEntrada[0];var setFiltEntrada=_filtEntrada[1];var _loteNota=useState('');var loteNota=_loteNota[0];var setLoteNota=_loteNota[1];var _valNota=useState('');var valNota=_valNota[0];var setValNota=_valNota[1];var _qtds=useState({});var qtds=_qtds[0];var setQtds=_qtds[1];var _salvandoNota=useState(false);var salvandoNota=_salvandoNota[0];var setSalvandoNota=_salvandoNota[1];var _okNota=useState('');var okNota=_okNota[0];var setOkNota=_okNota[1];var _catNota=useState('medicamento');var catNota=_catNota[0];var setCatNota=_catNota[1];
+function TabEntrada(props){var user=props.user;var medications=props.medications;var onSave=props.onSave;var isGuest=props.isGuest||false;var canMove=props.canMove!==false;var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};var alert2=props.alert2||function(m){window.alert(m);};var _modo=useState('individual');var modo=_modo[0];var setModo=_modo[1];var _search=useState('');var search=_search[0];var setSearch=_search[1];var _sel=useState(null);var sel=_sel[0];var setSel=_sel[1];var _newNome=useState('');var newNome=_newNome[0];var setNewNome=_newNome[1];var _newEan=useState('');var newEan=_newEan[0];var setNewEan=_newEan[1];var _creating=useState(false);var creating=_creating[0];var setCreating=_creating[1];var _showList=useState(false);var showList=_showList[0];var setShowList=_showList[1];var _qty=useState('');var qty=_qty[0];var setQty=_qty[1];var _lote=useState('');var lote=_lote[0];var setLote=_lote[1];var _val=useState('');var val=_val[0];var setVal=_val[1];var _obs=useState('');var obs=_obs[0];var setObs=_obs[1];var _err=useState('');var err=_err[0];var setErr=_err[1];var _ok=useState('');var ok=_ok[0];var setOk=_ok[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];var _filtEntrada=useState('todos');var filtEntrada=_filtEntrada[0];var setFiltEntrada=_filtEntrada[1];var _loteNota=useState('');var loteNota=_loteNota[0];var setLoteNota=_loteNota[1];var _valNota=useState('');var valNota=_valNota[0];var setValNota=_valNota[1];var _obsNota=useState('');var obsNota=_obsNota[0];var setObsNota=_obsNota[1];var _loteNotaReal=useState('');var loteNotaReal=_loteNotaReal[0];var setLoteNotaReal=_loteNotaReal[1];var _valNotaReal=useState('');var valNotaReal=_valNotaReal[0];var setValNotaReal=_valNotaReal[1];var _qtds=useState({});var qtds=_qtds[0];var setQtds=_qtds[1];var _salvandoNota=useState(false);var salvandoNota=_salvandoNota[0];var setSalvandoNota=_salvandoNota[1];
+var _carrinhoNota=useState([]);var carrinhoNota=_carrinhoNota[0];var setCarrinhoNota=_carrinhoNota[1];
+var _editIdx=useState(null);var editIdx=_editIdx[0];var setEditIdx=_editIdx[1];
+var _showNovoMed=useState(false);var showNovoMed=_showNovoMed[0];var setShowNovoMed=_showNovoMed[1];
+var _novoMedNome=useState('');var novoMedNome=_novoMedNome[0];var setNovoMedNome=_novoMedNome[1];
+var _novoMedCat=useState('medicamento');var novoMedCat=_novoMedCat[0];var setNovoMedCat=_novoMedCat[1];
+var _novoMedQty=useState('');var novoMedQty=_novoMedQty[0];var setNovoMedQty=_novoMedQty[1];
+var _novoMedLote=useState('');var novoMedLote=_novoMedLote[0];var setNovoMedLote=_novoMedLote[1];
+var _novoMedVal=useState('');var novoMedVal=_novoMedVal[0];var setNovoMedVal=_novoMedVal[1];
+var _searchNota=useState('');var searchNota=_searchNota[0];var setSearchNota=_searchNota[1];
+var _selNota=useState(null);var selNota=_selNota[0];var setSelNota=_selNota[1];
+var _qtyNota=useState('');var qtyNota=_qtyNota[0];var setQtyNota=_qtyNota[1];var _okNota=useState('');var okNota=_okNota[0];var setOkNota=_okNota[1];var _catNota=useState('medicamento');var catNota=_catNota[0];var setCatNota=_catNota[1];
 var medList=medications;if(filtEntrada&&filtEntrada!=='todos')medList=medList.filter(function(m){return ((m.categoria||'medicamento').toLowerCase().trim())===filtEntrada.toLowerCase().trim();});if(search.trim()){var s=search.toLowerCase();medList=medList.filter(function(m){return m.nome.toLowerCase().indexOf(s)>=0||(m.ean&&m.ean.indexOf(s)>=0);});}
 var medListNota=medications.filter(function(m){return ((m.categoria||'medicamento').toLowerCase().trim())===catNota.toLowerCase().trim();}).sort(function(a,b){return a.nome.localeCompare(b.nome);});
 function selectMed(m){setSel(m);setSearch(m.nome);setShowList(false);setCreating(false);}
 function create(){if(!newNome.trim()){setErr('Nome obrigatorio.');return;}setSaving(true);db.collection('medicamentos').add({nome:newNome.trim(),ean:newEan.trim(),minEstoque:0,criadoEm:new Date().toISOString()}).then(function(r){selectMed({id:r.id,nome:newNome.trim(),ean:newEan.trim()});setCreating(false);setErr('');setSaving(false);}).catch(function(e){setErr(e.message);setSaving(false);});}
 function save(){if(!sel){setErr('Selecione um medicamento.');return;}var q=parseInt(qty);if(!q||q<=0){setErr('Informe a quantidade.');return;}setSaving(true);setErr('');var data={medicamentoId:sel.id,medicamentoNome:sel.nome,ean:sel.ean||'',tipo:'entrada',quantidade:q,lote:lote.trim(),validade:val.trim(),observacao:obs.trim()};var saveFn=(!canMove&&isGuest&&props.onSolicitar)?props.onSolicitar:onSave;saveFn(data).then(function(){playSound('success');setOk((!canMove&&isGuest)?'Solicitacao enviada!':'Entrada de '+q+'x '+sel.nome+' registrada!');setSel(null);setSearch('');setQty('');setLote('');setVal('');setObs('');setTimeout(function(){setOk('');},4000);setSaving(false);}).catch(function(e){setErr('Erro: '+(e.message||''));setSaving(false);});}
-function salvarNota(){var itens=[];Object.keys(qtds).forEach(function(medId){var q=parseInt(qtds[medId])||0;if(q>0){var med=medications.find(function(m){return m.id===medId;});if(med)itens.push({med:med,qty:q});}});if(itens.length===0){setOkNota('Nenhuma quantidade informada.');return;}if(!confirm('Confirmar entrada de '+itens.length+' medicamento(s)?'))return;setSalvandoNota(true);var idx=0;function next(){if(idx>=itens.length){playSound('success');setOkNota('Entrada de '+itens.length+' item(ns) registrada com sucesso!');setQtds({});setLoteNota('');setValNota('');setSalvandoNota(false);setTimeout(function(){setOkNota('');},5000);return;}var item=itens[idx++];onSave({medicamentoId:item.med.id,medicamentoNome:item.med.nome,ean:item.med.ean||'',tipo:'entrada',quantidade:item.qty,lote:loteNota.trim(),validade:valNota.trim(),observacao:'Entrada por nota'}).then(next).catch(next);}next();}
+  var filteredNota=[];
+  if(searchNota.trim()){var sn2=searchNota.toLowerCase();filteredNota=medications.filter(function(m){return m.nome.toLowerCase().indexOf(sn2)>=0;}).slice(0,8);}
+
+  function adicionarAoCarrinhoNota(med,q){
+    if(!med||!parseInt(q))return;
+    var item={medId:med.id,medNome:med.nome,qty:parseInt(q),lote:loteNotaReal||'',validade:valNotaReal||'',novo:false};
+    setCarrinhoNota(function(prev){
+      var exist=prev.findIndex(function(i){return i.medId===med.id;});
+      if(exist>=0){var arr=prev.slice();arr[exist]=Object.assign({},arr[exist],{qty:arr[exist].qty+item.qty});return arr;}
+      return prev.concat([item]);
+    });
+    setSelNota(null);setSearchNota('');setQtyNota('');setLoteNotaReal('');setValNotaReal('');
+  }
+
+  function cadastrarNovoMed(){
+    if(!novoMedNome.trim())return;
+    setSalvandoNota(true);
+    db.collection('medications').add({nome:novoMedNome.trim().toUpperCase(),categoria:novoMedCat,tipo:novoMedCat,ean:'',estoqueMin:5,criadoEm:new Date().toISOString(),criadoPor:user.name}).then(function(ref){
+      var q2=parseInt(novoMedQty)||0;
+      if(q2>0){
+        var item={medId:ref.id,medNome:novoMedNome.trim().toUpperCase(),qty:q2,lote:novoMedLote||loteNotaReal||'',validade:novoMedVal||valNotaReal||'',novo:true};
+        setCarrinhoNota(function(prev){return prev.concat([item]);});
+      }
+      setNovoMedNome('');setNovoMedQty('');setNovoMedLote('');setNovoMedVal('');setShowNovoMed(false);setSalvandoNota(false);
+    }).catch(function(e){setSalvandoNota(false);alert('Erro: '+e.message);});
+  }
+
+  function salvarCarrinhoNota(){
+    if(!carrinhoNota.length)return;
+    confirm2('Confirmar entrada','Registrar entrada de '+carrinhoNota.length+' medicamento(s) no estoque?',_execSalvarCarrinhoNota,'success','Confirmar');
+  }
+  function _execSalvarCarrinhoNota(){
+    setSalvandoNota(true);
+    var nfNum=loteNota.trim();var nfForn=obsNota.trim();
+    var obsTexto='NF'+(nfNum?' '+nfNum:'')+(nfForn?' - '+nfForn:'');
+    var idx3=0;var items=carrinhoNota.slice();
+    function next2(){
+      if(idx3>=items.length){
+        playSound('success');
+        setOkNota('Entrada de '+items.length+' medicamento(s) registrada!');
+        setCarrinhoNota([]);setLoteNota('');setValNota('');setObsNota('');setLoteNotaReal('');setValNotaReal('');
+        setSalvandoNota(false);setTimeout(function(){setOkNota('');},5000);return;
+      }
+      var item2=items[idx3++];
+      onSave({medicamentoId:item2.medId,medicamentoNome:item2.medNome,tipo:'entrada',quantidade:item2.qty,lote:item2.lote,validade:item2.validade,observacao:obsTexto,nfNumero:nfNum,nfFornecedor:nfForn}).then(next2).catch(next2);
+    }
+    next2();
+  }
+
+  function salvarNota(){var itens=[];Object.keys(qtds).forEach(function(medId){var q=parseInt(qtds[medId])||0;if(q>0){var med=medications.find(function(m){return m.id===medId;});if(med)itens.push({med:med,qty:q});}});if(itens.length===0){setOkNota('Nenhuma quantidade informada.');return;}confirm2('Confirmar entrada','Registrar entrada de '+itens.length+' medicamento(s) no estoque?',function(){_execSalvarNota();},'success','Confirmar');return;setSalvandoNota(true);var nfNum=loteNota.trim();var nfData=valNota.trim();var nfForn=obsNota.trim();var obsTexto='NF'+(nfNum?' '+nfNum:'')+(nfForn?' - '+nfForn:'');var idx=0;function next(){if(idx>=itens.length){playSound('success');setOkNota('Entrada de '+itens.length+' item(ns) registrada! NF: '+(nfNum||'sem numero'));setQtds({});setLoteNota('');setValNota('');setObsNota('');setLoteNotaReal('');setValNotaReal('');setSalvandoNota(false);setTimeout(function(){setOkNota('');},5000);return;}var item=itens[idx++];onSave({medicamentoId:item.med.id,medicamentoNome:item.med.nome,ean:item.med.ean||'',tipo:'entrada',quantidade:item.qty,lote:loteNotaReal.trim(),validade:valNotaReal.trim(),observacao:obsTexto,nfNumero:nfNum,nfData:nfData,nfFornecedor:nfForn}).then(next).catch(next);}next();}
 return(
 <div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
   <div className="tab-sw">
@@ -449,36 +594,100 @@ return(
       <div className="card" style={{marginBottom:14}}>
         <div className="ch"><div className="ch-title"><div style={{width:3,height:16,background:'#0C6B3E',borderRadius:2}}/><span>Entrada por Nota Fiscal</span></div></div>
         <div style={{padding:'16px'}}>
-          <div className="inf" style={{marginBottom:16}}>Selecione a categoria, informe lote e validade comuns, e preencha as quantidades recebidas.</div>
-          <Lbl c="1. Categoria"/>
-          <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:16}}>
-            {Object.keys(TIPOS).map(function(k){var t=TIPOS[k];var sel2=catNota===k;return(<button key={k} onClick={function(){setCatNota(k);setQtds({});}} style={{padding:'9px 14px',borderRadius:20,border:'1.5px solid '+(sel2?t.cor:'#E2E8F0'),background:sel2?t.cor:'#fff',color:sel2?'#fff':'#64748B',cursor:'pointer',fontWeight:sel2?700:500,fontSize:12,transition:'all .15s'}}>{t.icon} {t.label}</button>);})}</div>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:16}}>
-            <div><Lbl c="2. Lote (opcional)"/><input value={loteNota} onChange={function(e){setLoteNota(e.target.value);}} placeholder="Ex: ABC1234" className="inp"/></div>
-            <div><Lbl c="3. Validade (opcional)"/><input value={valNota} onChange={function(e){setValNota(e.target.value);}} placeholder="MM/AAAA" className="inp"/></div>
+          <div className="inf" style={{marginBottom:16}}>Informe os dados da nota e adicione os medicamentos ao carrinho.</div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
+            <div><Lbl c="Numero da NF"/><input value={loteNota} onChange={function(e){setLoteNota(e.target.value);}} placeholder="Ex: 001234" className="inp"/></div>
+            <div><Lbl c="Data da Nota"/><input type="date" value={valNota} onChange={function(e){setValNota(e.target.value);}} className="inp"/></div>
           </div>
-          <Lbl c="4. Quantidades recebidas"/>
-          <div style={{fontSize:12,color:'#94A3B8',marginBottom:10}}>Preencha apenas os que vieram na nota.</div>
+          <div style={{marginBottom:14}}><Lbl c="Fornecedor (opcional)"/><input value={obsNota} onChange={function(e){setObsNota(e.target.value);}} placeholder="Ex: Distribuidora XYZ" className="inp"/></div>
+                    <Lbl c="Buscar medicamento"/>
+          <div style={{position:'relative',marginBottom:8}}>
+            <input value={searchNota} onChange={function(e){setSearchNota(e.target.value);setSelNota(null);}} placeholder="Digite o nome do medicamento..." className="inp" style={{marginBottom:0}}/>
+            {filteredNota.length>0&&!selNota&&<div className="sdrop">
+              {filteredNota.map(function(m){return(
+                <div key={m.id} className="sdi" onClick={function(){setSelNota(m);setSearchNota(m.nome);}}>
+                  <span style={{fontWeight:600,color:'#1E293B'}}>{m.nome}</span>
+                  <span style={{fontSize:11,color:'#059669',fontWeight:700}}>cadastrado</span>
+                </div>
+              );})}
+            </div>}
+          </div>
+          {selNota&&<div style={{background:'#F0FDF4',border:'1.5px solid #86EFAC',borderRadius:10,padding:'10px 14px',marginBottom:10,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <div style={{fontWeight:700,fontSize:13,color:'#065F46'}}>{selNota.nome}</div>
+            <button onClick={function(){setSelNota(null);setSearchNota('');}} style={{background:'none',border:'none',color:'#94A3B8',cursor:'pointer',fontSize:18}}>x</button>
+          </div>}
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+            <div><Lbl c="Lote *"/><input value={loteNotaReal} onChange={function(e){setLoteNotaReal(e.target.value);}} placeholder="Ex: ABC1234" className="inp" style={{borderColor:!loteNotaReal&&selNota?'#FCA5A5':''}}/></div>
+            <div><Lbl c="Validade *"/><input value={valNotaReal} onChange={function(e){setValNotaReal(e.target.value);}} placeholder="MM/AAAA" className="inp" style={{borderColor:!valNotaReal&&selNota?'#FCA5A5':''}}/></div>
+          </div>
+          <div style={{display:'flex',gap:8,marginBottom:12}}>
+            <input value={qtyNota} onChange={function(e){setQtyNota(e.target.value.replace(/[^0-9]/g,''));}} placeholder="Qtd *" style={{width:80,padding:'10px',borderRadius:8,border:'1.5px solid '+((!qtyNota&&selNota)?'#FCA5A5':'#E2E8F0'),fontSize:15,fontWeight:800,textAlign:'center'}}/>
+            <button onClick={function(){
+              if(!selNota)return;
+              if(!qtyNota||parseInt(qtyNota)<=0){alert2('Informe a quantidade!');return;}
+              if(!loteNotaReal.trim()){alert2('Informe o lote do medicamento!');return;}
+              if(!valNotaReal.trim()){alert2('Informe a validade do medicamento!');return;}
+              adicionarAoCarrinhoNota(selNota,qtyNota);
+            }} disabled={!selNota} style={{flex:1,padding:'10px',background:!selNota?'#E2E8F0':'#059669',color:!selNota?'#94A3B8':'#fff',border:'none',borderRadius:8,fontWeight:700,fontSize:13,cursor:'pointer'}}>+ Adicionar</button>
+            <button onClick={function(){setShowNovoMed(!showNovoMed);}} style={{padding:'10px 14px',background:'#EFF6FF',border:'1.5px solid #BFDBFE',borderRadius:8,color:'#1351B4',fontWeight:700,fontSize:12,cursor:'pointer'}}>+ Novo</button>
+          </div>
         </div>
       </div>
-      <div className="card" style={{marginBottom:14}}>
-        {medListNota.length===0
-          ?<div style={{padding:32,textAlign:'center',color:'#94A3B8'}}>Nenhum medicamento nessa categoria.</div>
-          :medListNota.map(function(m,i){var q=qtds[m.id]||'';var temQtd=parseInt(q)>0;return(
-            <div key={m.id} style={{padding:'11px 16px',borderBottom:i<medListNota.length-1?'1px solid #F8FAFC':'none',display:'flex',gap:10,alignItems:'center',background:temQtd?'#F0FDF4':'#fff',transition:'background .15s'}}>
-              <div style={{flex:1}}><div style={{fontWeight:600,fontSize:13,color:temQtd?'#0C6B3E':'#334155'}}>{m.nome}</div></div>
-              <input value={q} onChange={function(e){var v2=e.target.value.replace(/[^0-9]/g,'');var nq={};for(var k in qtds)nq[k]=qtds[k];if(v2)nq[m.id]=v2;else delete nq[m.id];setQtds(nq);}} placeholder="0" style={{width:70,textAlign:'center',padding:'8px',borderRadius:8,border:'1.5px solid '+(temQtd?'#86EFAC':'#E2E8F0'),fontSize:15,fontWeight:800,outline:'none',color:temQtd?'#0C6B3E':'#1E293B',background:temQtd?'#DCFCE7':'#fff',transition:'all .15s'}}/>
+
+      {showNovoMed&&<div className="card" style={{marginBottom:14,border:'1.5px solid #BFDBFE'}}>
+        <div className="ch"><div className="ch-title"><div style={{width:3,height:16,background:'#1351B4',borderRadius:2}}/><span>Cadastrar novo medicamento</span></div></div>
+        <div style={{padding:16}}>
+          <div style={{fontSize:12,color:'#64748B',marginBottom:10}}>Sera cadastrado e adicionado ao carrinho automaticamente.</div>
+          <Lbl c="Nome"/><input value={novoMedNome} onChange={function(e){setNovoMedNome(e.target.value);}} placeholder="Ex: AMOXICILINA 500MG" className="inp"/>
+          <Lbl c="Categoria"/>
+          <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:10}}>
+            {Object.keys(TIPOS).map(function(k){var t=TIPOS[k];return(<button key={k} onClick={function(){setNovoMedCat(k);}} style={{padding:'7px 12px',borderRadius:20,border:'1.5px solid '+(novoMedCat===k?t.cor:'#E2E8F0'),background:novoMedCat===k?t.cor:'#fff',color:novoMedCat===k?'#fff':'#64748B',cursor:'pointer',fontWeight:novoMedCat===k?700:500,fontSize:11}}>{t.icon} {t.label}</button>);})}</div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
+            <div><Lbl c="Qtd"/><input value={novoMedQty} onChange={function(e){setNovoMedQty(e.target.value.replace(/[^0-9]/g,''));}} placeholder="0" className="inp"/></div>
+            <div><Lbl c="Lote"/><input value={novoMedLote} onChange={function(e){setNovoMedLote(e.target.value);}} placeholder="Lote" className="inp"/></div>
+            <div><Lbl c="Validade"/><input value={novoMedVal} onChange={function(e){setNovoMedVal(e.target.value);}} placeholder="MM/AAAA" className="inp"/></div>
+          </div>
+          <button onClick={cadastrarNovoMed} disabled={!novoMedNome.trim()||salvandoNota} style={{width:'100%',padding:'12px',background:'#1351B4',border:'none',borderRadius:10,color:'#fff',fontWeight:700,fontSize:14,cursor:'pointer',marginTop:8,opacity:(!novoMedNome.trim()||salvandoNota)?0.5:1}}>
+            {salvandoNota?'Cadastrando...':'Cadastrar e adicionar ao carrinho'}
+          </button>
+        </div>
+      </div>}
+
+      {carrinhoNota.length>0&&<div className="card" style={{marginBottom:14,border:'1.5px solid #86EFAC'}}>
+        <div className="ch"><div className="ch-title"><div style={{width:3,height:16,background:'#059669',borderRadius:2}}/><span>Carrinho ({carrinhoNota.length} item{carrinhoNota.length>1?'s':''})</span></div></div>
+        <div style={{padding:'0 0 12px'}}>
+          {carrinhoNota.map(function(item,i){return(
+            <div key={i} style={{padding:'10px 16px',borderBottom:i<carrinhoNota.length-1?'1px solid #F0FDF4':'none',background:editIdx===i?'#FFFBEB':'#fff'}}>
+              {editIdx===i
+                ?<div>
+                  <div style={{fontWeight:700,fontSize:13,color:'#1E293B',marginBottom:8}}>{item.medNome}</div>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:6,marginBottom:8}}>
+                    <div><div style={{fontSize:10,color:'#64748B',fontWeight:600,marginBottom:2}}>QTD</div><input value={item.qty} onChange={function(e){var v=parseInt(e.target.value)||0;setCarrinhoNota(function(prev){var arr=prev.slice();arr[i]=Object.assign({},arr[i],{qty:v});return arr;});}} style={{width:'100%',padding:'7px',borderRadius:7,border:'1.5px solid #FCD34D',fontSize:14,fontWeight:800,textAlign:'center',boxSizing:'border-box'}}/></div>
+                    <div><div style={{fontSize:10,color:'#64748B',fontWeight:600,marginBottom:2}}>LOTE</div><input value={item.lote} onChange={function(e){var v=e.target.value;setCarrinhoNota(function(prev){var arr=prev.slice();arr[i]=Object.assign({},arr[i],{lote:v});return arr;});}} style={{width:'100%',padding:'7px',borderRadius:7,border:'1.5px solid #FCD34D',fontSize:12,boxSizing:'border-box'}}/></div>
+                    <div><div style={{fontSize:10,color:'#64748B',fontWeight:600,marginBottom:2}}>VALIDADE</div><input value={item.validade} onChange={function(e){var v=e.target.value;setCarrinhoNota(function(prev){var arr=prev.slice();arr[i]=Object.assign({},arr[i],{validade:v});return arr;});}} style={{width:'100%',padding:'7px',borderRadius:7,border:'1.5px solid #FCD34D',fontSize:12,boxSizing:'border-box'}}/></div>
+                  </div>
+                  <button onClick={function(){setEditIdx(null);}} style={{width:'100%',padding:'7px',background:'#059669',border:'none',borderRadius:7,color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>Salvar</button>
+                </div>
+                :<div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                  <div>
+                    <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>{item.medNome}{item.novo?<span style={{fontSize:10,background:'#DBEAFE',color:'#1D4ED8',padding:'2px 6px',borderRadius:10,fontWeight:700,marginLeft:6}}>NOVO</span>:null}</div>
+                    <div style={{fontSize:11,color:'#64748B',marginTop:2}}>{item.qty} un.{item.lote?' · Lote: '+item.lote:''}{item.validade?' · Val: '+item.validade:''}</div>
+                  </div>
+                  <div style={{display:'flex',gap:6}}>
+                    <button onClick={function(){setEditIdx(i);}} style={{background:'#FEF3C7',border:'none',borderRadius:7,padding:'5px 10px',fontSize:11,fontWeight:700,color:'#92400E',cursor:'pointer'}}>Editar</button>
+                    <button onClick={function(){setCarrinhoNota(function(prev){return prev.filter(function(_,ii){return ii!==i;});});}} style={{background:'#FEE2E2',border:'none',borderRadius:7,padding:'5px 10px',fontSize:11,color:'#DC2626',cursor:'pointer',fontWeight:700}}>X</button>
+                  </div>
+                </div>
+              }
             </div>
-          );})
-        }
-      </div>
-      {Object.keys(qtds).filter(function(k){return parseInt(qtds[k])>0;}).length>0&&(
-        <div className="card" style={{padding:'14px 16px',marginBottom:14,border:'1.5px solid #86EFAC',background:'#F0FDF4'}}>
-          <div style={{fontWeight:700,color:'#0C6B3E',fontSize:14}}>{Object.keys(qtds).filter(function(k){return parseInt(qtds[k])>0;}).length} medicamento(s) prontos para registrar</div>
+          );})}
         </div>
-      )}
+      </div>}
+
       {okNota&&<div className="ok" style={{marginBottom:14}}>{okNota}</div>}
-      <button onClick={salvarNota} disabled={salvandoNota||Object.keys(qtds).filter(function(k){return parseInt(qtds[k])>0;}).length===0} className="bg" style={{opacity:(salvandoNota||Object.keys(qtds).filter(function(k){return parseInt(qtds[k])>0;}).length===0)?0.45:1}}>{salvandoNota?'Registrando...':'Registrar Entrada da Nota'}</button>
+      {carrinhoNota.length>0&&<button onClick={salvarCarrinhoNota} disabled={salvandoNota} style={{width:'100%',padding:'15px',background:'#0C6B3E',border:'none',borderRadius:12,color:'#fff',fontWeight:800,fontSize:16,cursor:'pointer',opacity:salvandoNota?0.6:1,marginBottom:14}}>
+        {salvandoNota?'Registrando...':'Confirmar entrada de '+carrinhoNota.length+' medicamento(s)'}
+      </button>}
     </div>
   )}
 </div>);}
@@ -586,14 +795,182 @@ return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
 {sub==='team'&&(<div style={{display:'flex',flexDirection:'column',gap:10}}>{approved.map(function(u){return(<div key={u.id} className="card" style={{padding:'14px 16px',display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}><UserAvatar user={u} size={42}/><div style={{flex:1}}><div style={{fontWeight:700,color:u.color||B,fontSize:14}}>{u.name}</div><div style={{fontSize:12,color:'#64748B',marginTop:2}}>{ROLE_ICON[u.role]} {ROLES[u.role]}{u.role==='farmaceutico'&&u.crf?' · CRF: '+u.crf:''}</div></div>{u.id!==currentUser.uid?(<div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}><select value={u.role} onChange={function(e){changeRole(u.id,e.target.value);}} className="inp" style={{width:'auto',marginBottom:0,fontSize:12,padding:'6px 10px'}}>{Object.keys(ROLES).map(function(k){return <option key={k} value={k}>{ROLES[k]}</option>;})}</select>{currentUser.role==='tecnico'&&<button onClick={function(){deactivate(u.id,u.name);}} style={{background:'#FEE2E2',border:'1px solid #FCA5A5',borderRadius:8,padding:'6px 12px',color:'#B91C1C',cursor:'pointer',fontSize:11,fontWeight:600,whiteSpace:'nowrap'}}>Desativar</button>}</div>):<span className="badge badge-blue">{ROLES[u.role]} (voce)</span>}</div>);})}</div>)}
 {sub==='solicit'&&(solicitList.length===0?<div className="card" style={{padding:40,textAlign:'center',color:'#94A3B8'}}>Nenhuma solicitacao pendente.</div>:(<div style={{display:'flex',flexDirection:'column',gap:10}}>{solicitList.map(function(s){return(<div key={s.id} className="card" style={{padding:'14px 16px',border:'1.5px solid #BFDBFE'}}><div style={{display:'flex',justifyContent:'space-between',marginBottom:10,alignItems:'center'}}><div style={{display:'flex',alignItems:'center',gap:8}}><div className="av" style={{width:34,height:34,background:s.solicitanteColor||B,fontSize:13}}>{s.solicitanteNome?s.solicitanteNome.charAt(0):'?'}</div><div><div style={{fontWeight:600,fontSize:13,color:B}}>{s.solicitanteNome}</div><div style={{fontSize:11,color:'#64748B'}}>{ROLES[s.solicitanteCargo]||s.solicitanteCargo} · {fmtT(s.criadoEm)}</div></div></div><span className={s.tipo==='saida'?'tag-s':'tag-e'}>{s.tipo}</span></div><div style={{fontWeight:700,color:'#1E293B',fontSize:14,marginBottom:4}}>{s.medicamentoNome}</div><div style={{fontSize:13,color:'#64748B',marginBottom:s.observacao?8:14}}>Qtd: <strong>{s.quantidade}</strong></div>{s.observacao&&<div style={{fontSize:12,color:'#64748B',fontStyle:'italic',marginBottom:14,background:'#F8FAFC',padding:'8px 12px',borderRadius:8}}>"{s.observacao}"</div>}<div style={{display:'flex',gap:8}}><button onClick={function(){rejectSolicit(s.id);}} className="br" style={{flex:1}}>Recusar</button><button onClick={function(){approveSolicit(s);}} className="bg" style={{flex:2}}>Aprovar</button></div></div>);})}</div>))}
 {sub==='alerts'&&(alertas.length===0?<div className="card" style={{padding:40,textAlign:'center',color:'#94A3B8'}}>Nenhum alerta registrado.</div>:(<div style={{display:'flex',flexDirection:'column',gap:10}}>{alertas.map(function(a){return(<div key={a.id} className="card" style={{padding:'14px 16px',opacity:a.lido?0.5:1}}><div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}><span className="badge badge-amber">Saida excessiva</span><span style={{fontSize:11,color:'#94A3B8'}}>{fmtD(a.criadoEm)}</span></div><div style={{fontWeight:600,color:'#1E293B',marginBottom:4,fontSize:14}}>{a.medicamentoNome}</div><div style={{fontSize:12,color:'#64748B',marginBottom:a.lido?0:12}}>Por: {a.autorNome} · {a.quantidade} un.</div>{!a.lido&&<button onClick={function(){db.collection('alertas').doc(a.id).update({lido:true});}} className="bs" style={{width:'auto',padding:'6px 16px',fontSize:12}}>Marcar como lido</button>}</div>);})}</div>))}
-{sub==='inativo'&&(inactive.length===0?<div className="card" style={{padding:40,textAlign:'center',color:'#94A3B8'}}>Nenhuma conta inativa.</div>:(<div style={{display:'flex',flexDirection:'column',gap:10}}>{inactive.map(function(u){return(<div key={u.id} className="card" style={{padding:'14px 16px',display:'flex',alignItems:'center',gap:12,flexWrap:'wrap',opacity:0.65}}><UserAvatar user={u} size={38}/><div style={{flex:1}}><div style={{fontWeight:600,color:'#64748B'}}>{u.name}</div><div style={{fontSize:12,color:'#94A3B8'}}>{ROLES[u.role]||u.role}</div></div><button onClick={function(){reactivate(u);}} style={{fontSize:12,background:'#DCFCE7',border:'1px solid #86EFAC',borderRadius:20,padding:'5px 14px',color:'#0C6B3E',cursor:'pointer',fontWeight:600}}>Reativar</button></div>);})}</div>))}
+{sub==='inativo'&&(inactive.length===0?<div className="card" style={{padding:40,textAlign:'center',color:'#94A3B8'}}>Nenhuma conta inativa.</div>:(<div style={{display:'flex',flexDirection:'column',gap:10}}>{inactive.map(function(u){return(<div key={u.id} className="card" style={{padding:'14px 16px',display:'flex',alignItems:'center',gap:12,flexWrap:'wrap',opacity:0.65}}><UserAvatar user={u} size={38}/><div style={{flex:1}}><div style={{fontWeight:600,color:'#64748B'}}>{u.name}</div><div style={{fontSize:12,color:'#94A3B8'}}>{ROLES[u.role]||u.role}</div></div><button onClick={function(){reactivate(u);}} style={{fontSize:12,background:'#DCFCE7',border:'1px solid #86EFAC',borderRadius:20,padding:'5px 14px',color:'#0C6B3E',cursor:'pointer',fontWeight:600}}>Reativar</button>{currentUser.role==='tecnico'&&<button onClick={function(){if(!confirm('EXCLUIR PERMANENTEMENTE '+u.name+'? Isso nao pode ser desfeito!'))return;auth.currentUser&&db.collection('users').doc(u.id).delete().then(function(){db.collection('logs_contas').add({uid:u.id,nome:u.name,cargo:u.role,acao:'excluido permanentemente',por:currentUser.name,criadoEm:new Date().toISOString()}).catch(function(){});alert(u.name+' excluido permanentemente.');}).catch(function(e){alert('Erro: '+e.message);});}} style={{fontSize:12,background:'#FEE2E2',border:'1px solid #FCA5A5',borderRadius:20,padding:'5px 14px',color:'#DC2626',cursor:'pointer',fontWeight:600}}>Excluir</button>}</div>);})}</div>))}
 {sub==='reset'&&(<div><div className="wn" style={{marginBottom:16}}>Atencao: estas acoes sao permanentes e irreversiveis.</div><div className="card" style={{padding:'20px',marginBottom:12}}><div style={{fontWeight:700,color:'#1E293B',fontSize:14,marginBottom:6}}>Apagar movimentacoes</div><div style={{fontSize:13,color:'#64748B',marginBottom:14}}>Remove todos os registros de entrada e saida. Medicamentos mantidos.</div><button onClick={function(){if(!confirm('Apagar TODAS as movimentacoes?'))return;if(!confirm('CONFIRMACAO FINAL: isso nao pode ser desfeito!'))return;db.collection('entries').get().then(function(s){var b=db.batch();s.docs.forEach(function(d){b.delete(d.ref);});return b.commit();}).then(function(){alert('Movimentacoes apagadas!');}).catch(function(e){alert(e.message);});}} className="br">Apagar movimentacoes</button></div><div className="card" style={{padding:'20px',marginBottom:12}}><div style={{fontWeight:700,color:'#1E293B',fontSize:14,marginBottom:6}}>Apagar medicamentos</div><div style={{fontSize:13,color:'#64748B',marginBottom:14}}>Remove todos os medicamentos cadastrados.</div><button onClick={function(){if(!confirm('Apagar TODOS os medicamentos?'))return;if(!confirm('CONFIRMACAO FINAL?'))return;db.collection('medicamentos').get().then(function(s){var b=db.batch();s.docs.forEach(function(d){b.delete(d.ref);});return b.commit();}).then(function(){alert('Medicamentos apagados!');}).catch(function(e){alert(e.message);});}} className="br">Apagar medicamentos</button></div><div className="card" style={{padding:'20px'}}><div style={{fontWeight:700,color:'#1E293B',fontSize:14,marginBottom:6}}>Reset completo</div><div style={{fontSize:13,color:'#64748B',marginBottom:14}}>Apaga todos os medicamentos e movimentacoes.</div><button onClick={function(){if(!confirm('RESET COMPLETO do sistema?'))return;if(!confirm('ULTIMA CONFIRMACAO — sem volta!'))return;Promise.all([db.collection('entries').get().then(function(s){var b=db.batch();s.docs.forEach(function(d){b.delete(d.ref);});return b.commit();}),db.collection('medicamentos').get().then(function(s){var b=db.batch();s.docs.forEach(function(d){b.delete(d.ref);});return b.commit();})]).then(function(){alert('Reset realizado!');}).catch(function(e){alert(e.message);});}} style={{background:'#7B1FA2',border:'none',borderRadius:10,padding:'12px',color:'#fff',fontSize:14,fontWeight:600,cursor:'pointer',width:'100%',boxShadow:'0 2px 8px rgba(123,31,162,.3)'}}>Reset completo</button></div></div>)}
 </div>);}
 
 function TabLog(){var _logs=useState([]);var logs=_logs[0];var setLogs=_logs[1];useEffect(function(){db.collection('logs_acesso').limit(100).onSnapshot(function(s){var list=s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;});list.sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});setLogs(list);});},[]);return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}><div className="card"><div className="ch"><div className="ch-title"><div className="ch-accent"/><span>Log de Acessos</span></div><span style={{fontSize:12,color:'#94A3B8',fontWeight:500}}>{logs.length} registros</span></div>{logs.length===0?<div style={{padding:32,textAlign:'center',color:'#94A3B8'}}>Nenhum log.</div>:(<div style={{overflowX:'auto'}}><table className="tbl"><thead><tr><th>Data</th><th>Hora</th><th>Usuario</th><th>Cargo</th><th>Acao</th></tr></thead><tbody>{logs.map(function(l){return(<tr key={l.id}><td style={{fontSize:12,color:'#64748B',whiteSpace:'nowrap'}}>{fmtD(l.criadoEm)}</td><td style={{whiteSpace:'nowrap',fontSize:12,color:'#64748B'}}>{fmtT(l.criadoEm)}</td><td><div style={{fontWeight:600,color:'#1E293B',fontSize:13}}>{l.nome}</div></td><td><span className="badge badge-gray">{ROLES[l.cargo]||l.cargo}</span></td><td><span className={'badge '+(l.acao==='login'?'badge-blue':'badge-red')}>{l.acao==='login'?'Login':'Logout'}</span></td></tr>);})}</tbody></table></div>)}</div></div>);}
 
 function TabHistContas(){var _logs=useState([]);var logs=_logs[0];var setLogs=_logs[1];useEffect(function(){db.collection('logs_contas').limit(100).onSnapshot(function(s){var list=s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;});list.sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});setLogs(list);});},[]);var styles={aprovado:{cls:'badge-green',txt:'Aprovado'},recusado:{cls:'badge-red',txt:'Recusado'},desativado:{cls:'badge-red',txt:'Desativado'},reativado:{cls:'badge-green',txt:'Reativado'}};return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}><div className="card"><div className="ch"><div className="ch-title"><div className="ch-accent"/><span>Historico de Contas</span></div><span style={{fontSize:12,color:'#94A3B8',fontWeight:500}}>{logs.length} registros</span></div>{logs.length===0?<div style={{padding:32,textAlign:'center',color:'#94A3B8'}}>Nenhum registro.</div>:<div>{logs.map(function(l,i){var st=styles[l.acao]||{cls:'badge-gray',txt:l.acao};return(<div key={l.id} style={{padding:'13px 20px',borderBottom:i<logs.length-1?'1px solid #F8FAFC':'none',display:'flex',gap:12,alignItems:'center',flexWrap:'wrap'}}><div style={{flex:1}}><div style={{fontWeight:600,fontSize:14,color:'#1E293B'}}>{l.nome}</div><div style={{fontSize:12,color:'#64748B',marginTop:2}}>{ROLES[l.cargo]||l.cargo} · por: <strong>{l.por}</strong></div><div style={{fontSize:11,color:'#94A3B8',marginTop:2}}>{fmtD(l.criadoEm)} {fmtT(l.criadoEm)}</div></div><span className={'badge '+st.cls}>{st.txt}</span></div>);}  )}</div>}</div></div>);}
-function TabPerfil(props){var user=props.user;var onUpdate=props.onUpdate;var onLogout=props.onLogout;var entries=props.entries;var medications=props.medications;var stock=props.stock;var _color=useState(user.color||PALETTE[0]);var color=_color[0];var setColor=_color[1];var _sessionH=useState(user.sessionTimeout||12);var sessionH=_sessionH[0];var setSessionH=_sessionH[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];var _ok=useState('');var ok=_ok[0];var setOk=_ok[1];var _photo=useState(user.photoURL||'');var photo=_photo[0];var setPhoto=_photo[1];var _crf=useState(user.crf||'');var crf=_crf[0];var setCrf=_crf[1];var _uploading=useState(false);var uploading=_uploading[0];var setUploading=_uploading[1];
+function SeletorAmbiente({user}){
+  var _open=useState(false);var open=_open[0];var setOpen=_open[1];
+  if(!user||user.role!=='tecnico')return null;
+  var env=localStorage.getItem('farmacontrol_env')||'prod';
+  var isDev=env==='dev';
+  return (
+    <div style={{position:'fixed',bottom:76,right:16,zIndex:999}}>
+      {open&&<div style={{background:'#fff',borderRadius:14,padding:16,boxShadow:'0 4px 24px rgba(0,0,0,0.18)',marginBottom:8,minWidth:180}}>
+        <div style={{fontSize:12,fontWeight:700,color:'#1E293B',marginBottom:10}}>⚙️ Trocar Ambiente</div>
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          <button onClick={function(){localStorage.setItem('farmacontrol_env','prod');window.location.reload();}} style={{padding:'10px',background:!isDev?'#059669':'#F1F5F9',color:!isDev?'#fff':'#1E293B',border:'none',borderRadius:8,fontWeight:700,fontSize:12,cursor:'pointer'}}>🟢 PRODUÇÃO</button>
+          <button onClick={function(){localStorage.setItem('farmacontrol_env','dev');window.location.reload();}} style={{padding:'10px',background:isDev?'#F59E0B':'#F1F5F9',color:isDev?'#fff':'#1E293B',border:'none',borderRadius:8,fontWeight:700,fontSize:12,cursor:'pointer'}}>🧪 TESTES</button>
+        </div>
+      </div>}
+      <button onClick={function(){setOpen(!open);}} style={{width:48,height:48,borderRadius:99,background:isDev?'#F59E0B':'#1351B4',border:'none',boxShadow:'0 4px 16px rgba(0,0,0,0.2)',cursor:'pointer',fontSize:20,display:'flex',alignItems:'center',justifyContent:'center',marginLeft:'auto'}}>
+        {isDev?'🧪':'⚙️'}
+      </button>
+    </div>
+  );
+}
+function TabAdmin({user,entries,medications,db}){
+  var sl=React.useState,ef=React.useEffect;
+  var _sub=sl('entradas');var sub=_sub[0];var setSub=_sub[1];
+  var _confirm=sl('');var confirmId=_confirm[0];var setConfirmId=_confirm[1];
+  var _ok=sl('');var ok=_ok[0];var setOk=_ok[1];
+  var _busca=sl('');var busca=_busca[0];var setBusca=_busca[1];
+  var _tratamentos=sl([]);var tratamentos=_tratamentos[0];var setTratamentos=_tratamentos[1];
+  var _logs=sl([]);var logs=_logs[0];var setLogs=_logs[1];
+  var _histcontas=sl([]);var histcontas=_histcontas[0];var setHistcontas=_histcontas[1];
+  var _logAcesso=sl([]);var logAcesso=_logAcesso[0];var setLogAcesso=_logAcesso[1];
+
+  ef(function(){
+    var u1=db.collection('tratamentos_atb').orderBy('criadoEm','desc').limit(50).onSnapshot(function(sn){setTratamentos(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));});
+    var u2=db.collection('entries').orderBy('criadoEm','desc').limit(100).onSnapshot(function(sn){setLogs(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));});
+    var u3=db.collection('logs_contas').orderBy('criadoEm','desc').limit(100).onSnapshot(function(sn){setHistcontas(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));}).catch?db.collection('logs_contas').orderBy('criadoEm','desc').limit(100).onSnapshot(function(sn){setHistcontas(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));}):function(){};
+    var u4=db.collection('logs_acesso').orderBy('criadoEm','desc').limit(100).onSnapshot(function(sn){setLogAcesso(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));},function(){});
+    return function(){u1();u2();};
+  },[]);
+
+  function del(col,id,nome){
+    if(confirmId===id){
+      db.collection(col).doc(id).delete().then(function(){
+        setOk(nome+' apagado com sucesso!');setConfirmId('');setTimeout(function(){setOk('');},3000);
+      }).catch(function(e){setOk('Erro: '+e.message);});
+    } else {
+      setConfirmId(id);setTimeout(function(){setConfirmId('');},4000);
+    }
+  }
+
+  function delMed(id,nome){
+    if(confirmId===id){
+      db.collection('medications').doc(id).delete().then(function(){
+        setOk(nome+' apagado!');setConfirmId('');setTimeout(function(){setOk('');},3000);
+      }).catch(function(e){setOk('Erro: '+e.message);});
+    } else {setConfirmId(id);setTimeout(function(){setConfirmId('');},4000);}
+  }
+
+  var subItems=[['entradas','📥 Entradas'],['saidas','💊 Saídas'],['medicamentos','💉 Medicamentos'],['atb','🧬 ATB'],['histcontas','📋 Hist. Contas'],['log','🔐 Log Acesso']];
+
+  var entradasFilt=logs.filter(function(e){return e.tipo==='entrada'&&(!busca||(e.medicamentoNome||'').toLowerCase().includes(busca.toLowerCase()));});
+  var saidasFilt=logs.filter(function(e){return e.tipo==='saida'&&(!busca||(e.medicamentoNome||'').toLowerCase().includes(busca.toLowerCase()));});
+  var medsFilt=medications.filter(function(m){return !busca||(m.nome||'').toLowerCase().includes(busca.toLowerCase());});
+  var atbFilt=tratamentos.filter(function(t){return !busca||(t.pacienteNome||'').toLowerCase().includes(busca.toLowerCase());});
+
+  function BtnDel({col,id,nome}){
+    var conf=confirmId===id;
+    return <button onClick={function(){del(col,id,nome);}} style={{background:conf?'#DC2626':'#FEE2E2',color:conf?'#fff':'#DC2626',border:'none',borderRadius:7,padding:'5px 10px',fontSize:11,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap'}}>{conf?'Confirmar!':'🗑 Apagar'}</button>;
+  }
+
+  return (
+    <div style={{maxWidth:600,margin:'0 auto',padding:'16px 14px'}}>
+      <div style={{background:'linear-gradient(135deg,#1E293B,#334155)',borderRadius:16,padding:16,marginBottom:16,color:'#fff'}}>
+        <div style={{fontSize:18,fontWeight:800,marginBottom:4}}>🔧 Painel do Técnico</div>
+        <div style={{fontSize:12,color:'rgba(255,255,255,0.7)'}}>Controle total — exclua registros com cuidado</div>
+      </div>
+      {ok&&<div style={{background:'#DCFCE7',color:'#065F46',padding:'10px 14px',borderRadius:10,marginBottom:12,fontWeight:700,fontSize:13}}>{ok}</div>}
+      <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:14}}>
+        {subItems.map(function(s){return(
+          <button key={s[0]} onClick={function(){setSub(s[0]);setBusca('');}} style={{padding:'8px 14px',borderRadius:10,border:'none',background:sub===s[0]?'#1351B4':'#F1F5F9',color:sub===s[0]?'#fff':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>{s[1]}</button>
+        );})}
+      </div>
+      <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="Buscar..." style={{width:'100%',padding:'10px 14px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:13,marginBottom:12,boxSizing:'border-box'}}/>
+      {confirmId&&<div style={{background:'#FEF3C7',border:'1px solid #FCD34D',borderRadius:10,padding:'10px 14px',marginBottom:12,fontSize:12,fontWeight:700,color:'#92400E'}}>⚠️ Clique em "Confirmar!" novamente para apagar permanentemente</div>}
+
+      {sub==='entradas'&&<div style={{display:'flex',flexDirection:'column',gap:8}}>
+        {entradasFilt.length===0&&<div style={{textAlign:'center',color:'#94A3B8',padding:20}}>Nenhuma entrada encontrada</div>}
+        {entradasFilt.map(function(e){return(
+          <div key={e.id} style={{background:'#fff',borderRadius:12,padding:'12px 14px',boxShadow:'0 1px 6px rgba(0,0,0,0.06)',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontWeight:700,fontSize:13,color:'#1E293B',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{e.medicamentoNome}</div>
+              <div style={{fontSize:11,color:'#64748B',marginTop:2}}>+{e.quantidade} un. · {e.autorNome||'?'} · {e.criadoEm?new Date(e.criadoEm).toLocaleString('pt-BR'):''}</div>
+            </div>
+            <BtnDel col="entries" id={e.id} nome={e.medicamentoNome}/>
+          </div>
+        );})}
+      </div>}
+
+      {sub==='saidas'&&<div style={{display:'flex',flexDirection:'column',gap:8}}>
+        {saidasFilt.length===0&&<div style={{textAlign:'center',color:'#94A3B8',padding:20}}>Nenhuma saída encontrada</div>}
+        {saidasFilt.map(function(e){return(
+          <div key={e.id} style={{background:'#fff',borderRadius:12,padding:'12px 14px',boxShadow:'0 1px 6px rgba(0,0,0,0.06)',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontWeight:700,fontSize:13,color:'#DC2626',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{e.medicamentoNome}</div>
+              <div style={{fontSize:11,color:'#64748B',marginTop:2}}>-{e.quantidade} un. · {e.autorNome||'?'} · {e.criadoEm?new Date(e.criadoEm).toLocaleString('pt-BR'):''}</div>
+            </div>
+            <BtnDel col="entries" id={e.id} nome={e.medicamentoNome}/>
+          </div>
+        );})}
+      </div>}
+
+      {sub==='medicamentos'&&<div style={{display:'flex',flexDirection:'column',gap:8}}>
+        {medsFilt.length===0&&<div style={{textAlign:'center',color:'#94A3B8',padding:20}}>Nenhum medicamento encontrado</div>}
+        {medsFilt.map(function(m){return(
+          <div key={m.id} style={{background:'#fff',borderRadius:12,padding:'12px 14px',boxShadow:'0 1px 6px rgba(0,0,0,0.06)',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontWeight:700,fontSize:13,color:'#1E293B',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{m.nome}</div>
+              <div style={{fontSize:11,color:'#64748B',marginTop:2}}>{m.categoria||'Sem categoria'} · EAN: {m.ean||'--'}</div>
+            </div>
+            <button onClick={function(){delMed(m.id,m.nome);}} style={{background:confirmId===m.id?'#DC2626':'#FEE2E2',color:confirmId===m.id?'#fff':'#DC2626',border:'none',borderRadius:7,padding:'5px 10px',fontSize:11,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap'}}>{confirmId===m.id?'Confirmar!':'🗑 Apagar'}</button>
+          </div>
+        );})}
+      </div>}
+
+      {sub==='atb'&&<div style={{display:'flex',flexDirection:'column',gap:8}}>
+        {atbFilt.length===0&&<div style={{textAlign:'center',color:'#94A3B8',padding:20}}>Nenhum paciente encontrado</div>}
+        {atbFilt.map(function(t){return(
+          <div key={t.id} style={{background:'#fff',borderRadius:12,padding:'12px 14px',boxShadow:'0 1px 6px rgba(0,0,0,0.06)',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontWeight:700,fontSize:13,color:'#1E293B',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.pacienteNome}</div>
+              <div style={{fontSize:11,color:'#64748B',marginTop:2}}>{t.medicamentoNome||'--'} · {t.status||'--'} · {t.criadoPor||'?'}</div>
+            </div>
+            <BtnDel col="tratamentos_atb" id={t.id} nome={t.pacienteNome}/>
+          </div>
+        );})}
+      </div>}
+
+      {sub==='histcontas'&&<div style={{display:'flex',flexDirection:'column',gap:8}}>
+        {histcontas.length===0&&<div style={{textAlign:'center',color:'#94A3B8',padding:20}}>Nenhum registro encontrado</div>}
+        {histcontas.filter(function(h){return !busca||(h.nome||'').toLowerCase().includes(busca.toLowerCase());}).map(function(h){return(
+          <div key={h.id} style={{background:'#fff',borderRadius:12,padding:'12px 14px',boxShadow:'0 1px 6px rgba(0,0,0,0.06)',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>{h.nome||'--'}</div>
+              <div style={{fontSize:11,color:'#64748B',marginTop:2}}>{h.acao||'--'} · {h.por||'?'} · {h.criadoEm?new Date(h.criadoEm).toLocaleString('pt-BR'):''}</div>
+            </div>
+            <BtnDel col="logs_contas" id={h.id} nome={h.nome||'registro'}/>
+          </div>
+        );})}
+      </div>}
+
+      {sub==='log'&&<div style={{display:'flex',flexDirection:'column',gap:8}}>
+        {logAcesso.length===0&&<div style={{textAlign:'center',color:'#94A3B8',padding:20}}>Nenhum log encontrado</div>}
+        {logAcesso.filter(function(l){return !busca||(l.nome||l.userName||'').toLowerCase().includes(busca.toLowerCase());}).map(function(l){return(
+          <div key={l.id} style={{background:'#fff',borderRadius:12,padding:'12px 14px',boxShadow:'0 1px 6px rgba(0,0,0,0.06)',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>{l.nome||l.userName||'--'}</div>
+              <div style={{fontSize:11,color:'#64748B',marginTop:2}}>{l.acao||l.tipo||'acesso'} · {l.criadoEm?new Date(l.criadoEm).toLocaleString('pt-BR'):''}</div>
+            </div>
+            <BtnDel col="logs_acesso" id={l.id} nome={l.nome||'log'}/>
+          </div>
+        );})}
+      </div>}
+    </div>
+  );
+}
+function TabPerfil(props){var user=props.user;var onUpdate=props.onUpdate;var onLogout=props.onLogout;var entries=props.entries;var medications=props.medications;var stock=props.stock;
+  var _amb=useState(localStorage.getItem('farmacontrol_env')||'prod');var amb=_amb[0];var setAmb=_amb[1];
+  var _showAmbSelector=useState(false);var showAmbSelector=_showAmbSelector[0];var setShowAmbSelector=_showAmbSelector[1];
+  function trocarAmbiente(novoAmb){localStorage.setItem('farmacontrol_env',novoAmb);setAmb(novoAmb);setShowAmbSelector(false);setTimeout(function(){window.location.reload();},500);}
+  var _color=useState(user.color||PALETTE[0]);var color=_color[0];var setColor=_color[1];var _sessionH=useState(user.sessionTimeout||12);var sessionH=_sessionH[0];var setSessionH=_sessionH[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];var _ok=useState('');var ok=_ok[0];var setOk=_ok[1];var _photo=useState(user.photoURL||'');var photo=_photo[0];var setPhoto=_photo[1];var _crf=useState(user.crf||'');var crf=_crf[0];var setCrf=_crf[1];var _uploading=useState(false);var uploading=_uploading[0];var setUploading=_uploading[1];
 function handlePhotoChange(e){var file=e.target.files[0];if(!file)return;if(!file.type.startsWith('image/')){alert('Selecione uma imagem.');return;}if(file.size>8*1024*1024){alert('Max 8MB.');return;}setUploading(true);compressPhoto(file,function(b64){setPhoto(b64);setUploading(false);});}
 function save(){setSaving(true);var upd={color:color,sessionTimeout:parseInt(sessionH)||12,photoURL:photo||''};if(user.role==='farmaceutico')upd.crf=crf.trim();db.collection('users').doc(user.uid).update(upd).then(function(){var u={};for(var k in user)u[k]=user[k];u.color=color;u.sessionTimeout=parseInt(sessionH)||12;u.photoURL=photo||'';if(user.role==='farmaceutico')u.crf=crf.trim();localStorage.setItem('fc_user',JSON.stringify(u));onUpdate(u);setOk('Preferencias salvas com sucesso!');setTimeout(function(){setOk('');},3000);setSaving(false);}).catch(function(e){alert('Erro: '+e.message);setSaving(false);});}
 function exportBackup(){var wb=XLSX.utils.book_new();var rows=[['Data','Hora','Responsavel','Medicamento','Tipo','Qtd','Lote']];(entries||[]).forEach(function(e){rows.push([fmtD(e.criadoEm),fmtT(e.criadoEm),e.autorNome||'',e.medicamentoNome||'',e.tipo==='entrada'?'Entrada':'Saida',e.quantidade||0,e.lote||'']);});XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'Movimentacoes');var sr=[['Medicamento','EAN','Estoque']];(medications||[]).forEach(function(m){sr.push([m.nome,m.ean||'',(stock||{})[m.id]||0]);});XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(sr),'Estoque');XLSX.writeFile(wb,'backup_farmacontrol_'+todayStr()+'.xlsx');}
@@ -663,13 +1040,588 @@ return(
 </div>);}
 
 function BuscaGlobal(props){var entries=props.entries;var medications=props.medications;var onClose=props.onClose;var _q=useState('');var q=_q[0];var setQ=_q[1];var results=[];if(q&&q.length>=2){var s=q.toLowerCase();var meds=medications.filter(function(m){return m.nome.toLowerCase().indexOf(s)>=0||(m.ean&&m.ean.indexOf(s)>=0);}).slice(0,5).map(function(m){var o={};for(var k in m)o[k]=m[k];o._t='med';return o;});var ents=entries.filter(function(e){return (e.medicamentoNome||'').toLowerCase().indexOf(s)>=0||(e.autorNome||'').toLowerCase().indexOf(s)>=0;}).sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');}).slice(0,12).map(function(e){var o={};for(var k in e)o[k]=e[k];o._t='entry';return o;});results=meds.concat(ents);}
-return(<div onClick={onClose} style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(15,23,42,.65)',zIndex:400,padding:'50px 14px 14px',display:'flex',alignItems:'flex-start',justifyContent:'center',backdropFilter:'blur(3px)'}}><div onClick={function(e){e.stopPropagation();}} style={{background:'#fff',borderRadius:20,maxWidth:560,width:'100%',overflow:'hidden',boxShadow:'0 24px 64px rgba(0,0,0,.2)'}}><div style={{padding:'14px 16px',borderBottom:'1px solid #F1F5F9',display:'flex',gap:10,alignItems:'center',background:'#F8FAFC'}}><span style={{fontSize:18}}>🔍</span><input value={q} onChange={function(e){setQ(e.target.value);}} placeholder="Buscar medicamentos, registros, responsaveis..." style={{flex:1,border:'none',outline:'none',fontSize:14,color:'#1E293B',background:'transparent',fontFamily:'inherit'}} autoFocus/><button onClick={onClose} style={{background:'#E2E8F0',border:'none',borderRadius:'50%',width:28,height:28,cursor:'pointer',fontSize:16,color:'#64748B',display:'flex',alignItems:'center',justifyContent:'center'}}>×</button></div><div style={{maxHeight:'60vh',overflowY:'auto'}}>{q.length<2?<div style={{padding:40,textAlign:'center',color:'#94A3B8',fontSize:13}}>Digite ao menos 2 letras para buscar</div>:results.length===0?<div style={{padding:40,textAlign:'center',color:'#94A3B8',fontSize:13}}>Nenhum resultado encontrado</div>:results.map(function(r,i){return(<div key={i} style={{padding:'12px 16px',borderBottom:'1px solid #F8FAFC',display:'flex',gap:10,alignItems:'center',transition:'background .1s'}} onMouseEnter={function(e){e.currentTarget.style.background='#EFF6FF';}} onMouseLeave={function(e){e.currentTarget.style.background='';}}><div style={{width:36,height:36,borderRadius:10,background:r._t==='med'?'#EFF6FF':r.tipo==='saida'?'#FEE2E2':'#DCFCE7',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0}}>{r._t==='med'?'💊':r.tipo==='saida'?'📤':'📥'}</div><div style={{flex:1,minWidth:0}}>{r._t==='med'?<div style={{fontWeight:600,color:B,fontSize:14}}>{r.nome}</div>:(<div><div style={{fontWeight:600,color:'#1E293B',fontSize:13,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.medicamentoNome}</div><div style={{fontSize:11,color:'#94A3B8',marginTop:2}}>{fmtD(r.criadoEm)} · {r.autorNome} · {r.tipo}: {r.quantidade}</div></div>)}</div><span className={'badge '+(r._t==='med'?'badge-blue':r.tipo==='saida'?'badge-red':'badge-green')}>{r._t==='med'?'Medicamento':r.tipo==='saida'?'Saida':'Entrada'}</span></div>);}  )}</div></div></div>);}
+return(
+      <div onClick={onClose} style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(15,23,42,.65)',zIndex:400,padding:'50px 14px 14px',display:'flex',alignItems:'flex-start',justifyContent:'center',backdropFilter:'blur(3px)'}}><div onClick={function(e){e.stopPropagation();}} style={{background:'#fff',borderRadius:20,maxWidth:560,width:'100%',overflow:'hidden',boxShadow:'0 24px 64px rgba(0,0,0,.2)'}}><div style={{padding:'14px 16px',borderBottom:'1px solid #F1F5F9',display:'flex',gap:10,alignItems:'center',background:'#F8FAFC'}}><span style={{fontSize:18}}>🔍</span><input value={q} onChange={function(e){setQ(e.target.value);}} placeholder="Buscar medicamentos, registros, responsaveis..." style={{flex:1,border:'none',outline:'none',fontSize:14,color:'#1E293B',background:'transparent',fontFamily:'inherit'}} autoFocus/><button onClick={onClose} style={{background:'#E2E8F0',border:'none',borderRadius:'50%',width:28,height:28,cursor:'pointer',fontSize:16,color:'#64748B',display:'flex',alignItems:'center',justifyContent:'center'}}>×</button></div><div style={{maxHeight:'60vh',overflowY:'auto'}}>{q.length<2?<div style={{padding:40,textAlign:'center',color:'#94A3B8',fontSize:13}}>Digite ao menos 2 letras para buscar</div>:results.length===0?<div style={{padding:40,textAlign:'center',color:'#94A3B8',fontSize:13}}>Nenhum resultado encontrado</div>:results.map(function(r,i){return(<div key={i} style={{padding:'12px 16px',borderBottom:'1px solid #F8FAFC',display:'flex',gap:10,alignItems:'center',transition:'background .1s'}} onMouseEnter={function(e){e.currentTarget.style.background='#EFF6FF';}} onMouseLeave={function(e){e.currentTarget.style.background='';}}><div style={{width:36,height:36,borderRadius:10,background:r._t==='med'?'#EFF6FF':r.tipo==='saida'?'#FEE2E2':'#DCFCE7',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0}}>{r._t==='med'?'💊':r.tipo==='saida'?'📤':'📥'}</div><div style={{flex:1,minWidth:0}}>{r._t==='med'?<div style={{fontWeight:600,color:B,fontSize:14}}>{r.nome}</div>:(<div><div style={{fontWeight:600,color:'#1E293B',fontSize:13,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.medicamentoNome}</div><div style={{fontSize:11,color:'#94A3B8',marginTop:2}}>{fmtD(r.criadoEm)} · {r.autorNome} · {r.tipo}: {r.quantidade}</div></div>)}</div><span className={'badge '+(r._t==='med'?'badge-blue':r.tipo==='saida'?'badge-red':'badge-green')}>{r._t==='med'?'Medicamento':r.tipo==='saida'?'Saida':'Entrada'}</span></div>);}  )}</div></div></div>);}
 
 function SolicitModal(props){var user=props.user;var medications=props.medications;var onClose=props.onClose;var _search=useState('');var search=_search[0];var setSearch=_search[1];var _sel=useState(null);var sel=_sel[0];var setSel=_sel[1];var _tipo=useState('saida');var tipo=_tipo[0];var setTipo=_tipo[1];var _qty=useState('');var qty=_qty[0];var setQty=_qty[1];var _obs=useState('');var obs=_obs[0];var setObs=_obs[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];var _ok=useState('');var ok=_ok[0];var setOk=_ok[1];var _err=useState('');var err=_err[0];var setErr=_err[1];var _showList=useState(false);var showList=_showList[0];var setShowList=_showList[1];var medList=medications;if(search.trim()){var s=search.toLowerCase();medList=medications.filter(function(m){return m.nome.toLowerCase().indexOf(s)>=0;});}
 function solicitar(){if(!sel){setErr('Selecione um medicamento.');return;}var q=parseInt(qty);if(!q||q<=0){setErr('Informe a quantidade.');return;}setSaving(true);setErr('');db.collection('solicitacoes').add({medicamentoId:sel.id,medicamentoNome:sel.nome,tipo:tipo,quantidade:q,observacao:obs.trim(),solicitanteId:user.uid,solicitanteNome:user.name,solicitanteCargo:user.role,solicitanteColor:user.color||B,status:'pendente',criadoEm:new Date().toISOString(),origem:'convidado'}).then(function(){playSound('success');setOk('Solicitacao enviada com sucesso!');setSaving(false);setTimeout(function(){onClose();},2000);}).catch(function(e){setErr('Erro: '+e.message);setSaving(false);});}
 return(<Modal onClose={onClose} title="Solicitar Movimentacao"><div className="inf" style={{marginBottom:14}}>Modo convidado — sera revisado pelo Gestor ou Tecnico antes de ser efetivado.</div><div style={{display:'flex',gap:8,marginBottom:14}}><button onClick={function(){setTipo('saida');}} style={{flex:1,padding:'11px',borderRadius:10,border:'1.5px solid '+(tipo==='saida'?'#DC2626':'#E2E8F0'),background:tipo==='saida'?'#FEE2E2':'#fff',color:tipo==='saida'?'#DC2626':'#64748B',cursor:'pointer',fontWeight:600,fontSize:13,transition:'all .15s'}}>💊 Saida</button><button onClick={function(){setTipo('entrada');}} style={{flex:1,padding:'11px',borderRadius:10,border:'1.5px solid '+(tipo==='entrada'?'#0C6B3E':'#E2E8F0'),background:tipo==='entrada'?'#DCFCE7':'#fff',color:tipo==='entrada'?'#0C6B3E':'#64748B',cursor:'pointer',fontWeight:600,fontSize:13,transition:'all .15s'}}>📥 Entrada</button></div><Lbl c="Medicamento"/><input value={search} onChange={function(e){setSearch(e.target.value);setShowList(true);}} onFocus={function(){setShowList(true);}} placeholder="Digite para filtrar..." className="inp"/>{showList&&(<div style={{border:'1.5px solid '+B,borderRadius:10,overflow:'hidden',maxHeight:180,overflowY:'auto',marginBottom:10,boxShadow:'0 4px 12px rgba(0,0,0,.1)'}}>{medList.slice(0,8).map(function(m){return <div key={m.id} onClick={function(){setSel(m);setSearch(m.nome);setShowList(false);}} style={{padding:'11px 14px',borderBottom:'1px solid #F8FAFC',cursor:'pointer',fontWeight:600,color:'#1E293B',fontSize:13,transition:'background .1s'}} onMouseEnter={function(e){e.currentTarget.style.background='#EFF6FF';}} onMouseLeave={function(e){e.currentTarget.style.background='';}}>{m.nome}</div>;}  )}</div>)}{sel&&!showList&&<div style={{background:'#DCFCE7',border:'1.5px solid #86EFAC',borderRadius:10,padding:'10px 14px',marginBottom:10,display:'flex',justifyContent:'space-between',alignItems:'center'}}><span style={{fontWeight:700,color:'#0C6B3E'}}>{sel.nome}</span><button onClick={function(){setSel(null);setSearch('');}} style={{background:'none',border:'none',cursor:'pointer',color:'#64748B',fontSize:16}}>×</button></div>}<Lbl c="Quantidade"/><input value={qty} onChange={function(e){setQty(e.target.value.replace(/[^0-9]/g,''));}} placeholder="Ex: 10" className="inp" style={{fontSize:20,fontWeight:800,textAlign:'center'}}/><Lbl c="Motivo (opcional)"/><textarea value={obs} onChange={function(e){setObs(e.target.value);}} rows={2} className="inp" style={{resize:'none',lineHeight:1.6}}/>{err&&<div className="er">{err}</div>}{ok&&<div className="ok">{ok}</div>}<button onClick={solicitar} disabled={saving} className="bp" style={{opacity:saving?0.5:1}}>{saving?'Enviando...':'Enviar Solicitacao'}</button></Modal>);}
 
 function SolicitacoesPlantaoModal(props){var list=props.list;var onApprove=props.onApprove;var onDeny=props.onDeny;var onClose=props.onClose;if(!list||list.length===0)return null;return(<div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(15,23,42,.65)',display:'flex',alignItems:'flex-start',justifyContent:'center',zIndex:450,padding:'60px 16px 16px',backdropFilter:'blur(3px)'}}><div style={{background:'#fff',borderRadius:20,maxWidth:420,width:'100%',overflow:'hidden',boxShadow:'0 24px 64px rgba(0,0,0,.2)'}}><div style={{padding:'14px 18px',background:'linear-gradient(135deg,#0A2D6E,#1351B4)',color:'#fff',display:'flex',justifyContent:'space-between',alignItems:'center'}}><span style={{fontWeight:700,fontSize:14}}>Solicitacoes de entrada ({list.length})</span><button onClick={onClose} style={{background:'rgba(255,255,255,.15)',border:'none',color:'#fff',cursor:'pointer',fontSize:16,width:28,height:28,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center'}}>×</button></div><div style={{maxHeight:400,overflowY:'auto'}}>{list.map(function(s,i){return(<div key={s.id} style={{padding:'14px 16px',borderBottom:i<list.length-1?'1px solid #F8FAFC':'none'}}><div style={{display:'flex',alignItems:'center',gap:10,marginBottom:12}}><div className="av" style={{width:38,height:38,background:s.deColor||B,fontSize:14}}>{s.deNome?s.deNome.charAt(0):'?'}</div><div><div style={{fontWeight:600,color:'#1E293B',fontSize:14}}>{s.deNome}</div><div style={{fontSize:12,color:'#64748B'}}>{ROLES[s.deCargo]||s.deCargo}</div></div></div><div style={{display:'flex',gap:8}}><button onClick={function(){onDeny(s);}} className="bs" style={{flex:1}}>Recusar</button><button onClick={function(){onApprove(s);}} className="bg" style={{flex:2}}>Aprovar</button></div></div>);})}</div></div></div>);}
+function TabNotas({user,medications}){
+  var sl=React.useState,ef=React.useEffect,B='#1351B4';
+  var _no=sl([]);var notas=_no[0];var setNotas=_no[1];
+  var _ld=sl(false);var loading=_ld[0];var setLoading=_ld[1];
+  var _pv=sl(null);var preview=_pv[0];var setPreview=_pv[1];
+  var _co=sl(false);var confirmando=_co[0];var setConfirmando=_co[1];
+  var _er=sl('');var erro=_er[0];var setErro=_er[1];
+  var _ie=sl([]);var itemsEdit=_ie[0];var setItemsEdit=_ie[1];
+  var _dt=sl(null);var detNota=_dt[0];var setDetNota=_dt[1];
+  var _vi=sl({});var vinculos=_vi[0];var setVinculos=_vi[1];
+  var _fb=sl('');var filtroBusca=_fb[0];var setFiltroBusca=_fb[1];
+  var _ff=sl('');var filtroForns=_ff[0];var setFiltroForns=_ff[1];
+  var _fd=sl('');var filtroDataDe=_fd[0];var setFiltroDataDe=_fd[1];
+  var _fa=sl('');var filtroDataAte=_fa[0];var setFiltroDataAte=_fa[1];
+  var _fotos=sl([]);var fotos=_fotos[0];var setFotos=_fotos[1];
+  var _ocrProg=sl('');var ocrProg=_ocrProg[0];var setOcrProg=_ocrProg[1];
+  var _ocrRun=sl(false);var ocrRunning=_ocrRun[0];var setOcrRunning=_ocrRun[1];
+
+  ef(function(){
+    var u=db.collection('notas_fiscais').orderBy('criadoEm','desc').onSnapshot(function(sn){
+      setNotas(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));
+    });return u;
+  },[]);
+
+  ef(function(){
+    var u=db.collection('vinculos_nfe').onSnapshot(function(sn){
+      var v={};sn.docs.forEach(function(d){var dat=d.data();if(dat.chaveNota)v[dat.chaveNota]={medId:dat.medId,medNome:dat.medNome};});setVinculos(v);
+    });return u;
+  },[]);
+
+  function normalizar(s){return(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/dissodic[ao]|sodic[ao]|cloridrat[ao]|fosfat[ao]|acetato|sulfato|nitrato|monoidratad[ao]/g,'').replace(/\b(inj|amp|cp|cpr|comp|sol|susp|caps|sach|fr|mg|mcg|ml|ui|un|cx|bl|fco|vd)\b/g,'').replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();}
+  function gerarChave(nome){var n=normalizar(nome);var ws=n.split(' ').filter(function(w){return w.length>=4;});return ws.slice(0,2).join('_')||n.substring(0,10);}
+  function calcConf(nNota,nCad){var n1=normalizar(nNota);var n2=normalizar(nCad);if(!n1||!n2)return 0;if(n1===n2)return 100;if(n1.includes(n2)||n2.includes(n1))return 92;var w1=n1.split(' ').filter(function(w){return w.length>3;});var w2=n2.split(' ').filter(function(w){return w.length>3;});if(!w1.length||!w2.length)return 0;if(w1[0]===w2[0]&&w1[0].length>=5)return 78;var ov=w1.filter(function(w){return w2.includes(w);}).length;return Math.round((ov/Math.max(w1.length,w2.length))*100);}
+
+  function aplicarVinculos(itens){
+    return itens.map(function(it){
+      var chave=gerarChave(it.xProd);var vinc=vinculos[chave];
+      if(vinc&&vinc.medId){var med=(medications||[]).find(function(m){return m.id===vinc.medId;});if(med)return Object.assign({},it,{medId:med.id,medCasado:med,confianca:100,confirmado:true,daMemoria:true});}
+      var melhorMed=null;var melhorConf=0;
+      (medications||[]).forEach(function(m){var c=calcConf(it.xProd,m.nome||'');if(c>melhorConf){melhorConf=c;melhorMed=m;}});
+      return Object.assign({},it,{medId:melhorConf>=50&&melhorMed?melhorMed.id:'',medCasado:melhorConf>=50?melhorMed:null,confianca:melhorConf,confirmado:melhorConf>=85});
+    });
+  }
+
+  async function salvarVinculo(nomeNota,medId,medNome){
+    var chave=gerarChave(nomeNota);if(!chave||!medId)return;
+    var sn=await db.collection('vinculos_nfe').where('chaveNota','==',chave).get();
+    if(sn.empty){await db.collection('vinculos_nfe').add({chaveNota:chave,nomeOriginal:nomeNota,medId:medId,medNome:medNome,confirmadoPor:user.name,criadoEm:new Date().toISOString()});}
+    else{await db.collection('vinculos_nfe').doc(sn.docs[0].id).update({medId:medId,medNome:medNome,confirmadoPor:user.name,atualizadoEm:new Date().toISOString()});}
+  }
+
+  function adicionarFotos(e){
+    var files=e.target.files;if(!files||!files.length)return;
+    var novas=[];
+    for(var i=0;i<files.length;i++){
+      var f=files[i];
+      if(!f.type.startsWith('image/')){continue;}
+      novas.push(f);
+    }
+    setFotos(function(prev){return prev.concat(novas);});
+    e.target.value='';
+  }
+  function removerFoto(idx){setFotos(function(prev){return prev.filter(function(_,i){return i!==idx;});});}
+  function moverFoto(idx,dir){
+    setFotos(function(prev){
+      var arr=prev.slice();
+      var tgt=idx+dir;
+      if(tgt<0||tgt>=arr.length)return arr;
+      var tmp=arr[idx];arr[idx]=arr[tgt];arr[tgt]=tmp;
+      return arr;
+    });
+  }
+
+  async function processarFotos(){
+    if(!fotos.length){setErro('Adicione ao menos uma foto!');return;}
+    var Tesseract=window.Tesseract;
+    if(!Tesseract){setErro('Biblioteca OCR nao carregada. Verifique sua conexao.');return;}
+    setOcrRunning(true);setErro('');
+    var textoTotal='';
+    for(var i=0;i<fotos.length;i++){
+      setOcrProg('Lendo pagina '+(i+1)+' de '+fotos.length+'...');
+      try{
+        var url=URL.createObjectURL(fotos[i]);
+        var result=await Tesseract.recognize(url,['por','eng'],{logger:function(m){if(m.status==='recognizing text')setOcrProg('Pagina '+(i+1)+'/'+fotos.length+': '+(m.progress*100|0)+'%');}});
+        URL.revokeObjectURL(url);
+        textoTotal+=result.data.text+'\n';
+      }catch(ex){setOcrProg('Erro na pagina '+(i+1)+': '+ex.message);}
+    }
+    setOcrProg('Identificando medicamentos...');
+    parsearPDF(textoTotal,'foto_nota_'+new Date().toISOString().slice(0,10));
+    setOcrRunning(false);setOcrProg('');
+    setFotos([]);
+  }
+
+  function lerXML(e){
+    var file=e.target.files&&e.target.files[0];
+    if(!file)return;
+    if(!file.name.toLowerCase().endsWith('.xml')){setErro('Selecione um arquivo .xml da NF-e!');return;}
+    setErro('');setLoading(true);
+    var reader=new FileReader();
+    reader.onload=function(ev){
+      try{
+        var parser=new DOMParser();var xml=parser.parseFromString(ev.target.result,'text/xml');
+        if(xml.querySelector('parsererror')){setErro('XML invalido ou corrompido.');setLoading(false);return;}
+        var get=function(sel){var el=xml.querySelector(sel);return el?el.textContent.trim():''};
+        var nNF=get('nNF');var dhEmi=get('dhEmi')||get('dEmi');var dataEmissao=dhEmi?dhEmi.substring(0,10):'';
+        var fornecedorNome=get('emit xNome');var fornecedorCNPJ=get('emit CNPJ');
+        var infNFe=xml.querySelector('infNFe');var chaveAcesso=infNFe?(infNFe.getAttribute('Id')||'').replace(/^NFe/,''):'';
+        var vTotal=get('vNF')||get('vProd');
+        var itens=[];
+        xml.querySelectorAll('det').forEach(function(det){
+          var xProd=det.querySelector('xProd')?det.querySelector('xProd').textContent.trim():'';
+          var qCom=det.querySelector('qCom')?parseFloat(det.querySelector('qCom').textContent):0;
+          var uCom=det.querySelector('uCom')?det.querySelector('uCom').textContent.trim():'UN';
+          var vUnCom=det.querySelector('vUnCom')?parseFloat(det.querySelector('vUnCom').textContent):0;
+          var vProd=det.querySelector('vProd')?parseFloat(det.querySelector('vProd').textContent):0;
+          var cProd=det.querySelector('cProd')?det.querySelector('cProd').textContent.trim():'';
+          var rastro=det.querySelector('rastro');
+          var lote=rastro&&rastro.querySelector('nLote')?rastro.querySelector('nLote').textContent.trim():'';
+          var dFab=rastro&&rastro.querySelector('dFab')?rastro.querySelector('dFab').textContent.trim():'';
+          var dVal=rastro&&rastro.querySelector('dVal')?rastro.querySelector('dVal').textContent.trim():'';
+          itens.push({xProd:xProd,cProd:cProd,qCom:qCom,uCom:uCom,vUnCom:vUnCom,vProd:vProd,lote:lote,dFab:dFab,dVal:dVal,incluir:true,tipo:'xml'});
+        });
+        var com=aplicarVinculos(itens);
+        setPreview({nNF:nNF,dataEmissao:dataEmissao,fornecedorNome:fornecedorNome,fornecedorCNPJ:fornecedorCNPJ,chaveAcesso:chaveAcesso,vTotal:vTotal,nomeArquivo:file.name,tipo:'xml'});
+        setItemsEdit(com.map(function(it,i){return Object.assign({},it,{idx:i});}));
+        setLoading(false);
+      }catch(ex){setErro('Erro ao processar XML: '+ex.message);setLoading(false);}
+    };
+    reader.readAsText(file,'UTF-8');e.target.value='';
+  }
+
+  async function lerPDF(e){
+    var file=e.target.files&&e.target.files[0];
+    if(!file)return;
+    if(!file.name.toLowerCase().endsWith('.pdf')){setErro('Selecione um arquivo .pdf!');return;}
+    setErro('');setLoading(true);
+    var pdfLib=window.pdfjsLib;
+    if(!pdfLib){setErro('Biblioteca PDF nao carregada.');setLoading(false);return;}
+    pdfLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    try{
+      var buf=await file.arrayBuffer();
+      var pdf=await pdfLib.getDocument({data:buf}).promise;
+      var texto='';
+      for(var pg=1;pg<=pdf.numPages;pg++){
+        var page=await pdf.getPage(pg);var tc=await page.getTextContent();
+        texto+=tc.items.map(function(i){return i.str;}).join(' ')+'\n';
+      }
+      parsearPDF(texto,file.name);
+    }catch(ex){setErro('Erro ao ler PDF: '+ex.message);}
+    setLoading(false);e.target.value='';
+  }
+
+  function parsearPDF(texto,filename){
+    var ehFoto=filename.startsWith('foto_nota');
+    var tipo=ehFoto?'foto':'pdf';
+    var nNFm=texto.match(/N[uU][mM][eE][rR][oO]\s*:?\s*(\d{1,9})/)||texto.match(/NF[\s\-e]*n?[\s\.]*[oO°]?[\s\.]*:?\s*(\d{6,9})/i)||texto.match(/\b(\d{6,9})\b/);
+    var nNF=nNFm?nNFm[1]:'(verificar)';
+    var dtm=texto.match(/emiss[ao][oa][:\s]*(\d{2}[\/\-]\d{2}[\/\-]\d{4})/i)||texto.match(/(\d{2}\/\d{2}\/\d{4})/);
+    var dataEmissao='';
+    if(dtm){var pts=dtm[1].split(/[\/\-]/);dataEmissao=pts[2]+'-'+pts[1]+'-'+pts[0];}
+    var cnpjs=texto.match(/\d{2}\.?\d{3}\.?\d{3}[\/]?\d{4}[-]?\d{2}/g)||[];
+    var fornecedorCNPJ=cnpjs[0]||'';
+    var fornecedorNome='(Verificar na nota)';
+    var vtm=texto.match(/VALOR\s*TOTAL\s*[:\s]*(R\$\s*)?([\d.,]+)/i)||texto.match(/TOTAL\s*[:\s]*(R\$\s*)?([\d.,]+)/i);
+    var vTotal=vtm?(vtm[2]||vtm[1]||'0').replace(/[R$\s]/g,'').replace('.','').replace(',','.').trim():'0';
+    var itens=[];
+    var unidades='UN|UNID|AMP|AMPOLA|FR|FRASCO|CX|CAIXA|CP|COMP|ML|KG|G|VD|PC|PCT|BIS|CAP|SER|BCA|FAR|SAC|TB|TUBO';
+    var linhas=texto.split('\n');
+    for(var i=0;i<linhas.length;i++){
+      var l=linhas[i].trim();
+      if(!l||l.length<5)continue;
+      // Padrão 1: descrição + qtd + unidade na mesma linha
+      var m1=l.match(new RegExp('(.{4,60}?)\\s+(\\d+(?:[.,]\\d+)?)\\s+('+unidades+')\\b','i'));
+      if(m1){
+        var desc=m1[1].replace(/^\d+\s+/,'').trim();
+        var qtd=parseFloat(m1[2].replace(',','.'));
+        if(desc.length>=4&&qtd>0&&qtd<100000&&!/^(TOTAL|VALOR|PESO|FRETE|DESCONTO)/i.test(desc)){
+          itens.push({xProd:desc.toUpperCase(),cProd:'',qCom:qtd,uCom:m1[3].toUpperCase(),vUnCom:0,vProd:0,lote:'',dFab:'',dVal:'',incluir:true,tipo:tipo});
+          continue;
+        }
+      }
+      // Padrão 2: linha com apenas nome de medicamento conhecido (para OCR fragmentado)
+      var m2=l.match(/^([A-Z][A-Za-z]{3,}(?:\s+[A-Za-z0-9]+){1,4})\s+(\d{1,5})\s*$/);
+      if(m2){
+        var desc2=m2[1].trim();var qtd2=parseFloat(m2[2]);
+        if(qtd2>0&&qtd2<10000)itens.push({xProd:desc2.toUpperCase(),cProd:'',qCom:qtd2,uCom:'UN',vUnCom:0,vProd:0,lote:'',dFab:'',dVal:'',incluir:true,tipo:tipo});
+      }
+    }
+    var com=aplicarVinculos(itens);
+    setPreview({nNF:nNF,dataEmissao:dataEmissao,fornecedorNome:fornecedorNome,fornecedorCNPJ:fornecedorCNPJ,chaveAcesso:'',vTotal:vTotal,nomeArquivo:filename,tipo:tipo,textoOCR:texto.substring(0,3000)});
+    setItemsEdit(com.map(function(it,i){return Object.assign({},it,{idx:i});}));
+  }
+
+  async function confirmarEntrada(){
+    if(!preview)return;setConfirmando(true);
+    var hj=new Date().toISOString().split('T')[0];var itensSalvos=[];
+    for(var i=0;i<itemsEdit.length;i++){
+      var it=itemsEdit[i];if(!it.incluir||!it.medId)continue;
+      await db.collection('entries').add({tipo:'entrada',medicamentoId:it.medId,medicamentoNome:it.xProd,quantidade:Math.round(it.qCom),autorNome:user.name,autorCor:user.color||B,autorId:user.uid,lote:it.lote||'',validade:it.dVal||'',obs:'NF-e '+preview.nNF+' - '+preview.fornecedorNome,criadoEm:new Date().toISOString(),date:preview.dataEmissao||hj,vUnCom:it.vUnCom||0,nfNumero:preview.nNF});
+      await salvarVinculo(it.xProd,it.medId,it.medCasado?it.medCasado.nome:'');
+      itensSalvos.push({nome:it.xProd,qtd:Math.round(it.qCom),lote:it.lote||''});
+    }
+    await db.collection('notas_fiscais').add({nNF:preview.nNF,dataEmissao:preview.dataEmissao,fornecedorNome:preview.fornecedorNome,fornecedorCNPJ:preview.fornecedorCNPJ,chaveAcesso:preview.chaveAcesso,vTotal:preview.vTotal,itensSalvos:itensSalvos,importadoPor:user.name,importadoCor:user.color||B,criadoEm:new Date().toISOString(),nomeArquivo:preview.nomeArquivo,tipo:preview.tipo||'xml'});
+    setConfirmando(false);setPreview(null);setItemsEdit([]);
+    alert('NF-e '+preview.nNF+' importada! '+itensSalvos.length+' item(ns) adicionado(s) ao estoque.');
+  }
+
+  async function confirmarVinculo(idx){
+    var it=itemsEdit.find(function(i){return i.idx===idx;});
+    if(it)await salvarVinculo(it.xProd,it.medId,it.medCasado?it.medCasado.nome:'');
+    setItemsEdit(function(prev){return prev.map(function(i){return i.idx===idx?Object.assign({},i,{confirmado:true}):i;});});
+  }
+  function trocarVinculo(idx){setItemsEdit(function(prev){return prev.map(function(i){return i.idx===idx?Object.assign({},i,{confirmado:false,medId:'',medCasado:null,confianca:0,daMemoria:false}):i;});});}
+  function toggleItem(idx){setItemsEdit(function(prev){return prev.map(function(i){return i.idx===idx?Object.assign({},i,{incluir:!i.incluir}):i;});});}
+  function setMedItem(idx,medId){var med=(medications||[]).find(function(m){return m.id===medId;})||null;setItemsEdit(function(prev){return prev.map(function(i){return i.idx===idx?Object.assign({},i,{medId:medId,medCasado:med,confirmado:!!medId}):i;});});}
+  function setQtdItem(idx,v){setItemsEdit(function(prev){return prev.map(function(i){return i.idx===idx?Object.assign({},i,{qCom:parseFloat(v)||0}):i;});});}
+  function setLoteItem(idx,v){setItemsEdit(function(prev){return prev.map(function(i){return i.idx===idx?Object.assign({},i,{lote:v}):i;});});}
+  function setValItem(idx,v){setItemsEdit(function(prev){return prev.map(function(i){return i.idx===idx?Object.assign({},i,{dVal:v}):i;});});}
+
+  function fD(d){if(!d)return'';var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}
+  function fDxml(d){if(!d||d.length<8)return'';return d.substring(6,8)+'/'+d.substring(4,6)+'/'+d.substring(0,4);}
+  function fMoeda(v){return'R$ '+parseFloat(v||0).toFixed(2).replace('.',',');}
+
+  var totalConf=itemsEdit.filter(function(i){return i.incluir&&i.medId&&i.confirmado;}).length;
+  var totalAguard=itemsEdit.filter(function(i){return i.incluir&&i.medId&&!i.confirmado;}).length;
+  var totalSemV=itemsEdit.filter(function(i){return i.incluir&&!i.medId;}).length;
+  var uniqueForns=[];notas.forEach(function(n){if(n.fornecedorNome&&uniqueForns.indexOf(n.fornecedorNome)===-1)uniqueForns.push(n.fornecedorNome);});
+  var notasFiltradas=notas.filter(function(n){
+    var okB=!filtroBusca||(n.nNF||'').includes(filtroBusca)||(n.fornecedorNome||'').toLowerCase().includes(filtroBusca.toLowerCase());
+    var okF=!filtroForns||n.fornecedorNome===filtroForns;
+    var okDe=!filtroDataDe||n.dataEmissao>=filtroDataDe;
+    var okAt=!filtroDataAte||n.dataEmissao<=filtroDataAte;
+    return okB&&okF&&okDe&&okAt;
+  });
+
+  if(preview){
+    return (
+      <div style={{padding:'0 0 100px'}}>
+        <div style={{background:'linear-gradient(135deg,#0F766E,#1351B4)',padding:'20px 16px 20px',borderRadius:'0 0 24px 24px',marginBottom:16}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
+            <div>
+              <div style={{color:'rgba(255,255,255,.7)',fontSize:11,textTransform:'uppercase',letterSpacing:1}}>Conferencia {preview.tipo==='pdf'?'PDF':preview.tipo==='foto'?'FOTO (OCR)':'XML'}</div>
+              <div style={{color:'#fff',fontSize:18,fontWeight:700,marginTop:2}}>NF-e {preview.nNF}</div>
+              <div style={{color:'rgba(255,255,255,.8)',fontSize:12,marginTop:2}}>{preview.fornecedorNome}</div>
+            </div>
+            <button onClick={function(){setPreview(null);setItemsEdit([]);}} style={{background:'rgba(255,255,255,.2)',border:'1.5px solid rgba(255,255,255,.4)',borderRadius:10,padding:'8px 12px',color:'#fff',fontWeight:700,fontSize:13,cursor:'pointer'}}>Cancelar</button>
+          </div>
+        </div>
+        <div style={{padding:'0 16px',display:'flex',flexDirection:'column',gap:12}}>
+          <div style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)'}}>
+            <div style={{fontWeight:700,fontSize:14,color:'#1E293B',marginBottom:10}}>Dados da Nota</div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+              <div style={{background:'#F8FAFC',borderRadius:10,padding:'10px 12px'}}>
+                <div style={{fontSize:10,color:'#94A3B8',textTransform:'uppercase',marginBottom:2}}>Numero</div>
+                <div style={{fontWeight:700,fontSize:14,color:'#1E293B'}}>NF {preview.nNF}</div>
+              </div>
+              <div style={{background:'#F8FAFC',borderRadius:10,padding:'10px 12px'}}>
+                <div style={{fontSize:10,color:'#94A3B8',textTransform:'uppercase',marginBottom:2}}>Emissao</div>
+                <div style={{fontWeight:700,fontSize:14,color:'#1E293B'}}>{fD(preview.dataEmissao)||'—'}</div>
+              </div>
+              <div style={{background:'#F8FAFC',borderRadius:10,padding:'10px 12px',gridColumn:'1/-1'}}>
+                <div style={{fontSize:10,color:'#94A3B8',textTransform:'uppercase',marginBottom:2}}>Fornecedor</div>
+                <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>{preview.fornecedorNome}</div>
+                {preview.fornecedorCNPJ&&<div style={{fontSize:11,color:'#64748B'}}>CNPJ: {preview.fornecedorCNPJ}</div>}
+              </div>
+              <div style={{background:'#EFF6FF',borderRadius:10,padding:'10px 12px',gridColumn:'1/-1'}}>
+                <div style={{fontSize:10,color:'#94A3B8',textTransform:'uppercase',marginBottom:2}}>Valor Total</div>
+                <div style={{fontWeight:800,fontSize:18,color:B}}>{fMoeda(preview.vTotal)}</div>
+              </div>
+            </div>
+            {preview.chaveAcesso&&<div style={{marginTop:8,background:'#F8FAFC',borderRadius:10,padding:'8px 12px'}}>
+              <div style={{fontSize:10,color:'#94A3B8',textTransform:'uppercase',marginBottom:2}}>Chave de Acesso</div>
+              <div style={{fontSize:10,color:'#475569',wordBreak:'break-all',fontFamily:'monospace'}}>{preview.chaveAcesso}</div>
+            </div>}
+            {(preview.tipo==='pdf'||preview.tipo==='foto')&&itemsEdit.length===0&&<div style={{marginTop:10,background:'#FEF3C7',borderRadius:10,padding:'12px 14px',border:'1px solid #FCD34D'}}>
+              <div style={{fontSize:13,fontWeight:700,color:'#92400E',marginBottom:6}}>{preview.tipo==='foto'?'📸 OCR nao identificou itens automaticamente':'PDF: itens nao identificados'}</div>
+              <div style={{fontSize:12,color:'#92400E',marginBottom:10}}>Adicione os itens manualmente usando o botao abaixo. Os dados do cabecalho foram preenchidos — confira e corrija se necessario.</div>
+              <button onClick={function(){setItemsEdit([{idx:0,xProd:'',cProd:'',qCom:1,uCom:'UN',vUnCom:0,vProd:0,lote:'',dFab:'',dVal:'',incluir:true,tipo:'manual',medId:'',medCasado:null,confirmado:false,confianca:0}]);}} style={{width:'100%',padding:'10px',background:'#F59E0B',border:'none',borderRadius:8,color:'#fff',fontWeight:700,fontSize:13,cursor:'pointer'}}>+ Adicionar item manualmente</button>
+              {preview.textoOCR
+                ?<div style={{marginTop:10}}>
+                  <div style={{fontSize:11,color:'#92400E',fontWeight:700,marginBottom:4}}>Texto lido pelo OCR (verifique abaixo):</div>
+                  <pre style={{fontSize:10,color:'#475569',background:'#fff',padding:10,borderRadius:8,maxHeight:200,overflow:'auto',whiteSpace:'pre-wrap',wordBreak:'break-all',border:'1px solid #FCD34D',lineHeight:1.6}}>{preview.textoOCR}</pre>
+                </div>
+                :<div style={{marginTop:8,background:'#FEE2E2',borderRadius:8,padding:'8px 10px',fontSize:11,color:'#DC2626',fontWeight:600}}>OCR nao extraiu texto — tente com uma foto mais nitida ou com maior resolucao.</div>
+              }
+            </div>}
+          </div>
+          <div style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+              <div style={{fontWeight:700,fontSize:14,color:'#1E293B'}}>Itens ({itemsEdit.length})</div>
+              <div style={{display:'flex',gap:5}}>
+                {totalConf>0&&<span style={{background:'#D1FAE5',color:'#059669',fontSize:11,fontWeight:700,padding:'3px 8px',borderRadius:20}}>{totalConf} OK</span>}
+                {totalAguard>0&&<span style={{background:'#FEF9C3',color:'#713F12',fontSize:11,fontWeight:700,padding:'3px 8px',borderRadius:20}}>{totalAguard} ?</span>}
+                {totalSemV>0&&<span style={{background:'#FEE2E2',color:'#DC2626',fontSize:11,fontWeight:700,padding:'3px 8px',borderRadius:20}}>{totalSemV} !!</span>}
+              </div>
+            </div>
+            {(totalAguard>0||totalSemV>0)&&<div style={{background:'#FEF9C3',borderRadius:10,padding:'9px 12px',marginBottom:10,border:'1px solid #FDE047',fontSize:12,color:'#713F12',fontWeight:600}}>
+              {totalAguard>0&&'🤔 '+totalAguard+' item(ns) aguardando confirmacao. '}{totalSemV>0&&'⚠️ '+totalSemV+' sem vinculo (serao ignorados).'}
+            </div>}
+            <div style={{display:'flex',flexDirection:'column',gap:10}}>
+              {itemsEdit.map(function(it){
+                var skip=!it.incluir;
+                var bord=skip?'1.5px solid #E2E8F0':it.confirmado&&it.medId?'1.5px solid #BBF7D0':!it.confirmado&&it.medId?'2px solid #FCD34D':'1.5px solid #FECACA';
+                var bg=skip?'#F8FAFC':it.confirmado&&it.medId?'#F0FDF4':!it.confirmado&&it.medId?'#FFFBEB':'#FFF5F5';
+                return (
+                  <div key={it.idx} style={{borderRadius:13,border:bord,background:bg,padding:13}}>
+                    <div style={{display:'flex',alignItems:'flex-start',gap:10}}>
+                      <input type='checkbox' checked={it.incluir} onChange={function(){toggleItem(it.idx);}} style={{marginTop:4,width:16,height:16,cursor:'pointer'}}/>
+                      <div style={{flex:1}}>
+                        {it.tipo==='manual'&&!skip
+                          ?<input value={it.xProd} onChange={function(e){var v=e.target.value;setItemsEdit(function(prev){return prev.map(function(i){return i.idx===it.idx?Object.assign({},i,{xProd:v.toUpperCase()}):i;});});}} placeholder='Nome do medicamento...' style={{width:'100%',padding:'8px 10px',borderRadius:8,border:'1.5px solid #E2E8F0',fontSize:13,fontWeight:700,marginBottom:4,boxSizing:'border-box'}}/>
+                          :<div style={{fontWeight:700,fontSize:13,color:skip?'#94A3B8':'#1E293B',textDecoration:skip?'line-through':'none'}}>{it.xProd||'(sem nome)'}</div>}
+                        <div style={{fontSize:11,color:'#64748B',marginTop:2}}>Qtd: <strong>{it.qCom} {it.uCom}</strong>{it.lote?' · Lote: '+it.lote:''}{it.dVal?' · Val: '+fDxml(it.dVal):''}</div>
+                        <div style={{fontSize:11,color:'#94A3B8'}}>{fMoeda(it.vUnCom)}/un · Total: {fMoeda(it.vProd)}</div>
+                        {it.incluir&&it.daMemoria&&it.confirmado&&it.medId&&<div style={{marginTop:8,background:'#D1FAE5',borderRadius:8,padding:'7px 10px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                          <div>
+                            <div style={{fontSize:10,color:'#065F46',fontWeight:700,textTransform:'uppercase'}}>🧠 Da memoria</div>
+                            <div style={{fontSize:12,color:'#059669',fontWeight:700,marginTop:1}}>{it.medCasado&&it.medCasado.nome}</div>
+                          </div>
+                          <button onClick={function(){trocarVinculo(it.idx);}} style={{background:'rgba(0,0,0,.07)',border:'none',borderRadius:7,padding:'5px 8px',fontSize:11,color:'#065F46',cursor:'pointer',fontWeight:600}}>Trocar</button>
+                        </div>}
+                        {it.incluir&&!it.daMemoria&&it.confirmado&&it.medId&&<div style={{marginTop:8,background:'#D1FAE5',borderRadius:8,padding:'7px 10px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                          <div>
+                            <div style={{fontSize:10,color:'#065F46',fontWeight:700,textTransform:'uppercase'}}>Vinculado ({it.confianca}%)</div>
+                            <div style={{fontSize:12,color:'#059669',fontWeight:700,marginTop:1}}>{it.medCasado&&it.medCasado.nome}</div>
+                          </div>
+                          <button onClick={function(){trocarVinculo(it.idx);}} style={{background:'rgba(0,0,0,.07)',border:'none',borderRadius:7,padding:'5px 8px',fontSize:11,color:'#065F46',cursor:'pointer',fontWeight:600}}>Trocar</button>
+                        </div>}
+                        {it.incluir&&!it.confirmado&&it.medId&&<div style={{marginTop:8,background:'#FEF9C3',borderRadius:10,padding:'10px 12px',border:'1px solid #FDE047'}}>
+                          <div style={{fontSize:11,color:'#713F12',fontWeight:700,marginBottom:6}}>🤔 O sistema acredita que e o mesmo produto — confirma?</div>
+                          <div style={{background:'#fff',borderRadius:8,padding:'8px 10px',marginBottom:8,border:'1px solid #FDE047'}}>
+                            <div style={{fontSize:10,color:'#92400E',textTransform:'uppercase',marginBottom:1}}>Nota fiscal</div>
+                            <div style={{fontWeight:700,fontSize:12,color:'#1E293B'}}>{it.xProd}</div>
+                            <div style={{textAlign:'center',fontSize:14,margin:'3px 0'}}>downarrow</div>
+                            <div style={{fontSize:10,color:'#15803D',textTransform:'uppercase',marginBottom:1}}>No sistema</div>
+                            <div style={{fontWeight:700,fontSize:13,color:'#15803D'}}>{it.medCasado&&it.medCasado.nome}</div>
+                            <div style={{fontSize:10,color:'#D97706',marginTop:3,fontWeight:600}}>Confianca: {it.confianca}%</div>
+                          </div>
+                          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+                            <button onClick={function(){confirmarVinculo(it.idx);}} style={{padding:'9px',background:'#16A34A',border:'none',borderRadius:8,color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>Sim, e o mesmo</button>
+                            <button onClick={function(){trocarVinculo(it.idx);}} style={{padding:'9px',background:'#fff',border:'1.5px solid #EF4444',borderRadius:8,color:'#DC2626',fontWeight:700,fontSize:12,cursor:'pointer'}}>Nao, trocar</button>
+                          </div>
+                        </div>}
+                        {it.incluir&&!it.medId&&<div style={{marginTop:8,background:'#FEE2E2',borderRadius:10,padding:'10px 12px',border:'1px solid #FECACA'}}>
+                          <div style={{fontSize:11,color:'#991B1B',fontWeight:700,marginBottom:6}}>Nao encontrado — selecione manualmente:</div>
+                          <select value={it.medId} onChange={function(e){setMedItem(it.idx,e.target.value);}} style={{width:'100%',padding:'9px 10px',borderRadius:8,border:'1.5px solid #FECACA',fontSize:12,background:'#fff',boxSizing:'border-box'}}>
+                            <option value=''>-- Selecione --</option>
+                            {(medications||[]).map(function(m){return <option key={m.id} value={m.id}>{m.nome}</option>;})}
+                          </select>
+                        </div>}
+                        {it.incluir&&it.medId&&<div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:6,marginTop:8}}>
+                          <div>
+                            <div style={{fontSize:10,color:'#64748B',marginBottom:3,fontWeight:600}}>QTD</div>
+                            <input type='number' value={it.qCom} onChange={function(e){setQtdItem(it.idx,e.target.value);}} min='1' style={{width:'100%',padding:'8px',borderRadius:8,border:'1.5px solid #E2E8F0',fontSize:13,fontWeight:700,textAlign:'center',boxSizing:'border-box'}}/>
+                          </div>
+                          <div>
+                            <div style={{fontSize:10,color:'#64748B',marginBottom:3,fontWeight:600}}>LOTE</div>
+                            <input value={it.lote} onChange={function(e){setLoteItem(it.idx,e.target.value);}} placeholder='Ex: L001' style={{width:'100%',padding:'8px',borderRadius:8,border:'1.5px solid #E2E8F0',fontSize:12,boxSizing:'border-box'}}/>
+                          </div>
+                          <div>
+                            <div style={{fontSize:10,color:'#64748B',marginBottom:3,fontWeight:600}}>VALIDADE</div>
+                            <input value={it.dVal} onChange={function(e){setValItem(it.idx,e.target.value);}} placeholder='AAAAMMDD' style={{width:'100%',padding:'8px',borderRadius:8,border:'1.5px solid #E2E8F0',fontSize:12,boxSizing:'border-box'}}/>
+                          </div>
+                        </div>}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {itemsEdit.length>0&&<button onClick={function(){setItemsEdit(function(prev){var idx=prev.length;return prev.concat([{idx:idx,xProd:'',cProd:'',qCom:1,uCom:'UN',vUnCom:0,vProd:0,lote:'',dFab:'',dVal:'',incluir:true,tipo:'manual',medId:'',medCasado:null,confirmado:false,confianca:0}]);});}} style={{width:'100%',padding:'10px',background:'#F8FAFC',border:'1.5px dashed #CBD5E1',borderRadius:10,color:'#64748B',fontWeight:600,fontSize:13,cursor:'pointer',marginTop:8}}>+ Adicionar item</button>}
+          </div>
+          <div style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)'}}>
+            <div style={{fontWeight:700,fontSize:14,color:'#1E293B',marginBottom:12}}>Resumo da Importacao</div>
+            <div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:14}}>
+              <div style={{display:'flex',justifyContent:'space-between',fontSize:13}}><span style={{color:'#64748B'}}>Total de itens</span><span style={{fontWeight:700}}>{itemsEdit.length}</span></div>
+              <div style={{display:'flex',justifyContent:'space-between',fontSize:13}}><span style={{color:'#059669'}}>Prontos para entrada</span><span style={{fontWeight:700,color:'#059669'}}>{totalConf}</span></div>
+              {totalAguard>0&&<div style={{display:'flex',justifyContent:'space-between',fontSize:13}}><span style={{color:'#D97706'}}>Aguardando confirmacao</span><span style={{fontWeight:700,color:'#D97706'}}>{totalAguard}</span></div>}
+              {totalSemV>0&&<div style={{display:'flex',justifyContent:'space-between',fontSize:13}}><span style={{color:'#DC2626'}}>Sem vinculo</span><span style={{fontWeight:700,color:'#DC2626'}}>{totalSemV}</span></div>}
+              <div style={{display:'flex',justifyContent:'space-between',fontSize:13,paddingTop:6,borderTop:'1px solid #F1F5F9'}}><span style={{color:'#64748B'}}>Valor total</span><span style={{fontWeight:800,color:B}}>{fMoeda(preview.vTotal)}</span></div>
+            </div>
+            {totalAguard>0&&<div style={{background:'#FEF9C3',borderRadius:10,padding:10,fontSize:12,color:'#713F12',fontWeight:600,textAlign:'center',marginBottom:10}}>Confirme os {totalAguard} item(ns) em duvida para liberar a importacao</div>}
+            {totalConf===0&&totalAguard===0
+              ?<div style={{background:'#FEE2E2',borderRadius:10,padding:12,fontSize:13,color:'#DC2626',fontWeight:600,textAlign:'center'}}>Nenhum item pronto. Vincule ao menos um.</div>
+              :<button onClick={confirmarEntrada} disabled={confirmando||totalAguard>0} style={{width:'100%',padding:'16px',background:confirmando?'#94A3B8':totalAguard>0?'#D97706':'#059669',border:'none',borderRadius:13,color:'#fff',fontWeight:800,fontSize:15,cursor:confirmando||totalAguard>0?'default':'pointer',opacity:confirmando||totalAguard>0?0.85:1}}>
+                {confirmando?'Importando...':totalAguard>0?'Confirme os itens em duvida antes':'Confirmar e Atualizar Estoque ('+totalConf+' item'+(totalConf>1?'s':'')+')'}
+              </button>}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{padding:'0 0 80px'}}>
+      <div style={{background:'linear-gradient(135deg,#0F766E,#1351B4)',padding:'20px 16px 24px',borderRadius:'0 0 24px 24px',marginBottom:16}}>
+        <div style={{color:'rgba(255,255,255,.7)',fontSize:12,textTransform:'uppercase',letterSpacing:1}}>Farmacia Hospitalar</div>
+        <div style={{color:'#fff',fontSize:20,fontWeight:700,marginTop:2}}>Notas Fiscais</div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8,marginTop:14}}>
+          <div style={{background:'rgba(255,255,255,.12)',borderRadius:12,padding:'10px 8px',textAlign:'center',border:'1px solid rgba(255,255,255,.15)'}}>
+            <div style={{color:'#fff',fontSize:20,fontWeight:800}}>{notas.length}</div>
+            <div style={{color:'rgba(255,255,255,.7)',fontSize:10}}>Notas</div>
+          </div>
+          <div style={{background:'rgba(255,255,255,.12)',borderRadius:12,padding:'10px 8px',textAlign:'center',border:'1px solid rgba(255,255,255,.15)'}}>
+            <div style={{color:'#fff',fontSize:20,fontWeight:800}}>{Object.keys(vinculos).length}</div>
+            <div style={{color:'rgba(255,255,255,.7)',fontSize:10}}>Memorizados</div>
+          </div>
+          <div style={{background:'rgba(255,255,255,.12)',borderRadius:12,padding:'10px 8px',textAlign:'center',border:'1px solid rgba(255,255,255,.15)'}}>
+            <div style={{color:'#fff',fontSize:13,fontWeight:800}}>{fMoeda(notas.reduce(function(s,n){return s+parseFloat(n.vTotal||0);},0))}</div>
+            <div style={{color:'rgba(255,255,255,.7)',fontSize:10}}>Total</div>
+          </div>
+        </div>
+      </div>
+      <div style={{padding:'0 16px',marginBottom:14}}>
+        {erro&&<div style={{background:'#FEE2E2',borderRadius:12,padding:'11px 14px',marginBottom:12,fontSize:13,color:'#DC2626',fontWeight:600,border:'1px solid #FECACA'}}>{erro}</div>}
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
+          <label style={{display:'block',background:'#fff',borderRadius:14,padding:18,boxShadow:'0 2px 10px rgba(0,0,0,.06)',border:'2px dashed #BFDBFE',cursor:'pointer',textAlign:'center'}}>
+            <input type='file' accept='.xml' onChange={lerXML} style={{display:'none'}}/>
+            {loading?<div style={{color:B,fontSize:12,fontWeight:600}}>Processando...</div>:<div>
+              <div style={{fontSize:32,marginBottom:6}}>🗂</div>
+              <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>Importar XML</div>
+              <div style={{fontSize:11,color:'#64748B',marginTop:2}}>NF-e oficial</div>
+              <div style={{background:'#EFF6FF',color:B,fontWeight:700,fontSize:11,padding:'4px 10px',borderRadius:8,display:'inline-block',marginTop:8}}>100% preciso</div>
+            </div>}
+          </label>
+          <label style={{display:'block',background:'#fff',borderRadius:14,padding:18,boxShadow:'0 2px 10px rgba(0,0,0,.06)',border:'2px dashed #E2E8F0',cursor:'pointer',textAlign:'center'}}>
+            <input type='file' accept='.pdf' onChange={lerPDF} style={{display:'none'}}/>
+            <div>
+              <div style={{fontSize:32,marginBottom:6}}>📑</div>
+              <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>Importar PDF</div>
+              <div style={{fontSize:11,color:'#64748B',marginTop:2}}>DANFE impresso</div>
+              <div style={{background:'#FEF3C7',color:'#92400E',fontWeight:700,fontSize:11,padding:'4px 10px',borderRadius:8,display:'inline-block',marginTop:8}}>Requer revisao</div>
+            </div>
+          </label>
+        </div>
+        <label style={{display:'block',background:'#fff',borderRadius:14,padding:18,boxShadow:'0 2px 10px rgba(0,0,0,.06)',border:'2px dashed #BBF7D0',cursor:'pointer',textAlign:'center',marginBottom:10}}>
+          <input type='file' accept='image/*' multiple onChange={adicionarFotos} style={{display:'none'}}/>
+          <div>
+            <div style={{fontSize:32,marginBottom:6}}>📸</div>
+            <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>Adicionar Foto</div>
+            <div style={{fontSize:11,color:'#64748B',marginTop:2}}>Print ou foto da nota</div>
+            <div style={{background:'#F0FDF4',color:'#059669',fontWeight:700,fontSize:11,padding:'4px 10px',borderRadius:8,display:'inline-block',marginTop:8}}>Varias paginas OK</div>
+          </div>
+        </label>
+        {fotos.length>0&&<div style={{background:'#fff',borderRadius:14,padding:14,boxShadow:'0 2px 10px rgba(0,0,0,.06)',marginBottom:10,border:'1.5px solid #BBF7D0'}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+            <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>{fotos.length} foto{fotos.length>1?'s':''} adicionada{fotos.length>1?'s':''}</div>
+            <label style={{background:'#F0FDF4',border:'1px solid #BBF7D0',borderRadius:8,padding:'5px 12px',fontSize:11,color:'#059669',cursor:'pointer',fontWeight:700}}>
+              <input type='file' accept='image/*' multiple onChange={adicionarFotos} style={{display:'none'}}/>+ Mais fotos
+            </label>
+          </div>
+          <div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:10}}>
+            {fotos.map(function(f,i){return(
+              <div key={i} style={{display:'flex',alignItems:'center',gap:8,background:'#F0FDF4',borderRadius:8,padding:'8px 10px',border:'1px solid #D1FAE5'}}>
+                <div style={{fontSize:20}}>🖼</div>
+                <div style={{flex:1,fontSize:12,color:'#065F46',fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>Pag. {i+1}: {f.name}</div>
+                <div style={{display:'flex',gap:4}}>
+                  {i>0&&<button onClick={function(){moverFoto(i,-1);}} style={{background:'none',border:'1px solid #D1FAE5',borderRadius:6,width:26,height:26,cursor:'pointer',fontSize:12}}>↑</button>}
+                  {i<fotos.length-1&&<button onClick={function(){moverFoto(i,1);}} style={{background:'none',border:'1px solid #D1FAE5',borderRadius:6,width:26,height:26,cursor:'pointer',fontSize:12}}>↓</button>}
+                  <button onClick={function(){removerFoto(i);}} style={{background:'#FEE2E2',border:'none',borderRadius:6,width:26,height:26,cursor:'pointer',fontSize:12,color:'#DC2626'}}>✕</button>
+                </div>
+              </div>
+            );})}
+          </div>
+          {ocrRunning
+            ?<div style={{background:'#EFF6FF',borderRadius:10,padding:'12px 14px',textAlign:'center'}}>
+              <div style={{fontSize:13,color:B,fontWeight:700,marginBottom:4}}>Lendo nota com OCR...</div>
+              <div style={{fontSize:12,color:'#64748B'}}>{ocrProg||'Iniciando...'}</div>
+              <div style={{marginTop:8,background:'#BFDBFE',borderRadius:99,height:4,overflow:'hidden'}}>
+                <div style={{height:'100%',background:B,borderRadius:99,width:'60%',animation:'loading 1.5s infinite ease-in-out'}}/>
+              </div>
+            </div>
+            :<button onClick={processarFotos} style={{width:'100%',padding:'13px',background:'#059669',border:'none',borderRadius:10,color:'#fff',fontWeight:700,fontSize:14,cursor:'pointer'}}>
+              Processar {fotos.length} foto{fotos.length>1?'s':''} com OCR
+            </button>
+          }
+        </div>}
+        {Object.keys(vinculos).length>0&&<div style={{background:'#F0FDF4',borderRadius:12,padding:'10px 14px',marginBottom:10,border:'1px solid #BBF7D0'}}>
+          <div style={{fontSize:12,color:'#059669',fontWeight:700}}>🧠 {Object.keys(vinculos).length} produto(s) ja memorizados — proximas notas serao ainda mais rapidas!</div>
+        </div>}
+        <div style={{background:'#EFF6FF',borderRadius:12,padding:'10px 14px',border:'1px solid #BFDBFE'}}>
+          <div style={{fontSize:12,color:'#1D4ED8',fontWeight:700,marginBottom:2}}>Dica</div>
+          <div style={{fontSize:12,color:'#3730A3',lineHeight:1.6}}>Prefira sempre o XML — e 100% fiel a nota. O sistema memoriza os vinculos confirmados automaticamente.</div>
+        </div>
+      </div>
+      <div style={{padding:'0 16px'}}>
+        <div style={{fontWeight:700,fontSize:15,color:'#1E293B',marginBottom:10}}>Historico de Notas</div>
+        <div style={{display:'flex',flexDirection:'column',gap:8,marginBottom:12}}>
+          <input value={filtroBusca} onChange={function(e){setFiltroBusca(e.target.value);}} placeholder='Buscar por NF# ou fornecedor...' style={{width:'100%',padding:'10px 14px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:13,boxSizing:'border-box'}}/>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+            <input type='date' value={filtroDataDe} onChange={function(e){setFiltroDataDe(e.target.value);}} title='De' style={{width:'100%',padding:'9px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:12,boxSizing:'border-box'}}/>
+            <input type='date' value={filtroDataAte} onChange={function(e){setFiltroDataAte(e.target.value);}} title='Ate' style={{width:'100%',padding:'9px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:12,boxSizing:'border-box'}}/>
+          </div>
+          {uniqueForns.length>1&&<select value={filtroForns} onChange={function(e){setFiltroForns(e.target.value);}} style={{width:'100%',padding:'9px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:12,background:'#fff',boxSizing:'border-box'}}>
+            <option value=''>Todos os fornecedores</option>
+            {uniqueForns.map(function(f){return <option key={f} value={f}>{f}</option>;})}
+          </select>}
+          {(filtroBusca||filtroForns||filtroDataDe||filtroDataAte)&&<button onClick={function(){setFiltroBusca('');setFiltroForns('');setFiltroDataDe('');setFiltroDataAte('');}} style={{padding:'8px',background:'#F1F5F9',border:'none',borderRadius:10,fontSize:12,color:'#64748B',cursor:'pointer',fontWeight:600}}>Limpar filtros</button>}
+        </div>
+        {notasFiltradas.length===0&&<div style={{textAlign:'center',padding:40,color:'#94A3B8',background:'#fff',borderRadius:16}}>Nenhuma nota encontrada</div>}
+        <div style={{display:'flex',flexDirection:'column',gap:10}}>
+          {notasFiltradas.map(function(n){
+            return (
+              <div key={n.id} style={{background:'#fff',borderRadius:14,padding:14,boxShadow:'0 2px 8px rgba(0,0,0,.05)',border:'1.5px solid #F1F5F9',cursor:'pointer'}} onClick={function(){setDetNota(n);}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:6}}>
+                  <div>
+                    <div style={{fontWeight:700,fontSize:14,color:'#1E293B'}}>NF {n.nNF}</div>
+                    <div style={{fontSize:12,color:'#64748B',marginTop:1}}>{n.fornecedorNome}</div>
+                  </div>
+                  <div style={{textAlign:'right'}}>
+                    <div style={{fontWeight:800,fontSize:14,color:B}}>{fMoeda(n.vTotal)}</div>
+                    <div style={{fontSize:11,color:'#94A3B8',marginTop:1}}>{fD(n.dataEmissao)}</div>
+                  </div>
+                </div>
+                <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                  <span style={{background:'#D1FAE5',color:'#059669',fontSize:11,fontWeight:700,padding:'3px 8px',borderRadius:20}}>{(n.itensSalvos||[]).length} item(ns)</span>
+                  <span style={{background:n.tipo==='pdf'?'#FEF3C7':'#EFF6FF',color:n.tipo==='pdf'?'#92400E':B,fontSize:11,fontWeight:600,padding:'3px 8px',borderRadius:20}}>{n.tipo==='pdf'?'PDF':'XML'}</span>
+                  <span style={{background:'#F8FAFC',color:'#64748B',fontSize:11,padding:'3px 8px',borderRadius:20}}>por {n.importadoPor}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      {detNota&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:1000,display:'flex',alignItems:'flex-end',justifyContent:'center'}} onClick={function(){setDetNota(null);}}>
+        <div style={{background:'#fff',borderRadius:'24px 24px 0 0',padding:'24px 20px 40px',width:'100%',maxWidth:480,maxHeight:'90vh',overflowY:'auto'}} onClick={function(e){e.stopPropagation();}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+            <div>
+              <div style={{fontWeight:800,fontSize:17,color:'#1E293B'}}>NF {detNota.nNF}</div>
+              <div style={{fontSize:12,color:'#64748B',marginTop:2}}>{detNota.fornecedorNome}</div>
+            </div>
+            <button onClick={function(){setDetNota(null);}} style={{background:'#F1F5F9',border:'none',borderRadius:10,width:36,height:36,cursor:'pointer',fontSize:18}}>X</button>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:14}}>
+            <div style={{background:'#F8FAFC',borderRadius:10,padding:'10px 12px'}}>
+              <div style={{fontSize:10,color:'#94A3B8',textTransform:'uppercase',marginBottom:2}}>Emissao</div>
+              <div style={{fontWeight:700,fontSize:13}}>{fD(detNota.dataEmissao)||'—'}</div>
+            </div>
+            <div style={{background:'#EFF6FF',borderRadius:10,padding:'10px 12px'}}>
+              <div style={{fontSize:10,color:'#94A3B8',textTransform:'uppercase',marginBottom:2}}>Valor Total</div>
+              <div style={{fontWeight:800,fontSize:14,color:B}}>{fMoeda(detNota.vTotal)}</div>
+            </div>
+            {detNota.fornecedorCNPJ&&<div style={{background:'#F8FAFC',borderRadius:10,padding:'10px 12px'}}>
+              <div style={{fontSize:10,color:'#94A3B8',textTransform:'uppercase',marginBottom:2}}>CNPJ</div>
+              <div style={{fontWeight:600,fontSize:12}}>{detNota.fornecedorCNPJ}</div>
+            </div>}
+            <div style={{background:'#F8FAFC',borderRadius:10,padding:'10px 12px'}}>
+              <div style={{fontSize:10,color:'#94A3B8',textTransform:'uppercase',marginBottom:2}}>Importado por</div>
+              <div style={{fontWeight:600,fontSize:12}}>{detNota.importadoPor}</div>
+            </div>
+          </div>
+          {detNota.chaveAcesso&&<div style={{background:'#F8FAFC',borderRadius:10,padding:'10px 12px',marginBottom:14}}>
+            <div style={{fontSize:10,color:'#94A3B8',textTransform:'uppercase',marginBottom:3}}>Chave de Acesso</div>
+            <div style={{fontSize:10,color:'#475569',wordBreak:'break-all',fontFamily:'monospace'}}>{detNota.chaveAcesso}</div>
+          </div>}
+          <div style={{fontWeight:700,fontSize:13,color:'#1E293B',marginBottom:8}}>Itens adicionados ao estoque</div>
+          <div style={{display:'flex',flexDirection:'column',gap:6}}>
+            {(detNota.itensSalvos||[]).map(function(it,i){
+              return (
+                <div key={i} style={{background:'#F0FDF4',borderRadius:10,padding:'10px 12px',border:'1px solid #D1FAE5'}}>
+                  <div style={{fontWeight:600,fontSize:13,color:'#065F46'}}>{it.nome}</div>
+                  <div style={{fontSize:12,color:'#059669'}}>Qtd: {it.qtd}{it.lote?' · Lote: '+it.lote:''}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>}
+    </div>
+  );
+}
+
+
 function TabAntibiotico({user,medications,stock}){
   var sl=React.useState,ef=React.useEffect,B='#1351B4';
   var _tr=sl([]);var tratamentos=_tr[0];var setTratamentos=_tr[1];
@@ -725,6 +1677,18 @@ function TabAntibiotico({user,medications,stock}){
   function dRest(t){return Math.max(0,parseInt(t.diasTratamento||0)-(t.doses||[]).filter(function(d){return!d.retroativo;}).length);}
   function dHj(t){var hj=new Date().toISOString().split('T')[0];return(t.doses||[]).some(function(d){return d.data===hj&&!d.retroativo;});}
   function pHj(t){return cSt(t)==='ativo'&&!dHj(t);}
+  function diasFaltou(t){
+    if(cSt(t)!=='ativo')return 0;
+    var doses=t.doses||[];
+    var doasReais=doses.filter(function(d){return!d.retroativo;});
+    if(doasReais.length===0)return 0;
+    var ultima=doasReais.reduce(function(a,b){return a.data>b.data?a:b;});
+    var dataUltima=new Date(ultima.data+'T12:00:00');
+    var hoje=new Date();hoje.setHours(12,0,0,0);
+    var diff=Math.floor((hoje-dataUltima)/86400000);
+    return diff>1?diff-1:0;
+  }
+  function isInterrompido(t){return cSt(t)==='ativo'&&diasFaltou(t)>=1;}
   function cCor(s){if(s==='ativo')return'#10B981';if(s==='espera')return'#F59E0B';if(s==='dose_ataque')return'#8B5CF6';if(s==='concluido'||s==='finalizado')return'#3B82F6';if(s==='desistiu')return'#EF4444';return'#64748B';}
   function cLbl(s){if(s==='ativo')return'Em Tratamento';if(s==='espera')return'Aguardando';if(s==='dose_ataque')return'Dose de Ataque';if(s==='concluido')return'Concluido';if(s==='finalizado')return'Finalizado';if(s==='desistiu')return'Desistiu';return s;}
   function cIco(s){if(s==='ativo')return'💉';if(s==='espera')return'⏳';if(s==='dose_ataque')return'⚡';if(s==='concluido'||s==='finalizado')return'✅';if(s==='desistiu')return'❌';return'';}
@@ -777,10 +1741,12 @@ function TabAntibiotico({user,medications,stock}){
 
   var lista=tratamentos.filter(function(t){
     var s=cSt(t);
-    var okF=filtro==='todos'||s===filtro||(filtro==='ativos'&&s==='ativo');
+    var interr=isInterrompido(t);
+    var okF=filtro==='todos'||s===filtro||(filtro==='ativos'&&s==='ativo'&&!interr)||(filtro==='interrompido'&&interr);
     var okB=!busca||(t.pacienteNome||'').toLowerCase().includes(busca.toLowerCase())||(t.nomeMedico||'').toLowerCase().includes(busca.toLowerCase());
     return okF&&okB;
   });
+  var totalInterrompidos=tratamentos.filter(function(t){return isInterrompido(t);}).length;
 
   return (
     <div style={{padding:'0 0 80px'}}>
@@ -822,6 +1788,10 @@ function TabAntibiotico({user,medications,stock}){
           {[['ativos','💉 Ativos'],['espera','⏳ Espera'],['dose_ataque','⚡ Ataque'],['concluido','✅ Concluidos'],['desistiu','❌ Desistiram'],['todos','Todos']].map(function(f){
             return <button key={f[0]} onClick={function(){setFiltro(f[0]);}} style={{flexShrink:0,padding:'7px 9px',borderRadius:10,border:'none',background:filtro===f[0]?B:'#F1F5F9',color:filtro===f[0]?'#fff':'#64748B',fontWeight:filtro===f[0]?700:500,fontSize:11,cursor:'pointer',whiteSpace:'nowrap'}}>{f[1]}</button>;
           })}
+          <button onClick={function(){setFiltro('interrompido');}} style={{flexShrink:0,padding:'7px 9px',borderRadius:10,border:'none',background:filtro==='interrompido'?'#DC2626':'#F1F5F9',color:filtro==='interrompido'?'#fff':'#DC2626',fontWeight:filtro==='interrompido'?700:600,fontSize:11,cursor:'pointer',whiteSpace:'nowrap',position:'relative'}}>
+            ⚠️ Interrompido
+            {totalInterrompidos>0&&<span style={{position:'absolute',top:-4,right:-4,background:'#DC2626',color:'#fff',borderRadius:99,width:16,height:16,fontSize:9,fontWeight:800,display:filtro==='interrompido'?'none':'flex',alignItems:'center',justifyContent:'center'}}>{totalInterrompidos}</span>}
+          </button>
         </div>
       </div>
 
@@ -834,18 +1804,23 @@ function TabAntibiotico({user,medications,stock}){
           var total=parseInt(t.diasTratamento)||0;
           var pct=total>0?Math.min(100,Math.round((feitas/total)*100)):0;
           var de=dEsp(t);
-          var bord=s==='dose_ataque'?'1.5px solid #DDD6FE':s==='espera'?(de>=3?'2px solid #EF4444':de>=2?'2px solid #F59E0B':'2px solid #FCD34D'):dHj(t)?'2px solid #10B981':'1.5px solid #F1F5F9';
+          var interr=isInterrompido(t);var faltou=diasFaltou(t);
+          var bord=interr?'2px solid #EF4444':s==='dose_ataque'?'1.5px solid #DDD6FE':s==='espera'?(de>=3?'2px solid #EF4444':de>=2?'2px solid #F59E0B':'2px solid #FCD34D'):dHj(t)?'2px solid #10B981':'1.5px solid #F1F5F9';
           return (
             <div key={t.id} style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:bord,cursor:'pointer'}} onClick={function(){setShowDet(t);}}>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:8}}>
                 <div style={{flex:1}}>
                   <div style={{fontWeight:700,fontSize:15,color:'#1E293B'}}>{t.pacienteNome}</div>
                   {(t.nomeMedico||t.crmMedico)&&<div style={{fontSize:11,color:'#64748B',marginTop:2}}>👨‍⚕️ {t.nomeMedico}{t.crmMedico?' · CRM: '+t.crmMedico:''}</div>}
+                  {t.criadoPor&&<div style={{fontSize:11,color:'#94A3B8',marginTop:2}}>📋 Cadastrado por: <span style={{fontWeight:600,color:'#64748B'}}>{t.criadoPor}</span></div>}
                   {s==='espera'&&<div style={{fontSize:11,fontWeight:600,marginTop:2,color:de>=3?'#DC2626':de>=2?'#D97706':'#D97706'}}>{de>=3?'🚨 '+de+' dias - PRAZO VENCIDO!':'⏳ Dia '+de+' de 3 em espera'}</div>}
                   {s==='dose_ataque'&&<div style={{fontSize:11,fontWeight:600,marginTop:2,color:'#7C3AED'}}>⚡ {t.doseAtaqueRegistradoPor||'—'} · {t.doseAtaqueData?fD(t.doseAtaqueData):''}{t.doseAtaqueHora?' as '+t.doseAtaqueHora:''}</div>}
                   {s!=='espera'&&s!=='dose_ataque'&&total>0&&<div style={{fontSize:11,color:'#94A3B8',marginTop:2}}>Inicio: {fD(t.dataInicio)} · {total} dias</div>}
                 </div>
-                <span style={{background:cCor(s)+'18',color:cCor(s),fontSize:11,fontWeight:700,padding:'3px 10px',borderRadius:20,border:'1px solid '+cCor(s)+'40'}}>{cIco(s)} {cLbl(s)}</span>
+                <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:4}}>
+                  <span style={{background:cCor(s)+'18',color:cCor(s),fontSize:11,fontWeight:700,padding:'3px 10px',borderRadius:20,border:'1px solid '+cCor(s)+'40'}}>{cIco(s)} {cLbl(s)}</span>
+                  {interr&&<span style={{background:'#FEE2E2',color:'#DC2626',fontWeight:800,fontSize:10,padding:'3px 8px',borderRadius:20,border:'1px solid #FECACA'}}>⚠️ {faltou} dia{faltou>1?'s':''} sem dose</span>}
+                </div>
               </div>
               {s!=='espera'&&s!=='dose_ataque'&&total>0&&<div style={{marginBottom:8}}>
                 <div style={{display:'flex',justifyContent:'space-between',fontSize:11,color:'#94A3B8',marginBottom:3}}>
@@ -1104,7 +2079,63 @@ function TabAntibiotico({user,medications,stock}){
   );
 }
 
+function ModalConfirm({titulo,msg,onConfirm,onCancel,tipo,confirmTxt,cancelTxt}){
+  var cor=tipo==='danger'?'#DC2626':tipo==='warning'?'#D97706':'#059669';
+  var bg=tipo==='danger'?'#FEF2F2':tipo==='warning'?'#FFFBEB':'#F0FDF4';
+  var icon=tipo==='danger'?'🗑️':tipo==='warning'?'⚠️':'✅';
+  return(
+    <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.6)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:20}} onClick={onCancel}>
+      <div style={{background:'#fff',borderRadius:20,padding:24,maxWidth:340,width:'100%',boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}} onClick={function(e){e.stopPropagation();}}>
+        <div style={{textAlign:'center',marginBottom:16}}>
+          <div style={{width:56,height:56,borderRadius:16,background:bg,display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,margin:'0 auto 12px'}}>{icon}</div>
+          <div style={{fontWeight:800,fontSize:17,color:'#1E293B',marginBottom:6}}>{titulo}</div>
+          <div style={{fontSize:13,color:'#64748B',lineHeight:1.5}}>{msg}</div>
+        </div>
+        <div style={{display:'flex',gap:10,marginTop:20}}>
+          {onCancel&&<button onClick={onCancel} style={{flex:1,padding:'12px',background:'#F1F5F9',border:'none',borderRadius:12,fontWeight:700,fontSize:14,color:'#64748B',cursor:'pointer'}}>{cancelTxt||'Cancelar'}</button>}
+          <button onClick={onConfirm} style={{flex:1,padding:'12px',background:cor,border:'none',borderRadius:12,fontWeight:700,fontSize:14,color:'#fff',cursor:'pointer'}}>{confirmTxt||'Confirmar'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModalAlert({titulo,msg,onClose,tipo}){
+  var cor=tipo==='danger'?'#DC2626':tipo==='warning'?'#D97706':'#1351B4';
+  var bg=tipo==='danger'?'#FEF2F2':tipo==='warning'?'#FFFBEB':'#EFF6FF';
+  var icon=tipo==='danger'?'❌':tipo==='warning'?'⚠️':'ℹ️';
+  return(
+    <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.6)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:20}} onClick={onClose}>
+      <div style={{background:'#fff',borderRadius:20,padding:24,maxWidth:320,width:'100%',boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}} onClick={function(e){e.stopPropagation();}}>
+        <div style={{textAlign:'center',marginBottom:20}}>
+          <div style={{width:56,height:56,borderRadius:16,background:bg,display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,margin:'0 auto 12px'}}>{icon}</div>
+          <div style={{fontWeight:800,fontSize:17,color:'#1E293B',marginBottom:6}}>{titulo||'Atenção'}</div>
+          <div style={{fontSize:13,color:'#64748B',lineHeight:1.5}}>{msg}</div>
+        </div>
+        <button onClick={onClose} style={{width:'100%',padding:'12px',background:cor,border:'none',borderRadius:12,fontWeight:700,fontSize:14,color:'#fff',cursor:'pointer'}}>Entendido</button>
+      </div>
+    </div>
+  );
+}
+
+function useModal(){
+  var _modal=React.useState(null);var modal=_modal[0];var setModal=_modal[1];
+  function confirm2(titulo,msg,onConfirm,tipo,confirmTxt){
+    setModal({type:'confirm',titulo:titulo,msg:msg,onConfirm:function(){setModal(null);onConfirm();},onCancel:function(){setModal(null);},tipo:tipo,confirmTxt:confirmTxt});
+  }
+  function alert2(msg,titulo,tipo){
+    setModal({type:'alert',titulo:titulo||'Atenção',msg:msg,onClose:function(){setModal(null);},tipo:tipo||'warning'});
+  }
+  function ModalRender(){
+    if(!modal)return null;
+    if(modal.type==='confirm')return React.createElement(ModalConfirm,modal);
+    return React.createElement(ModalAlert,modal);
+  }
+  return {confirm2:confirm2,alert2:alert2,ModalRender:ModalRender,modal:modal};
+}
+
 function App(){
+var {confirm2,alert2,ModalRender,modal}=useModal();
 var _ready=useState(false);var ready=_ready[0];var setReady=_ready[1];var _user=useState(null);var user=_user[0];var setUser=_user[1];var _entries=useState([]);var entries=_entries[0];var setEntries=_entries[1];var _meds=useState([]);var meds=_meds[0];var setMeds=_meds[1];var _loading=useState(true);var loading=_loading[0];var setLoading=_loading[1];var _tab=useState('dashboard');var tab=_tab[0];var setTab=_tab[1];var _pending=useState(0);var pending=_pending[0];var setPending=_pending[1];var _alertCount=useState(0);var alertCount=_alertCount[0];var setAlertCount=_alertCount[1];var _solicitCount=useState(0);var solicitCount=_solicitCount[0];var setSolicitCount=_solicitCount[1];var _online=useState(navigator.onLine);var online=_online[0];var setOnline=_online[1];var _busca=useState(false);var busca=_busca[0];var setBusca=_busca[1];var _showSolicit=useState(false);var showSolicit=_showSolicit[0];var setShowSolicit=_showSolicit[1];var _showShift=useState(false);var showShift=_showShift[0];var setShowShift=_showShift[1];var _showShiftModal=useState(false);var showShiftModal=_showShiftModal[0];var setShowShiftModal=_showShiftModal[1];var _pendingInvite=useState(null);var pendingInvite=_pendingInvite[0];var setPendingInvite=_pendingInvite[1];var _plantao=useState(null);var plantao=_plantao[0];var setPlantao=_plantao[1];var _isGuest=useState(false);var isGuest=_isGuest[0];var setIsGuest=_isGuest[1];var _allUsers=useState([]);var allUsers=_allUsers[0];var setAllUsers=_allUsers[1];var _shiftChecked=useState(false);var shiftChecked=_shiftChecked[0];var setShiftChecked=_shiftChecked[1];var _shiftId=useState(null);var shiftId=_shiftId[0];var setShiftId=_shiftId[1];var _solicitacoesPlantao=useState([]);var solicitacoesPlantao=_solicitacoesPlantao[0];var setSolicitacoesPlantao=_solicitacoesPlantao[1];var lastAct=useRef(Date.now());
 useEffect(function(){var cfg=loadCfg();if(cfg&&initFB(cfg)){setReady(true);var saved=localStorage.getItem('fc_user');if(saved){try{setUser(JSON.parse(saved));}catch(e){}}auth.onAuthStateChanged(function(firebaseUser){if(firebaseUser&&!skipAuthCheck){db.collection('users').doc(firebaseUser.uid).get().then(function(s){if(s.exists){var d=s.data();if(d.status==='inativo'||d.status==='rejected'||d.status==='pending'){auth.signOut();localStorage.removeItem('fc_user');setUser(null);return;}var u={uid:firebaseUser.uid,name:d.name,role:d.role,color:d.color,email:d.email,status:d.status,sessionTimeout:d.sessionTimeout||12,photoURL:d.photoURL||'',crf:d.crf||''};localStorage.setItem('fc_user',JSON.stringify(u));setUser(u);}}).catch(function(){var s2=localStorage.getItem('fc_user');if(s2){try{setUser(JSON.parse(s2));}catch(e){}}});}});}},[] );
 useEffect(function(){function on(){setOnline(true);}function off(){setOnline(false);}window.addEventListener('online',on);window.addEventListener('offline',off);return function(){window.removeEventListener('online',on);window.removeEventListener('offline',off);};},[]);
@@ -1132,7 +2163,7 @@ if(pendingInvite)return <InviteScreen invite={pendingInvite} onConfirm={handleCo
 var isManagerRole=(user.role==='gestor'||user.role==='tecnico');
 var canMove=isManagerRole||!isGuest;
 var badge=pending+alertCount+solicitCount;
-var navTabs=[{id:'dashboard',icon:'🏠',label:'Inicio',show:true},{id:'saida',icon:'💊',label:'Saida',show:true},{id:'entrada',icon:'📥',label:'Entrada',show:true},{id:'estoque',icon:'📦',label:'Estoque',show:true},{id:'antibiotico',icon:'🧬',label:'ATB',show:true},{id:'relatorio',icon:'📊',label:'Relatorio',show:can(user.role,'relatorio')},{id:'gestao',icon:'👥',label:'Gestao',show:can(user.role,'gestao'),badge:badge},{id:'log',icon:'🔐',label:'Log',show:can(user.role,'log')},{id:'histcontas',icon:'📋',label:'Contas',show:can(user.role,'log')},{id:'perfil',icon:'👤',label:'Perfil',show:true}].filter(function(t){return t.show;});
+var navTabs=[{id:'dashboard',icon:'🏠',label:'Inicio',show:true},{id:'saida',icon:'💊',label:'Saida',show:true},{id:'entrada',icon:'📥',label:'Entrada',show:true},{id:'estoque',icon:'📦',label:'Estoque',show:true},{id:'antibiotico',icon:'🧬',label:'ATB',show:true},{id:'relatorio',icon:'📊',label:'Relatorio',show:can(user.role,'relatorio')},{id:'gestao',icon:'👥',label:'Gestao',show:can(user.role,'gestao'),badge:badge},{id:'log',icon:'🔐',label:'Log',show:can(user.role,'log')},{id:'histcontas',icon:'📋',label:'Contas',show:can(user.role,'log')},{id:'admin',icon:'🔧',label:'Admin',show:user.role==='tecnico'},{id:'perfil',icon:'👤',label:'Perfil',show:true}].filter(function(t){return t.show;});
 return(
 <div style={{minHeight:'100vh',background:'#EEF2F7',position:'relative',overflow:'hidden'}}>
   {/* MARCA D'ÁGUA BACKGROUND */}
@@ -1201,18 +2232,21 @@ return(
     ):(
       <div>
         {tab==='dashboard'&&<TabDashboard entries={entries} medications={meds} stock={stock} user={user} plantao={plantao} isGuest={isGuest} onSolicitar={function(){setShowSolicit(true);}} onEncerrar={encerrarPlantao} onSair={sairDoPlantao} onSolicitarEntrada={solicitarEntradaPlantao} shiftId={shiftId} onIniciar={function(){setShowShiftModal(true);}}/>}
-        {tab==='saida'&&<TabSaida user={user} medications={meds} stock={stock} entries={entries} onSave={addEntry} onSolicitar={addSolicitacao} latest={latest} isGuest={isGuest} canMove={canMove}/>}
-        {tab==='entrada'&&<TabEntrada user={user} medications={meds} onSave={addEntry} onSolicitar={addSolicitacao} isGuest={isGuest} canMove={canMove}/>}
+        {tab==='saida'&&<TabSaida user={user} medications={meds} stock={stock} entries={entries} onSave={addEntry} onSolicitar={addSolicitacao} latest={latest} isGuest={isGuest} canMove={canMove} confirm2={confirm2} alert2={alert2}/>}
+        {tab==='entrada'&&<TabEntrada user={user} medications={meds} onSave={addEntry} onSolicitar={addSolicitacao} isGuest={isGuest} canMove={canMove} confirm2={confirm2} alert2={alert2}/>}
         {tab==='estoque'&&<TabEstoque user={user} medications={meds} entries={entries} stock={stock}/>}
         {tab==='relatorio'&&can(user.role,'relatorio')&&<TabRelatorio entries={entries} medications={meds}/>}
         {tab==='gestao'&&can(user.role,'gestao')&&<TabGestao currentUser={user} entries={entries}/>}
         {tab==='log'&&can(user.role,'log')&&<TabLog/>}
         {tab==='histcontas'&&can(user.role,'log')&&<TabHistContas/>}
         {tab==='antibiotico'&&<TabAntibiotico user={user} medications={meds} stock={stock}/>}
+        {tab==='admin'&&user.role==='tecnico'&&<TabAdmin user={user} entries={entries} medications={meds} db={db}/>}
         {tab==='perfil'&&<TabPerfil user={user} onUpdate={function(u){setUser(u);}} onLogout={logout} entries={entries} medications={meds} stock={stock}/>}
       </div>
     )}
   </div>
+  <SeletorAmbiente user={user}/>
+  <ModalRender/>
 
   <nav className="bnav">
     {navTabs.map(function(t){return(
