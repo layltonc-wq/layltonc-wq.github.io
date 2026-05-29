@@ -202,33 +202,16 @@ function Auth(props){
   function login(){if(!email||!pass){setErr('Preencha email e senha.');return;}setLoad(true);setErr('');auth.signInWithEmailAndPassword(email,pass).then(function(c){return db.collection('users').doc(c.user.uid).get().then(function(s){if(!s.exists){setErr('Usuario nao encontrado.');auth.signOut();setLoad(false);return;}var d=s.data();if(d.status==='pending'){setErr('Aguardando aprovacao.');auth.signOut();setLoad(false);return;}if(d.status==='rejected'||d.status==='inativo'){setErr('Conta nao ativa.');auth.signOut();setLoad(false);return;}var u={uid:c.user.uid,name:d.name,role:d.role,color:d.color,email:d.email,status:d.status,sessionTimeout:d.sessionTimeout||12,photoURL:d.photoURL||'',crf:d.crf||''};localStorage.setItem('fc_user',JSON.stringify(u));db.collection('logs_acesso').add({uid:u.uid,nome:u.name,cargo:u.role,acao:'login',criadoEm:new Date().toISOString()}).catch(function(){});props.onLogin(u);});}).catch(function(e){setErr(EM[e.code]||e.message);setLoad(false);});}
   function register(){if(!name||!email||!pass){setErr('Preencha todos os campos.');return;}if(pass.length<6){setErr('Senha min. 6 caracteres.');return;}setLoad(true);setErr('');skipAuthCheck=true;db.collection('users').limit(1).get().then(function(ex){var isFirst=ex.empty;auth.createUserWithEmailAndPassword(email,pass).then(function(c){var ud={name:name,role:isFirst?'gestor':role,color:color,email:email,status:isFirst?'approved':'pending',criadoEm:new Date().toISOString(),sessionTimeout:12,photoURL:'',crf:role==='farmaceutico'?crf.trim():''};db.collection('users').doc(c.user.uid).set(ud).then(function(){skipAuthCheck=false;if(isFirst){var u={uid:c.user.uid,name:ud.name,role:ud.role,color:ud.color,email:ud.email,status:ud.status,sessionTimeout:12,photoURL:'',crf:''};localStorage.setItem('fc_user',JSON.stringify(u));props.onLogin(u);}else{auth.signOut().catch(function(){});setErr('Conta criada! Aguarde aprovacao do Tecnico.');setMode('login');setLoad(false);}}).catch(function(e){skipAuthCheck=false;setErr(e.message);setLoad(false);});}).catch(function(e){skipAuthCheck=false;setErr(EM[e.code]||e.message);setLoad(false);});}).catch(function(e){skipAuthCheck=false;setErr(e.message);setLoad(false);});}
   return(
-    <div style={{minHeight:'100vh',background:'linear-gradient(160deg,#0A2D6E 0%,#1351B4 55%,#0C7B4A 100%)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:16}}>
+    <div style={{minHeight:'100vh',background:'linear-gradient(160deg,#0D1B4B 0%,#1351B4 55%,#1A6FD4 100%)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:16,position:'relative',overflow:'hidden'}}>
+      <div style={{position:'absolute',width:320,height:320,borderRadius:'50%',border:'1px solid rgba(255,255,255,0.05)',top:-100,right:-100}}/>
+      <div style={{position:'absolute',width:220,height:220,borderRadius:'50%',border:'1px solid rgba(255,255,255,0.05)',top:-60,right:-60}}/>
+      <div style={{position:'absolute',width:200,height:200,borderRadius:'50%',border:'1px solid rgba(255,255,255,0.04)',bottom:-80,left:-80}}/>
       <div style={{textAlign:'center',marginBottom:28}}>
-        <div style={{width:80,height:80,borderRadius:20,background:'rgba(255,255,255,.12)',border:'1.5px solid rgba(255,255,255,.25)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 14px',backdropFilter:'blur(10px)',boxShadow:'0 8px 24px rgba(0,0,0,.2)'}}>
-          <svg width="52" height="52" viewBox="0 0 200 260" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <linearGradient id="g1" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="#FFFFFF" stopOpacity="1"/>
-                <stop offset="100%" stopColor="#E8F0FE" stopOpacity="0.9"/>
-              </linearGradient>
-            </defs>
-            <rect x="94" y="30" width="12" height="175" rx="6" fill="url(#g1)"/>
-            <rect x="82" y="198" width="36" height="7" rx="3.5" fill="url(#g1)"/>
-            <rect x="74" y="205" width="52" height="7" rx="3.5" fill="url(#g1)"/>
-            <ellipse cx="100" cy="216" rx="30" ry="6" fill="url(#g1)" opacity="0.85"/>
-            <path d="M 60 95 L 55 75 L 145 75 L 140 95 Q 100 120 60 95 Z" fill="url(#g1)"/>
-            <path d="M 40 68 L 160 68 L 145 76 L 55 76 Z" fill="url(#g1)"/>
-            <path d="M 100 220 C 80 215,68 200,72 185 C 76 170,95 168,100 160 C 105 152,120 148,122 135 C 124 122,112 112,100 108 C 88 104,75 100,74 88 C 73 76,88 70,100 68" stroke="url(#g1)" strokeWidth="14" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-            <path d="M 100 220 C 120 215,132 198,128 182 C 124 166,105 162,100 152 C 95 142,82 136,80 122 C 78 108,90 100,100 98 C 110 96,126 92,127 80 C 128 72,115 66,100 64" stroke="url(#g1)" strokeWidth="14" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-            <ellipse cx="100" cy="52" rx="13" ry="18" fill="url(#g1)"/>
-            <ellipse cx="106" cy="46" rx="3" ry="3.5" fill="rgba(19,81,180,0.6)"/>
-            <path d="M 100 68 L 94 76 M 100 68 L 106 76" stroke="rgba(255,100,100,0.9)" strokeWidth="2.5" strokeLinecap="round"/>
-            <path d="M 94 58 C 80 50,55 48,40 55 C 30 60,28 68,35 72 C 45 78,70 70,94 65 Z" fill="url(#g1)" opacity="0.9"/>
-            <path d="M 106 58 C 120 50,145 48,160 55 C 170 60,172 68,165 72 C 155 78,130 70,106 65 Z" fill="url(#g1)" opacity="0.9"/>
-          </svg>
+        <div style={{width:84,height:84,borderRadius:22,background:'rgba(255,255,255,0.13)',border:'1.5px solid rgba(255,255,255,0.28)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px',backdropFilter:'blur(12px)',boxShadow:'0 8px 32px rgba(0,0,0,0.25)'}}>
+          <span style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:36,fontWeight:900,color:'#fff',letterSpacing:'-2px',lineHeight:1}}>FC</span>
         </div>
         <div style={{fontSize:28,fontWeight:800,color:'#fff',letterSpacing:'-.02em'}}>FarmaControl</div>
-        <div style={{fontSize:13,color:'rgba(255,255,255,.65)',marginTop:4}}>Sistema de Controle Farmaceutico</div>
+        <div style={{fontSize:11,color:'rgba(255,255,255,.45)',marginTop:5,letterSpacing:'.14em',textTransform:'uppercase'}}>Sistema de Controle Farmaceutico</div>
       </div>
       <div style={{background:'#fff',borderRadius:24,padding:'28px 24px',maxWidth:380,width:'100%',boxShadow:'0 24px 64px rgba(0,0,0,.25)'}}>
         <div style={{display:'flex',background:'#F1F5F9',borderRadius:10,padding:3,marginBottom:24,gap:3}}>
@@ -248,6 +231,10 @@ function Auth(props){
         <button onClick={mode==='login'?login:register} disabled={load} className="bp" style={{opacity:load?0.7:1,marginBottom:12}}>{load?'Aguarde...':(mode==='login'?'Entrar':'Criar conta')}</button>
         <button onClick={function(){if(!email){setErr('Digite seu email primeiro.');return;}auth.sendPasswordResetEmail(email).then(function(){setErr('Email de recuperacao enviado!');}).catch(function(e){setErr('Erro: '+e.message);});}} style={{background:'none',border:'none',color:B,fontSize:12,cursor:'pointer',width:'100%',textAlign:'center',padding:'4px'}}>Esqueci minha senha</button>
         <button onClick={function(){localStorage.removeItem(CFG_KEY);window.location.reload();}} style={{marginTop:4,background:'none',border:'none',color:'#94a3b8',fontSize:11,cursor:'pointer',width:'100%',textAlign:'center'}}>Reconfigurar Firebase</button>
+      </div>
+      <div style={{marginTop:24,textAlign:'center'}}>
+        <span style={{fontSize:11,color:'rgba(255,255,255,0.2)',letterSpacing:'.06em'}}>Desenvolvido por </span>
+        <span style={{fontSize:11,color:'rgba(255,255,255,0.38)',fontWeight:700,letterSpacing:'.04em'}}>Laylton Carlos</span>
       </div>
     </div>
   );}
