@@ -489,7 +489,7 @@ var _carrinhoNota=useState([]);var carrinhoNota=_carrinhoNota[0];var setCarrinho
 var _editIdx=useState(null);var editIdx=_editIdx[0];var setEditIdx=_editIdx[1];
 var _showNovoMed=useState(false);var showNovoMed=_showNovoMed[0];var setShowNovoMed=_showNovoMed[1];
 var _novoMedNome=useState('');var novoMedNome=_novoMedNome[0];var setNovoMedNome=_novoMedNome[1];
-var _novoMedCat=useState('medicamento');var novoMedCat=_novoMedCat[0];var setNovoMedCat=_novoMedCat[1];
+var _novoMedCat=useState('injetavel');var novoMedCat=_novoMedCat[0];var setNovoMedCat=_novoMedCat[1];
 var _novoMedQty=useState('');var novoMedQty=_novoMedQty[0];var setNovoMedQty=_novoMedQty[1];
 var _novoMedLote=useState('');var novoMedLote=_novoMedLote[0];var setNovoMedLote=_novoMedLote[1];
 var _novoMedVal=useState('');var novoMedVal=_novoMedVal[0];var setNovoMedVal=_novoMedVal[1];
@@ -518,7 +518,7 @@ function save(){if(!sel){setErr('Selecione um medicamento.');return;}var q=parse
   function cadastrarNovoMed(){
     if(!novoMedNome.trim())return;
     setSalvandoNota(true);
-    db.collection('medications').add({nome:novoMedNome.trim().toUpperCase(),categoria:novoMedCat,tipo:novoMedCat,ean:'',estoqueMin:5,criadoEm:new Date().toISOString(),criadoPor:user.name}).then(function(ref){
+    db.collection('medicamentos').add({nome:novoMedNome.trim().toUpperCase(),categoria:novoMedCat,tipo:novoMedCat,ean:'',estoqueMin:5,criadoEm:new Date().toISOString(),criadoPor:user.name}).then(function(ref){
       var q2=parseInt(novoMedQty)||0;
       if(q2>0){
         var item={medId:ref.id,medNome:novoMedNome.trim().toUpperCase(),qty:q2,lote:novoMedLote||loteNotaReal||'',validade:novoMedVal||valNotaReal||'',novo:true};
@@ -545,12 +545,14 @@ function save(){if(!sel){setErr('Selecione um medicamento.');return;}var q=parse
         setSalvandoNota(false);setTimeout(function(){setOkNota('');},5000);return;
       }
       var item2=items[idx3++];
-      onSave({medicamentoId:item2.medId,medicamentoNome:item2.medNome,tipo:'entrada',quantidade:item2.qty,lote:item2.lote,validade:item2.validade,observacao:obsTexto,nfNumero:nfNum,nfFornecedor:nfForn}).then(next2).catch(next2);
+      var medOrig2=medications.find(function(m){return m.id===item2.medId;});
+      onSave({medicamentoId:item2.medId,medicamentoNome:item2.medNome,tipo:'entrada',quantidade:item2.qty,lote:item2.lote,validade:item2.validade,observacao:obsTexto,nfNumero:nfNum,nfFornecedor:nfForn,categoriaMed:medOrig2?medOrig2.categoria||'medicamento':'medicamento'}).then(next2).catch(next2);
     }
     next2();
   }
 
-  function salvarNota(){var itens=[];Object.keys(qtds).forEach(function(medId){var q=parseInt(qtds[medId])||0;if(q>0){var med=medications.find(function(m){return m.id===medId;});if(med)itens.push({med:med,qty:q});}});if(itens.length===0){setOkNota('Nenhuma quantidade informada.');return;}confirm2('Confirmar entrada','Registrar entrada de '+itens.length+' medicamento(s) no estoque?',function(){_execSalvarNota();},'success','Confirmar');return;setSalvandoNota(true);var nfNum=loteNota.trim();var nfData=valNota.trim();var nfForn=obsNota.trim();var obsTexto='NF'+(nfNum?' '+nfNum:'')+(nfForn?' - '+nfForn:'');var idx=0;function next(){if(idx>=itens.length){playSound('success');setOkNota('Entrada de '+itens.length+' item(ns) registrada! NF: '+(nfNum||'sem numero'));setQtds({});setLoteNota('');setValNota('');setObsNota('');setLoteNotaReal('');setValNotaReal('');setSalvandoNota(false);setTimeout(function(){setOkNota('');},5000);return;}var item=itens[idx++];onSave({medicamentoId:item.med.id,medicamentoNome:item.med.nome,ean:item.med.ean||'',tipo:'entrada',quantidade:item.qty,lote:loteNotaReal.trim(),validade:valNotaReal.trim(),observacao:obsTexto,nfNumero:nfNum,nfData:nfData,nfFornecedor:nfForn}).then(next).catch(next);}next();}
+  function _execSalvarNota(){var itens2=[];Object.keys(qtds).forEach(function(medId){var q=parseInt(qtds[medId])||0;if(q>0){var med=medications.find(function(m){return m.id===medId;});if(med)itens2.push({med:med,qty:q});}});if(itens2.length===0)return;setSalvandoNota(true);var nfNum=loteNota.trim();var nfData=valNota.trim();var nfForn=obsNota.trim();var obsTexto='NF'+(nfNum?' '+nfNum:'')+(nfForn?' - '+nfForn:'');var idx2=0;function next2(){if(idx2>=itens2.length){playSound('success');setOkNota('Entrada de '+itens2.length+' item(ns) registrada! NF: '+(nfNum||'sem numero'));setQtds({});setLoteNota('');setValNota('');setObsNota('');setLoteNotaReal('');setValNotaReal('');setSalvandoNota(false);setTimeout(function(){setOkNota('');},5000);return;}var item=itens2[idx2++];onSave({medicamentoId:item.med.id,medicamentoNome:item.med.nome,ean:item.med.ean||'',tipo:'entrada',quantidade:item.qty,lote:loteNotaReal.trim(),validade:valNotaReal.trim(),observacao:obsTexto,nfNumero:nfNum,nfData:nfData,nfFornecedor:nfForn,categoriaMed:item.med.categoria||'medicamento'}).then(next2).catch(next2);}next2();}
+  function salvarNota(){var itens=[];Object.keys(qtds).forEach(function(medId){var q=parseInt(qtds[medId])||0;if(q>0){var med=medications.find(function(m){return m.id===medId;});if(med)itens.push({med:med,qty:q});}});if(itens.length===0){setOkNota('Nenhuma quantidade informada.');return;}confirm2('Confirmar entrada','Registrar entrada de '+itens.length+' medicamento(s) no estoque?',function(){_execSalvarNota();},'success','Confirmar');}
 return(
 <div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
   <div className="tab-sw">
@@ -901,6 +903,15 @@ function HistModal(props){
     </div>}
   </Modal>);}
 function TabEstoque(props){var user=props.user;var medications=props.medications;var entries=props.entries;var stock=props.stock;var _search=useState('');var search=_search[0];var setSearch=_search[1];var _sub=useState('estoque');var sub=_sub[0];var setSub=_sub[1];var _showAdd=useState(false);var showAdd=_showAdd[0];var setShowAdd=_showAdd[1];var _hist=useState(null);var hist=_hist[0];var setHist=_hist[1];var _editId=useState(null);var editId=_editId[0];var setEditId=_editId[1];var _editNome=useState('');var editNome=_editNome[0];var setEditNome=_editNome[1];var _editMin=useState('');var editMin=_editMin[0];var setEditMin=_editMin[1];var _editTipo=useState('medicamento');var editTipo=_editTipo[0];var setEditTipo=_editTipo[1];var _newNome=useState('');var newNome=_newNome[0];var setNewNome=_newNome[1];var _newEan=useState('');var newEan=_newEan[0];var setNewEan=_newEan[1];var _newMin=useState('');var newMin=_newMin[0];var setNewMin=_newMin[1];var _newTipo=useState('medicamento');var newTipo=_newTipo[0];var setNewTipo=_newTipo[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];var _importStatus=useState('');var importStatus=_importStatus[0];var setImportStatus=_importStatus[1];var _importing=useState(false);var importing=_importing[0];var setImporting=_importing[1];var _filtCat=useState('todos');var filtCat=_filtCat[0];var setFiltCat=_filtCat[1];var _ajusteId=useState(null);var ajusteId=_ajusteId[0];var setAjusteId=_ajusteId[1];var _ajusteQty=useState('');var ajusteQty=_ajusteQty[0];var setAjusteQty=_ajusteQty[1];var _ajusteMotivo=useState('');var ajusteMotivo=_ajusteMotivo[0];var setAjusteMotivo=_ajusteMotivo[1];var _ajusteMed=useState(null);var ajusteMed=_ajusteMed[0];var setAjusteMed=_ajusteMed[1];var _loteSel=useState(null);var loteSel=_loteSel[0];var setLoteSel=_loteSel[1];var _editLote=useState(null);var editLote=_editLote[0];var setEditLote=_editLote[1];var _editLoteVal=useState('');var editLoteVal=_editLoteVal[0];var setEditLoteVal=_editLoteVal[1];var _editLoteData=useState('');var editLoteData=_editLoteData[0];var setEditLoteData=_editLoteData[1];
+var _showFixCat=useState(false);var showFixCat=_showFixCat[0];var setShowFixCat=_showFixCat[1];
+var _showHistEntradas=useState(false);var showHistEntradas=_showHistEntradas[0];var setShowHistEntradas=_showHistEntradas[1];
+var _editEntry=useState(null);var editEntry=_editEntry[0];var setEditEntry=_editEntry[1];
+var _editEntryField=useState({});var editEntryField=_editEntryField[0];var setEditEntryField=_editEntryField[1];
+var _savingEdit=useState(false);var savingEdit=_savingEdit[0];var setSavingEdit=_savingEdit[1];
+var _fixSaving=useState(false);var fixSaving=_fixSaving[0];var setFixSaving=_fixSaving[1];
+var _fixSelected=useState({});var fixSelected=_fixSelected[0];var setFixSelected=_fixSelected[1];
+var _fixDestCat=useState('injetavel');var fixDestCat=_fixDestCat[0];var setFixDestCat=_fixDestCat[1];
+var _fixSearch=useState('');var fixSearch=_fixSearch[0];var setFixSearch=_fixSearch[1];
 var isManager=(user.role==='gestor'||user.role==='tecnico');var hoje=new Date();
 function getDiasVal(val){if(!val)return null;var p=val.split('/');if(p.length!==2)return null;var d=new Date(parseInt(p[1]),parseInt(p[0])-1,1);return Math.ceil((d-hoje)/86400000);}
 var medList=medications.map(function(m){var me=entries.filter(function(e){return e.medicamentoId===m.id&&e.tipo==='entrada'&&e.lote;});var loteMap={};me.forEach(function(e){if(!e.lote)return;var lk=e.lote;if(!loteMap[lk])loteMap[lk]={lote:e.lote,validade:e.validade||'',entrada:0,saida:0};loteMap[lk].entrada+=(e.quantidade||0);if(e.validade&&!loteMap[lk].validade)loteMap[lk].validade=e.validade;});
@@ -941,6 +952,29 @@ var venc30=[],venc60=[],venc90=[],vencidos=[];medList.forEach(function(m){
   }
 });
 var faltas=medList.filter(function(m){return m.minEstoque>0&&m.est<=m.minEstoque;});var zerados=medList.filter(function(m){return m.minEstoque>0&&m.est<=0;});var baixos=medList.filter(function(m){return m.minEstoque>0&&m.est>0&&m.est<=m.minEstoque;});var totalAlertas=vencidos.length+venc30.length+venc60.length+venc90.filter(function(m){return !m.semLote;}).length+faltas.length;
+function salvarEdicaoEntrada(){
+  if(!editEntry)return;
+  setSavingEdit(true);
+  var upd={};
+  if(editEntryField.nota!==undefined)upd.nfNumero=editEntryField.nota;
+  if(editEntryField.lote!==undefined)upd.lote=editEntryField.lote;
+  if(editEntryField.validade!==undefined)upd.validade=editEntryField.validade;
+  if(editEntryField.quantidade!==undefined)upd.quantidade=parseInt(editEntryField.quantidade)||editEntry.quantidade;
+  if(editEntryField.medicamento!==undefined)upd.medicamentoNome=editEntryField.medicamento;
+  upd.editadoPor=user.name;upd.editadoEm=new Date().toISOString();
+  db.collection('entries').doc(editEntry.id).update(upd).then(function(){setSavingEdit(false);setEditEntry(null);setEditEntryField({});}).catch(function(e){alert('Erro: '+e.message);setSavingEdit(false);});
+}
+function corrigirCategoriaEmLote(medsParaCorrigir, novaCategoria){
+  if(!medsParaCorrigir.length)return;
+  setFixSaving(true);
+  var idx=0;
+  function next(){
+    if(idx>=medsParaCorrigir.length){setFixSaving(false);setShowFixCat(false);alert('Categorias corrigidas! '+medsParaCorrigir.length+' medicamento(s) atualizados.');return;}
+    var m=medsParaCorrigir[idx++];
+    db.collection('medicamentos').doc(m.id).update({categoria:novaCategoria}).then(next).catch(next);
+  }
+  next();
+}
 function exportXL(){var rows=[['Tipo','Medicamento','EAN','Estoque','Lote','Validade','Minimo']];medList.forEach(function(m){var t=TIPOS[m.cat]||TIPOS.medicamento;rows.push([t.label,m.nome,m.ean||'',m.est,m.info.lote||'',m.info.validade||'',m.minEstoque||0]);});var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'Estoque');XLSX.writeFile(wb,'estoque_'+todayStr()+'.xlsx');}
 function exportAlertasXL(){var rows=[['Tipo','Medicamento','Estoque','Min','Validade','Lote','Dias']];vencidos.forEach(function(m){rows.push(['VENCIDO',m.nome,m.est,'',m.validade,m.lote,m.dias]);});venc30.forEach(function(m){rows.push(['Vence 30d',m.nome,m.est,'',m.validade,m.lote,m.dias]);});zerados.forEach(function(m){rows.push(['Zerado',m.nome,m.est,m.minEstoque,'','',0]);});baixos.forEach(function(m){rows.push(['Baixo',m.nome,m.est,m.minEstoque,'','',0]);});var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'Alertas');XLSX.writeFile(wb,'alertas_'+todayStr()+'.xlsx');}
 function saveNew(){if(!newNome.trim())return;setSaving(true);db.collection('medicamentos').add({nome:newNome.trim(),ean:newEan.trim(),minEstoque:parseInt(newMin)||0,categoria:newTipo,criadoEm:new Date().toISOString()}).then(function(){setShowAdd(false);setNewNome('');setNewEan('');setNewMin('');setNewTipo('medicamento');setSaving(false);});}
@@ -990,8 +1024,148 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
     </div>
   </Modal>;})()}
 <div className="tab-sw">{subTabs.map(function(t){return <button key={t.id} onClick={function(){setSub(t.id);}} className={sub===t.id?'on':''}>{t.label}</button>;})}</div>
-{sub==='estoque'&&(<div><div style={{display:'flex',gap:10,marginBottom:10,flexWrap:'wrap'}}><input value={search} onChange={function(e){setSearch(e.target.value);}} placeholder="Buscar medicamento..." className="inp" style={{marginBottom:0,flex:1}}/>{can(user.role,'editar')&&<button onClick={function(){setShowAdd(true);}} className="bp" style={{whiteSpace:'nowrap',padding:'0 18px',width:'auto'}}>+ Novo</button>}{can(user.role,'editar')&&<button onClick={function(){document.getElementById('importXlsInput').click();}} style={{whiteSpace:'nowrap',padding:'0 14px',background:'#7C3AED',border:'none',borderRadius:10,color:'#fff',fontSize:13,fontWeight:600,cursor:'pointer',boxShadow:'0 2px 8px rgba(124,58,237,.3)'}}>Importar Excel</button>}<input id="importXlsInput" type="file" accept=".xlsx,.xls" style={{display:'none'}} onChange={function(e){handleImportXls(e.target.files[0]);e.target.value='';  }}/></div>
+{sub==='estoque'&&(<div><div style={{display:'flex',gap:10,marginBottom:10,flexWrap:'wrap'}}><input value={search} onChange={function(e){setSearch(e.target.value);}} placeholder="Buscar medicamento..." className="inp" style={{marginBottom:0,flex:1}}/>{can(user.role,'editar')&&<button onClick={function(){setShowAdd(true);}} className="bp" style={{whiteSpace:'nowrap',padding:'0 18px',width:'auto'}}>+ Novo</button>}
+{isManager&&<button onClick={function(){setShowHistEntradas(true);}} style={{whiteSpace:'nowrap',padding:'0 14px',background:'#7C3AED',border:'none',borderRadius:10,color:'#fff',fontSize:13,fontWeight:600,cursor:'pointer',height:42}}>📋 Histórico Entradas</button>}
+{isManager&&<button onClick={function(){setShowFixCat(true);}} style={{whiteSpace:'nowrap',padding:'0 14px',background:'#F59E0B',border:'none',borderRadius:10,color:'#fff',fontSize:13,fontWeight:600,cursor:'pointer',height:42}}>🔧 Corrigir Categorias</button>}{can(user.role,'editar')&&<button onClick={function(){document.getElementById('importXlsInput').click();}} style={{whiteSpace:'nowrap',padding:'0 14px',background:'#7C3AED',border:'none',borderRadius:10,color:'#fff',fontSize:13,fontWeight:600,cursor:'pointer',boxShadow:'0 2px 8px rgba(124,58,237,.3)'}}>Importar Excel</button>}<input id="importXlsInput" type="file" accept=".xlsx,.xls" style={{display:'none'}} onChange={function(e){handleImportXls(e.target.files[0]);e.target.value='';  }}/></div>
 <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:14,alignItems:'center'}}><button onClick={function(){setFiltCat('todos');}} className={'pill'+(filtCat==='todos'?' on':'')}>Todos</button>{Object.keys(TIPOS).map(function(k){var t=TIPOS[k];return <button key={k} onClick={function(){setFiltCat(k);}} className={'pill'+(filtCat===k?' on':'')} style={filtCat===k?{background:t.cor,borderColor:t.cor,color:'#fff'}:{}}>{t.icon} {t.label}</button>;}  )}<button onClick={exportXL} style={{marginLeft:'auto',padding:'6px 12px',borderRadius:20,fontSize:11,fontWeight:600,cursor:'pointer',border:'1.5px solid #0C6B3E',background:'#F0FDF4',color:'#0C6B3E'}}>Excel</button></div>
+{showFixCat&&isManager&&(function(){
+  var todosComEstoque=medications.filter(function(m){return (stock[m.id]||0)>0;});
+  var filtrados=fixSearch.trim()?todosComEstoque.filter(function(m){return m.nome.toLowerCase().includes(fixSearch.toLowerCase());}):todosComEstoque;
+  var qtdSel=Object.keys(fixSelected).filter(function(k){return fixSelected[k];}).length;
+  return(<div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.75)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',padding:16,backdropFilter:'blur(6px)'}}>
+    <div style={{background:'#fff',borderRadius:20,width:'100%',maxWidth:520,maxHeight:'92vh',display:'flex',flexDirection:'column',boxShadow:'0 24px 64px rgba(0,0,0,0.3)'}}>
+      <div style={{padding:'18px 20px',borderBottom:'1px solid #F1F5F9',flexShrink:0}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
+          <div style={{fontWeight:800,fontSize:16,color:'#1E293B'}}>🔧 Corrigir Categorias</div>
+          <button onClick={function(){setShowFixCat(false);setFixSelected({});setFixSearch('');}} style={{background:'#F1F5F9',border:'none',borderRadius:8,width:32,height:32,cursor:'pointer',fontSize:16}}>✕</button>
+        </div>
+        <div style={{fontSize:12,color:'#64748B'}}>Selecione individualmente os medicamentos e mude a categoria</div>
+      </div>
+      <div style={{padding:'12px 16px',borderBottom:'1px solid #F1F5F9',flexShrink:0}}>
+        <input value={fixSearch} onChange={function(e){setFixSearch(e.target.value);}} placeholder="Filtrar por nome..." className="inp" style={{marginBottom:8}}/>
+        <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
+          <span style={{fontSize:12,color:'#64748B',fontWeight:600}}>Mover selecionados para:</span>
+          {Object.keys(TIPOS).map(function(k){var t=TIPOS[k];return(
+            <button key={k} onClick={function(){setFixDestCat(k);}} style={{padding:'5px 12px',borderRadius:20,border:'1.5px solid '+(fixDestCat===k?t.cor:'#E2E8F0'),background:fixDestCat===k?t.cor:'#fff',color:fixDestCat===k?'#fff':t.cor,fontWeight:600,fontSize:11,cursor:'pointer'}}>{t.icon} {t.label}</button>
+          );})}
+        </div>
+      </div>
+      <div style={{flex:1,overflowY:'auto',padding:'8px 16px'}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8,padding:'4px 0'}}>
+          <span style={{fontSize:12,color:'#64748B'}}>{filtrados.length} medicamento(s)</span>
+          <div style={{display:'flex',gap:8}}>
+            <button onClick={function(){var sel={};filtrados.forEach(function(m){sel[m.id]=true;});setFixSelected(sel);}} style={{fontSize:11,color:'#1351B4',fontWeight:600,background:'none',border:'none',cursor:'pointer'}}>Selecionar todos</button>
+            <button onClick={function(){setFixSelected({});}} style={{fontSize:11,color:'#64748B',background:'none',border:'none',cursor:'pointer'}}>Limpar</button>
+          </div>
+        </div>
+        {filtrados.map(function(m){
+          var cat=TIPOS[m.categoria||'medicamento']||TIPOS.medicamento;
+          var sel=!!fixSelected[m.id];
+          return(<div key={m.id} onClick={function(){setFixSelected(function(prev){var n=Object.assign({},prev);n[m.id]=!n[m.id];return n;});}} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',borderRadius:10,marginBottom:6,cursor:'pointer',border:'1.5px solid '+(sel?'#1351B4':'#E2E8F0'),background:sel?'#EFF6FF':'#F8FAFC',transition:'all .15s'}}>
+            <div style={{width:20,height:20,borderRadius:6,border:'2px solid '+(sel?'#1351B4':'#CBD5E1'),background:sel?'#1351B4':'transparent',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+              {sel&&<span style={{color:'#fff',fontSize:12,fontWeight:900}}>✓</span>}
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontWeight:600,fontSize:13,color:'#1E293B',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{m.nome}</div>
+              <div style={{display:'flex',gap:6,alignItems:'center',marginTop:2}}>
+                <span style={{fontSize:10,padding:'1px 7px',borderRadius:10,background:cat.cor+'18',color:cat.cor,fontWeight:700}}>{cat.icon} {cat.label}</span>
+                <span style={{fontSize:11,color:'#94A3B8'}}>Estoque: {stock[m.id]||0}</span>
+              </div>
+            </div>
+          </div>);
+        })}
+      </div>
+      <div style={{padding:'14px 16px',borderTop:'1px solid #F1F5F9',flexShrink:0}}>
+        {fixSaving&&<div className="inf" style={{marginBottom:10}}>⏳ Salvando...</div>}
+        <button onClick={function(){
+          var selecionados=medications.filter(function(m){return fixSelected[m.id];});
+          if(!selecionados.length){alert('Selecione ao menos um medicamento.');return;}
+          var dest=TIPOS[fixDestCat];
+          if(!window.confirm('Mover '+selecionados.length+' medicamento(s) para "'+dest.label+'"?'))return;
+          corrigirCategoriaEmLote(selecionados,fixDestCat);
+          setFixSelected({});
+        }} disabled={fixSaving||qtdSel===0} className="bg" style={{width:'100%',opacity:qtdSel===0?0.4:1}}>
+          {qtdSel===0?'Selecione medicamentos para mover':'✅ Mover '+qtdSel+' selecionado(s) para '+((TIPOS[fixDestCat]||{}).icon||'')+' '+(TIPOS[fixDestCat]||{}).label}
+        </button>
+      </div>
+    </div>
+  </div>);
+}())}
+{isManager&&filtCat!=='todos'&&medList.length===0&&<div style={{background:'#FEF3C7',border:'1.5px solid #FCD34D',borderRadius:12,padding:'14px 16px',marginBottom:14}}>
+  <div style={{fontWeight:700,color:'#92400E',marginBottom:6}}>⚠️ Nenhum medicamento nesta categoria</div>
+  <div style={{fontSize:13,color:'#92400E',marginBottom:10}}>Pode haver medicamentos com categoria incorreta. Use o botão abaixo para corrigir em lote — sem precisar alterar um por um.</div>
+  <button onClick={function(){setShowFixCat(true);}} style={{padding:'10px 18px',background:'#F59E0B',border:'none',borderRadius:8,color:'#fff',fontWeight:700,fontSize:13,cursor:'pointer'}}>🔧 Corrigir Categorias em Lote</button>
+</div>}
+
+{showHistEntradas&&isManager&&<div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.7)',zIndex:999,display:'flex',alignItems:'center',justifyContent:'center',padding:20,backdropFilter:'blur(6px)'}}>
+  <div style={{background:'#fff',borderRadius:20,padding:24,maxWidth:520,width:'100%',maxHeight:'90vh',overflowY:'auto',boxShadow:'0 24px 64px rgba(0,0,0,0.3)'}}>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
+      <div style={{fontWeight:800,fontSize:17,color:'#1E293B'}}>📋 Histórico de Entradas</div>
+      <button onClick={function(){setShowHistEntradas(false);setEditEntry(null);setEditEntryField({});}} style={{background:'#F1F5F9',border:'none',borderRadius:8,width:32,height:32,cursor:'pointer',fontSize:16}}>✕</button>
+    </div>
+    <div style={{fontSize:12,color:'#64748B',marginBottom:14}}>Apenas gestor e técnico podem visualizar e editar</div>
+    {editEntry?(
+      <div style={{background:'#FFF7ED',border:'1.5px solid #FCD34D',borderRadius:12,padding:16,marginBottom:16}}>
+        <div style={{fontWeight:700,fontSize:14,color:'#92400E',marginBottom:12}}>✏️ Editando entrada</div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+          <div>
+            <div style={{fontSize:11,color:'#64748B',fontWeight:600,marginBottom:4}}>Nº NOTA</div>
+            <input defaultValue={editEntry.nfNumero||''} onChange={function(e){setEditEntryField(function(p){return Object.assign({},p,{nota:e.target.value});});}} className="inp" style={{marginBottom:0}}/>
+          </div>
+          <div>
+            <div style={{fontSize:11,color:'#64748B',fontWeight:600,marginBottom:4}}>MEDICAMENTO</div>
+            <input defaultValue={editEntry.medicamentoNome||''} onChange={function(e){setEditEntryField(function(p){return Object.assign({},p,{medicamento:e.target.value});});}} className="inp" style={{marginBottom:0}}/>
+          </div>
+          <div>
+            <div style={{fontSize:11,color:'#64748B',fontWeight:600,marginBottom:4}}>QUANTIDADE</div>
+            <input type="number" defaultValue={editEntry.quantidade||''} onChange={function(e){setEditEntryField(function(p){return Object.assign({},p,{quantidade:e.target.value});});}} className="inp" style={{marginBottom:0}}/>
+          </div>
+          <div>
+            <div style={{fontSize:11,color:'#64748B',fontWeight:600,marginBottom:4}}>LOTE</div>
+            <input defaultValue={editEntry.lote||''} onChange={function(e){setEditEntryField(function(p){return Object.assign({},p,{lote:e.target.value});});}} className="inp" style={{marginBottom:0}}/>
+          </div>
+          <div>
+            <div style={{fontSize:11,color:'#64748B',fontWeight:600,marginBottom:4}}>VALIDADE</div>
+            <input defaultValue={editEntry.validade||''} onChange={function(e){setEditEntryField(function(p){return Object.assign({},p,{validade:e.target.value});});}} className="inp" style={{marginBottom:0}}/>
+          </div>
+        </div>
+        {savingEdit&&<div className="inf" style={{marginTop:10}}>⏳ Salvando...</div>}
+        <div style={{display:'flex',gap:8,marginTop:12}}>
+          <button onClick={function(){setEditEntry(null);setEditEntryField({});}} className="bs" style={{flex:1}}>Cancelar</button>
+          <button onClick={salvarEdicaoEntrada} disabled={savingEdit} className="bg" style={{flex:2}}>✅ Salvar Edição</button>
+        </div>
+      </div>
+    ):null}
+    <div style={{display:'flex',flexDirection:'column',gap:8}}>
+      {entries.filter(function(e){return e.tipo==='entrada'&&e.medicamentoNome;}).slice().sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');}).slice(0,80).map(function(e){
+        var med=medications.find(function(m){return m.id===e.medicamentoId;});
+        var cat=med?TIPOS[med.categoria||'medicamento']||TIPOS.medicamento:TIPOS.medicamento;
+        var dt=e.criadoEm?new Date(e.criadoEm).toLocaleString('pt-BR'):'';
+        return(<div key={e.id} style={{background:'#F8FAFC',borderRadius:10,padding:'12px 14px',border:'1px solid #E2E8F0'}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:4}}>
+            <div>
+              <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>{e.medicamentoNome||'—'}</div>
+              {e.nfNumero&&<div style={{fontSize:11,color:'#64748B'}}>NF: {e.nfNumero}</div>}
+            </div>
+            <div style={{display:'flex',gap:6,alignItems:'center'}}>
+              <span style={{background:'#DCFCE7',color:'#0C6B3E',fontWeight:700,fontSize:13,padding:'2px 10px',borderRadius:20}}>+{e.quantidade}</span>
+              <button onClick={function(){setEditEntry(e);setEditEntryField({});}} style={{background:'#EFF6FF',border:'none',borderRadius:6,padding:'4px 10px',fontSize:11,fontWeight:600,color:'#1351B4',cursor:'pointer'}}>✏️ Editar</button>
+            </div>
+          </div>
+          <div style={{display:'flex',gap:8,flexWrap:'wrap',fontSize:11,color:'#94A3B8'}}>
+            <span style={{background:cat.cor+'18',color:cat.cor,padding:'1px 7px',borderRadius:10,fontWeight:600}}>{cat.icon} {cat.label}</span>
+            {e.lote&&<span>Lote: {e.lote}</span>}
+            {e.validade&&<span>Val: {e.validade}</span>}
+            <span>{dt}</span>
+            {e.autorNome&&<span>por {e.autorNome}</span>}
+            {e.editadoPor&&<span style={{color:'#F59E0B',fontWeight:600}}>✏️ editado por {e.editadoPor}</span>}
+          </div>
+        </div>);
+      })}
+    </div>
+  </div>
+</div>}
+
 {importing&&<div className="inf" style={{marginBottom:10}}>⏳ {importStatus}</div>}
 {!importing&&importStatus&&<div className="ok" style={{marginBottom:10}}>{importStatus}</div>}
 <div className="card"><div className="ch"><div className="ch-title"><div className="ch-accent"/><span>Estoque Atual</span></div><span style={{fontSize:12,color:'#94A3B8',fontWeight:500}}>{medList.length} produto(s)</span></div>
