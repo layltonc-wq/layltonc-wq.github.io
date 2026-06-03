@@ -2249,7 +2249,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
       <div style={{padding:'0 16px',marginBottom:12}}>
         <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="Buscar paciente ou medico..." style={{width:'100%',padding:'10px 14px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:14,marginBottom:10,boxSizing:'border-box'}}/>
         <div style={{display:'flex',gap:6,overflowX:'auto'}}>
-          {[['ativos','💉 Ativos'],['espera','⏳ Espera'],['dose_ataque','⚡ Ataque'],['concluido','✅ Concluidos'],['desistiu','❌ Desistiram'],['todos','Todos']].map(function(f){
+          {[['ativos','💉 Ativos'],['espera','⏳ Espera'],['dose_ataque','⚡ Ataque'],['concluido','✅ Concluidos'],['finalizado','🏁 Finalizados'],['desistiu','❌ Desistiram'],['todos','Todos']].map(function(f){
             return <button key={f[0]} onClick={function(){setFiltro(f[0]);}} style={{flexShrink:0,padding:'7px 9px',borderRadius:10,border:'none',background:filtro===f[0]?B:'#F1F5F9',color:filtro===f[0]?'#fff':'#64748B',fontWeight:filtro===f[0]?700:500,fontSize:11,cursor:'pointer',whiteSpace:'nowrap'}}>{f[1]}</button>;
           })}
           <button onClick={function(){setFiltro('interrompido');}} style={{flexShrink:0,padding:'7px 9px',borderRadius:10,border:'none',background:filtro==='interrompido'?'#DC2626':'#F1F5F9',color:filtro==='interrompido'?'#fff':'#DC2626',fontWeight:filtro==='interrompido'?700:600,fontSize:11,cursor:'pointer',whiteSpace:'nowrap',position:'relative'}}>
@@ -2768,6 +2768,425 @@ function TabHistoricoNotas(props){
   );
 }
 
+function TabPrevisao(props){
+  var user=props.user;var entries=props.entries;var medications=props.medications;var stock=props.stock;var db=props.db;
+  var isMan=user.role==='gestor'||user.role==='tecnico';
+  var _atas=useState([]);var atas=_atas[0];var setAtas=_atas[1];
+  var _sub=useState('previsao');var sub=_sub[0];var setSub=_sub[1];
+  var _diasPrev=useState(30);var diasPrev=_diasPrev[0];var setDiasPrev=_diasPrev[1];
+  var _ajustes=useState({});var ajustes=_ajustes[0];var setAjustes=_ajustes[1];
+  var _ataAberta=useState(null);var ataAberta=_ataAberta[0];var setAtaAberta=_ataAberta[1];
+  var _msg=useState('');var msg=_msg[0];var setMsg=_msg[1];
+  // estados de cadastro de ata
+  var _novaAta=useState('');var novaAta=_novaAta[0];var setNovaAta=_novaAta[1];
+  var _novaAtaCat=useState('controlado');var novaAtaCat=_novaAtaCat[0];var setNovaAtaCat=_novaAtaCat[1];
+  var _vincMed=useState('');var vincMed=_vincMed[0];var setVincMed=_vincMed[1];
+  var _vincAta=useState('');var vincAta=_vincAta[0];var setVincAta=_vincAta[1];
+  var _buscaVinc=useState('');var buscaVinc=_buscaVinc[0];var setBuscaVinc=_buscaVinc[1];
+  var _loteEdits=useState({});var loteEdits=_loteEdits[0];var setLoteEdits=_loteEdits[1];
+  var _salvandoLote=useState(false);var salvandoLote=_salvandoLote[0];var setSalvandoLote=_salvandoLote[1];
+  var _buscaLote=useState('');var buscaLote=_buscaLote[0];var setBuscaLote=_buscaLote[1];
+  var _filtCatLote=useState('todos');var filtCatLote=_filtCatLote[0];var setFiltCatLote=_filtCatLote[1];
+
+  var COR={medicamento:'#1351B4',controlado:'#DC2626',injetavel:'#7C3AED',leite:'#D97706',penso:'#0C6B3E'};
+  var ICO={medicamento:'💊',controlado:'🔒',injetavel:'💉',leite:'🍼',penso:'🩹'};
+  var LBL={medicamento:'Farm. Básica',controlado:'Controlado',injetavel:'Injetável',leite:'Leite',penso:'Penso/Material'};
+
+  // Carregar atas do Firebase
+  useEffect(function(){
+    if(!db)return;
+    var u=db.collection('atas').onSnapshot(function(s){
+      var list=s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;});
+      list.sort(function(a,b){return (a.nome||'').localeCompare(b.nome||'');});
+      setAtas(list);
+    },function(){});
+    return function(){u();};
+  },[]);
+
+  // ── CÁLCULO DE PREVISÃO ──────────────────────────────────────
+  // Descobrir quantos dias de histórico existem
+  function diasHistorico(){
+    var datas=entries.filter(function(e){return e.tipo==='saida';}).map(function(e){return e.date||(e.criadoEm||'').slice(0,10);}).filter(Boolean);
+    if(datas.length===0)return 0;
+    datas.sort();
+    var primeira=new Date(datas[0]+'T12:00:00');
+    var hoje=new Date();
+    return Math.max(1,Math.round((hoje-primeira)/(1000*60*60*24)));
+  }
+
+  // Consumo total de um medicamento num período (em dias atrás)
+  function consumoPeriodo(medId,diasAtras){
+    var limite=new Date();limite.setDate(limite.getDate()-diasAtras);
+    var total=0;
+    entries.forEach(function(e){
+      if(e.tipo!=='saida'||e.medicamentoId!==medId)return;
+      var d=new Date((e.date||(e.criadoEm||'').slice(0,10))+'T12:00:00');
+      if(d>=limite)total+=(Number(e.quantidade)||0);
+    });
+    return total;
+  }
+
+  // Calcular previsão de um medicamento — retorna {pedir, metodo, detalhe}
+  function calcularPrevisao(med){
+    var dias=diasHistorico();
+    var estoqueAtual=stock[med.id]||0;
+    var minimo=Number(med.minEstoque||med.estoqueMin||0);
+
+    // FASE 1: pouco histórico (<25 dias) → usa consumo mensal estimado
+    var consEstim=Number(med.consumoEstimado||0);
+    if(dias<25){
+      if(consEstim>0){
+        // projetar o consumo estimado para o período escolhido
+        var projEstim=Math.ceil((consEstim/30)*diasPrev);
+        var margemE=Math.ceil(projEstim*0.15);
+        var pedirE=Math.max(0,projEstim+margemE-estoqueAtual);
+        return {pedir:pedirE,metodo:'estimado',detalhe:'Estimado '+consEstim+'/mês → '+projEstim+' em '+diasPrev+'d + margem '+margemE+' − estoque '+estoqueAtual,fase:1,consumoMes:projEstim};
+      }
+      // fallback: se não tem consumo estimado, usa o mínimo
+      var alvo=minimo>0?minimo:0;
+      var pedir1=Math.max(0,alvo-estoqueAtual);
+      return {pedir:pedir1,metodo:'minimo',detalhe:minimo>0?('Alvo mínimo '+minimo+' − estoque '+estoqueAtual):'Defina o consumo estimado ou o mínimo deste item',fase:1,consumoMes:null};
+    }
+
+    // FASE 2: 25-55 dias → média de consumo diário projetada
+    var cons30=consumoPeriodo(med.id,30);
+    var consDiario=cons30/Math.min(dias,30);
+    var projecaoMes=Math.ceil(consDiario*diasPrev);
+
+    if(dias<55){
+      var margem=minimo>0?Math.ceil(minimo*0.2):Math.ceil(projecaoMes*0.15);
+      var pedir2=Math.max(0,projecaoMes+margem-estoqueAtual);
+      return {pedir:pedir2,metodo:'media',detalhe:'Consumo ~'+consDiario.toFixed(1)+'/dia × '+diasPrev+'d = '+projecaoMes+' + margem '+margem+' − estoque '+estoqueAtual,fase:2,consumoMes:projecaoMes};
+    }
+
+    // FASE 3: 55+ dias → tendência (compara últimos 30d vs 30d anteriores)
+    var consRecente=consumoPeriodo(med.id,30);
+    var consAnterior=consumoPeriodo(med.id,60)-consRecente;
+    var tendencia=0;
+    if(consAnterior>0)tendencia=(consRecente-consAnterior)/consAnterior;
+    var fatorTend=1+Math.max(-0.3,Math.min(0.5,tendencia));
+    var projTend=Math.ceil((consRecente/30)*diasPrev*fatorTend);
+    var margem3=minimo>0?Math.ceil(minimo*0.2):Math.ceil(projTend*0.15);
+    var pedir3=Math.max(0,projTend+margem3-estoqueAtual);
+    var tendStr=tendencia>0.05?('alta +'+Math.round(tendencia*100)+'%'):(tendencia<-0.05?('queda '+Math.round(tendencia*100)+'%'):'estável');
+    return {pedir:pedir3,metodo:'tendencia',detalhe:'Tendência '+tendStr+' · proj '+projTend+' + margem '+margem3+' − estoque '+estoqueAtual,fase:3,consumoMes:projTend};
+  }
+
+  // Medicamentos de uma ata
+  function medsDaAta(ataId){
+    return medications.filter(function(m){return m.ataId===ataId;});
+  }
+  // Medicamentos sem ata
+  var medsSemAta=medications.filter(function(m){return !m.ataId;});
+
+  function valorPedido(med){
+    var p=calcularPrevisao(med);
+    var aj=ajustes[med.id];
+    return aj!==undefined?(parseInt(aj)||0):p.pedir;
+  }
+
+  // ── AÇÕES ────────────────────────────────────────────────────
+  function criarAta(){
+    if(!novaAta.trim())return;
+    db.collection('atas').add({nome:novaAta.trim(),categoria:novaAtaCat,limite:0,criadoEm:new Date().toISOString(),criadoPor:user.name}).then(function(){
+      setNovaAta('');setMsg('ok:Ata criada!');setTimeout(function(){setMsg('');},2500);
+    }).catch(function(e){setMsg('e:'+e.message);});
+  }
+  function excluirAta(ata){
+    if(!window.confirm('Excluir a ata "'+ata.nome+'"? Os medicamentos ficarão sem ata.'))return;
+    var meds=medsDaAta(ata.id);var i=0;
+    function nx(){if(i>=meds.length){db.collection('atas').doc(ata.id).delete();return;}var m=meds[i++];db.collection('medicamentos').doc(m.id).update({ataId:''}).then(nx).catch(nx);}
+    nx();
+  }
+  function vincular(){
+    if(!vincMed||!vincAta)return;
+    db.collection('medicamentos').doc(vincMed).update({ataId:vincAta}).then(function(){
+      setVincMed('');setMsg('ok:Medicamento vinculado!');setTimeout(function(){setMsg('');},2500);
+    }).catch(function(e){setMsg('e:'+e.message);});
+  }
+  function salvarLote(){
+    var ids=Object.keys(loteEdits);
+    if(ids.length===0){setMsg('e:Nenhuma alteração para salvar');setTimeout(function(){setMsg('');},2500);return;}
+    setSalvandoLote(true);
+    var i=0;
+    function nx(){
+      if(i>=ids.length){setSalvandoLote(false);setLoteEdits({});setMsg('ok:'+ids.length+' medicamento(s) atualizados!');setTimeout(function(){setMsg('');},3000);return;}
+      var id=ids[i++];var ed=loteEdits[id];var upd={};
+      if(ed.min!==undefined)upd.minEstoque=parseInt(ed.min)||0;
+      if(ed.cons!==undefined)upd.consumoEstimado=parseInt(ed.cons)||0;
+      db.collection('medicamentos').doc(id).update(upd).then(nx).catch(nx);
+    }
+    nx();
+  }
+  function desvincular(medId){
+    db.collection('medicamentos').doc(medId).update({ataId:''}).catch(function(){});
+  }
+  function setLimite(ataId,val){
+    db.collection('atas').doc(ataId).update({limite:parseInt(val)||0}).catch(function(){});
+  }
+
+  // ── EXPORTAÇÃO ───────────────────────────────────────────────
+  function exportarExcel(){
+    var wb=XLSX.utils.book_new();
+    var dadosGeral=[['ATA','Categoria','Medicamento','Estoque Atual','Estoque Mín.','Sugestão Pedido','Método','Limite Ata']];
+    atas.forEach(function(ata){
+      var meds=medsDaAta(ata.id);
+      meds.forEach(function(m){
+        var p=calcularPrevisao(m);
+        dadosGeral.push([ata.nome,LBL[ata.categoria]||ata.categoria,m.nome,stock[m.id]||0,m.minEstoque||0,valorPedido(m),p.metodo,ata.limite||'sem limite']);
+      });
+    });
+    medsSemAta.forEach(function(m){
+      var p=calcularPrevisao(m);
+      dadosGeral.push(['(sem ata)','—',m.nome,stock[m.id]||0,m.minEstoque||0,valorPedido(m),p.metodo,'—']);
+    });
+    var ws=XLSX.utils.aoa_to_sheet(dadosGeral);
+    XLSX.utils.book_append_sheet(wb,ws,'Previsao Mensal');
+    var hoje=new Date().toLocaleDateString('pt-BR').replace(/\//g,'-');
+    XLSX.writeFile(wb,'Previsao_Pedido_'+hoje+'.xlsx');
+    setMsg('ok:Excel exportado!');setTimeout(function(){setMsg('');},2500);
+  }
+
+  function exportarPDF(){
+    var hoje=new Date().toLocaleDateString('pt-BR');
+    var html='<html><head><meta charset="utf-8"><title>Previsao de Pedido</title>';
+    html+='<style>body{font-family:Arial,sans-serif;padding:24px;color:#1E293B}h1{font-size:20px;margin-bottom:4px}.sub{color:#64748B;font-size:13px;margin-bottom:20px}h2{font-size:15px;margin:18px 0 8px;padding-bottom:4px;border-bottom:2px solid #1351B4}table{width:100%;border-collapse:collapse;margin-bottom:12px;font-size:12px}th{background:#F1F5F9;text-align:left;padding:8px;border:1px solid #E2E8F0}td{padding:8px;border:1px solid #E2E8F0}.tot{font-weight:bold;background:#EFF6FF}@media print{button{display:none}}</style></head><body>';
+    html+='<h1>📋 Previsão de Pedido Mensal</h1><div class="sub">Gerado em '+hoje+' · Período: '+diasPrev+' dias · Por: '+user.name+'</div>';
+    atas.forEach(function(ata){
+      var meds=medsDaAta(ata.id);if(meds.length===0)return;
+      var totalAta=meds.reduce(function(a,m){return a+valorPedido(m);},0);
+      html+='<h2>'+ata.nome+(ata.limite>0?(' (limite: '+ata.limite+')'):'')+'</h2>';
+      html+='<table><tr><th>Medicamento</th><th>Estoque</th><th>Mínimo</th><th>Sugestão</th><th>Método</th></tr>';
+      meds.forEach(function(m){var p=calcularPrevisao(m);html+='<tr><td>'+m.nome+'</td><td>'+(stock[m.id]||0)+'</td><td>'+(m.minEstoque||0)+'</td><td><b>'+valorPedido(m)+'</b></td><td>'+p.metodo+'</td></tr>';});
+      html+='<tr class="tot"><td colspan="3">TOTAL DA ATA</td><td colspan="2">'+totalAta+' unidades</td></tr></table>';
+    });
+    if(medsSemAta.length>0){
+      html+='<h2>Sem ata vinculada</h2><table><tr><th>Medicamento</th><th>Estoque</th><th>Mínimo</th><th>Sugestão</th></tr>';
+      medsSemAta.forEach(function(m){html+='<tr><td>'+m.nome+'</td><td>'+(stock[m.id]||0)+'</td><td>'+(m.minEstoque||0)+'</td><td><b>'+valorPedido(m)+'</b></td></tr>';});
+      html+='</table>';
+    }
+    html+='</body></html>';
+    var w=window.open('','_blank');
+    if(w){w.document.write(html);w.document.close();setTimeout(function(){w.print();},400);}
+    else{setMsg('e:Permita pop-ups para gerar o PDF');}
+  }
+
+  var dias=diasHistorico();
+  var faseGlobal=dias<25?1:(dias<55?2:3);
+  var faseInfo={1:{txt:'Baseado no estoque mínimo',cor:'#D97706',ico:'📊'},2:{txt:'Baseado no consumo médio',cor:'#1351B4',ico:'📉'},3:{txt:'Baseado em tendência de consumo',cor:'#0C6B3E',ico:'📈'}};
+
+  return(
+    <div style={{maxWidth:760,margin:'0 auto',padding:'16px 12px 90px'}}>
+      <div style={{fontWeight:800,fontSize:22,color:'#1E293B',marginBottom:2}}>📋 Previsão / Pedido Mensal</div>
+      <div style={{fontSize:13,color:'#64748B',marginBottom:14}}>Sugestão de quanto pedir de cada medicamento</div>
+
+      {msg.indexOf('ok:')===0&&<div className="ok" style={{marginBottom:10}}>✅ {msg.slice(3)}</div>}
+      {msg.indexOf('e:')===0&&<div className="er" style={{marginBottom:10}}>❌ {msg.slice(2)}</div>}
+
+      {/* Sub-abas */}
+      <div style={{display:'flex',gap:6,marginBottom:16}}>
+        <button onClick={function(){setSub('previsao');}} className={'pill'+(sub==='previsao'?' act':'')} style={sub==='previsao'?{background:'#1351B4',color:'#fff',borderColor:'#1351B4'}:{}}>📊 Previsão</button>
+        <button onClick={function(){setSub('atas');}} className={'pill'+(sub==='atas'?' act':'')} style={sub==='atas'?{background:'#1351B4',color:'#fff',borderColor:'#1351B4'}:{}}>🗂️ Gerenciar Atas</button>
+        <button onClick={function(){setSub('config');}} className={'pill'+(sub==='config'?' act':'')} style={sub==='config'?{background:'#1351B4',color:'#fff',borderColor:'#1351B4'}:{}}>⚙️ Mín. e Consumo</button>
+      </div>
+
+      {sub==='previsao'&&<div>
+        {/* Indicador de método */}
+        <div style={{background:faseInfo[faseGlobal].cor+'14',border:'1.5px solid '+faseInfo[faseGlobal].cor+'40',borderRadius:12,padding:'12px 14px',marginBottom:14}}>
+          <div style={{display:'flex',alignItems:'center',gap:10}}>
+            <div style={{fontSize:24}}>{faseInfo[faseGlobal].ico}</div>
+            <div style={{flex:1}}>
+              <div style={{fontWeight:700,fontSize:13,color:faseInfo[faseGlobal].cor}}>{faseInfo[faseGlobal].txt}</div>
+              <div style={{fontSize:12,color:'#64748B'}}>{dias} dia(s) de histórico registrado{faseGlobal<3?' · fica mais preciso com o tempo':''}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Período */}
+        <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:14,background:'#F8FAFC',borderRadius:10,padding:'10px 14px'}}>
+          <span style={{fontSize:13,fontWeight:600,color:'#475569'}}>Prever para os próximos:</span>
+          <select value={diasPrev} onChange={function(e){setDiasPrev(parseInt(e.target.value));}} className="inp" style={{marginBottom:0,width:'auto',padding:'6px 10px'}}>
+            <option value={30}>30 dias</option>
+            <option value={15}>15 dias</option>
+            <option value={45}>45 dias</option>
+            <option value={60}>60 dias</option>
+          </select>
+        </div>
+
+        {/* Botão exportar */}
+        <div style={{display:'flex',gap:8,marginBottom:16}}><button onClick={exportarExcel} className="bg" style={{flex:1}}>📥 Excel</button><button onClick={exportarPDF} className="bp" style={{flex:1,background:'#DC2626'}}>📄 PDF</button></div>
+
+        {/* Atas com previsão */}
+        {atas.length===0&&medsSemAta.length===0&&<div style={{textAlign:'center',padding:'40px 0',color:'#94A3B8'}}><div style={{fontSize:40,marginBottom:8}}>📋</div><div style={{fontWeight:600}}>Nenhum medicamento cadastrado</div></div>}
+
+        {atas.map(function(ata){
+          var meds=medsDaAta(ata.id);
+          if(meds.length===0)return null;
+          var aberta=ataAberta===ata.id;
+          var totalPedido=meds.reduce(function(a,m){return a+valorPedido(m);},0);
+          var cor=COR[ata.categoria]||'#1351B4';
+          var excedeLimite=ata.limite>0&&totalPedido>ata.limite;
+          return(<div key={ata.id} style={{marginBottom:10,borderRadius:16,overflow:'hidden',border:'1.5px solid '+(aberta?cor:'#E2E8F0'),boxShadow:'0 2px 8px rgba(0,0,0,0.06)'}}>
+            <button onClick={function(){setAtaAberta(aberta?null:ata.id);}} style={{width:'100%',background:aberta?cor+'10':'#fff',border:'none',padding:'14px 16px',cursor:'pointer',display:'flex',alignItems:'center',gap:12,textAlign:'left'}}>
+              <div style={{width:42,height:42,borderRadius:12,background:cor+'18',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,flexShrink:0}}>{ICO[ata.categoria]||'🗂️'}</div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontWeight:700,fontSize:14,color:'#1E293B'}}>{ata.nome}</div>
+                <div style={{fontSize:12,color:'#64748B'}}>{meds.length} medicamento(s){ata.limite>0?(' · limite '+ata.limite):''}</div>
+              </div>
+              <div style={{textAlign:'right',flexShrink:0,marginRight:6}}>
+                <div style={{fontWeight:800,fontSize:18,color:excedeLimite?'#DC2626':cor}}>{totalPedido}</div>
+                <div style={{fontSize:10,color:'#94A3B8'}}>a pedir</div>
+              </div>
+              <span style={{fontSize:16,color:aberta?cor:'#94A3B8'}}>{aberta?'▲':'▼'}</span>
+            </button>
+            {excedeLimite&&<div style={{background:'#FEF2F2',color:'#DC2626',fontSize:12,fontWeight:600,padding:'6px 16px',borderTop:'1px solid #FCA5A5'}}>⚠️ Pedido ({totalPedido}) excede o limite da ata ({ata.limite})</div>}
+            {aberta&&<div style={{borderTop:'1px solid #E2E8F0',background:'#F8FAFC',padding:'8px 12px 12px'}}>
+              {meds.map(function(m){
+                var p=calcularPrevisao(m);
+                var metodoLbl={estimado:'🎯 estimado',minimo:'📊 mínimo',media:'📉 média',tendencia:'📈 tendência'};
+                var val=valorPedido(m);
+                var editado=ajustes[m.id]!==undefined;
+                return(<div key={m.id} style={{marginBottom:8,borderRadius:12,background:'#fff',border:'1px solid #E2E8F0',padding:'12px 14px'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:10}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>{m.nome}</div>
+                      <div style={{fontSize:11,color:'#94A3B8',marginTop:2}}>Estoque: {stock[m.id]||0} · Mín: {m.minEstoque||0} · <span style={{color:cor,fontWeight:600}}>{metodoLbl[p.metodo]}</span></div>
+                      <div style={{fontSize:10,color:'#CBD5E1',marginTop:1}}>{p.detalhe}</div>
+                    </div>
+                    <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:4}}>
+                      <input type="number" value={val} onChange={function(e){var v=e.target.value;setAjustes(function(pr){var n=Object.assign({},pr);n[m.id]=v;return n;});}} style={{width:70,padding:'6px 8px',border:'1.5px solid '+(editado?'#F59E0B':'#CBD5E1'),borderRadius:8,fontSize:15,fontWeight:700,textAlign:'center',color:'#1E293B',outline:'none'}}/>
+                      {editado&&<button onClick={function(){setAjustes(function(pr){var n=Object.assign({},pr);delete n[m.id];return n;});}} style={{fontSize:10,color:'#94A3B8',background:'none',border:'none',cursor:'pointer'}}>↺ auto</button>}
+                    </div>
+                  </div>
+                </div>);
+              })}
+            </div>}
+          </div>);
+        })}
+
+        {/* Sem ata */}
+        {medsSemAta.length>0&&<div style={{marginBottom:10,borderRadius:16,overflow:'hidden',border:'1.5px dashed #CBD5E1',background:'#fff'}}>
+          <button onClick={function(){setAtaAberta(ataAberta==='__sem__'?null:'__sem__');}} style={{width:'100%',background:'#fff',border:'none',padding:'14px 16px',cursor:'pointer',display:'flex',alignItems:'center',gap:12,textAlign:'left'}}>
+            <div style={{width:42,height:42,borderRadius:12,background:'#F1F5F9',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20}}>❓</div>
+            <div style={{flex:1}}>
+              <div style={{fontWeight:700,fontSize:14,color:'#64748B'}}>Sem ata vinculada</div>
+              <div style={{fontSize:12,color:'#94A3B8'}}>{medsSemAta.length} medicamento(s) · vincule na aba "Gerenciar Atas"</div>
+            </div>
+            <span style={{fontSize:16,color:'#94A3B8'}}>{ataAberta==='__sem__'?'▲':'▼'}</span>
+          </button>
+          {ataAberta==='__sem__'&&<div style={{borderTop:'1px solid #E2E8F0',background:'#F8FAFC',padding:'8px 12px 12px'}}>
+            {medsSemAta.map(function(m){
+              var p=calcularPrevisao(m);var val=valorPedido(m);var editado=ajustes[m.id]!==undefined;
+              var metodoLbl={estimado:'🎯 estimado',minimo:'📊 mínimo',media:'📉 média',tendencia:'📈 tendência'};
+              return(<div key={m.id} style={{marginBottom:8,borderRadius:12,background:'#fff',border:'1px solid #E2E8F0',padding:'12px 14px',display:'flex',alignItems:'center',gap:10}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>{m.nome}</div>
+                  <div style={{fontSize:11,color:'#94A3B8',marginTop:2}}>Estoque: {stock[m.id]||0} · Mín: {m.minEstoque||0} · {metodoLbl[p.metodo]}</div>
+                </div>
+                <input type="number" value={val} onChange={function(e){var v=e.target.value;setAjustes(function(pr){var n=Object.assign({},pr);n[m.id]=v;return n;});}} style={{width:70,padding:'6px 8px',border:'1.5px solid '+(editado?'#F59E0B':'#CBD5E1'),borderRadius:8,fontSize:15,fontWeight:700,textAlign:'center',outline:'none'}}/>
+              </div>);
+            })}
+          </div>}
+        </div>}
+      </div>}
+
+      {sub==='atas'&&<div>
+        {/* Criar nova ata */}
+        <div style={{background:'#fff',borderRadius:14,border:'1px solid #E2E8F0',padding:16,marginBottom:16}}>
+          <div style={{fontWeight:700,fontSize:14,color:'#1E293B',marginBottom:10}}>➕ Nova Ata</div>
+          <input value={novaAta} onChange={function(e){setNovaAta(e.target.value);}} placeholder="Nome da ata (ex: Controlados ATA 1)" className="inp"/>
+          <div style={{fontSize:11,fontWeight:600,color:'#64748B',marginBottom:6}}>Categoria predominante:</div>
+          <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:12}}>
+            {Object.keys(LBL).map(function(k){return(<button key={k} onClick={function(){setNovaAtaCat(k);}} style={{padding:'6px 12px',borderRadius:20,border:'1.5px solid '+(novaAtaCat===k?COR[k]:'#E2E8F0'),background:novaAtaCat===k?COR[k]:'#fff',color:novaAtaCat===k?'#fff':COR[k],fontWeight:600,fontSize:11,cursor:'pointer'}}>{ICO[k]} {LBL[k]}</button>);})}
+          </div>
+          <button onClick={criarAta} className="bp">Criar Ata</button>
+        </div>
+
+        {/* Vincular medicamento */}
+        <div style={{background:'#fff',borderRadius:14,border:'1px solid #E2E8F0',padding:16,marginBottom:16}}>
+          <div style={{fontWeight:700,fontSize:14,color:'#1E293B',marginBottom:10}}>🔗 Vincular Medicamento a uma Ata</div>
+          <input value={buscaVinc} onChange={function(e){setBuscaVinc(e.target.value);}} placeholder="🔍 Buscar medicamento..." className="inp"/>
+          <select value={vincMed} onChange={function(e){setVincMed(e.target.value);}} className="inp">
+            <option value="">Selecione o medicamento...</option>
+            {medications.filter(function(m){return !buscaVinc.trim()||m.nome.toLowerCase().indexOf(buscaVinc.toLowerCase())>=0;}).slice(0,50).map(function(m){
+              var ataAtual=m.ataId?atas.find(function(a){return a.id===m.ataId;}):null;
+              return(<option key={m.id} value={m.id}>{m.nome}{ataAtual?(' ['+ataAtual.nome+']'):''}</option>);
+            })}
+          </select>
+          <select value={vincAta} onChange={function(e){setVincAta(e.target.value);}} className="inp">
+            <option value="">Selecione a ata...</option>
+            {atas.map(function(a){return(<option key={a.id} value={a.id}>{a.nome}</option>);})}
+          </select>
+          <button onClick={vincular} className="bp" disabled={!vincMed||!vincAta} style={{opacity:(!vincMed||!vincAta)?0.5:1}}>Vincular</button>
+        </div>
+
+        {/* Lista de atas existentes */}
+        <div style={{fontWeight:700,fontSize:14,color:'#1E293B',marginBottom:10}}>Atas Cadastradas ({atas.length})</div>
+        {atas.length===0&&<div style={{textAlign:'center',padding:'24px 0',color:'#94A3B8',fontSize:13}}>Nenhuma ata criada ainda</div>}
+        {atas.map(function(ata){
+          var meds=medsDaAta(ata.id);var cor=COR[ata.categoria]||'#1351B4';
+          return(<div key={ata.id} style={{marginBottom:10,borderRadius:14,border:'1px solid #E2E8F0',background:'#fff',padding:14}}>
+            <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:10}}>
+              <div style={{width:36,height:36,borderRadius:10,background:cor+'18',display:'flex',alignItems:'center',justifyContent:'center',fontSize:17}}>{ICO[ata.categoria]||'🗂️'}</div>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:700,fontSize:14,color:'#1E293B'}}>{ata.nome}</div>
+                <div style={{fontSize:11,color:'#94A3B8'}}>{LBL[ata.categoria]||ata.categoria} · {meds.length} medicamento(s)</div>
+              </div>
+              <button onClick={function(){excluirAta(ata);}} style={{background:'#FEE2E2',border:'none',borderRadius:8,padding:'6px 10px',fontSize:12,color:'#DC2626',fontWeight:600,cursor:'pointer'}}>🗑️</button>
+            </div>
+            <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
+              <span style={{fontSize:12,color:'#64748B',fontWeight:600}}>Limite da ata:</span>
+              <input type="number" defaultValue={ata.limite||''} onBlur={function(e){setLimite(ata.id,e.target.value);}} placeholder="sem limite" style={{width:120,padding:'6px 10px',border:'1.5px solid #CBD5E1',borderRadius:8,fontSize:13,outline:'none'}}/>
+              <span style={{fontSize:11,color:'#94A3B8'}}>unid./período</span>
+            </div>
+            {meds.length>0&&<div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+              {meds.map(function(m){return(<span key={m.id} style={{background:'#F1F5F9',borderRadius:16,padding:'4px 10px',fontSize:11,color:'#475569',display:'flex',alignItems:'center',gap:6}}>{m.nome}<button onClick={function(){desvincular(m.id);}} style={{background:'none',border:'none',color:'#94A3B8',cursor:'pointer',fontSize:13,padding:0,lineHeight:1}}>×</button></span>);})}
+            </div>}
+          </div>);
+        })}
+      </div>}
+
+      {sub==='config'&&<div>
+        <div style={{background:'#EFF6FF',border:'1.5px solid #BFDBFE',borderRadius:12,padding:'12px 14px',marginBottom:14}}>
+          <div style={{fontSize:13,color:'#1E40AF',lineHeight:1.5}}><strong>Estoque mínimo</strong> dispara o alerta de "está acabando".<br/><strong>Consumo estimado</strong> é quanto você gasta por mês — usado pra prever o pedido enquanto não há histórico.</div>
+        </div>
+        <input value={buscaLote} onChange={function(e){setBuscaLote(e.target.value);}} placeholder="🔍 Buscar medicamento..." className="inp"/>
+        <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:12}}>
+          <button onClick={function(){setFiltCatLote('todos');}} className={'pill'+(filtCatLote==='todos'?' act':'')} style={filtCatLote==='todos'?{background:'#1351B4',color:'#fff',borderColor:'#1351B4'}:{}}>Todos</button>
+          {Object.keys(LBL).map(function(k){return(<button key={k} onClick={function(){setFiltCatLote(k);}} className={'pill'+(filtCatLote===k?' act':'')} style={filtCatLote===k?{background:COR[k],color:'#fff',borderColor:COR[k]}:{}}>{ICO[k]} {LBL[k]}</button>);})}
+        </div>
+        <div style={{position:'sticky',top:0,zIndex:5,background:'#EEF2F7',padding:'8px 0',marginBottom:4}}>
+          <button onClick={salvarLote} disabled={salvandoLote||Object.keys(loteEdits).length===0} className="bg" style={{opacity:(salvandoLote||Object.keys(loteEdits).length===0)?0.5:1}}>{salvandoLote?'⏳ Salvando...':('💾 Salvar '+(Object.keys(loteEdits).length>0?Object.keys(loteEdits).length+' alteração(ões)':'alterações'))}</button>
+        </div>
+        <div style={{display:'flex',gap:8,padding:'0 4px 6px',fontSize:10,fontWeight:700,color:'#94A3B8',textTransform:'uppercase'}}>
+          <div style={{flex:1}}>Medicamento</div>
+          <div style={{width:70,textAlign:'center'}}>Mínimo</div>
+          <div style={{width:70,textAlign:'center'}}>Consumo/mês</div>
+        </div>
+        {medications.filter(function(m){
+          var okB=!buscaLote.trim()||m.nome.toLowerCase().indexOf(buscaLote.toLowerCase())>=0;
+          var okC=filtCatLote==='todos'||(m.categoria||'medicamento')===filtCatLote;
+          return okB&&okC;
+        }).slice(0,200).map(function(m){
+          var cat=m.categoria||'medicamento';var cor=COR[cat]||'#1351B4';
+          var ed=loteEdits[m.id]||{};
+          var minVal=ed.min!==undefined?ed.min:(m.minEstoque||0);
+          var consVal=ed.cons!==undefined?ed.cons:(m.consumoEstimado||0);
+          var alterado=loteEdits[m.id]!==undefined;
+          return(<div key={m.id} style={{display:'flex',gap:8,alignItems:'center',padding:'10px 12px',marginBottom:6,borderRadius:10,background:'#fff',border:'1.5px solid '+(alterado?'#F59E0B':'#E2E8F0')}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontWeight:600,fontSize:13,color:'#1E293B',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{m.nome}</div>
+              <div style={{fontSize:10}}><span style={{background:cor+'18',color:cor,padding:'1px 7px',borderRadius:10,fontWeight:600}}>{ICO[cat]} {LBL[cat]}</span> <span style={{color:'#94A3B8'}}>est: {stock[m.id]||0}</span></div>
+            </div>
+            <input type="number" value={minVal} onChange={function(e){var v=e.target.value;setLoteEdits(function(p){var n=Object.assign({},p);n[m.id]=Object.assign({},n[m.id],{min:v});return n;});}} style={{width:70,padding:'8px 6px',border:'1.5px solid #CBD5E1',borderRadius:8,fontSize:14,textAlign:'center',outline:'none'}}/>
+            <input type="number" value={consVal} onChange={function(e){var v=e.target.value;setLoteEdits(function(p){var n=Object.assign({},p);n[m.id]=Object.assign({},n[m.id],{cons:v});return n;});}} style={{width:70,padding:'8px 6px',border:'1.5px solid #CBD5E1',borderRadius:8,fontSize:14,textAlign:'center',outline:'none'}}/>
+          </div>);
+        })}
+      </div>}
+    </div>
+  );
+}
+
 function App(){
 var {confirm2,alert2,ModalRender,modal}=useModal();
 var _ready=useState(false);var ready=_ready[0];var setReady=_ready[1];var _user=useState(null);var user=_user[0];var setUser=_user[1];var _entries=useState([]);var entries=_entries[0];var setEntries=_entries[1];var _meds=useState([]);var meds=_meds[0];var setMeds=_meds[1];var _loading=useState(true);var loading=_loading[0];var setLoading=_loading[1];var _tab=useState('dashboard');var tab=_tab[0];var setTab=_tab[1];var _menuAberto=useState(false);var menuAberto=_menuAberto[0];var setMenuAberto=_menuAberto[1];var _showSairModal=useState(false);var showSairModal=_showSairModal[0];var setShowSairModal=_showSairModal[1];var _pending=useState(0);var pending=_pending[0];var setPending=_pending[1];var _alertCount=useState(0);var alertCount=_alertCount[0];var setAlertCount=_alertCount[1];
@@ -2885,6 +3304,7 @@ return(
         {tab==='gestao'&&can(user.role,'gestao')&&<TabGestao currentUser={user} entries={entries}/>}
         {tab==='log'&&can(user.role,'log')&&<TabLog/>}
         {tab==='histnotas'&&(user.role==='gestor'||user.role==='tecnico')&&<ErrBoundary><TabHistoricoNotas user={user} entries={entries} medications={meds} db={db}/></ErrBoundary>}
+        {tab==='previsao'&&(user.role==='gestor'||user.role==='tecnico')&&<ErrBoundary><TabPrevisao user={user} entries={entries} medications={meds} stock={stock} db={db}/></ErrBoundary>}
         {tab==='histcontas'&&can(user.role,'log')&&<TabHistContas/>}
         {tab==='antibiotico'&&<TabAntibiotico user={user} medications={meds} stock={stock} allUsers={allUsers}/>}
         {tab==='admin'&&user.role==='tecnico'&&<TabAdmin user={user} entries={entries} medications={meds} db={db}/>}
@@ -2928,7 +3348,8 @@ return(
               {id:'relatorio',icon:'📊',label:'Relatório',show:true},
               {id:'gestao',icon:'👥',label:'Gestão',badge:badge,show:can(user.role,'gestao')},
               {id:'log',icon:'🔐',label:'Log de Acesso',show:can(user.role,'log')},
-              {id:'histnotas',icon:'🗂️',label:'Histórico de Notas',show:true},
+              {id:'histnotas',icon:'🗂️',label:'Histórico de Notas',show:isManagerRole},
+              {id:'previsao',icon:'📋',label:'Previsão / Pedido',show:isManagerRole},
               {id:'histcontas',icon:'📋',label:'Hist. de Contas',show:can(user.role,'log')},
               {id:'admin',icon:'🔧',label:'Painel Admin',show:user.role==='tecnico'},
             ].filter(function(t){return t.show;}).map(function(t){return(
