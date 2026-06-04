@@ -14,6 +14,7 @@
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone@7.23.10/babel.min.js"></script>
 <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <style>
 :root{
   --blue-900:#0A2D6E;--blue-800:#0E3D96;--blue-700:#1351B4;--blue-600:#1A64D6;
@@ -410,7 +411,26 @@ return(
         {filtered.length>0&&!sel&&(
           <div className="sdrop">
             {filtered.map(function(m){return(
-              <div key={m.id} className="sdi" onClick={function(){setSel(m);setSearch(m.nome);setWarn('');}}>
+              <div key={m.id} className="sdi" onClick={function(){setSel(m);setSearch(m.nome);setWarn('');
+                // FEFO: pegar lote com validade mais próxima
+                (function(){
+                  var lotesEntrada={};
+                  (entries||[]).forEach(function(e){
+                    if(e.tipo!=='entrada'||e.medicamentoId!==m.id||!e.lote)return;
+                    var key=e.lote+'|'+(e.validade||'');
+                    if(!lotesEntrada[key])lotesEntrada[key]={lote:e.lote,validade:e.validade||''};
+                  });
+                  var lotes=Object.values(lotesEntrada);
+                  if(lotes.length===0)return;
+                  // Ordenar pela validade mais próxima (FEFO)
+                  lotes.sort(function(a,b){
+                    // Converter MM/YYYY para data do último dia do mês
+                    function toDate(v){if(!v)return new Date(9999,11,31);var p=v.split('/');if(p.length!==2)return new Date(9999,11,31);return new Date(parseInt(p[1]),parseInt(p[0]),0);}
+                    return toDate(a.validade)-toDate(b.validade);
+                  });
+                  setLote(lotes[0].lote);
+                  setVal(lotes[0].validade);
+                })();}}>
                 <span style={{fontWeight:600,color:'#1E293B'}}>{m.nome}</span>
                 <span style={{fontSize:12,fontWeight:700,color:'#0C6B3E',background:'#DCFCE7',padding:'3px 10px',borderRadius:20}}>{stock[m.id]||0} un.</span>
               </div>);
@@ -902,7 +922,7 @@ function HistModal(props){
   </Modal>);}
 function TabEstoque(props){var user=props.user;var medications=props.medications;var entries=props.entries;var stock=props.stock;var _search=useState('');var search=_search[0];var setSearch=_search[1];var _sub=useState('estoque');var sub=_sub[0];var setSub=_sub[1];var _showAdd=useState(false);var showAdd=_showAdd[0];var setShowAdd=_showAdd[1];var _hist=useState(null);var hist=_hist[0];var setHist=_hist[1];var _editId=useState(null);var editId=_editId[0];var setEditId=_editId[1];var _editNome=useState('');var editNome=_editNome[0];var setEditNome=_editNome[1];var _editMin=useState('');var editMin=_editMin[0];var setEditMin=_editMin[1];var _editTipo=useState('medicamento');var editTipo=_editTipo[0];var setEditTipo=_editTipo[1];var _newNome=useState('');var newNome=_newNome[0];var setNewNome=_newNome[1];var _newEan=useState('');var newEan=_newEan[0];var setNewEan=_newEan[1];var _newMin=useState('');var newMin=_newMin[0];var setNewMin=_newMin[1];var _newTipo=useState('medicamento');var newTipo=_newTipo[0];var setNewTipo=_newTipo[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];var _importStatus=useState('');var importStatus=_importStatus[0];var setImportStatus=_importStatus[1];var _importing=useState(false);var importing=_importing[0];var setImporting=_importing[1];var _filtCat=useState('todos');var filtCat=_filtCat[0];var setFiltCat=_filtCat[1];var _ajusteId=useState(null);var ajusteId=_ajusteId[0];var setAjusteId=_ajusteId[1];var _ajusteQty=useState('');var ajusteQty=_ajusteQty[0];var setAjusteQty=_ajusteQty[1];var _ajusteMotivo=useState('');var ajusteMotivo=_ajusteMotivo[0];var setAjusteMotivo=_ajusteMotivo[1];var _ajusteMed=useState(null);var ajusteMed=_ajusteMed[0];var setAjusteMed=_ajusteMed[1];var _loteSel=useState(null);var loteSel=_loteSel[0];var setLoteSel=_loteSel[1];var _editLote=useState(null);var editLote=_editLote[0];var setEditLote=_editLote[1];var _editLoteVal=useState('');var editLoteVal=_editLoteVal[0];var setEditLoteVal=_editLoteVal[1];var _editLoteData=useState('');var editLoteData=_editLoteData[0];var setEditLoteData=_editLoteData[1];
 var isManager=(user.role==='gestor'||user.role==='tecnico');var hoje=new Date();
-function getDiasVal(val){if(!val)return null;var p=val.split('/');if(p.length!==2)return null;var d=new Date(parseInt(p[1]),parseInt(p[0])-1,1);return Math.ceil((d-hoje)/86400000);}
+function getDiasVal(val){if(!val)return null;var p=val.split('/');if(p.length!==2)return null;var d=new Date(parseInt(p[1]),parseInt(p[0]),0);return Math.ceil((d-hoje)/86400000);}
 var medList=medications.map(function(m){var me=entries.filter(function(e){return e.medicamentoId===m.id&&e.tipo==='entrada'&&e.lote;});var loteMap={};me.forEach(function(e){if(!e.lote)return;var lk=e.lote;if(!loteMap[lk])loteMap[lk]={lote:e.lote,validade:e.validade||'',entrada:0,saida:0};loteMap[lk].entrada+=(e.quantidade||0);if(e.validade&&!loteMap[lk].validade)loteMap[lk].validade=e.validade;});
   var saidas=entries.filter(function(e){return e.medicamentoId===m.id&&e.tipo==='saida'&&e.lote;});
   saidas.forEach(function(e){var lk=e.lote;if(loteMap[lk])loteMap[lk].saida+=(e.quantidade||0);});
@@ -1039,7 +1059,76 @@ var rankMap={};entries.forEach(function(e){if(e.tipo!=='saida')return;var k=e.me
 var respMap={};entries.forEach(function(e){var k=e.autorNome||'?';if(!respMap[k])respMap[k]={nome:k,color:e.autorColor,qtdS:0,qtdE:0,cntS:0,cntE:0};if(e.tipo==='saida'){respMap[k].qtdS+=(e.quantidade||0);respMap[k].cntS++;}else{respMap[k].qtdE+=(e.quantidade||0);respMap[k].cntE++;}});var porResp=Object.keys(respMap).map(function(k){return respMap[k];}).sort(function(a,b){return (b.qtdS+b.qtdE)-(a.qtdS+a.qtdE);});
 function doXL(){var rows=[['Data','Hora','Responsavel','Medicamento','Tipo','Qtd','Lote']];filtered.forEach(function(e){rows.push([fmtD(e.criadoEm),fmtT(e.criadoEm),e.autorNome||'',e.medicamentoNome||'',e.tipo==='entrada'?'Entrada':'Saida',e.quantidade||0,e.lote||'']);});var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'Relatorio');XLSX.writeFile(wb,'relatorio_'+dF+'_'+dT+'.xlsx');}
 return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
-<div className="tab-sw">{[['mov','Movimentações'],['resp','Por Responsável'],['rank','Ranking']].map(function(t){return <button key={t[0]} onClick={function(){setSub(t[0]);}} className={sub===t[0]?'on':''}>{t[1]}</button>;})}</div>
+<div className="tab-sw">{[['mov','Movimentações'],['dia','Saídas do Dia'],['resp','Por Responsável'],['rank','Ranking']].map(function(t){return <button key={t[0]} onClick={function(){setSub(t[0]);}} className={sub===t[0]?'on':''}>{t[1]}</button>;})}</div>
+{sub==='dia'&&<div style={{paddingBottom:8}}>
+  <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:14,flexWrap:'wrap'}}>
+    <div style={{fontWeight:700,fontSize:16,color:'#1E293B',flex:1}}>📋 Saídas do Dia</div>
+    <input type="date" value={dF} onChange={function(e){setDF(e.target.value);}} className="inp" style={{marginBottom:0,width:'auto'}}/>
+  </div>
+  {(function(){
+    var saidasDia=entries.filter(function(e){return e.tipo==='saida'&&(e.date||'')===(dF||todayStr());});
+    var agrupado={};
+    saidasDia.forEach(function(e){
+      var key=e.medicamentoId||e.medicamentoNome||'?';
+      if(!agrupado[key]){
+        var med=medications.find(function(m){return m.id===e.medicamentoId;});
+        agrupado[key]={nome:e.medicamentoNome||(med&&med.nome)||'?',total:0,saidas:[],cat:(med&&med.categoria)||'medicamento'};
+      }
+      agrupado[key].total+=(Number(e.quantidade)||0);
+      agrupado[key].saidas.push(e);
+    });
+    var lista=Object.values(agrupado).sort(function(a,b){return a.nome.localeCompare(b.nome);});
+    var totalGeral=lista.reduce(function(acc,it){return acc+it.total;},0);
+    if(lista.length===0)return(<div style={{textAlign:'center',padding:'40px 0',color:'#94A3B8'}}><div style={{fontSize:40,marginBottom:8}}>📋</div><div style={{fontWeight:600}}>Nenhuma saída registrada neste dia</div></div>);
+    var COR_CAT={medicamento:'#1351B4',controlado:'#DC2626',injetavel:'#7C3AED',leite:'#D97706',penso:'#0C6B3E'};
+    var ICO_CAT={medicamento:'💊',controlado:'🔒',injetavel:'💉',leite:'🍼',penso:'🩹'};
+    return(<div>
+      <div style={{background:'#EFF6FF',borderRadius:12,padding:'12px 16px',marginBottom:14,display:'flex',justifyContent:'space-between'}}>
+        <span style={{fontWeight:700,color:'#1351B4'}}>{lista.length} medicamento(s) com saída</span>
+        <span style={{fontWeight:700,color:'#1351B4'}}>{totalGeral} unidades no total</span>
+      </div>
+      <div style={{background:'#fff',borderRadius:14,border:'1px solid #E2E8F0',overflow:'hidden',marginBottom:14}}>
+        <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
+          <thead>
+            <tr style={{background:'#F8FAFC'}}>
+              <th style={{padding:'10px 14px',textAlign:'left',fontWeight:700,color:'#64748B',fontSize:11,textTransform:'uppercase',letterSpacing:'.05em',borderBottom:'1px solid #E2E8F0'}}>Medicamento</th>
+              <th style={{padding:'10px 14px',textAlign:'center',fontWeight:700,color:'#64748B',fontSize:11,textTransform:'uppercase',letterSpacing:'.05em',borderBottom:'1px solid #E2E8F0'}}>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {lista.map(function(it,i){
+              var cor=COR_CAT[it.cat]||'#1351B4';
+              var ico=ICO_CAT[it.cat]||'💊';
+              return(<tr key={i} style={{borderBottom:'1px solid #F1F5F9'}}>
+                <td style={{padding:'10px 14px'}}>
+                  <div style={{fontWeight:600,color:'#1E293B'}}>{it.nome}</div>
+                  <span style={{background:cor+'18',color:cor,padding:'1px 8px',borderRadius:10,fontSize:11,fontWeight:600}}>{ico} {it.cat}</span>
+                </td>
+                <td style={{padding:'10px 14px',textAlign:'center',fontWeight:800,fontSize:18,color:'#DC2626'}}>-{it.total}</td>
+              </tr>);
+            })}
+          </tbody>
+          <tfoot>
+            <tr style={{background:'#F8FAFC',borderTop:'2px solid #E2E8F0'}}>
+              <td style={{padding:'10px 14px',fontWeight:700,color:'#1E293B'}}>TOTAL GERAL</td>
+              <td style={{padding:'10px 14px',textAlign:'center',fontWeight:800,fontSize:16,color:'#DC2626'}}>-{totalGeral}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <button onClick={function(){
+        var hoje=new Date(dF+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'});
+        var html='<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;padding:24px;font-size:12px}h2{font-size:16px;margin-bottom:4px}table{width:100%;border-collapse:collapse;margin-top:16px}th{background:#f0f0f0;padding:8px;text-align:left;border:1px solid #ccc;font-size:11px}td{padding:8px;border:1px solid #ddd}.total{font-weight:700;background:#f8f8f8}@media print{button{display:none}}</style></head><body>';
+        html+='<h2>📋 Relatório de Saídas</h2><div style="color:#555;margin-bottom:8px">Data: <b>'+hoje+'</b> · Total: <b>'+totalGeral+' unidades</b></div>';
+        html+='<table><tr><th>Medicamento</th><th>Categoria</th><th style="text-align:center">Quantidade</th></tr>';
+        lista.forEach(function(it){html+='<tr><td>'+it.nome+'</td><td>'+it.cat+'</td><td style="text-align:center;font-weight:700">'+it.total+'</td></tr>';});
+        html+='<tr class="total"><td colspan="2">TOTAL</td><td style="text-align:center">'+totalGeral+'</td></tr>';
+        html+='</table></body></html>';
+        var w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(function(){w.print();},400);}
+      }} className="bp">🖨️ Imprimir / Salvar PDF</button>
+    </div>);
+  })()}
+</div>}
 {sub==='mov'&&<div>
   <div className="card" style={{marginBottom:12,padding:14}}>
     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
@@ -2787,6 +2876,16 @@ function TabPrevisao(props){
   var _salvandoLote=useState(false);var salvandoLote=_salvandoLote[0];var setSalvandoLote=_salvandoLote[1];
   var _buscaLote=useState('');var buscaLote=_buscaLote[0];var setBuscaLote=_buscaLote[1];
   var _filtCatLote=useState('todos');var filtCatLote=_filtCatLote[0];var setFiltCatLote=_filtCatLote[1];
+  var _numPedido=useState('');var numPedido=_numPedido[0];var setNumPedido=_numPedido[1];
+  var _empresa=useState('');var empresa=_empresa[0];var setEmpresa=_empresa[1];
+  var _cnpjEmpresa=useState('');var cnpjEmpresa=_cnpjEmpresa[0];var setCnpjEmpresa=_cnpjEmpresa[1];
+  var _importPreview=useState(null);var importPreview=_importPreview[0];var setImportPreview=_importPreview[1];
+  var _importNome=useState('');var importNome=_importNome[0];var setImportNome=_importNome[1];
+  var _importCat=useState('controlado');var importCat=_importCat[0];var setImportCat=_importCat[1];
+  var _importando=useState(false);var importando=_importando[0];var setImportando=_importando[1];
+  var _ataDetalhe=useState(null);var ataDetalhe=_ataDetalhe[0];var setAtaDetalhe=_ataDetalhe[1];
+  var _pastasAbertas=useState({});var pastasAbertas=_pastasAbertas[0];var setPastasAbertas=_pastasAbertas[1];
+  var _buscaItemMed=useState({});var buscaItemMed=_buscaItemMed[0];var setBuscaItemMed=_buscaItemMed[1];
 
   var COR={medicamento:'#1351B4',controlado:'#DC2626',injetavel:'#7C3AED',leite:'#D97706',penso:'#0C6B3E'};
   var ICO={medicamento:'💊',controlado:'🔒',injetavel:'💉',leite:'🍼',penso:'🩹'};
@@ -2874,10 +2973,23 @@ function TabPrevisao(props){
 
   // Medicamentos de uma ata
   function medsDaAta(ataId){
-    return medications.filter(function(m){return m.ataId===ataId;});
+    var porAtaId=medications.filter(function(m){return m.ataId===ataId;});
+    // Também buscar pelos medicamentos vinculados nos itens da ata
+    var ataObj=atas.find(function(a){return a.id===ataId;});
+    if(!ataObj||!ataObj.itens||!ataObj.itens.length)return porAtaId;
+    var porItens=medications.filter(function(m){
+      return ataObj.itens.some(function(it){return it.medicamentoId&&it.medicamentoId===m.id;});
+    });
+    // Combinar sem duplicatas
+    var mapa={};
+    porAtaId.concat(porItens).forEach(function(m){mapa[m.id]=m;});
+    return Object.values(mapa);
   }
   // Medicamentos sem ata
-  var medsSemAta=medications.filter(function(m){return !m.ataId;});
+  // Medicamentos vinculados via itens de ata (mesmo sem ataId no doc)
+  var medVinculadosViaItens={};
+  atas.forEach(function(a){if(a.itens)a.itens.forEach(function(it){if(it.medicamentoId)medVinculadosViaItens[it.medicamentoId]=true;});});
+  var medsSemAta=medications.filter(function(m){return !m.ataId&&!medVinculadosViaItens[m.id];});
 
   function valorPedido(med){
     var p=calcularPrevisao(med);
@@ -2886,6 +2998,72 @@ function TabPrevisao(props){
   }
 
   // ── AÇÕES ────────────────────────────────────────────────────
+  function importarAtaDocx(file){
+    if(!file)return;
+    setImportando(true);
+    var reader=new FileReader();
+    reader.onload=function(ev){
+      var ab=ev.target.result;
+      if(typeof mammoth==='undefined'){setMsg('e:Biblioteca não carregou. Recarregue.');setImportando(false);return;}
+      mammoth.convertToHtml({arrayBuffer:ab}).then(function(res){
+        var div=document.createElement('div');div.innerHTML=res.value;
+        var tabs=div.querySelectorAll('table');
+        var itens=[];
+        tabs.forEach(function(tab){
+          tab.querySelectorAll('tr').forEach(function(tr){
+            var cs=tr.querySelectorAll('td,th');
+            if(cs.length<4)return;
+            var tx=function(i){return cs[i]?cs[i].textContent.trim():'';}; 
+            var n=tx(0);
+            if(!/^\d+$/.test(n)||(tx(1).toLowerCase().indexOf('descri')>=0))return;
+            var desc='',marca='',qtd='',unid='',vU='',vT='';
+            if(cs.length>=7){desc=tx(1);marca=tx(2);qtd=tx(3);unid=tx(4);vU=tx(5);vT=tx(6);}
+            else if(cs.length===6){desc=tx(1);marca=tx(2);qtd=tx(3);unid=tx(4);vU=tx(5);}
+            else if(cs.length===5){desc=tx(1);qtd=tx(2);unid=tx(3);vU=tx(4);}
+            else{desc=tx(1);qtd=tx(2);}
+            var qN=parseInt((qtd||'').replace(/[^0-9]/g,''))||0;
+            if(!desc||qN===0)return;
+            var vUN=parseFloat((vU||'').replace(/[^0-9,]/g,'').replace(',','.'))||0;
+            itens.push({num:n,descricao:desc,marca:marca,qtdTeto:qN,unidade:unid,vUnit:vUN,pedidoAcumulado:0,medicamentoId:''});
+          });
+        });
+        if(itens.length===0){setMsg('e:Nenhum item encontrado na tabela. Verifique o arquivo.');setImportando(false);return;}
+        setImportPreview(itens);
+        if(!importNome)setImportNome(file.name.replace(/\.docx?$/i,''));
+        setImportando(false);
+        setMsg('ok:'+itens.length+' itens lidos! Confira abaixo e salve.');
+        setTimeout(function(){setMsg('');},4000);
+      }).catch(function(e){setMsg('e:Erro ao ler: '+e.message);setImportando(false);});
+    };
+    reader.onerror=function(){setMsg('e:Erro ao abrir arquivo');setImportando(false);};
+    reader.readAsArrayBuffer(file);
+  }
+  function salvarAtaImportada(){
+    if(!importPreview||!importNome.trim()){setMsg('e:Dê um nome à ata antes de salvar');return;}
+    var vTot=importPreview.reduce(function(a,it){return a+(it.vUnit*it.qtdTeto);},0);
+    db.collection('atas').add({nome:importNome.trim(),categoria:importCat,limite:0,valorTotal:parseFloat(vTot.toFixed(2)),itens:importPreview,criadoEm:new Date().toISOString(),criadoPor:user.name}).then(function(){
+      setImportPreview(null);setImportNome('');
+      setMsg('ok:Ata "'+importNome+'" importada com '+importPreview.length+' itens!');
+      setTimeout(function(){setMsg('');},4000);
+    }).catch(function(e){setMsg('e:'+e.message);});
+  }
+  function atualizarItemAta(ataId,itens,novoItem,idxIt){
+    var novos=itens.map(function(x,j){return j===idxIt?Object.assign({},x,novoItem):x;});
+    var p=[db.collection('atas').doc(ataId).update({itens:novos})];
+    // Sincronizar ataId no medicamento
+    if(novoItem.medicamentoId!==undefined){
+      var antigo=itens[idxIt]&&itens[idxIt].medicamentoId;
+      if(novoItem.medicamentoId){
+        // Vinculando: salvar ataId no medicamento
+        p.push(db.collection('medicamentos').doc(novoItem.medicamentoId).update({ataId:ataId}));
+      }
+      if(antigo&&antigo!==novoItem.medicamentoId){
+        // Desvinculando o anterior: remover ataId
+        p.push(db.collection('medicamentos').doc(antigo).update({ataId:''}));
+      }
+    }
+    return Promise.all(p);
+  }
   function criarAta(){
     if(!novaAta.trim())return;
     db.collection('atas').add({nome:novaAta.trim(),categoria:novaAtaCat,limite:0,criadoEm:new Date().toISOString(),criadoPor:user.name}).then(function(){
@@ -2948,28 +3126,114 @@ function TabPrevisao(props){
   }
 
   function exportarPDF(){
-    var hoje=new Date().toLocaleDateString('pt-BR');
-    var html='<html><head><meta charset="utf-8"><title>Previsao de Pedido</title>';
-    html+='<style>body{font-family:Arial,sans-serif;padding:24px;color:#1E293B}h1{font-size:20px;margin-bottom:4px}.sub{color:#64748B;font-size:13px;margin-bottom:20px}h2{font-size:15px;margin:18px 0 8px;padding-bottom:4px;border-bottom:2px solid #1351B4}table{width:100%;border-collapse:collapse;margin-bottom:12px;font-size:12px}th{background:#F1F5F9;text-align:left;padding:8px;border:1px solid #E2E8F0}td{padding:8px;border:1px solid #E2E8F0}.tot{font-weight:bold;background:#EFF6FF}@media print{button{display:none}}</style></head><body>';
-    html+='<h1>📋 Previsão de Pedido Mensal</h1><div class="sub">Gerado em '+hoje+' · Período: '+diasPrev+' dias · Por: '+user.name+'</div>';
+    var hoje=new Date();
+    var dataHoje=hoje.toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'}).replace(' de ',' DE ').toUpperCase();
+    var numPedidoDoc=numPedido.trim()||('N/'+new Date().getFullYear());
+
+    // Construir seções por categoria
+    var secoes=[];
+    // Atas com itens vinculados
     atas.forEach(function(ata){
-      var meds=medsDaAta(ata.id);if(meds.length===0)return;
-      var totalAta=meds.reduce(function(a,m){return a+valorPedido(m);},0);
-      html+='<h2>'+ata.nome+(ata.limite>0?(' (limite: '+ata.limite+')'):'')+'</h2>';
-      html+='<table><tr><th>Medicamento</th><th>Estoque</th><th>Mínimo</th><th>Sugestão</th><th>Método</th></tr>';
-      meds.forEach(function(m){var p=calcularPrevisao(m);html+='<tr><td>'+m.nome+'</td><td>'+(stock[m.id]||0)+'</td><td>'+(m.minEstoque||0)+'</td><td><b>'+valorPedido(m)+'</b></td><td>'+p.metodo+'</td></tr>';});
-      html+='<tr class="tot"><td colspan="3">TOTAL DA ATA</td><td colspan="2">'+totalAta+' unidades</td></tr></table>';
+      var itensPedido=[];
+      // Itens da ata que têm medicamento vinculado
+      if(ata.itens&&ata.itens.length>0){
+        ata.itens.forEach(function(it){
+          if(!it.medicamentoId)return;
+          var med=medications.find(function(m){return m.id===it.medicamentoId;});
+          if(!med)return;
+          var qtd=ajustes[med.id]!==undefined?parseInt(ajustes[med.id])||0:calcularPrevisao(med).pedir;
+          if(qtd===0)return;
+          var vU=it.vUnit||0;
+          itensPedido.push({desc:it.descricao||med.nome,unidade:it.unidade||'UN',qtd:qtd,vUnit:vU,vTotal:vU*qtd});
+        });
+      } else {
+        // Ata sem itens importados: usa medicamentos vinculados
+        medsDaAta(ata.id).forEach(function(med){
+          var qtd=ajustes[med.id]!==undefined?parseInt(ajustes[med.id])||0:calcularPrevisao(med).pedir;
+          if(qtd===0)return;
+          itensPedido.push({desc:med.nome,unidade:'UN',qtd:qtd,vUnit:0,vTotal:0});
+        });
+      }
+      if(itensPedido.length>0)secoes.push({titulo:ata.nome.toUpperCase(),itens:itensPedido,cor:COR[ata.categoria]||'#1351B4'});
     });
-    if(medsSemAta.length>0){
-      html+='<h2>Sem ata vinculada</h2><table><tr><th>Medicamento</th><th>Estoque</th><th>Mínimo</th><th>Sugestão</th></tr>';
-      medsSemAta.forEach(function(m){html+='<tr><td>'+m.nome+'</td><td>'+(stock[m.id]||0)+'</td><td>'+(m.minEstoque||0)+'</td><td><b>'+valorPedido(m)+'</b></td></tr>';});
-      html+='</table>';
-    }
+    // Medicamentos sem ata
+    var semAtaItens=[];
+    medsSemAta.forEach(function(med){
+      var qtd=ajustes[med.id]!==undefined?parseInt(ajustes[med.id])||0:calcularPrevisao(med).pedir;
+      if(qtd===0)return;
+      semAtaItens.push({desc:med.nome,unidade:'UN',qtd:qtd,vUnit:0,vTotal:0});
+    });
+    if(semAtaItens.length>0)secoes.push({titulo:'OUTROS',itens:semAtaItens,cor:'#475569'});
+
+    if(secoes.length===0){setMsg('e:Nenhum medicamento com pedido > 0. Ajuste as quantidades antes de exportar.');return;}
+
+    var css='<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;font-size:11px;color:#111;padding:20px}'+
+      '.header{border-bottom:3px solid #1351B4;padding-bottom:8px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:flex-start}'+
+      '.title-block .main{font-size:14px;font-weight:700;color:#1351B4}.title-block .sub{font-size:11px;color:#444;margin-top:2px}'+
+      '.pedido-num{font-size:16px;font-weight:900;color:#1351B4;text-align:right}'+
+      '.info-box{border:1.5px solid #222;padding:10px 14px;margin:12px 0;font-size:11px;line-height:1.7}'+
+      '.info-box b{font-weight:700}'+
+      '.assunto{font-size:11px;font-weight:700;margin:14px 0 8px;text-transform:uppercase}'+
+      '.intro{font-size:11px;margin-bottom:12px;line-height:1.6}'+
+      '.section-title{text-align:center;font-size:13px;font-weight:900;padding:8px;border:1px solid #222;background:#f0f0f0;margin-top:16px;margin-bottom:0;letter-spacing:.05em}'+
+      'table{width:100%;border-collapse:collapse;font-size:11px}'+
+      'th{padding:6px 8px;background:#e8e8e8;font-weight:700;border:1px solid #999;text-align:center;text-transform:uppercase;font-size:10px}'+
+      'td{padding:6px 8px;border:1px solid #bbb;vertical-align:top}'+
+      'td.num{text-align:center;white-space:nowrap;width:90px}'+
+      'td.vunit{text-align:center;white-space:nowrap;width:80px}'+
+      'td.vtotal{text-align:center;white-space:nowrap;width:90px}'+
+      '.total-row td{font-weight:900;text-align:center;background:#f5f5f5;font-size:12px;border:1.5px solid #555;padding:8px}'+
+      '.footer-line{border-top:2px solid #1351B4;margin-top:20px;padding-top:8px}'+
+      '.footer-data{text-align:center;font-size:10px;color:#333;margin-top:4px;line-height:1.6}'+
+      '.assinatura{margin-top:40px;text-align:center;font-size:11px;font-weight:700;border-top:1px solid #555;width:200px;padding-top:4px;margin-left:auto}'+
+      '@media print{.no-print{display:none}body{padding:10px}}'+
+      '</style>';
+
+    var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Pedido</title>'+css+'</head><body>';
+    // Cabeçalho
+    html+='<div class="header">';
+    html+='<div class="title-block"><div class="main">SECRETARIA DE SAÚDE E DEPARTAMENTO DE COMPRAS</div><div class="sub">Fundo Municipal de Saúde — CAF-Unidade Hospitalar</div></div>';
+    html+='<div class="pedido-num">PEDIDO Nº '+numPedido+'/'+new Date().getFullYear()+'</div>';
+    html+='</div>';
+    // Data e destinatário
+    var cidade='Vicência/PE, '+dataHoje+'.';
+    html+='<div style="text-align:right;font-size:11px;margin-bottom:14px">'+cidade+'</div>';
+    html+='<div style="font-size:11px;font-weight:700;margin-bottom:10px">PARA: CENTRAL DE COMPRAS DO MUNICÍPIO</div>';
+    html+='<div class="class="info-box"><b>À EMPRESA: '+(empresa.trim()||'_______________________________________________')+'</b><br>CNPJ: '+(cnpjEmpresa.trim()||'___________________________________')+'<br>NÚMERO P/ CONTATO: ______________________</div>';
+    html+='<div class="assunto">ASSUNTO: PEDIDO DE FORNECIMENTO DE INSUMOS COM O OBJETIVO DE ATENDEREM AS DEMANDAS DE ACORDO COM AS NECESSIDADES CLÍNICAS DOS PACIENTES NO ÂMBITO HOSPITALAR.</div>';
+    html+='<div class="intro">Caro Sr.(a):<br><br>Venho por meio deste, solicitar o fornecimento do(s) seguinte(s) insumo(s) e sua respectiva quantidade para atender as necessidades do Município.</div>';
+
+    // Tabelas por seção
+    secoes.forEach(function(sec){
+      var totalQtd=sec.itens.reduce(function(a,it){return a+it.qtd;},0);
+      var totalVal=sec.itens.reduce(function(a,it){return a+it.vTotal;},0);
+      html+='<div class="section-title">'+sec.titulo+'</div>';
+      html+='<table><thead><tr><th style="width:90px">QUANT</th><th>DISCRIMINAÇÃO</th><th style="width:80px">V.UNIT</th><th style="width:90px">V.TOTAL</th></tr></thead><tbody>';
+      sec.itens.forEach(function(it){
+        html+='<tr>';
+        html+='<td class="num">'+it.qtd+' '+(it.unidade||'UN')+'</td>';
+        html+='<td>'+it.desc+'</td>';
+        html+='<td class="vunit">'+(it.vUnit>0?'R$ '+it.vUnit.toFixed(2):'—')+'</td>';
+        html+='<td class="vtotal">'+(it.vTotal>0?it.vTotal.toFixed(2):'—')+'</td>';
+        html+='</tr>';
+      });
+      html+='</tbody></table>';
+      if(totalVal>0){html+='<table><tbody><tr class="total-row"><td colspan="3">TOTAL</td><td>R$ '+totalVal.toFixed(2)+'</td></tr></tbody></table>';}
+    });
+
+    // Rodapé
+    html+='<div style="margin-top:20px;font-size:11px"><b>LOCAL DE ENTREGA:</b> CAF - UNIDADE HOSPITALAR</div>';
+    html+='<div style="font-size:11px;margin-top:4px"><b>Obs.:</b> Dúvidas e informações, contatar o setor de compras.</div>';
+    html+='<div class="footer-line"></div>';
+    html+='<div class="footer-data">Fundo Municipal de Saúde de Vicência - CNPJ: 10.566.414/0001-36<br>Rua José Candido de Oliveira, 79 - Centro - Vicência - PE; CEP: 558580-000</div>';
+    html+='<div class="assinatura">COORDENADORA DA FARMÁCIA</div>';
     html+='</body></html>';
+
     var w=window.open('','_blank');
-    if(w){w.document.write(html);w.document.close();setTimeout(function(){w.print();},400);}
+    if(w){w.document.write(html);w.document.close();setTimeout(function(){w.print();},500);}
     else{setMsg('e:Permita pop-ups para gerar o PDF');}
   }
+
 
   var dias=diasHistorico();
   var faseGlobal=dias<25?1:(dias<55?2:3);
@@ -3014,14 +3278,47 @@ function TabPrevisao(props){
         </div>
 
         {/* Botão exportar */}
-        <div style={{display:'flex',gap:8,marginBottom:16}}><button onClick={exportarExcel} className="bg" style={{flex:1}}>📥 Excel</button><button onClick={exportarPDF} className="bp" style={{flex:1,background:'#DC2626'}}>📄 PDF</button></div>
+        <div style={{background:'#F8FAFC',borderRadius:10,border:'1px solid #E2E8F0',padding:'12px 14px',marginBottom:12}}>
+          <div style={{fontSize:12,fontWeight:700,color:'#1E293B',marginBottom:8}}>Dados do Pedido Oficial</div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+            <div><div style={{fontSize:11,color:'#64748B',marginBottom:3}}>Nº do Pedido</div><input value={numPedido} onChange={function(e){setNumPedido(e.target.value);}} placeholder="Ex: 171/2026" className="inp" style={{marginBottom:0,fontSize:13}}/></div>
+            <div><div style={{fontSize:11,color:'#64748B',marginBottom:3}}>CNPJ Fornecedor</div><input value={cnpjEmpresa} onChange={function(e){setCnpjEmpresa(e.target.value);}} placeholder="00.000.000/0000-00" className="inp" style={{marginBottom:0,fontSize:13}}/></div>
+          </div>
+          <div><div style={{fontSize:11,color:'#64748B',marginBottom:3}}>Nome da Empresa Fornecedora</div><input value={empresa} onChange={function(e){setEmpresa(e.target.value);}} placeholder="Nome da empresa..." className="inp" style={{marginBottom:0,fontSize:13}}/></div>
+        </div>
+        <div style={{display:'flex',gap:8,marginBottom:16}}><button onClick={exportarExcel} className="bg" style={{flex:1}}>📥 Excel</button><button onClick={exportarPDF} className="bp" style={{flex:1,background:'#DC2626'}}>📄 PDF Pedido</button></div>
 
         {/* Atas com previsão */}
         {atas.length===0&&medsSemAta.length===0&&<div style={{textAlign:'center',padding:'40px 0',color:'#94A3B8'}}><div style={{fontSize:40,marginBottom:8}}>📋</div><div style={{fontWeight:600}}>Nenhum medicamento cadastrado</div></div>}
 
-        {atas.map(function(ata){
-          var meds=medsDaAta(ata.id);
-          if(meds.length===0)return null;
+        {(function(){
+          // Agrupar atas por categoria (pastas)
+          var categorias=Object.keys(LBL);
+          return categorias.map(function(catKey){
+            var atasDaCat=atas.filter(function(a){return (a.categoria||'medicamento')===catKey;});
+            var atasComMeds=atasDaCat.filter(function(a){return medsDaAta(a.id).length>0;});
+            if(atasComMeds.length===0)return null;
+            var pastaAberta=pastasAbertas[catKey]!==false; // aberta por padrão
+            var totalCat=atasComMeds.reduce(function(sum,a){return sum+medsDaAta(a.id).reduce(function(s,m){return s+valorPedido(m);},0);},0);
+            return(<div key={catKey} style={{marginBottom:12}}>
+              {/* Cabeçalho da pasta */}
+              <button onClick={function(){setPastasAbertas(function(p){var n=Object.assign({},p);n[catKey]=!pastaAberta;return n;});}} style={{width:'100%',background:COR[catKey]||'#1351B4',border:'none',borderRadius:pastaAberta?'14px 14px 0 0':'14px',padding:'12px 16px',cursor:'pointer',display:'flex',alignItems:'center',gap:10,textAlign:'left'}}>
+                <span style={{fontSize:22}}>{ICO[catKey]||'🗂️'}</span>
+                <div style={{flex:1}}>
+                  <div style={{fontWeight:800,fontSize:15,color:'#fff'}}>📁 {LBL[catKey]}</div>
+                  <div style={{fontSize:12,color:'rgba(255,255,255,0.8)'}}>{atasComMeds.length} ata(s)</div>
+                </div>
+                <div style={{textAlign:'right'}}>
+                  <div style={{fontWeight:800,fontSize:16,color:'#fff'}}>{totalCat}</div>
+                  <div style={{fontSize:10,color:'rgba(255,255,255,0.8)'}}>a pedir</div>
+                </div>
+                <span style={{fontSize:18,color:'rgba(255,255,255,0.8)'}}>{pastaAberta?'▲':'▼'}</span>
+              </button>
+              {/* Atas dentro da pasta */}
+              {pastaAberta&&<div style={{border:'1.5px solid '+(COR[catKey]||'#1351B4'),borderTop:'none',borderRadius:'0 0 14px 14px',overflow:'hidden',marginBottom:4}}>
+                {atasComMeds.map(function(ata){
+                  var meds=medsDaAta(ata.id);
+                  if(meds.length===0)return null;
           var aberta=ataAberta===ata.id;
           var totalPedido=meds.reduce(function(a,m){return a+valorPedido(m);},0);
           var cor=COR[ata.categoria]||'#1351B4';
@@ -3044,6 +3341,8 @@ function TabPrevisao(props){
               {meds.map(function(m){
                 var p=calcularPrevisao(m);
                 var metodoLbl={estimado:'🎯 estimado',minimo:'📊 mínimo',media:'📉 média',tendencia:'📈 tendência'};
+                var _iA=null;atas.forEach(function(a){if(a.itens)a.itens.forEach(function(it){if(it.medicamentoId===m.id)_iA={ata:a,item:it};});});
+                var saldoAta=_iA?(_iA.item.qtdTeto-(_iA.item.pedidoAcumulado||0)):null;
                 var val=valorPedido(m);
                 var editado=ajustes[m.id]!==undefined;
                 return(<div key={m.id} style={{marginBottom:8,borderRadius:12,background:'#fff',border:'1px solid #E2E8F0',padding:'12px 14px'}}>
@@ -3052,6 +3351,7 @@ function TabPrevisao(props){
                       <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>{m.nome}</div>
                       <div style={{fontSize:11,color:'#94A3B8',marginTop:2}}>Estoque: {stock[m.id]||0} · Mín: {m.minEstoque||0} · <span style={{color:cor,fontWeight:600}}>{metodoLbl[p.metodo]}</span></div>
                       <div style={{fontSize:10,color:'#CBD5E1',marginTop:1}}>{p.detalhe}</div>
+                      {saldoAta!==null&&<div style={{fontSize:10,marginTop:2,fontWeight:600,color:saldoAta<val?'#DC2626':'#0C6B3E'}}>{saldoAta>0?('Saldo ata: '+saldoAta+(_iA.item.unidade?' '+_iA.item.unidade:'')+(val>saldoAta?' ⚠️ pedido supera saldo!':'')):saldoAta===0?'⛔ Saldo esgotado na ata!':'⛔ Saldo negativo na ata!'}</div>}
                     </div>
                     <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:4}}>
                       <input type="number" value={val} onChange={function(e){var v=e.target.value;setAjustes(function(pr){var n=Object.assign({},pr);n[m.id]=v;return n;});}} style={{width:70,padding:'6px 8px',border:'1.5px solid '+(editado?'#F59E0B':'#CBD5E1'),borderRadius:8,fontSize:15,fontWeight:700,textAlign:'center',color:'#1E293B',outline:'none'}}/>
@@ -3062,7 +3362,11 @@ function TabPrevisao(props){
               })}
             </div>}
           </div>);
-        })}
+                })}
+              </div>}
+            </div>);
+          });
+        })()}
 
         {/* Sem ata */}
         {medsSemAta.length>0&&<div style={{marginBottom:10,borderRadius:16,overflow:'hidden',border:'1.5px dashed #CBD5E1',background:'#fff'}}>
@@ -3078,6 +3382,8 @@ function TabPrevisao(props){
             {medsSemAta.map(function(m){
               var p=calcularPrevisao(m);var val=valorPedido(m);var editado=ajustes[m.id]!==undefined;
               var metodoLbl={estimado:'🎯 estimado',minimo:'📊 mínimo',media:'📉 média',tendencia:'📈 tendência'};
+              var _iA=null;atas.forEach(function(a){if(a.itens)a.itens.forEach(function(it){if(it.medicamentoId===m.id)_iA={ata:a,item:it};});});
+              var saldoAta=_iA?(_iA.item.qtdTeto-(_iA.item.pedidoAcumulado||0)):null;
               return(<div key={m.id} style={{marginBottom:8,borderRadius:12,background:'#fff',border:'1px solid #E2E8F0',padding:'12px 14px',display:'flex',alignItems:'center',gap:10}}>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>{m.nome}</div>
@@ -3092,8 +3398,48 @@ function TabPrevisao(props){
 
       {sub==='atas'&&<div>
         {/* Criar nova ata */}
+        <div style={{background:'#F0FDF4',borderRadius:14,border:'1.5px solid #86EFAC',padding:16,marginBottom:16}}>
+          <div style={{fontWeight:700,fontSize:14,color:'#0C6B3E',marginBottom:4}}>📥 Importar ATA de arquivo Word (.docx)</div>
+          <div style={{fontSize:12,color:'#475569',marginBottom:10}}>O app lê a tabela da ata automaticamente. Você confere os itens antes de salvar.</div>
+          <label style={{display:'block',cursor:'pointer'}}>
+            <div style={{border:'2px dashed #16A34A',borderRadius:10,padding:'16px',textAlign:'center',background:'#F0FDF4',cursor:'pointer',marginBottom:8}}>
+              <div style={{fontSize:28,marginBottom:4}}>📂</div>
+              <div style={{fontWeight:700,fontSize:13,color:'#0C6B3E',marginBottom:2}}>Clique aqui para selecionar o arquivo .docx da ATA</div>
+              <div style={{fontSize:11,color:'#64748B'}}>Arquivo Word (.docx) com a tabela da ata</div>
+            </div>
+            <input type="file" accept=".docx" onChange={function(e){var f=e.target.files&&e.target.files[0];if(f)importarAtaDocx(f);e.target.value='';}} style={{display:'none'}}/>
+          </label>
+          {importando&&<div className="inf" style={{marginBottom:8}}>⏳ Lendo arquivo...</div>}
+          {importPreview&&<div style={{marginTop:8}}>
+            <input value={importNome} onChange={function(e){setImportNome(e.target.value);}} placeholder="Nome da ata (obrigatório)" className="inp"/>
+            <div style={{fontSize:11,fontWeight:600,color:'#64748B',marginBottom:6}}>Categoria principal:</div>
+            <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:10}}>
+              {Object.keys(LBL).map(function(k){return(<button key={k} onClick={function(){setImportCat(k);}} style={{padding:'5px 11px',borderRadius:20,border:'1.5px solid '+(importCat===k?COR[k]:'#E2E8F0'),background:importCat===k?COR[k]:'#fff',color:importCat===k?'#fff':COR[k],fontWeight:600,fontSize:11,cursor:'pointer'}}>{ICO[k]} {LBL[k]}</button>);})}
+            </div>
+            <div style={{fontSize:12,fontWeight:700,color:'#0C6B3E',marginBottom:6}}>{importPreview.length} itens lidos — confira:</div>
+            <div style={{maxHeight:220,overflowY:'auto',background:'#fff',borderRadius:8,border:'1px solid #E2E8F0',marginBottom:10}}>
+              {importPreview.map(function(it,i){
+                var vTit=it.vUnit*it.qtdTeto;
+                return(<div key={i} style={{padding:'8px 10px',borderBottom:'1px solid #F1F5F9'}}>
+                  <div style={{display:'flex',justifyContent:'space-between',gap:8,fontSize:12}}>
+                    <span style={{fontWeight:700,color:'#1E293B',flex:1}}>#{it.num} {it.descricao}</span>
+                    <span style={{color:'#0C6B3E',fontWeight:700,whiteSpace:'nowrap'}}>Teto: {it.qtdTeto} {it.unidade}</span>
+                  </div>
+                  {it.vUnit>0&&<div style={{fontSize:11,color:'#94A3B8'}}>R$ {it.vUnit.toFixed(2)}/un · total R$ {vTit.toFixed(2)}</div>}
+                </div>);
+              })}
+            </div>
+            <div style={{background:'#F8FAFC',borderRadius:8,padding:'8px 10px',fontSize:12,color:'#475569',marginBottom:10}}>
+              Valor total da ata: <strong>R$ {importPreview.reduce(function(a,it){return a+(it.vUnit*it.qtdTeto);},0).toFixed(2)}</strong>
+            </div>
+            <div style={{display:'flex',gap:8}}>
+              <button onClick={function(){setImportPreview(null);setImportNome('');}} className="bs" style={{flex:1}}>Cancelar</button>
+              <button onClick={salvarAtaImportada} className="bg" style={{flex:2}}>✅ Salvar Ata Importada</button>
+            </div>
+          </div>}
+        </div>
         <div style={{background:'#fff',borderRadius:14,border:'1px solid #E2E8F0',padding:16,marginBottom:16}}>
-          <div style={{fontWeight:700,fontSize:14,color:'#1E293B',marginBottom:10}}>➕ Nova Ata</div>
+          <div style={{fontWeight:700,fontSize:14,color:'#1E293B',marginBottom:10}}>➕ Nova Ata (manual)</div>
           <input value={novaAta} onChange={function(e){setNovaAta(e.target.value);}} placeholder="Nome da ata (ex: Controlados ATA 1)" className="inp"/>
           <div style={{fontSize:11,fontWeight:600,color:'#64748B',marginBottom:6}}>Categoria predominante:</div>
           <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:12}}>
@@ -3123,16 +3469,32 @@ function TabPrevisao(props){
         {/* Lista de atas existentes */}
         <div style={{fontWeight:700,fontSize:14,color:'#1E293B',marginBottom:10}}>Atas Cadastradas ({atas.length})</div>
         {atas.length===0&&<div style={{textAlign:'center',padding:'24px 0',color:'#94A3B8',fontSize:13}}>Nenhuma ata criada ainda</div>}
-        {atas.map(function(ata){
+        {(function(){
+          var categorias=Object.keys(LBL);
+          return categorias.map(function(catKey){
+            var atasDaCat=atas.filter(function(a){return (a.categoria||'medicamento')===catKey;});
+            if(atasDaCat.length===0)return null;
+            var pastaGestAberta=pastasAbertas['gest_'+catKey]!==false;
+            return(<div key={catKey} style={{marginBottom:12}}>
+              <button onClick={function(){setPastasAbertas(function(p){var n=Object.assign({},p);n['gest_'+catKey]=!pastaGestAberta;return n;});}} style={{width:'100%',background:COR[catKey]||'#475569',border:'none',borderRadius:pastaGestAberta?'12px 12px 0 0':'12px',padding:'10px 14px',cursor:'pointer',display:'flex',alignItems:'center',gap:10,textAlign:'left',marginBottom:0}}>
+                <span style={{fontSize:20}}>{ICO[catKey]||'🗂️'}</span>
+                <div style={{flex:1}}>
+                  <div style={{fontWeight:700,fontSize:14,color:'#fff'}}>📁 {LBL[catKey]}</div>
+                  <div style={{fontSize:11,color:'rgba(255,255,255,0.75)'}}>{atasDaCat.length} ata(s)</div>
+                </div>
+                <span style={{fontSize:16,color:'rgba(255,255,255,0.8)'}}>{pastaGestAberta?'▲':'▼'}</span>
+              </button>
+              {pastaGestAberta&&<div style={{border:'1.5px solid '+(COR[catKey]||'#475569'),borderTop:'none',borderRadius:'0 0 12px 12px',padding:'10px 10px 6px',background:'#F8FAFC'}}>
+                {atasDaCat.map(function(ata){
           var meds=medsDaAta(ata.id);var cor=COR[ata.categoria]||'#1351B4';
           return(<div key={ata.id} style={{marginBottom:10,borderRadius:14,border:'1px solid #E2E8F0',background:'#fff',padding:14}}>
             <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:10}}>
               <div style={{width:36,height:36,borderRadius:10,background:cor+'18',display:'flex',alignItems:'center',justifyContent:'center',fontSize:17}}>{ICO[ata.categoria]||'🗂️'}</div>
               <div style={{flex:1}}>
                 <div style={{fontWeight:700,fontSize:14,color:'#1E293B'}}>{ata.nome}</div>
-                <div style={{fontSize:11,color:'#94A3B8'}}>{LBL[ata.categoria]||ata.categoria} · {meds.length} medicamento(s)</div>
+                <div style={{fontSize:11,color:'#94A3B8'}}>{LBL[ata.categoria]||ata.categoria} · {meds.length} vinculado(s){ata.itens&&ata.itens.length?' · '+ata.itens.length+' itens da ata':''}</div>
               </div>
-              <button onClick={function(){excluirAta(ata);}} style={{background:'#FEE2E2',border:'none',borderRadius:8,padding:'6px 10px',fontSize:12,color:'#DC2626',fontWeight:600,cursor:'pointer'}}>🗑️</button>
+              {ata.itens&&ata.itens.length>0&&<button onClick={function(){setAtaDetalhe(ataDetalhe===ata.id?null:ata.id);}} style={{background:'#EFF6FF',border:'none',borderRadius:8,padding:'6px 12px',fontSize:12,color:'#1351B4',fontWeight:600,cursor:'pointer',marginRight:6}}>{ataDetalhe===ata.id?'▲ Fechar':'📋 Itens'}</button>}<button onClick={function(){excluirAta(ata);}} style={{background:'#FEE2E2',border:'none',borderRadius:8,padding:'6px 10px',fontSize:12,color:'#DC2626',fontWeight:600,cursor:'pointer'}}>🗑️</button>
             </div>
             <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
               <span style={{fontSize:12,color:'#64748B',fontWeight:600}}>Limite da ata:</span>
@@ -3142,8 +3504,59 @@ function TabPrevisao(props){
             {meds.length>0&&<div style={{display:'flex',flexWrap:'wrap',gap:6}}>
               {meds.map(function(m){return(<span key={m.id} style={{background:'#F1F5F9',borderRadius:16,padding:'4px 10px',fontSize:11,color:'#475569',display:'flex',alignItems:'center',gap:6}}>{m.nome}<button onClick={function(){desvincular(m.id);}} style={{background:'none',border:'none',color:'#94A3B8',cursor:'pointer',fontSize:13,padding:0,lineHeight:1}}>×</button></span>);})}
             </div>}
+            {ataDetalhe===ata.id&&ata.itens&&ata.itens.length>0&&(function(){
+              var vTot=ata.itens.reduce(function(a,it){return a+(it.vUnit*(it.qtdTeto||0));},0);
+              var vGasto=ata.itens.reduce(function(a,it){return a+(it.vUnit*(it.pedidoAcumulado||0));},0);
+              return(<div style={{marginTop:12,borderTop:'1px solid #E2E8F0',paddingTop:12}}>
+                <div style={{background:'#F8FAFC',borderRadius:10,padding:'10px 14px',marginBottom:12,display:'flex',gap:20,flexWrap:'wrap',fontSize:12}}>
+                  <div><span style={{color:'#64748B'}}>Valor total ata: </span><strong>R$ {vTot.toFixed(2)}</strong></div>
+                  <div><span style={{color:'#64748B'}}>Já pedido: </span><strong style={{color:vGasto>vTot?'#DC2626':'#0C6B3E'}}>R$ {vGasto.toFixed(2)}</strong></div>
+                  <div><span style={{color:'#64748B'}}>Saldo R$: </span><strong style={{color:(vTot-vGasto)<0?'#DC2626':'#1351B4'}}>R$ {(vTot-vGasto).toFixed(2)}</strong></div>
+                </div>
+                {ata.itens.map(function(it,idxIt){
+                  var saldo=(it.qtdTeto||0)-(it.pedidoAcumulado||0);
+                  var medV=it.medicamentoId?(medications.find(function(m){return m.id===it.medicamentoId;})||null):null;
+                  var busca=buscaItemMed[ata.id+'.'+idxIt]||'';
+                  return(<div key={idxIt} style={{background:'#fff',border:'1px solid '+(saldo<0?'#FCA5A5':saldo===0?'#FCD34D':'#E2E8F0'),borderRadius:10,padding:'10px 12px',marginBottom:8}}>
+                    <div style={{fontWeight:700,fontSize:12,color:'#1E293B',marginBottom:5}}>#{it.num} {it.descricao}{it.marca?' · '+it.marca:''}</div>
+                    <div style={{display:'flex',gap:12,flexWrap:'wrap',fontSize:11,marginBottom:8}}>
+                      <span style={{color:'#64748B'}}>Teto: <strong>{it.qtdTeto}</strong> {it.unidade}</span>
+                      <span style={{color:'#64748B'}}>Já pedido: <strong>{it.pedidoAcumulado||0}</strong></span>
+                      <span style={{color:saldo<0?'#DC2626':saldo===0?'#B45309':'#0C6B3E',fontWeight:700}}>Saldo: {saldo}</span>
+                      {it.vUnit>0&&<span style={{color:'#94A3B8'}}>R$ {it.vUnit.toFixed(2)}/un</span>}
+                    </div>
+                    <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8,flexWrap:'wrap'}}>
+                      <span style={{fontSize:11,color:'#64748B'}}>Pedido acumulado:</span>
+                      <input type="number" defaultValue={it.pedidoAcumulado||0} onBlur={function(e){atualizarItemAta(ata.id,ata.itens,{pedidoAcumulado:parseInt(e.target.value)||0},idxIt).catch(function(){});}} style={{width:80,padding:'5px 8px',border:'1.5px solid #CBD5E1',borderRadius:8,fontSize:13,textAlign:'center'}}/>
+                      <button onClick={function(){if(!window.confirm('Zerar pedido acumulado de "'+it.descricao+'"?'))return;atualizarItemAta(ata.id,ata.itens,{pedidoAcumulado:0},idxIt).catch(function(){});}} style={{background:'#F1F5F9',border:'none',borderRadius:6,padding:'5px 10px',fontSize:11,color:'#64748B',cursor:'pointer'}}>↺ Zerar</button>
+                    </div>
+                    <div style={{borderTop:'1px dashed #E2E8F0',paddingTop:8,fontSize:12}}>
+                      {medV?(<div style={{display:'flex',alignItems:'center',gap:8}}>
+                        <span style={{color:'#0C6B3E',fontWeight:600}}>🔗 {medV.nome}</span>
+                        <button onClick={function(){atualizarItemAta(ata.id,ata.itens,{medicamentoId:''},idxIt).catch(function(){});}} style={{background:'none',border:'none',color:'#94A3B8',cursor:'pointer',fontSize:11}}>× desvincular</button>
+                      </div>):(
+                        <div>
+                          <input value={busca} onChange={function(e){var v=e.target.value;setBuscaItemMed(function(p){var n=Object.assign({},p);n[ata.id+'.'+idxIt]=v;return n;});}} placeholder="🔍 Vincular a medicamento do estoque..." className="inp" style={{marginBottom:4,fontSize:12,padding:'6px 10px'}}/>
+                          {busca.trim()&&<div style={{maxHeight:110,overflowY:'auto',border:'1px solid #E2E8F0',borderRadius:8,background:'#fff'}}>
+                            {medications.filter(function(m){return m.nome.toLowerCase().indexOf(busca.toLowerCase())>=0;}).slice(0,8).map(function(m){
+                              return(<div key={m.id} onClick={function(){
+                                atualizarItemAta(ata.id,ata.itens,{medicamentoId:m.id},idxIt).then(function(){setBuscaItemMed(function(p){var n=Object.assign({},p);n[ata.id+'.'+idxIt]='';return n;});}).catch(function(){});
+                              }} style={{padding:'7px 12px',fontSize:12,cursor:'pointer',borderBottom:'1px solid #F1F5F9'}}>{m.nome}</div>);
+                            })}
+                          </div>}
+                        </div>
+                      )}
+                    </div>
+                  </div>);
+                })}
+              </div>);
+            })()}
           </div>);
         })}
+              </div>}
+            </div>);
+          });
+        })()}
       </div>}
 
       {sub==='config'&&<div>
