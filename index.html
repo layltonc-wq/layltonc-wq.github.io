@@ -279,45 +279,11 @@ return(<div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'l
 
 function InviteScreen(props){return(<div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(15,23,42,.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:500,padding:16,backdropFilter:'blur(4px)'}}><div style={{background:'#fff',borderRadius:24,padding:'32px 24px',maxWidth:380,width:'100%',textAlign:'center',boxShadow:'0 24px 64px rgba(0,0,0,.25)'}}><div style={{width:56,height:56,borderRadius:16,background:'#EFF6FF',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px',fontSize:24}}>🏥</div><div style={{fontSize:18,fontWeight:800,color:B,marginBottom:8}}>Convite de Plantão</div><div style={{fontSize:14,color:'#64748B',marginBottom:24,lineHeight:1.7}}><strong style={{color:B}}>{props.invite.deNome}</strong><br/>te adicionou ao plantao de hoje.</div><div style={{display:'flex',gap:10}}><button onClick={function(){props.onDeny(props.invite);}} className="bs" style={{flex:1}}>Recusar</button><button onClick={function(){props.onConfirm(props.invite);}} className="bg" style={{flex:2}}>Aceitar Plantão</button></div></div></div>);}
 
-function ShiftCard(props){var plantao=props.plantao;var isGuest=props.isGuest;var user=props.user;var onEncerrar=props.onEncerrar;var shiftId=props.shiftId;var onIniciar=props.onIniciar;var onSolicitar=props.onSolicitarEntrada;var onSair=props.onSair;var allUsers=props.allUsers||[];var onAddMember=props.onAddMember;var onExpelMember=props.onExpelMember;var _showGer=useState(false);var showGer=_showGer[0];var setShowGer=_showGer[1];
-if(!plantao){if(!user||user.role!=='farmaceutico'||!isShiftTime())return null;return(<div style={{background:'#EFF6FF',border:'1.5px dashed #BFDBFE',borderRadius:16,padding:'16px 18px',marginBottom:14,textAlign:'center'}}><div style={{fontSize:13,color:'#64748B',marginBottom:10}}>Nenhum plantao ativo hoje</div><button onClick={onIniciar} style={{background:B,border:'none',borderRadius:10,padding:'10px 24px',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer',boxShadow:'0 2px 8px rgba(19,81,180,.3)'}}>Abrir Plantão</button></div>);}
-var equipe=plantao.equipe||[];
-var canGerenciar=user&&(user.role==='farmaceutico'||user.role==='gestor'||user.role==='tecnico')&&onEncerrar&&shiftId;
-var canEncerrar=canGerenciar;
-var inTeam=equipe.some(function(m){return m.id===user.uid&&m.status!=='saiu';});
-var canSolicitar=isGuest&&onSolicitar&&user&&(user.role==='auxiliar'||user.role==='diarista');
-var canSair=!isGuest&&onSair&&user&&(user.role==='auxiliar'||user.role==='diarista')&&inTeam;
-var membrosAtivos=equipe.filter(function(m){return m.status!=='saiu'&&m.status!=='negou';}).map(function(m){return m.id;});
-var disponiveis=allUsers.filter(function(u){return u.status==='approved'&&u.role!=='gestor'&&u.role!=='tecnico'&&!membrosAtivos.includes(u.id);});
-return(<div className="shift-card">
-  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}><div style={{fontWeight:700,fontSize:13,display:'flex',alignItems:'center',gap:6}}><div style={{width:8,height:8,borderRadius:'50%',background:'#4ADE80',boxShadow:'0 0 0 3px rgba(74,222,128,.3)'}}/>Plantão em andamento</div><div style={{display:'flex',alignItems:'center',gap:8}}><div style={{fontSize:11,opacity:0.65}}>por {plantao.iniciadoPorNome}</div>{canGerenciar&&<button onClick={function(){setShowGer(function(p){return !p;});}} style={{background:'rgba(255,255,255,.18)',border:'1px solid rgba(255,255,255,.3)',borderRadius:8,padding:'3px 10px',color:'#fff',fontSize:11,fontWeight:700,cursor:'pointer'}}>⚙️ Equipe</button>}</div></div>
-  <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:10}}>{equipe.map(function(m,i){var st=m.status==='confirmado'?'✓':m.status==='negou'?'✗':m.status==='saiu'?'→':'…';var stColor=m.status==='confirmado'?'rgba(74,222,128,.9)':m.status==='negou'?'rgba(248,113,113,.9)':'rgba(255,255,255,.5)';return(<div key={i} style={{display:'flex',alignItems:'center',gap:5,background:'rgba(255,255,255,.12)',borderRadius:20,padding:'4px 10px',border:'1px solid rgba(255,255,255,.15)'}}><div className="av" style={{width:16,height:16,background:m.color||'rgba(255,255,255,.3)',fontSize:8}}>{m.nome?m.nome.charAt(0):''}</div><span style={{fontSize:11}}>{m.nome?m.nome.split(' ')[0]:''}</span><span style={{fontSize:10,color:stColor,fontWeight:700}}>{st}</span></div>);})}</div>
-  {showGer&&canGerenciar&&<div style={{background:'rgba(0,0,0,.25)',borderRadius:12,padding:'12px 14px',marginBottom:10}}>
-    {disponiveis.length>0&&<div style={{marginBottom:10}}>
-      <div style={{fontSize:11,color:'rgba(255,255,255,.7)',fontWeight:700,marginBottom:6}}>➕ ADICIONAR AO PLANTÃO</div>
-      <div style={{display:'flex',flexDirection:'column',gap:5}}>
-        {disponiveis.map(function(u){return(<div key={u.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',background:'rgba(255,255,255,.08)',borderRadius:8,padding:'7px 10px'}}>
-          <div style={{display:'flex',alignItems:'center',gap:8}}><div className="av" style={{width:24,height:24,background:u.color||B,fontSize:10}}>{u.name?u.name.charAt(0):''}</div><span style={{fontSize:12,color:'#fff'}}>{u.name}</span></div>
-          <button onClick={function(){onAddMember&&onAddMember(u);}} style={{background:'rgba(74,222,128,.25)',border:'1px solid rgba(74,222,128,.5)',borderRadius:7,padding:'4px 10px',color:'#4ADE80',fontSize:11,fontWeight:700,cursor:'pointer'}}>Adicionar</button>
-        </div>);})}</div>
-    </div>}
-    {equipe.filter(function(m){return m.status!=='saiu';}).length>0&&<div>
-      <div style={{fontSize:11,color:'rgba(255,255,255,.7)',fontWeight:700,marginBottom:6}}>❌ REMOVER DO PLANTÃO</div>
-      <div style={{display:'flex',flexDirection:'column',gap:5}}>
-        {equipe.filter(function(m){return m.status!=='saiu';}).map(function(m,i){return(<div key={i} style={{display:'flex',alignItems:'center',justifyContent:'space-between',background:'rgba(255,255,255,.08)',borderRadius:8,padding:'7px 10px'}}>
-          <div style={{display:'flex',alignItems:'center',gap:8}}><div className="av" style={{width:24,height:24,background:m.color||B,fontSize:10}}>{m.nome?m.nome.charAt(0):''}</div><span style={{fontSize:12,color:'#fff'}}>{m.nome?m.nome.split(' ')[0]:''}</span></div>
-          <button onClick={function(){if(confirm('Remover '+m.nome+' do plantão?')){onExpelMember&&onExpelMember(m);}}} style={{background:'rgba(220,38,38,.3)',border:'1px solid rgba(220,38,38,.5)',borderRadius:7,padding:'4px 10px',color:'#FCA5A5',fontSize:11,fontWeight:700,cursor:'pointer'}}>Remover</button>
-        </div>);})}</div>
-    </div>}
-  </div>}
-  {isGuest&&<div style={{fontSize:11,background:'rgba(255,255,255,.1)',borderRadius:8,padding:'5px 10px',marginBottom:8,color:'rgba(255,255,255,.8)',border:'1px solid rgba(255,255,255,.15)'}}>Voce esta no modo convidado</div>}
-  {canSolicitar&&<button onClick={onSolicitar} style={{width:'100%',background:'rgba(255,255,255,.15)',border:'1px solid rgba(255,255,255,.3)',borderRadius:10,padding:'9px',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer',marginBottom:6}}>Solicitar entrada no plantao</button>}
-  {canSair&&<button onClick={onSair} style={{width:'100%',background:'rgba(255,255,255,.08)',border:'1px solid rgba(255,255,255,.2)',borderRadius:10,padding:'8px',color:'rgba(255,255,255,.8)',fontSize:12,fontWeight:600,cursor:'pointer',marginBottom:6}}>Sair do plantao</button>}
-  {canEncerrar&&<button onClick={onEncerrar} style={{width:'100%',background:'rgba(220,38,38,.7)',border:'1px solid rgba(255,255,255,.2)',borderRadius:10,padding:'9px',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer'}}>Encerrar Plantão</button>}
-</div>);}
+function ShiftCard(props){var plantao=props.plantao;var isGuest=props.isGuest;var user=props.user;var onEncerrar=props.onEncerrar;var shiftId=props.shiftId;var onIniciar=props.onIniciar;var onSolicitar=props.onSolicitarEntrada;var onSair=props.onSair;if(!plantao){if(!user||user.role!=='farmaceutico'||!isShiftTime())return null;return(<div style={{background:'#EFF6FF',border:'1.5px dashed #BFDBFE',borderRadius:16,padding:'16px 18px',marginBottom:14,textAlign:'center'}}><div style={{fontSize:13,color:'#64748B',marginBottom:10}}>Nenhum plantao ativo hoje</div><button onClick={onIniciar} style={{background:B,border:'none',borderRadius:10,padding:'10px 24px',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer',boxShadow:'0 2px 8px rgba(19,81,180,.3)'}}>Abrir Plantão</button></div>);}var equipe=plantao.equipe||[];var isFarmaLeader=user&&user.role==='farmaceutico'&&plantao.iniciadoPor===user.uid;var canEncerrar=isFarmaLeader&&onEncerrar&&shiftId;var inTeam=equipe.some(function(m){return m.id===user.uid&&m.status!=='saiu';});var canSolicitar=isGuest&&onSolicitar&&user&&(user.role==='auxiliar'||user.role==='diarista');var canSair=!isGuest&&onSair&&user&&(user.role==='auxiliar'||user.role==='diarista')&&inTeam;
+return(<div className="shift-card"><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}><div style={{fontWeight:700,fontSize:13,display:'flex',alignItems:'center',gap:6}}><div style={{width:8,height:8,borderRadius:'50%',background:'#4ADE80',boxShadow:'0 0 0 3px rgba(74,222,128,.3)'}}/>Plantão em andamento</div><div style={{fontSize:11,opacity:0.65}}>por {plantao.iniciadoPorNome}</div></div><div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:10}}>{equipe.map(function(m,i){var st=m.status==='confirmado'?'✓':m.status==='negou'?'✗':m.status==='saiu'?'→':'…';var stColor=m.status==='confirmado'?'rgba(74,222,128,.9)':m.status==='negou'?'rgba(248,113,113,.9)':'rgba(255,255,255,.5)';return(<div key={i} style={{display:'flex',alignItems:'center',gap:5,background:'rgba(255,255,255,.12)',borderRadius:20,padding:'4px 10px',border:'1px solid rgba(255,255,255,.15)'}}><div className="av" style={{width:16,height:16,background:m.color||'rgba(255,255,255,.3)',fontSize:8}}>{m.nome?m.nome.charAt(0):''}</div><span style={{fontSize:11}}>{m.nome?m.nome.split(' ')[0]:''}</span><span style={{fontSize:10,color:stColor,fontWeight:700}}>{st}</span></div>);})}</div>{isGuest&&<div style={{fontSize:11,background:'rgba(255,255,255,.1)',borderRadius:8,padding:'5px 10px',marginBottom:8,color:'rgba(255,255,255,.8)',border:'1px solid rgba(255,255,255,.15)'}}>Voce esta no modo convidado</div>}{canSolicitar&&<button onClick={onSolicitar} style={{width:'100%',background:'rgba(255,255,255,.15)',border:'1px solid rgba(255,255,255,.3)',borderRadius:10,padding:'9px',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer',marginBottom:6}}>Solicitar entrada no plantao</button>}{canSair&&<button onClick={onSair} style={{width:'100%',background:'rgba(255,255,255,.08)',border:'1px solid rgba(255,255,255,.2)',borderRadius:10,padding:'8px',color:'rgba(255,255,255,.8)',fontSize:12,fontWeight:600,cursor:'pointer',marginBottom:6}}>Sair do plantao</button>}{canEncerrar&&<button onClick={onEncerrar} style={{width:'100%',background:'rgba(220,38,38,.7)',border:'1px solid rgba(255,255,255,.2)',borderRadius:10,padding:'9px',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer'}}>Encerrar Plantão</button>}</div>);}
 
 function BarChart(props){var data=props.data||[];var max=1;for(var i=0;i<data.length;i++){if(data[i].v>max)max=data[i].v;}return(<div style={{display:'flex',alignItems:'flex-end',gap:6,height:80,padding:'0 4px'}}>{data.map(function(d,i){var h=Math.round((d.v/max)*58);var isToday=i===data.length-1;return(<div key={i} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:3}}><div style={{fontSize:10,color:isToday?B:'#94A3B8',fontWeight:isToday?700:500}}>{d.v||''}</div><div style={{width:'100%',background:isToday?B:'#BFDBFE',borderRadius:'5px 5px 0 0',height:h+'px',minHeight:d.v?4:0,transition:'height .3s ease'}}/><div style={{fontSize:9,color:isToday?B:'#94A3B8',fontWeight:isToday?700:400}}>{d.l}</div></div>);})}</div>);}
-function TabDashboard(props){var entries=props.entries;var medications=props.medications;var stock=props.stock;var user=props.user;var plantao=props.plantao;var isGuest=props.isGuest;var onSolicitar=props.onSolicitar;var onEncerrar=props.onEncerrar;var onSair=props.onSair;var onSolicitarEntrada=props.onSolicitarEntrada;var shiftId=props.shiftId;var onIniciar=props.onIniciar;var allUsers=props.allUsers||[];var onAddMember=props.onAddMember;var onExpelMember=props.onExpelMember;var _aviso=useState('');var aviso=_aviso[0];var setAviso=_aviso[1];var _avisos=useState([]);var avisos=_avisos[0];var setAvisos=_avisos[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];
+function TabDashboard(props){var entries=props.entries;var medications=props.medications;var stock=props.stock;var user=props.user;var plantao=props.plantao;var isGuest=props.isGuest;var onSolicitar=props.onSolicitar;var onEncerrar=props.onEncerrar;var onSair=props.onSair;var onSolicitarEntrada=props.onSolicitarEntrada;var shiftId=props.shiftId;var onIniciar=props.onIniciar;var _aviso=useState('');var aviso=_aviso[0];var setAviso=_aviso[1];var _avisos=useState([]);var avisos=_avisos[0];var setAvisos=_avisos[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];
 useEffect(function(){var u=db.collection('avisos').limit(20).onSnapshot(function(s){var list=s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;});var agora=new Date().toISOString();list=list.filter(function(a){return !a.expiraEm||a.expiraEm>agora;});list.sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});setAvisos(list);});return u;},[]);
 var _fotoMural=useState('');var fotoMural=_fotoMural[0];var setFotoMural=_fotoMural[1];
 function handleFotoMural(e){var f=e.target.files[0];if(!f||!f.type.startsWith('image/'))return;compressPhoto(f,function(b64){setFotoMural(b64);});e.target.value='';}
@@ -332,7 +298,7 @@ var stats=[
   {icon:'📉',label:'Estoque baixo',val:low.length,sub:'produtos',color:low.length>0?'#B45309':'#0C6B3E',bg:low.length>0?'#FEF3C7':'#DCFCE7'},
 ];
 return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
-  <ShiftCard plantao={plantao} isGuest={isGuest} user={user} onEncerrar={onEncerrar} shiftId={shiftId} onIniciar={onIniciar} onSolicitarEntrada={onSolicitarEntrada} onSair={onSair} allUsers={allUsers} onAddMember={onAddMember} onExpelMember={onExpelMember}/>
+  <ShiftCard plantao={plantao} isGuest={isGuest} user={user} onEncerrar={onEncerrar} shiftId={shiftId} onIniciar={onIniciar} onSolicitarEntrada={onSolicitarEntrada} onSair={onSair}/>
   {isGuest&&(user.role==='farmaceutico'||user.role==='auxiliar'||user.role==='diarista')&&onSolicitar&&(<button onClick={onSolicitar} style={{width:'100%',marginBottom:14,padding:'13px',background:B,border:'none',borderRadius:14,color:'#fff',fontSize:14,fontWeight:700,cursor:'pointer',boxShadow:'0 4px 14px rgba(19,81,180,.3)'}}>📋 Solicitar Movimentacao</button>)}
   <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:10,marginBottom:14}}>
     {stats.map(function(s){return(
@@ -2925,6 +2891,7 @@ function TabPrevisao(props){
   var _salvandoLote=useState(false);var salvandoLote=_salvandoLote[0];var setSalvandoLote=_salvandoLote[1];
   var _buscaLote=useState('');var buscaLote=_buscaLote[0];var setBuscaLote=_buscaLote[1];
   var _filtCatLote=useState('todos');var filtCatLote=_filtCatLote[0];var setFiltCatLote=_filtCatLote[1];
+  var _ajBusca=useState('');var ajBusca=_ajBusca[0];var setAjBusca=_ajBusca[1];
   var _numPedido=useState('');var numPedido=_numPedido[0];var setNumPedido=_numPedido[1];
   var _empresa=useState('');var empresa=_empresa[0];var setEmpresa=_empresa[1];
   var _cnpjEmpresa=useState('');var cnpjEmpresa=_cnpjEmpresa[0];var setCnpjEmpresa=_cnpjEmpresa[1];
@@ -3205,14 +3172,7 @@ function TabPrevisao(props){
       }
       if(itensPedido.length>0)secoes.push({titulo:ata.nome.toUpperCase(),itens:itensPedido,cor:COR[ata.categoria]||'#1351B4'});
     });
-    // Medicamentos sem ata
-    var semAtaItens=[];
-    medsSemAta.forEach(function(med){
-      var qtd=ajustes[med.id]!==undefined?parseInt(ajustes[med.id])||0:calcularPrevisao(med).pedir;
-      if(qtd===0)return;
-      semAtaItens.push({desc:med.nome,unidade:'UN',qtd:qtd,vUnit:0,vTotal:0});
-    });
-    if(semAtaItens.length>0)secoes.push({titulo:'OUTROS',itens:semAtaItens,cor:'#475569'});
+    // Medicamentos sem ata não entram no PDF oficial
 
     if(secoes.length===0){setMsg('e:Nenhum medicamento com pedido > 0. Ajuste as quantidades antes de exportar.');return;}
 
@@ -3304,146 +3264,114 @@ function TabPrevisao(props){
       </div>
 
       {sub==='previsao'&&<div>
-        {/* Indicador de método */}
-        <div style={{background:faseInfo[faseGlobal].cor+'14',border:'1.5px solid '+faseInfo[faseGlobal].cor+'40',borderRadius:12,padding:'12px 14px',marginBottom:14}}>
-          <div style={{display:'flex',alignItems:'center',gap:10}}>
-            <div style={{fontSize:24}}>{faseInfo[faseGlobal].ico}</div>
-            <div style={{flex:1}}>
-              <div style={{fontWeight:700,fontSize:13,color:faseInfo[faseGlobal].cor}}>{faseInfo[faseGlobal].txt}</div>
-              <div style={{fontSize:12,color:'#64748B'}}>{dias} dia(s) de histórico registrado{faseGlobal<3?' · fica mais preciso com o tempo':''}</div>
+        {/* Indicador de fase */}
+        {(function(){
+          var dias=diasHistorico();
+          var fase=dias<25?1:(dias<55?2:3);
+          var fInfo={1:{txt:'Fase 1 — baseado no consumo estimado',cor:'#D97706',ico:'📊'},2:{txt:'Fase 2 — baseado no consumo médio real',cor:'#1351B4',ico:'📉'},3:{txt:'Fase 3 — baseado em tendência',cor:'#0C6B3E',ico:'📈'}};
+          var fi=fInfo[fase];
+          return(<div style={{background:fi.cor+'14',border:'1.5px solid '+fi.cor+'40',borderRadius:12,padding:'12px 14px',marginBottom:12}}>
+            <div style={{display:'flex',alignItems:'center',gap:10}}>
+              <span style={{fontSize:24}}>{fi.ico}</span>
+              <div>
+                <div style={{fontWeight:700,fontSize:13,color:fi.cor}}>{fi.txt}</div>
+                <div style={{fontSize:12,color:'#64748B'}}>{dias} dia(s) de histórico{fase<3?' · fica mais preciso com o tempo':''}</div>
+              </div>
             </div>
-          </div>
-        </div>
+          </div>);
+        })()}
 
-        {/* Período */}
-        <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:14,background:'#F8FAFC',borderRadius:10,padding:'10px 14px'}}>
-          <span style={{fontSize:13,fontWeight:600,color:'#475569'}}>Prever para os próximos:</span>
-          <select value={diasPrev} onChange={function(e){setDiasPrev(parseInt(e.target.value));}} className="inp" style={{marginBottom:0,width:'auto',padding:'6px 10px'}}>
-            <option value={30}>30 dias</option>
+        {/* Período + busca */}
+        <div style={{display:'flex',gap:8,marginBottom:12,flexWrap:'wrap',alignItems:'center'}}>
+          <select value={diasPrev} onChange={function(e){setDiasPrev(parseInt(e.target.value));}} className="inp" style={{marginBottom:0,width:'auto',padding:'8px 12px',flex:'none'}}>
             <option value={15}>15 dias</option>
+            <option value={30}>30 dias</option>
             <option value={45}>45 dias</option>
             <option value={60}>60 dias</option>
           </select>
+          <input value={ajBusca||''} onChange={function(e){setAjBusca(e.target.value);}} placeholder="🔍 Buscar medicamento..." className="inp" style={{marginBottom:0,flex:1}}/>
         </div>
 
-        {/* Botão exportar */}
+        {/* Botões exportar */}
         <div style={{background:'#F8FAFC',borderRadius:10,border:'1px solid #E2E8F0',padding:'12px 14px',marginBottom:12}}>
           <div style={{fontSize:12,fontWeight:700,color:'#1E293B',marginBottom:8}}>Dados do Pedido Oficial</div>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
             <div><div style={{fontSize:11,color:'#64748B',marginBottom:3}}>Nº do Pedido</div><input value={numPedido} onChange={function(e){setNumPedido(e.target.value);}} placeholder="Ex: 171/2026" className="inp" style={{marginBottom:0,fontSize:13}}/></div>
             <div><div style={{fontSize:11,color:'#64748B',marginBottom:3}}>CNPJ Fornecedor</div><input value={cnpjEmpresa} onChange={function(e){setCnpjEmpresa(e.target.value);}} placeholder="00.000.000/0000-00" className="inp" style={{marginBottom:0,fontSize:13}}/></div>
           </div>
-          <div><div style={{fontSize:11,color:'#64748B',marginBottom:3}}>Nome da Empresa Fornecedora</div><input value={empresa} onChange={function(e){setEmpresa(e.target.value);}} placeholder="Nome da empresa..." className="inp" style={{marginBottom:0,fontSize:13}}/></div>
+          <div><div style={{fontSize:11,color:'#64748B',marginBottom:3}}>Nome da Empresa</div><input value={empresa} onChange={function(e){setEmpresa(e.target.value);}} placeholder="Nome da empresa..." className="inp" style={{marginBottom:0,fontSize:13}}/></div>
+          <div style={{display:'flex',gap:8,marginTop:10}}><button onClick={exportarExcel} className="bg" style={{flex:1}}>📥 Excel</button><button onClick={exportarPDF} className="bp" style={{flex:1,background:'#DC2626'}}>📄 PDF Pedido</button></div>
         </div>
-        <div style={{display:'flex',gap:8,marginBottom:16}}><button onClick={exportarExcel} className="bg" style={{flex:1}}>📥 Excel</button><button onClick={exportarPDF} className="bp" style={{flex:1,background:'#DC2626'}}>📄 PDF Pedido</button></div>
 
-        {/* Atas com previsão */}
-        {atas.length===0&&medsSemAta.length===0&&<div style={{textAlign:'center',padding:'40px 0',color:'#94A3B8'}}><div style={{fontSize:40,marginBottom:8}}>📋</div><div style={{fontWeight:600}}>Nenhum medicamento cadastrado</div></div>}
-
+        {/* Lista de medicamentos por categoria */}
         {(function(){
-          // Agrupar atas por categoria (pastas)
+          var buscaL=(ajBusca||'').toLowerCase().trim();
           var categorias=Object.keys(LBL);
-          return categorias.map(function(catKey){
-            var atasDaCat=atas.filter(function(a){return (a.categoria||'medicamento')===catKey;});
-            var atasComMeds=atasDaCat.filter(function(a){return medsDaAta(a.id).length>0;});
-            if(atasComMeds.length===0)return null;
-            var pastaAberta=pastasAbertas[catKey]!==false; // aberta por padrão
-            var totalCat=atasComMeds.reduce(function(sum,a){return sum+medsDaAta(a.id).reduce(function(s,m){return s+valorPedido(m);},0);},0);
-            return(<div key={catKey} style={{marginBottom:12}}>
-              {/* Cabeçalho da pasta */}
-              <button onClick={function(){setPastasAbertas(function(p){var n=Object.assign({},p);n[catKey]=!pastaAberta;return n;});}} style={{width:'100%',background:COR[catKey]||'#1351B4',border:'none',borderRadius:pastaAberta?'14px 14px 0 0':'14px',padding:'12px 16px',cursor:'pointer',display:'flex',alignItems:'center',gap:10,textAlign:'left'}}>
-                <span style={{fontSize:22}}>{ICO[catKey]||'🗂️'}</span>
+          var algumaMostrada=false;
+          var secoes=categorias.map(function(catKey){
+            var medsCat=medications.filter(function(m){
+              var temConfig=(Number(m.consumoEstimado||0)>0||Number(m.minEstoque||m.estoqueMin||0)>0);
+              var matchCat=(m.categoria||'medicamento')===catKey;
+              var matchBusca=!buscaL||m.nome.toLowerCase().indexOf(buscaL)>=0;
+              return temConfig&&matchCat&&matchBusca;
+            });
+            if(medsCat.length===0)return null;
+            algumaMostrada=true;
+            var catAberta=pastasAbertas['prev_'+catKey]!==false;
+            var totalCat=medsCat.reduce(function(s,m){return s+valorPedido(m);},0);
+            var cor=COR[catKey]||'#475569';
+            return(<div key={catKey} style={{marginBottom:10}}>
+              <button onClick={function(){setPastasAbertas(function(p){var n=Object.assign({},p);n['prev_'+catKey]=!catAberta;return n;});}} style={{width:'100%',background:cor,border:'none',borderRadius:catAberta?'14px 14px 0 0':'14px',padding:'12px 16px',cursor:'pointer',display:'flex',alignItems:'center',gap:10,textAlign:'left'}}>
+                <span style={{fontSize:22}}>{ICO[catKey]||'💊'}</span>
                 <div style={{flex:1}}>
                   <div style={{fontWeight:800,fontSize:15,color:'#fff'}}>📁 {LBL[catKey]}</div>
-                  <div style={{fontSize:12,color:'rgba(255,255,255,0.8)'}}>{atasComMeds.length} ata(s)</div>
+                  <div style={{fontSize:12,color:'rgba(255,255,255,0.8)'}}>{medsCat.length} medicamento(s)</div>
                 </div>
-                <div style={{textAlign:'right'}}>
-                  <div style={{fontWeight:800,fontSize:16,color:'#fff'}}>{totalCat}</div>
+                <div style={{textAlign:'right',marginRight:6}}>
+                  <div style={{fontWeight:800,fontSize:18,color:'#fff'}}>{totalCat}</div>
                   <div style={{fontSize:10,color:'rgba(255,255,255,0.8)'}}>a pedir</div>
                 </div>
-                <span style={{fontSize:18,color:'rgba(255,255,255,0.8)'}}>{pastaAberta?'▲':'▼'}</span>
+                <span style={{fontSize:18,color:'rgba(255,255,255,0.7)'}}>{catAberta?'▲':'▼'}</span>
               </button>
-              {/* Atas dentro da pasta */}
-              {pastaAberta&&<div style={{border:'1.5px solid '+(COR[catKey]||'#1351B4'),borderTop:'none',borderRadius:'0 0 14px 14px',overflow:'hidden',marginBottom:4}}>
-                {atasComMeds.map(function(ata){
-                  var meds=medsDaAta(ata.id);
-                  if(meds.length===0)return null;
-          var aberta=ataAberta===ata.id;
-          var totalPedido=meds.reduce(function(a,m){return a+valorPedido(m);},0);
-          var cor=COR[ata.categoria]||'#1351B4';
-          var excedeLimite=ata.limite>0&&totalPedido>ata.limite;
-          return(<div key={ata.id} style={{marginBottom:10,borderRadius:16,overflow:'hidden',border:'1.5px solid '+(aberta?cor:'#E2E8F0'),boxShadow:'0 2px 8px rgba(0,0,0,0.06)'}}>
-            <button onClick={function(){setAtaAberta(aberta?null:ata.id);}} style={{width:'100%',background:aberta?cor+'10':'#fff',border:'none',padding:'14px 16px',cursor:'pointer',display:'flex',alignItems:'center',gap:12,textAlign:'left'}}>
-              <div style={{width:42,height:42,borderRadius:12,background:cor+'18',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,flexShrink:0}}>{ICO[ata.categoria]||'🗂️'}</div>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontWeight:700,fontSize:14,color:'#1E293B'}}>{ata.nome}</div>
-                <div style={{fontSize:12,color:'#64748B'}}>{meds.length} medicamento(s){ata.limite>0?(' · limite '+ata.limite):''}</div>
-              </div>
-              <div style={{textAlign:'right',flexShrink:0,marginRight:6}}>
-                <div style={{fontWeight:800,fontSize:18,color:excedeLimite?'#DC2626':cor}}>{totalPedido}</div>
-                <div style={{fontSize:10,color:'#94A3B8'}}>a pedir</div>
-              </div>
-              <span style={{fontSize:16,color:aberta?cor:'#94A3B8'}}>{aberta?'▲':'▼'}</span>
-            </button>
-            {excedeLimite&&<div style={{background:'#FEF2F2',color:'#DC2626',fontSize:12,fontWeight:600,padding:'6px 16px',borderTop:'1px solid #FCA5A5'}}>⚠️ Pedido ({totalPedido}) excede o limite da ata ({ata.limite})</div>}
-            {aberta&&<div style={{borderTop:'1px solid #E2E8F0',background:'#F8FAFC',padding:'8px 12px 12px'}}>
-              {meds.map(function(m){
-                var p=calcularPrevisao(m);
-                var metodoLbl={estimado:'🎯 estimado',minimo:'📊 mínimo',media:'📉 média',tendencia:'📈 tendência'};
-                var _iA=null;atas.forEach(function(a){if(a.itens)a.itens.forEach(function(it){if(it.medicamentoId===m.id)_iA={ata:a,item:it};});});
-                var saldoAta=_iA?(_iA.item.qtdTeto-(_iA.item.pedidoAcumulado||0)):null;
-                var val=valorPedido(m);
-                var editado=ajustes[m.id]!==undefined;
-                return(<div key={m.id} style={{marginBottom:8,borderRadius:12,background:'#fff',border:'1px solid #E2E8F0',padding:'12px 14px'}}>
-                  <div style={{display:'flex',alignItems:'center',gap:10}}>
+              {catAberta&&<div style={{border:'1.5px solid '+cor,borderTop:'none',borderRadius:'0 0 14px 14px',padding:'8px 10px 10px',background:'#F8FAFC'}}>
+                {medsCat.map(function(m){
+                  var p=calcularPrevisao(m);
+                  var val=valorPedido(m);
+                  var editado=ajustes[m.id]!==undefined;
+                  var metodoLbl={estimado:'🎯 estimado',minimo:'📊 mínimo',media:'📉 média',tendencia:'📈 tendência'};
+                  var _iA=null;atas.forEach(function(a){if(a.itens)a.itens.forEach(function(it){if(it.medicamentoId===m.id)_iA={ata:a,item:it};});});
+                  var saldoAta=_iA?(_iA.item.qtdTeto-(_iA.item.pedidoAcumulado||0)):null;
+                  return(<div key={m.id} style={{background:'#fff',borderRadius:12,border:'1px solid #E2E8F0',padding:'12px 14px',marginBottom:8,display:'flex',alignItems:'center',gap:10}}>
                     <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>{m.nome}</div>
-                      <div style={{fontSize:11,color:'#94A3B8',marginTop:2}}>Estoque: {stock[m.id]||0} · Mín: {m.minEstoque||0} · <span style={{color:cor,fontWeight:600}}>{metodoLbl[p.metodo]}</span></div>
-                      <div style={{fontSize:10,color:'#CBD5E1',marginTop:1}}>{p.detalhe}</div>
-                      {saldoAta!==null&&<div style={{fontSize:10,marginTop:2,fontWeight:600,color:saldoAta<val?'#DC2626':'#0C6B3E'}}>{saldoAta>0?('Saldo ata: '+saldoAta+(_iA.item.unidade?' '+_iA.item.unidade:'')+(val>saldoAta?' ⚠️ pedido supera saldo!':'')):saldoAta===0?'⛔ Saldo esgotado na ata!':'⛔ Saldo negativo na ata!'}</div>}
+                      <div style={{fontWeight:700,fontSize:13,color:'#1E293B',marginBottom:2}}>{m.nome}</div>
+                      <div style={{fontSize:11,color:'#94A3B8'}}>
+                        Estoque: {stock[m.id]||0} · Mín: {m.minEstoque||0} · Consumo/mês: {m.consumoEstimado||0}
+                        {' · '}<span style={{color:cor,fontWeight:600}}>{metodoLbl[p.metodo]||p.metodo}</span>
+                      </div>
+                      {saldoAta!==null&&<div style={{fontSize:11,marginTop:2,fontWeight:600,color:saldoAta<val?'#DC2626':'#0C6B3E'}}>
+                        ATA: {_iA.ata.nome} · Saldo: {saldoAta} {_iA.item.unidade||''}{val>saldoAta?' ⚠️ excede saldo!':''}
+                      </div>}
                     </div>
-                    <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:4}}>
-                      <input type="number" value={val} onChange={function(e){var v=e.target.value;setAjustes(function(pr){var n=Object.assign({},pr);n[m.id]=v;return n;});}} style={{width:70,padding:'6px 8px',border:'1.5px solid '+(editado?'#F59E0B':'#CBD5E1'),borderRadius:8,fontSize:15,fontWeight:700,textAlign:'center',color:'#1E293B',outline:'none'}}/>
-                      {editado&&<button onClick={function(){setAjustes(function(pr){var n=Object.assign({},pr);delete n[m.id];return n;});}} style={{fontSize:10,color:'#94A3B8',background:'none',border:'none',cursor:'pointer'}}>↺ auto</button>}
+                    <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:3}}>
+                      <div style={{fontSize:10,color:'#94A3B8',fontWeight:600}}>PEDIR</div>
+                      <input type="number" value={val} onChange={function(e){var v=e.target.value;setAjustes(function(pr){var n=Object.assign({},pr);n[m.id]=v;return n;});}} style={{width:72,padding:'8px 6px',border:'2px solid '+(editado?'#F59E0B':cor+'60'),borderRadius:10,fontSize:16,fontWeight:800,textAlign:'center',color:'#1E293B',outline:'none',background:editado?'#FFFBEB':'#fff'}}/>
+                      {editado&&<button onClick={function(){setAjustes(function(pr){var n=Object.assign({},pr);delete n[m.id];return n;});}} style={{fontSize:10,color:'#94A3B8',background:'none',border:'none',cursor:'pointer',padding:0}}>↺ auto</button>}
                     </div>
-                  </div>
-                </div>);
-              })}
-            </div>}
-          </div>);
+                  </div>);
                 })}
               </div>}
             </div>);
           });
+          if(!algumaMostrada){
+            return(<div style={{textAlign:'center',padding:'40px 16px',color:'#94A3B8'}}>
+              <div style={{fontSize:48,marginBottom:12}}>⚙️</div>
+              <div style={{fontWeight:700,fontSize:15,marginBottom:8}}>{buscaL?'Nenhum medicamento encontrado':'Nenhum medicamento configurado ainda'}</div>
+              {!buscaL&&<div style={{fontSize:13}}>Vá em <strong>⚙️ Mín. e Consumo</strong> e preencha o consumo mensal de cada medicamento para receber sugestões de pedido.</div>}
+            </div>);
+          }
+          return secoes;
         })()}
-
-        {/* Sem ata */}
-        {medsSemAta.length>0&&<div style={{marginBottom:10,borderRadius:16,overflow:'hidden',border:'1.5px dashed #CBD5E1',background:'#fff'}}>
-          <button onClick={function(){setAtaAberta(ataAberta==='__sem__'?null:'__sem__');}} style={{width:'100%',background:'#fff',border:'none',padding:'14px 16px',cursor:'pointer',display:'flex',alignItems:'center',gap:12,textAlign:'left'}}>
-            <div style={{width:42,height:42,borderRadius:12,background:'#F1F5F9',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20}}>❓</div>
-            <div style={{flex:1}}>
-              <div style={{fontWeight:700,fontSize:14,color:'#64748B'}}>Sem ata vinculada</div>
-              <div style={{fontSize:12,color:'#94A3B8'}}>{medsSemAta.length} medicamento(s) · vincule na aba "Gerenciar Atas"</div>
-            </div>
-            <span style={{fontSize:16,color:'#94A3B8'}}>{ataAberta==='__sem__'?'▲':'▼'}</span>
-          </button>
-          {ataAberta==='__sem__'&&<div style={{borderTop:'1px solid #E2E8F0',background:'#F8FAFC',padding:'8px 12px 12px'}}>
-            {medsSemAta.map(function(m){
-              var p=calcularPrevisao(m);var val=valorPedido(m);var editado=ajustes[m.id]!==undefined;
-              var metodoLbl={estimado:'🎯 estimado',minimo:'📊 mínimo',media:'📉 média',tendencia:'📈 tendência'};
-              var _iA=null;atas.forEach(function(a){if(a.itens)a.itens.forEach(function(it){if(it.medicamentoId===m.id)_iA={ata:a,item:it};});});
-              var saldoAta=_iA?(_iA.item.qtdTeto-(_iA.item.pedidoAcumulado||0)):null;
-              return(<div key={m.id} style={{marginBottom:8,borderRadius:12,background:'#fff',border:'1px solid #E2E8F0',padding:'12px 14px',display:'flex',alignItems:'center',gap:10}}>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>{m.nome}</div>
-                  <div style={{fontSize:11,color:'#94A3B8',marginTop:2}}>Estoque: {stock[m.id]||0} · Mín: {m.minEstoque||0} · {metodoLbl[p.metodo]}</div>
-                </div>
-                <input type="number" value={val} onChange={function(e){var v=e.target.value;setAjustes(function(pr){var n=Object.assign({},pr);n[m.id]=v;return n;});}} style={{width:70,padding:'6px 8px',border:'1.5px solid '+(editado?'#F59E0B':'#CBD5E1'),borderRadius:8,fontSize:15,fontWeight:700,textAlign:'center',outline:'none'}}/>
-              </div>);
-            })}
-          </div>}
-        </div>}
-      </div>}
+      </div>}}
 
       {sub==='atas'&&<div>
         {/* Criar nova ata */}
@@ -3653,10 +3581,82 @@ function App(){
 var {confirm2,alert2,ModalRender,modal}=useModal();
 var _ready=useState(false);var ready=_ready[0];var setReady=_ready[1];var _user=useState(null);var user=_user[0];var setUser=_user[1];var _entries=useState([]);var entries=_entries[0];var setEntries=_entries[1];var _meds=useState([]);var meds=_meds[0];var setMeds=_meds[1];var _loading=useState(true);var loading=_loading[0];var setLoading=_loading[1];var _tab=useState('dashboard');var tab=_tab[0];var setTab=_tab[1];var _menuAberto=useState(false);var menuAberto=_menuAberto[0];var setMenuAberto=_menuAberto[1];var _showSairModal=useState(false);var showSairModal=_showSairModal[0];var setShowSairModal=_showSairModal[1];var _pending=useState(0);var pending=_pending[0];var setPending=_pending[1];var _alertCount=useState(0);var alertCount=_alertCount[0];var setAlertCount=_alertCount[1];
 var _convites=useState([]);var convites=_convites[0];var setConvites=_convites[1];
-var _lowStock=useState([]);var lowStock=_lowStock[0];var setLowStock=_lowStock[1];var _solicitCount=useState(0);var solicitCount=_solicitCount[0];var setSolicitCount=_solicitCount[1];var _online=useState(navigator.onLine);var online=_online[0];var setOnline=_online[1];var _busca=useState(false);var busca=_busca[0];var setBusca=_busca[1];var _showSolicit=useState(false);var showSolicit=_showSolicit[0];var setShowSolicit=_showSolicit[1];var _showShift=useState(false);var showShift=_showShift[0];var setShowShift=_showShift[1];var _showShiftModal=useState(false);var showShiftModal=_showShiftModal[0];var setShowShiftModal=_showShiftModal[1];var _pendingInvite=useState(null);var pendingInvite=_pendingInvite[0];var setPendingInvite=_pendingInvite[1];var _plantao=useState(null);var plantao=_plantao[0];var setPlantao=_plantao[1];var _isGuest=useState(false);var isGuest=_isGuest[0];var setIsGuest=_isGuest[1];var _allUsers=useState([]);var allUsers=_allUsers[0];var setAllUsers=_allUsers[1];var _shiftChecked=useState(false);var shiftChecked=_shiftChecked[0];var setShiftChecked=_shiftChecked[1];var _shiftId=useState(null);var shiftId=_shiftId[0];var setShiftId=_shiftId[1];var _solicitacoesPlantao=useState([]);var solicitacoesPlantao=_solicitacoesPlantao[0];var setSolicitacoesPlantao=_solicitacoesPlantao[1];var lastAct=useRef(Date.now());
+var _lowStock=useState([]);var lowStock=_lowStock[0];var setLowStock=_lowStock[1];var _solicitCount=useState(0);var solicitCount=_solicitCount[0];var setSolicitCount=_solicitCount[1];var _online=useState(navigator.onLine);var online=_online[0];var setOnline=_online[1];var _busca=useState(false);var busca=_busca[0];var setBusca=_busca[1];var _showSolicit=useState(false);var showSolicit=_showSolicit[0];var setShowSolicit=_showSolicit[1];var _showShift=useState(false);var showShift=_showShift[0];var setShowShift=_showShift[1];var _showShiftModal=useState(false);var showShiftModal=_showShiftModal[0];var setShowShiftModal=_showShiftModal[1];
+var _alertaVenc=useState([]);var alertaVenc=_alertaVenc[0];var setAlertaVenc=_alertaVenc[1];
+var _showAlertaVenc=useState(false);var showAlertaVenc=_showAlertaVenc[0];var setShowAlertaVenc=_showAlertaVenc[1];
+var _dandomBaixaVenc=useState(false);var dandomBaixaVenc=_dandomBaixaVenc[0];var setDandoBaixaVenc=_dandomBaixaVenc[1];var _pendingInvite=useState(null);var pendingInvite=_pendingInvite[0];var setPendingInvite=_pendingInvite[1];var _plantao=useState(null);var plantao=_plantao[0];var setPlantao=_plantao[1];var _isGuest=useState(false);var isGuest=_isGuest[0];var setIsGuest=_isGuest[1];var _allUsers=useState([]);var allUsers=_allUsers[0];var setAllUsers=_allUsers[1];var _shiftChecked=useState(false);var shiftChecked=_shiftChecked[0];var setShiftChecked=_shiftChecked[1];var _shiftId=useState(null);var shiftId=_shiftId[0];var setShiftId=_shiftId[1];var _solicitacoesPlantao=useState([]);var solicitacoesPlantao=_solicitacoesPlantao[0];var setSolicitacoesPlantao=_solicitacoesPlantao[1];var lastAct=useRef(Date.now());
 useEffect(function(){var cfg=loadCfg();if(cfg&&initFB(cfg)){setReady(true);var saved=localStorage.getItem('fc_user');if(saved){try{setUser(JSON.parse(saved));}catch(e){}}auth.onAuthStateChanged(function(firebaseUser){if(firebaseUser&&!skipAuthCheck){db.collection('users').doc(firebaseUser.uid).get().then(function(s){if(s.exists){var d=s.data();if(d.status==='inativo'||d.status==='rejected'||d.status==='pending'){auth.signOut();localStorage.removeItem('fc_user');setUser(null);return;}var u={uid:firebaseUser.uid,name:d.name,role:d.role,color:d.color,email:d.email,status:d.status,sessionTimeout:d.sessionTimeout||12,photoURL:d.photoURL||'',crf:d.crf||''};localStorage.setItem('fc_user',JSON.stringify(u));setUser(u);}}).catch(function(){var s2=localStorage.getItem('fc_user');if(s2){try{setUser(JSON.parse(s2));}catch(e){}}});}});}},[] );
 useEffect(function(){function on(){setOnline(true);}function off(){setOnline(false);}window.addEventListener('online',on);window.addEventListener('offline',off);return function(){window.removeEventListener('online',on);window.removeEventListener('offline',off);};},[]);
 useEffect(function(){if(!user)return;var stored=localStorage.getItem('fc_last_act');if(stored)lastAct.current=parseInt(stored);var timeout=(user.sessionTimeout||12)*3600000;function reset(){lastAct.current=Date.now();localStorage.setItem('fc_last_act',String(Date.now()));}function check(){if(Date.now()-lastAct.current>timeout){localStorage.removeItem('fc_last_act');logout();}}document.addEventListener('touchstart',reset);document.addEventListener('click',reset);var t=setInterval(check,60000);return function(){document.removeEventListener('touchstart',reset);document.removeEventListener('click',reset);clearInterval(t);};},[user]);
+useEffect(function(){
+  // Ao entrar no plantão (isGuest vira false), verificar medicamentos próximos ao vencimento
+  if(isGuest||!meds||!entries)return;
+  var hoje=new Date();
+  var criticos=[];
+  // Calcular estoque por lote a partir de entries
+  var lotesMap={};
+  entries.forEach(function(e){
+    var key=e.medicamentoId+'|'+(e.lote||'')+'|'+(e.validade||'');
+    if(!lotesMap[key])lotesMap[key]={medId:e.medicamentoId,medNome:e.medicamentoNome||'',lote:e.lote||'',validade:e.validade||'',qty:0};
+    if(e.tipo==='entrada')lotesMap[key].qty+=(Number(e.quantidade)||0);
+    else if(e.tipo==='saida')lotesMap[key].qty-=(Number(e.quantidade)||0);
+  });
+  Object.values(lotesMap).forEach(function(l){
+    if(!l.validade||l.qty<=0)return;
+    var p=l.validade.split('/');
+    if(p.length!==2)return;
+    var dVenc=new Date(parseInt(p[1]),parseInt(p[0]),0);
+    var dias=Math.ceil((dVenc-hoje)/86400000);
+    if(dias>=0&&dias<=3){
+      criticos.push({medId:l.medId,nome:l.medNome,lote:l.lote,validade:l.validade,dias:dias,qty:l.qty});
+    }
+  });
+  if(criticos.length>0){setAlertaVenc(criticos);setShowAlertaVenc(true);}
+},[isGuest,meds,entries]);
+
+useEffect(function(){
+  if(!user||!ready)return;
+  function verificarHorarioPlantao(){
+    var h=new Date().getHours();
+    var min=new Date().getMinutes();
+    // Diaristas saem automaticamente às 14h
+    if(user.role==='diarista'&&h>=14&&!isGuest){
+      var key='fc_shift_saiu_'+todayStr();
+      if(!localStorage.getItem(key)){
+        localStorage.setItem(key,'auto');
+        if(shiftId&&plantao){
+          var eq=(plantao.equipe||[]).map(function(m){
+            if(m.id===user.uid){var o={};for(var k in m)o[k]=m[k];o.status='saiu';return o;}
+            return m;
+          });
+          db.collection('plantoes').doc(shiftId).update({equipe:eq}).catch(function(){});
+        }
+        setIsGuest(true);
+        alert('Seu plantão encerrou automaticamente às 14h. Até logo!');
+      }
+    }
+    // Plantão encerra automaticamente às 20h (gestor/tecnico encerra, outros saem)
+    if(h>=20&&!isGuest&&shiftId){
+      var keyEnc='fc_shift_enc_'+todayStr();
+      if(!localStorage.getItem(keyEnc)){
+        if(user.role==='gestor'||user.role==='tecnico'){
+          // Encerrar o plantão para todos
+          db.collection('plantoes').doc(shiftId).update({ativo:false,encerradoEm:new Date().toISOString(),encerradoAuto:true}).then(function(){
+            localStorage.setItem(keyEnc,'auto');
+            setPlantao(null);setIsGuest(true);setShiftId(null);
+          }).catch(function(){});
+        } else {
+          // Outros roles apenas saem
+          localStorage.setItem('fc_shift_saiu_'+todayStr(),'auto');
+          setIsGuest(true);
+        }
+      }
+    }
+  }
+  verificarHorarioPlantao();
+  var t2=setInterval(verificarHorarioPlantao,60000);
+  return function(){clearInterval(t2);};
+},[user,ready,isGuest,shiftId,plantao]);
 useEffect(function(){if(!ready||!user)return;var u1=db.collection('entries').onSnapshot(function(s){var list=s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;});list.sort(function(a,b){return (a.criadoEm||'').localeCompare(b.criadoEm||'');});setEntries(list);setLoading(false);},function(){setLoading(false);});var u2=db.collection('medicamentos').onSnapshot(function(s){var list=s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;});list.sort(function(a,b){return a.nome.localeCompare(b.nome);});setMeds(list);});var u3=db.collection('users').where('status','==','approved').onSnapshot(function(s){setAllUsers(s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;}));
 // Handler botão voltar
 window._backPressed=function(){setShowSairModal(true);};
@@ -3667,15 +3667,13 @@ if(user.role==='gestor'||user.role==='tecnico'){db.collection('medications').onS
 var stock=useMemo(function(){return calcStock(entries);},[entries]);
 var latest=useMemo(function(){return calcLatest(entries);},[entries]);
 var lowCount=useMemo(function(){var c=0;meds.forEach(function(m){if(m.minEstoque&&(stock[m.id]||0)<=m.minEstoque&&(stock[m.id]||0)>0)c++;});return c;},[meds,stock]);
-function checkShift(u){if(shiftChecked)return;setShiftChecked(true);var today=todayStr();var role=u.role;if(role==='gestor'||role==='tecnico'){setIsGuest(false);db.collection('plantoes').doc(today).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);}}).catch(function(){});return;}if(!isShiftTime()){setIsGuest(true);return;}var leftToday=localStorage.getItem('fc_shift_enc_'+today)||localStorage.getItem('fc_shift_saiu_'+today);if(leftToday){db.collection('plantoes').doc(today).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);}}).catch(function(){});setIsGuest(true);return;}db.collection('plantao_convites').where('para','==',u.uid).where('status','==','pendente').get().then(function(invSnap){var todayInvite=null;for(var i=0;i<invSnap.docs.length;i++){var d=invSnap.docs[i].data();if(d.data===today){var o={id:invSnap.docs[i].id};for(var k in d)o[k]=d[k];todayInvite=o;break;}}if(todayInvite){setPendingInvite(todayInvite);return;}db.collection('plantoes').doc(today).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);var inTeam=false;if(p.equipe){for(var i=0;i<p.equipe.length;i++){if(p.equipe[i].id===u.uid&&p.equipe[i].status==='confirmado'){inTeam=true;break;}}}setIsGuest(!inTeam);}else{setPlantao(null);if(role==='farmaceutico')setShowShift(true);else setIsGuest(true);}}).catch(function(){setIsGuest(true);});}).catch(function(){setIsGuest(true);});}
+function checkShift(u){if(shiftChecked)return;setShiftChecked(true);var today=todayStr();var role=u.role;if(role==='gestor'||role==='tecnico'){setIsGuest(false);return;}if(!isShiftTime()){setIsGuest(true);return;}var leftToday=localStorage.getItem('fc_shift_enc_'+today)||localStorage.getItem('fc_shift_saiu_'+today);if(leftToday){db.collection('plantoes').doc(today).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);}}).catch(function(){});setIsGuest(true);return;}db.collection('plantao_convites').where('para','==',u.uid).where('status','==','pendente').get().then(function(invSnap){var todayInvite=null;for(var i=0;i<invSnap.docs.length;i++){var d=invSnap.docs[i].data();if(d.data===today){var o={id:invSnap.docs[i].id};for(var k in d)o[k]=d[k];todayInvite=o;break;}}if(todayInvite){setPendingInvite(todayInvite);return;}db.collection('plantoes').doc(today).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);var inTeam=false;if(p.equipe){for(var i=0;i<p.equipe.length;i++){if(p.equipe[i].id===u.uid&&p.equipe[i].status==='confirmado'){inTeam=true;break;}}}setIsGuest(!inTeam);}else{setPlantao(null);if(role==='farmaceutico')setShowShift(true);else setIsGuest(true);}}).catch(function(){setIsGuest(true);});}).catch(function(){setIsGuest(true);});}
 function handleShiftDone(r){setShowShift(false);setShowShiftModal(false);setPlantao(r.plantao);setIsGuest(r.isGuest);if(r.shiftId)setShiftId(r.shiftId);}
 function handleConfirmInvite(invite){var today=todayStr();db.collection('plantao_convites').doc(invite.id).update({status:'confirmado'}).then(function(){return db.collection('plantoes').doc(today).get();}).then(function(snap){if(snap.exists){var p=snap.data();var eq=p.equipe.map(function(m){if(m.id===user.uid){var o={};for(var k in m)o[k]=m[k];o.status='confirmado';return o;}return m;});db.collection('plantoes').doc(today).update({equipe:eq});var np={};for(var k in p)np[k]=p[k];np.equipe=eq;setPlantao(np);}}).catch(function(){});setPendingInvite(null);setIsGuest(false);}
 function handleDenyInvite(invite){db.collection('plantao_convites').doc(invite.id).update({status:'negou'}).catch(function(){});setPendingInvite(null);setIsGuest(true);}
 function solicitarEntradaPlantao(){if(!plantao||!shiftId)return;if(!confirm('Solicitar entrada no plantao?'))return;var hoje=todayStr();db.collection('plantao_solicitacoes').where('de','==',user.uid).where('data','==',hoje).where('status','==','pendente').get().then(function(s){if(!s.empty){alert('Solicitação ja enviada.');return;}db.collection('plantao_solicitacoes').add({de:user.uid,deNome:user.name,deCargo:user.role,deColor:user.color,para:plantao.iniciadoPor,paraNome:plantao.iniciadoPorNome,data:hoje,status:'pendente',criadoEm:new Date().toISOString()}).then(function(){playSound('success');alert('Solicitação enviada!');});});}
 function aprovarEntradaPlantao(sol){var hoje=todayStr();var novoMembro={id:sol.de,nome:sol.deNome,cargo:sol.deCargo,color:sol.deColor,status:'confirmado'};var equipeAtual=plantao?plantao.equipe||[]:[];var jaEsta=equipeAtual.some(function(m){return m.id===sol.de;});var novaEquipe=jaEsta?equipeAtual:equipeAtual.concat([novoMembro]);db.collection('plantoes').doc(hoje).update({equipe:novaEquipe}).then(function(){db.collection('plantao_solicitacoes').doc(sol.id).update({status:'aprovado'});if(plantao){var p={};for(var k in plantao)p[k]=plantao[k];p.equipe=novaEquipe;setPlantao(p);}playSound('success');});}
 function recusarEntradaPlantao(sol){db.collection('plantao_solicitacoes').doc(sol.id).update({status:'recusado'}).catch(function(){});}
-function addMemberPlantao(u){if(!shiftId||!plantao)return;var equipeAtual=plantao.equipe||[];var jaEsta=equipeAtual.some(function(m){return m.id===u.id&&m.status!=='saiu';});if(jaEsta){alert(u.name+' já está no plantão.');return;}var novoMembro={id:u.id,nome:u.name,cargo:u.role,color:u.color||B,status:'confirmado'};var novaEquipe=equipeAtual.concat([novoMembro]);db.collection('plantoes').doc(shiftId).update({equipe:novaEquipe}).then(function(){var p=Object.assign({},plantao,{equipe:novaEquipe});setPlantao(p);db.collection('plantao_convites').add({para:u.id,de:user.uid,deNome:user.name,data:shiftId,status:'confirmado',criadoEm:new Date().toISOString()}).catch(function(){});}).catch(function(e){alert('Erro: '+e.message);});}
-function expelMemberPlantao(m){if(!shiftId||!plantao)return;var novaEquipe=(plantao.equipe||[]).map(function(x){if(x.id===m.id){return Object.assign({},x,{status:'saiu'});}return x;});db.collection('plantoes').doc(shiftId).update({equipe:novaEquipe}).then(function(){var p=Object.assign({},plantao,{equipe:novaEquipe});setPlantao(p);}).catch(function(e){alert('Erro: '+e.message);});}
 function encerrarPlantao(){if(!shiftId)return;if(!confirm('Encerrar o plantao de hoje?'))return;db.collection('plantoes').doc(shiftId).update({ativo:false,encerradoEm:new Date().toISOString()}).then(function(){localStorage.setItem('fc_shift_enc_'+todayStr(),'1');setPlantao(null);setIsGuest(true);setShiftId(null);}).catch(function(e){alert('Erro: '+e.message);});}
 function sairDoPlantao(){if(!confirm('Sair do plantao?'))return;localStorage.setItem('fc_shift_saiu_'+todayStr(),'1');if(shiftId&&plantao){var eq=(plantao.equipe||[]).map(function(m){if(m.id===user.uid){var o={};for(var k in m)o[k]=m[k];o.status='saiu';return o;}return m;});db.collection('plantoes').doc(shiftId).update({equipe:eq}).catch(function(){});}setIsGuest(true);}
 function addSolicitacao(data){var obj={medicamentoId:data.medicamentoId,medicamentoNome:data.medicamentoNome,ean:data.ean||'',tipo:data.tipo,quantidade:data.quantidade,lote:data.lote||'',validade:data.validade||'',observacao:data.observação||'',solicitanteId:user.uid,solicitanteNome:user.name,solicitanteCargo:user.role,solicitanteColor:user.color||B,status:'pendente',criadoEm:new Date().toISOString(),origem:'convidado'};return db.collection('solicitacoes').add(obj);}
@@ -3706,6 +3704,48 @@ return(
   {busca&&<BuscaGlobal entries={entries} medications={meds} onClose={function(){setBusca(false);}}/>}
   {showSolicit&&<SolicitModal user={user} medications={meds} onClose={function(){setShowSolicit(false);}}/>}
   {user&&user.role==='farmaceutico'&&solicitacoesPlantao.length>0&&<SolicitacoesPlantaoModal list={solicitacoesPlantao} onApprove={aprovarEntradaPlantao} onDeny={recusarEntradaPlantao} onClose={function(){setSolicitacoesPlantao([]);}}/>}
+
+  {/* Modal alerta medicamentos próximos ao vencimento */}
+  {showAlertaVenc&&alertaVenc.length>0&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+    <div style={{background:'#fff',borderRadius:20,padding:24,maxWidth:480,width:'100%',maxHeight:'80vh',overflowY:'auto'}}>
+      <div style={{textAlign:'center',marginBottom:16}}>
+        <div style={{fontSize:48,marginBottom:8}}>⚠️</div>
+        <div style={{fontWeight:900,fontSize:20,color:'#DC2626',marginBottom:4}}>ATENÇÃO — MEDICAMENTOS VENCENDO!</div>
+        <div style={{fontSize:13,color:'#64748B'}}>{alertaVenc.length} medicamento(s) vencem em até 3 dias</div>
+      </div>
+      {alertaVenc.map(function(it,i){
+        var cor=it.dias===0?'#DC2626':it.dias<=1?'#B91C1C':'#D97706';
+        return(<div key={i} style={{background:'#FEF2F2',border:'1.5px solid #FCA5A5',borderRadius:12,padding:'12px 14px',marginBottom:8}}>
+          <div style={{fontWeight:700,fontSize:14,color:'#1E293B'}}>{it.nome}</div>
+          <div style={{fontSize:12,color:'#64748B',marginTop:2}}>Lote: {it.lote||'—'} · Val: {it.validade} · Estoque: {it.qty} unid.</div>
+          <div style={{fontSize:13,fontWeight:800,color:cor,marginTop:4}}>
+            {it.dias===0?'🚨 VENCE HOJE!':it.dias===1?'🚨 VENCE AMANHÃ!':'⚠️ Vence em '+it.dias+' dias — CUIDADO!'}
+          </div>
+        </div>);
+      })}
+      <div style={{background:'#FFF7ED',border:'1.5px solid #FCD34D',borderRadius:12,padding:'12px 14px',marginBottom:16,fontSize:13,color:'#92400E'}}>
+        <strong>Dar saída como vencidos?</strong><br/>
+        Isso vai registrar saída do lote completo de cada medicamento acima com observação "Vencido — baixa automática".
+      </div>
+      {dandomBaixaVenc&&<div style={{textAlign:'center',padding:'8px',color:'#1351B4',fontWeight:600,marginBottom:8}}>⏳ Registrando saídas...</div>}
+      <div style={{display:'flex',gap:8}}>
+        <button onClick={function(){setShowAlertaVenc(false);}} className="bs" style={{flex:1,padding:'12px 0'}}>Fechar</button>
+        <button disabled={dandomBaixaVenc} onClick={function(){
+          setDandoBaixaVenc(true);
+          var lista=alertaVenc.slice();var i=0;
+          function nx(){
+            if(i>=lista.length){setDandoBaixaVenc(false);setShowAlertaVenc(false);setAlertaVenc([]);return;}
+            var it=lista[i++];
+            if(it.qty<=0){nx();return;}
+            addEntry({tipo:'saida',medicamentoId:it.medId,medicamentoNome:it.nome,quantidade:it.qty,lote:it.lote,validade:it.validade,obs:'Vencido — baixa automática',autorNome:user.name,autorCor:user.color||B}).then(nx).catch(nx);
+          }
+          nx();
+        }} style={{flex:2,padding:'12px 0',background:'#DC2626',color:'#fff',border:'none',borderRadius:12,fontWeight:700,fontSize:14,cursor:'pointer',opacity:dandomBaixaVenc?0.6:1}}>
+          ✅ Dar saída como vencidos
+        </button>
+      </div>
+    </div>
+  </div>}
 
   {/* NAVBAR */}
   <div style={{background:'linear-gradient(135deg,#0A2D6E 0%,#1351B4 100%)',padding:'0 16px',display:'flex',alignItems:'center',justifyContent:'space-between',position:'sticky',top:0,zIndex:10,boxShadow:'0 2px 20px rgba(10,45,110,.35)',height:56}}>
@@ -3760,7 +3800,7 @@ return(
       </div>
     ):(
       <div>
-        {tab==='dashboard'&&<TabDashboard entries={entries} medications={meds} stock={stock} user={user} plantao={plantao} isGuest={isGuest} onSolicitar={function(){setShowSolicit(true);}} onEncerrar={encerrarPlantao} onSair={sairDoPlantao} onSolicitarEntrada={solicitarEntradaPlantao} shiftId={shiftId} onIniciar={function(){setShowShiftModal(true);}} allUsers={allUsers} onAddMember={addMemberPlantao} onExpelMember={expelMemberPlantao}/>}
+        {tab==='dashboard'&&<TabDashboard entries={entries} medications={meds} stock={stock} user={user} plantao={plantao} isGuest={isGuest} onSolicitar={function(){setShowSolicit(true);}} onEncerrar={encerrarPlantao} onSair={sairDoPlantao} onSolicitarEntrada={solicitarEntradaPlantao} shiftId={shiftId} onIniciar={function(){setShowShiftModal(true);}}/>}
         {tab==='saida'&&<TabSaida user={user} medications={meds} stock={stock} entries={entries} onSave={addEntry} onSolicitar={addSolicitacao} latest={latest} isGuest={isGuest} canMove={canMove} confirm2={confirm2} alert2={alert2}/>}
         {tab==='entrada'&&<TabEntrada user={user} medications={meds} onSave={addEntry} onSolicitar={addSolicitacao} isGuest={isGuest} canMove={canMove} confirm2={confirm2} alert2={alert2}/>}
         {tab==='estoque'&&<TabEstoque user={user} medications={meds} entries={entries} stock={stock}/>}
