@@ -553,21 +553,69 @@ function save(){if(!sel){setErr('Selecione um medicamento.');return;}var q=parse
     confirm2('Confirmar entrada','Registrar entrada de '+carrinhoNota.length+' medicamento(s) no estoque?',_execSalvarCarrinhoNota,'success','Confirmar');
   }
   function _execSalvarCarrinhoNota(){
-    setSalvandoNota(true);setTimeout(function(){setSalvandoNota(function(v){if(v){setOkNota('Tempo esgotado. Verifique a conexão e tente novamente.');setTimeout(function(){setOkNota('');},5000);}return false;});},15000);
-    var nfNum=loteNota.trim();var nfData=valNota.trim();var nfForn=obsNota.trim();
+    if(!carrinhoNota.length)return;
+    setSalvandoNota(true);
+    var nfNum=loteNota.trim();
+    var nfData=valNota.trim();
+    var nfForn=obsNota.trim();
     var obsTexto='NF'+(nfNum?' '+nfNum:'')+(nfForn?' - '+nfForn:'');
-    var idx3=0;var items=carrinhoNota.slice();
-    function next2(){
-      if(idx3>=items.length){
-        playSound('success');
-        setOkNota('Entrada de '+items.length+' medicamento(s) registrada!');
-        setCarrinhoNota([]);setLoteNota('');setValNota('');setObsNota('');setLoteNotaReal('');setValNotaReal('');
-        setSalvandoNota(false);setTimeout(function(){setOkNota('');},5000);return;
+    var items=carrinhoNota.slice();
+    var total=items.length;
+    var concluidos=0;
+    var temErro=false;
+    function finalizarSeCompleto(){
+      if(concluidos<total)return;
+      if(temErro){
+        setSalvandoNota(false);
+        setOkNota('Erro ao registrar. Verifique a conexão e tente novamente.');
+        setTimeout(function(){setOkNota('');},6000);
+        return;
       }
-      var item2=items[idx3++];var _mO=(medications||[]).find(function(m){return m.id===item2.medId;});
-      onSave({medicamentoId:item2.medId,medicamentoNome:item2.medNome,tipo:'entrada',quantidade:Number(item2.qty)||0,lote:item2.lote,validade:item2.validade,observacao:obsTexto,nfNumero:nfNum,nfData:nfData,nfFornecedor:nfForn,categoriaMed:_mO?_mO.categoria||'medicamento':'medicamento'}).then(next2).catch(function(e){console.error('Erro ao salvar entrada:',e);setSalvandoNota(false);setOkNota('Erro ao registrar: '+(e&&e.message?e.message:'verifique a conexão'));setTimeout(function(){setOkNota('');},5000);});
+      playSound('success');
+      setCarrinhoNota([]);setLoteNota('');setValNota('');setObsNota('');setLoteNotaReal('');setValNotaReal('');
+      setSalvandoNota(false);
+      setOkNota('Entrada de '+total+' medicamento(s) registrada com sucesso!');
+      setTimeout(function(){setOkNota('');},5000);
     }
-    next2();
+    items.forEach(function(item2){
+      var _mO=(medications||[]).find(function(m){return m.id===item2.medId;});
+      var obj={
+        medicamentoId:item2.medId,
+        medicamentoNome:item2.medNome,
+        tipo:'entrada',
+        quantidade:Number(item2.qty)||0,
+        lote:item2.lote||'',
+        validade:item2.validade||'',
+        observacao:obsTexto,
+        nfNumero:nfNum,
+        nfData:nfData,
+        nfFornecedor:nfForn,
+        categoriaMed:_mO?(_mO.categoria||'medicamento'):'medicamento'
+      };
+      try {
+        var promise=onSave(obj);
+        if(!promise||typeof promise.then!=='function'){
+          // onSave não retornou Promise — tratar como erro
+          temErro=true;concluidos++;
+          finalizarSeCompleto();
+          return;
+        }
+        promise.then(function(){
+          concluidos++;
+          finalizarSeCompleto();
+        }).catch(function(e){
+          console.error('Erro entrada Firebase:',e);
+          setOkNota('Erro Firebase: '+(e&&e.message?e.message:(e&&e.code?e.code:'sem resposta')));
+          temErro=true;concluidos++;
+          finalizarSeCompleto();
+        });
+      } catch(e2) {
+        console.error('Erro síncrono entrada:',e2);
+        setOkNota('Erro: '+(e2&&e2.message?e2.message:'erro inesperado'));
+        temErro=true;concluidos++;
+        finalizarSeCompleto();
+      }
+    });
   }
 
   function _execSalvarNota(){var it2=[];Object.keys(qtds).forEach(function(medId){var q=parseInt(qtds[medId])||0;if(q>0){var med=medications.find(function(m){return m.id===medId;});if(med)it2.push({med:med,qty:q});}});if(it2.length===0)return;setSalvandoNota(true);var nfNum=loteNota.trim();var nfData=valNota.trim();var nfForn=obsNota.trim();var obsTexto='NF'+(nfNum?' '+nfNum:'')+(nfForn?' - '+nfForn:'');var i2=0;function nx(){if(i2>=it2.length){playSound('success');setOkNota('Entrada de '+it2.length+' item(ns) registrada! NF: '+(nfNum||'sem numero'));setQtds({});setLoteNota('');setValNota('');setObsNota('');setLoteNotaReal('');setValNotaReal('');setSalvandoNota(false);setTimeout(function(){setOkNota('');},5000);return;}var item=it2[i2++];onSave({medicamentoId:item.med.id,medicamentoNome:item.med.nome,ean:item.med.ean||'',tipo:'entrada',quantidade:Number(item.qty)||0,lote:loteNotaReal.trim(),validade:valNotaReal.trim(),observacao:obsTexto,nfNumero:nfNum,nfData:nfData,nfFornecedor:nfForn,categoriaMed:item.med.categoria||'medicamento'}).then(nx).catch(function(e){console.error('Erro nota:',e);setSalvandoNota(false);setOkNota('Erro ao registrar: '+(e&&e.message?e.message:'verifique a conexão'));setTimeout(function(){setOkNota('');},5000);});}nx();}  function salvarNota(){var itens=[];Object.keys(qtds).forEach(function(medId){var q=parseInt(qtds[medId])||0;if(q>0){var med=medications.find(function(m){return m.id===medId;});if(med)itens.push({med:med,qty:q});}});if(itens.length===0){setOkNota('Nenhuma quantidade informada.');return;}confirm2('Confirmar entrada','Registrar entrada de '+itens.length+' medicamento(s) no estoque?',function(){_execSalvarNota();},'success','Confirmar');}
