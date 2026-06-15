@@ -262,7 +262,12 @@ function Auth(props){
         <Lbl c="Senha"/><input value={pass} onChange={function(e){setPass(e.target.value);}} type="password" placeholder="••••••••" className="inp"/>
         {err&&<div className={err.indexOf('criada')>=0?'ok':'er'}>{err}</div>}
         <button onClick={mode==='login'?login:register} disabled={load} className="bp" style={{opacity:load?0.7:1,marginBottom:12}}>{load?'Aguarde...':(mode==='login'?'Entrar':'Criar conta')}</button>
-        <button onClick={function(){if(!email){setErr('Digite seu email primeiro.');return;}auth.sendPasswordResetEmail(email).then(function(){setErr('Email de recuperacao enviado!');}).catch(function(e){setErr('Erro: '+e.message);});}} style={{background:'none',border:'none',color:B,fontSize:12,cursor:'pointer',width:'100%',textAlign:'center',padding:'4px'}}>Esqueci minha senha</button>
+        <button onClick={function(){if(!email){setErr('Digite seu email primeiro.');return;}auth.sendPasswordResetEmail(email).then(function(){
+                setErr('✅ Email enviado para '+email+'! Verifique sua caixa de entrada e também a pasta de SPAM. O link expira em 1 hora.');
+              }).catch(function(e){
+                var msg=e.code==='auth/user-not-found'?'Email não cadastrado no sistema.':e.code==='auth/invalid-email'?'Email inválido.':e.code==='auth/too-many-requests'?'Muitas tentativas. Aguarde alguns minutos.':'Erro: '+e.message;
+                setErr('❌ '+msg);
+              });}} style={{background:'none',border:'none',color:B,fontSize:12,cursor:'pointer',width:'100%',textAlign:'center',padding:'4px'}}>Esqueci minha senha</button>
         <button onClick={function(){localStorage.removeItem(CFG_KEY);window.location.reload();}} style={{marginTop:4,background:'none',border:'none',color:'#94a3b8',fontSize:11,cursor:'pointer',width:'100%',textAlign:'center'}}>Reconfigurar Firebase</button>
       </div>
       <div style={{marginTop:24,textAlign:'center'}}>
@@ -504,7 +509,19 @@ return(
     </div>
   )}
 </div>);}
+
 function TabEntrada(props){var user=props.user;var medications=props.medications;var onSave=props.onSave;var isGuest=props.isGuest||false;var canMove=props.canMove!==false;var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};var alert2=props.alert2||function(m){window.alert(m);};var _modo=useState('individual');var modo=_modo[0];var setModo=_modo[1];var _search=useState('');var search=_search[0];var setSearch=_search[1];var _sel=useState(null);var sel=_sel[0];var setSel=_sel[1];var _newNome=useState('');var newNome=_newNome[0];var setNewNome=_newNome[1];var _newEan=useState('');var newEan=_newEan[0];var setNewEan=_newEan[1];var _creating=useState(false);var creating=_creating[0];var setCreating=_creating[1];var _showList=useState(false);var showList=_showList[0];var setShowList=_showList[1];var _qty=useState('');var qty=_qty[0];var setQty=_qty[1];var _lote=useState('');var lote=_lote[0];var setLote=_lote[1];var _val=useState('');var val=_val[0];var setVal=_val[1];var _obs=useState('');var obs=_obs[0];var setObs=_obs[1];var _err=useState('');var err=_err[0];var setErr=_err[1];var _ok=useState('');var ok=_ok[0];var setOk=_ok[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];var _filtEntrada=useState('todos');var filtEntrada=_filtEntrada[0];var setFiltEntrada=_filtEntrada[1];var _loteNota=useState('');var loteNota=_loteNota[0];var setLoteNota=_loteNota[1];var _valNota=useState('');var valNota=_valNota[0];var setValNota=_valNota[1];var _obsNota=useState('');var obsNota=_obsNota[0];var setObsNota=_obsNota[1];var _loteNotaReal=useState('');var loteNotaReal=_loteNotaReal[0];var setLoteNotaReal=_loteNotaReal[1];var _valNotaReal=useState('');var valNotaReal=_valNotaReal[0];var setValNotaReal=_valNotaReal[1];var _qtds=useState({});var qtds=_qtds[0];var setQtds=_qtds[1];var _salvandoNota=useState(false);var salvandoNota=_salvandoNota[0];var setSalvandoNota=_salvandoNota[1];
+var _showDiv=useState(false);var showDiv=_showDiv[0];var setShowDiv=_showDiv[1];
+var _divNotaMed=useState(null);var divNotaMed=_divNotaMed[0];var setDivNotaMed=_divNotaMed[1];
+var _divNotaQty=useState('');var divNotaQty=_divNotaQty[0];var setDivNotaQty=_divNotaQty[1];
+var _divRealMed=useState(null);var divRealMed=_divRealMed[0];var setDivRealMed=_divRealMed[1];
+var _divRealQty=useState('');var divRealQty=_divRealQty[0];var setDivRealQty=_divRealQty[1];
+var _divRealLote=useState('');var divRealLote=_divRealLote[0];var setDivRealLote=_divRealLote[1];
+var _divRealVal=useState('');var divRealVal=_divRealVal[0];var setDivRealVal=_divRealVal[1];
+var _divMotivo=useState('');var divMotivo=_divMotivo[0];var setDivMotivo=_divMotivo[1];
+var _divBusca=useState('');var divBusca=_divBusca[0];var setDivBusca=_divBusca[1];
+var _divBuscaNota=useState('');var divBuscaNota=_divBuscaNota[0];var setDivBuscaNota=_divBuscaNota[1];
+var _salvandoDiv=useState(false);var salvandoDiv=_salvandoDiv[0];var setSalvandoDiv=_salvandoDiv[1];
 var _carrinhoNota=useState([]);var carrinhoNota=_carrinhoNota[0];var setCarrinhoNota=_carrinhoNota[1];
 var _editIdx=useState(null);var editIdx=_editIdx[0];var setEditIdx=_editIdx[1];
 var _showNovoMed=useState(false);var showNovoMed=_showNovoMed[0];var setShowNovoMed=_showNovoMed[1];
@@ -533,6 +550,56 @@ function save(){if(!sel){setErr('Selecione um medicamento.');return;}var q=parse
       return prev.concat([item]);
     });
     setSelNota(null);setSearchNota('');setQtyNota('');setLoteNotaReal('');setValNotaReal('');
+  }
+  function salvarDivergencia(){
+    if(!divNotaMed||!divNotaQty){alert2('Informe o medicamento e quantidade da nota.');return;}
+    if(!divRealMed||!divRealQty){alert2('Informe o medicamento e quantidade que chegou de verdade.');return;}
+    setSalvandoDiv(true);
+    var nfNum=loteNota.trim();
+    var nfForn=obsNota.trim();
+    var hoje=new Date().toISOString();
+    // 1. Registrar entry da NOTA (o que está escrito na nota — para prestação de contas)
+    var p1=onSave({
+      medicamentoId:divNotaMed.id,medicamentoNome:divNotaMed.nome,
+      tipo:'entrada',quantidade:Number(divNotaQty)||0,
+      lote:'',validade:'',observacao:'NF '+(nfNum||'')+(nfForn?' - '+nfForn:''),
+      nfNumero:nfNum,nfFornecedor:nfForn,nfData:valNota.trim(),
+      categoriaMed:divNotaMed.categoria||'medicamento',
+      divergencia:true,divergenciaTipo:'nota'
+    });
+    // 2. Registrar entry do REAL (o que chegou de verdade — entra no estoque)
+    var p2=divRealMed?onSave({
+      medicamentoId:divRealMed.id,medicamentoNome:divRealMed.nome,
+      tipo:'entrada',quantidade:Number(divRealQty)||0,
+      lote:divRealLote.trim(),validade:divRealVal.trim(),
+      observacao:'REAL — NF '+(nfNum||'')+(nfForn?' - '+nfForn:''),
+      nfNumero:nfNum,nfFornecedor:nfForn,nfData:valNota.trim(),
+      categoriaMed:divRealMed.categoria||'medicamento',
+      divergencia:true,divergenciaTipo:'real'
+    }):Promise.resolve(null);
+    // 3. Salvar registro de divergência para auditoria
+    var p3=db.collection('divergencias').add({
+      nfNumero:nfNum,nfFornecedor:nfForn,nfData:valNota.trim(),
+      notaMedId:divNotaMed.id,notaMedNome:divNotaMed.nome,notaQty:Number(divNotaQty)||0,
+      realMedId:divRealMed?divRealMed.id:'',realMedNome:divRealMed?divRealMed.nome:'Não chegou',
+      realQty:Number(divRealQty)||0,realLote:divRealLote.trim(),realValidade:divRealVal.trim(),
+      motivo:divMotivo.trim(),status:'pendente',
+      tipo:divRealMed?'substituicao':'nao_chegou',
+      saidaPendenteQty:Number(divNotaQty)||0,
+      saidaFicticiaTotal:0,
+      registradoPor:user.name,registradoEm:hoje,date:todayStr()
+    });
+    Promise.all([p1,p2,p3]).then(function(){
+      setSalvandoDiv(false);
+      setShowDiv(false);
+      setDivNotaMed(null);setDivNotaQty('');
+      setDivRealMed(null);setDivRealQty('');setDivRealLote('');setDivRealVal('');
+      setDivMotivo('');setDivBusca('');setDivBuscaNota('');
+      alert2('Divergência registrada! A coordenação será notificada.');
+    }).catch(function(e){
+      setSalvandoDiv(false);
+      alert2('Erro ao registrar: '+(e&&e.message?e.message:'verifique a conexão'));
+    });
   }
 
   function cadastrarNovoMed(){
@@ -742,6 +809,7 @@ return(
               if(!valNotaReal.trim()){alert2('Informe a validade do medicamento!');return;}
               adicionarAoCarrinhoNota(selNota,qtyNota);
             }} disabled={!selNota} style={{flex:1,padding:'10px',background:!selNota?'#E2E8F0':'#059669',color:!selNota?'#94A3B8':'#fff',border:'none',borderRadius:8,fontWeight:700,fontSize:13,cursor:'pointer'}}>+ Adicionar</button>
+            <button onClick={function(){setShowDiv(true);}} style={{padding:'10px 12px',background:'#FFF7ED',border:'1.5px solid #FCD34D',borderRadius:8,color:'#92400E',fontWeight:700,fontSize:12,cursor:'pointer'}}>⚠️ Divergência</button>
             <button onClick={function(){setShowNovoMed(!showNovoMed);}} style={{padding:'10px 14px',background:'#EFF6FF',border:'1.5px solid #BFDBFE',borderRadius:8,color:'#1351B4',fontWeight:700,fontSize:12,cursor:'pointer'}}>+ Novo</button>
           </div>
         </div>
@@ -805,7 +873,39 @@ return(
       </button>}
     </div>
   )}
-</div>);}
+  {showDiv&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+    <div style={{background:'#fff',borderRadius:20,padding:20,maxWidth:500,width:'100%',maxHeight:'90vh',overflowY:'auto'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+        <div style={{fontWeight:800,fontSize:17,color:'#92400E'}}>⚠️ Registrar Divergência</div>
+        <button onClick={function(){setShowDiv(false);}} style={{background:'none',border:'none',fontSize:22,cursor:'pointer',color:'#94A3B8'}}>✕</button>
+      </div>
+      <div style={{background:'#FEF2F2',borderRadius:12,padding:14,marginBottom:12}}>
+        <div style={{fontWeight:700,fontSize:13,color:'#DC2626',marginBottom:10}}>📄 O que está na NOTA</div>
+        <input value={divBuscaNota} onChange={function(e){setDivBuscaNota(e.target.value);setDivNotaMed(null);}} placeholder="Buscar medicamento da nota..." className="inp" style={{marginBottom:4,fontSize:13}}/>
+        {divBuscaNota.trim()&&!divNotaMed&&<div style={{maxHeight:100,overflowY:'auto',border:'1px solid #E2E8F0',borderRadius:8,background:'#fff',marginBottom:6}}>{medications.filter(function(m){return m.nome.toLowerCase().indexOf(divBuscaNota.toLowerCase())>=0;}).slice(0,6).map(function(m){return(<div key={m.id} onClick={function(){setDivNotaMed(m);setDivBuscaNota(m.nome);}} style={{padding:'8px 12px',fontSize:13,cursor:'pointer',borderBottom:'1px solid #F1F5F9'}}>{m.nome}</div>);})}</div>}
+        {divNotaMed&&<div style={{background:'#FEE2E2',borderRadius:8,padding:'6px 10px',marginBottom:8,fontSize:12,color:'#DC2626',fontWeight:600}}>✓ {divNotaMed.nome}</div>}
+        <input type="number" value={divNotaQty} onChange={function(e){setDivNotaQty(e.target.value);}} placeholder="Quantidade na nota" className="inp" style={{marginBottom:0,fontSize:13}}/>
+      </div>
+      <div style={{background:'#F0FDF4',borderRadius:12,padding:14,marginBottom:12}}>
+        <div style={{fontWeight:700,fontSize:13,color:'#0C6B3E',marginBottom:10}}>📦 O que chegou de VERDADE</div>
+        <input value={divBusca} onChange={function(e){setDivBusca(e.target.value);setDivRealMed(null);}} placeholder="Buscar medicamento recebido..." className="inp" style={{marginBottom:4,fontSize:13}}/>
+        {divBusca.trim()&&!divRealMed&&<div style={{maxHeight:100,overflowY:'auto',border:'1px solid #E2E8F0',borderRadius:8,background:'#fff',marginBottom:6}}>{medications.filter(function(m){return m.nome.toLowerCase().indexOf(divBusca.toLowerCase())>=0;}).slice(0,6).map(function(m){return(<div key={m.id} onClick={function(){setDivRealMed(m);setDivBusca(m.nome);}} style={{padding:'8px 12px',fontSize:13,cursor:'pointer',borderBottom:'1px solid #F1F5F9'}}>{m.nome}</div>);})}</div>}
+        {divRealMed&&<div style={{background:'#DCFCE7',borderRadius:8,padding:'6px 10px',marginBottom:8,fontSize:12,color:'#0C6B3E',fontWeight:600}}>✓ {divRealMed.nome}</div>}
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
+          <div><div style={{fontSize:11,color:'#64748B',marginBottom:3}}>Qtd</div><input type="number" value={divRealQty} onChange={function(e){setDivRealQty(e.target.value);}} placeholder="Qtd" className="inp" style={{marginBottom:0,fontSize:13}}/></div>
+          <div><div style={{fontSize:11,color:'#64748B',marginBottom:3}}>Lote</div><input value={divRealLote} onChange={function(e){setDivRealLote(e.target.value);}} placeholder="Lote" className="inp" style={{marginBottom:0,fontSize:13}}/></div>
+          <div><div style={{fontSize:11,color:'#64748B',marginBottom:3}}>Val.</div><input value={divRealVal} onChange={function(e){setDivRealVal(e.target.value);}} placeholder="MM/AAAA" className="inp" style={{marginBottom:0,fontSize:13}}/></div>
+        </div>
+      </div>
+      <input value={divMotivo} onChange={function(e){setDivMotivo(e.target.value);}} placeholder="Motivo / observação (opcional)" className="inp" style={{marginBottom:14,fontSize:13}}/>
+      {salvandoDiv&&<div style={{textAlign:'center',color:'#1351B4',fontWeight:600,marginBottom:8}}>⏳ Registrando...</div>}
+      <div style={{display:'flex',gap:8}}>
+        <button onClick={function(){setShowDiv(false);}} className="bs" style={{flex:1,padding:'12px 0'}}>Cancelar</button>
+        <button onClick={salvarDivergencia} disabled={salvandoDiv} style={{flex:2,padding:'12px 0',background:'#D97706',color:'#fff',border:'none',borderRadius:12,fontWeight:700,fontSize:14,cursor:'pointer'}}>⚠️ Registrar Divergência</button>
+      </div>
+    </div>
+  </div>}
+  </div>);}
 
 function HistModal(props){
   var med=props.med;var entries=props.entries;var onClose=props.onClose;var user=props.user;
@@ -1112,6 +1212,7 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
 </div>)}</div>)}
 </div>);}
 function TabRelatorio(props){
+  var db=props.db;var user=props.user||{};
   function nomeC(n){if(!n)return '?';var p=n.trim().split(' ');return p.length>=2?p[0]+' '+p[1]:p[0];}var entries=props.entries;var medications=props.medications;var _dF=useState(todayStr());var dF=_dF[0];var setDF=_dF[1];var _dT=useState(todayStr());var dT=_dT[0];var setDT=_dT[1];var _tipo=useState('todos');var tipo=_tipo[0];var setTipo=_tipo[1];var _sub=useState('mov');var sub=_sub[0];var setSub=_sub[1];var _filtCatRel=useState('todos');var filtCatRel=_filtCatRel[0];var setFiltCatRel=_filtCatRel[1];
 var filtered=entries.filter(function(e){var dt=(e.criadoEm||'').slice(0,10);if(dt<dF||dt>dT)return false;if(tipo!=='todos'&&e.tipo!==tipo)return false;if(filtCatRel&&filtCatRel!=='todos'){var meds=medications.filter(function(m){return m.nome===e.medicamentoNome&&((m.categoria||'medicamento'))===filtCatRel;});if(meds.length===0)return false;}return true;}).sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});
 var totE=0,totS=0;filtered.forEach(function(e){if(e.tipo==='entrada')totE+=(e.quantidade||0);if(e.tipo==='saida')totS+=(e.quantidade||0);});
@@ -1119,14 +1220,14 @@ var rankMap={};entries.forEach(function(e){if(e.tipo!=='saida')return;var k=e.me
 var respMap={};entries.forEach(function(e){var k=e.autorNome||'?';if(!respMap[k])respMap[k]={nome:k,color:e.autorColor,qtdS:0,qtdE:0,cntS:0,cntE:0};if(e.tipo==='saida'){respMap[k].qtdS+=(e.quantidade||0);respMap[k].cntS++;}else{respMap[k].qtdE+=(e.quantidade||0);respMap[k].cntE++;}});var porResp=Object.keys(respMap).map(function(k){return respMap[k];}).sort(function(a,b){return (b.qtdS+b.qtdE)-(a.qtdS+a.qtdE);});
 function doXL(){var rows=[['Data','Hora','Responsavel','Medicamento','Tipo','Qtd','Lote']];filtered.forEach(function(e){rows.push([fmtD(e.criadoEm),fmtT(e.criadoEm),e.autorNome||'',e.medicamentoNome||'',e.tipo==='entrada'?'Entrada':'Saida',e.quantidade||0,e.lote||'']);});var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'Relatorio');XLSX.writeFile(wb,'relatorio_'+dF+'_'+dT+'.xlsx');}
 return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
-<div className="tab-sw">{[['mov','Movimentações'],['dia','Saídas do Dia'],['resp','Por Responsável'],['rank','Ranking']].map(function(t){return <button key={t[0]} onClick={function(){setSub(t[0]);}} className={sub===t[0]?'on':''}>{t[1]}</button>;})}</div>
+<div className="tab-sw">{[['mov','Movimentações'],['dia','Saídas do Dia'],['div','⚠️ Divergências'],['resp','Por Responsável'],['rank','Ranking']].map(function(t){return <button key={t[0]} onClick={function(){setSub(t[0]);}} className={sub===t[0]?'on':''}>{t[1]}</button>;})}</div>
 {sub==='dia'&&<div style={{paddingBottom:8}}>
   <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:14,flexWrap:'wrap'}}>
     <div style={{fontWeight:700,fontSize:16,color:'#1E293B',flex:1}}>📋 Saídas do Dia</div>
     <input type="date" value={dF} onChange={function(e){setDF(e.target.value);}} className="inp" style={{marginBottom:0,width:'auto'}}/>
   </div>
   {(function(){
-    var saidasDia=entries.filter(function(e){return e.tipo==='saida'&&(e.date||'')===(dF||todayStr());});
+    var saidasDia=entries.filter(function(e){return e.tipo==='saida'&&!e.ficticioDiv&&(e.date||'')===(dF||todayStr());});
     var agrupado={};
     saidasDia.forEach(function(e){
       var key=e.medicamentoId||e.medicamentoNome||'?';
@@ -1186,6 +1287,111 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
         html+='</table></body></html>';
         var w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(function(){w.print();},400);}
       }} className="bp">🖨️ Imprimir / Salvar PDF</button>
+    </div>);
+  })()}
+</div>}
+{sub==='div'&&(user.role==='gestor'||user.role==='tecnico')&&<div>
+  {(function(){
+    var _divs=useState([]);var divs=_divs[0];var setDivs=_divs[1];
+    var _carregando=useState(true);var carregando=_carregando[0];var setCarregando=_carregando[1];
+    useEffect(function(){
+      if(!db)return;
+      return db.collection('divergencias').orderBy('registradoEm','desc').limit(100).onSnapshot(function(s){
+        setDivs(s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;}));
+        setCarregando(false);
+      },function(){setCarregando(false);});
+    },[]);
+    function confirmar(div){
+      db.collection('divergencias').doc(div.id).update({status:'confirmada',confirmadoPor:user.name,confirmadoEm:new Date().toISOString()}).catch(function(){});
+    }
+    function exportarDivPDF(){
+      var hoje=new Date().toLocaleDateString('pt-BR');
+      var html='<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;padding:24px;font-size:12px}h2{margin-bottom:4px}table{width:100%;border-collapse:collapse;margin-top:12px}th{background:#f0f0f0;padding:7px;text-align:left;border:1px solid #ccc;font-size:11px}td{padding:7px;border:1px solid #ddd}.pend{color:#D97706;font-weight:700}.conf{color:#059669;font-weight:700}</style></head><body>';
+      html+='<h2>⚠️ Relatório de Divergências</h2><p>Gerado em '+hoje+' por '+user.name+'</p>';
+      html+='<table><tr><th>Data</th><th>NF</th><th>Nota dizia</th><th>Chegou</th><th>Qtd</th><th>Lote</th><th>Motivo</th><th>Status</th><th>Registrado por</th></tr>';
+      divs.forEach(function(d){
+        html+='<tr><td>'+(d.date||'')+'</td><td>'+(d.nfNumero||'—')+'</td><td>'+(d.notaMedNome||'')+'</td><td>'+(d.realMedNome||'')+'</td><td>'+(d.realQty||0)+'</td><td>'+(d.realLote||'—')+'</td><td>'+(d.motivo||'—')+'</td><td class="'+(d.status==='confirmada'?'conf':'pend')+'">'+(d.status==='confirmada'?'✅ Confirmada':'⏳ Pendente')+'</td><td>'+(d.registradoPor||'')+'</td></tr>';
+      });
+      html+='</table></body></html>';
+      var w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(function(){w.print();},400);}
+    }
+    var pendentes=divs.filter(function(d){return d.status==='pendente';});
+    var confirmadas=divs.filter(function(d){return d.status!=='pendente';});
+    return(<div>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14,flexWrap:'wrap',gap:8}}>
+        <div style={{fontWeight:800,fontSize:16,color:'#92400E'}}>⚠️ Divergências de Entrada</div>
+        <button onClick={exportarDivPDF} className="bp" style={{background:'#D97706'}}>📄 Exportar PDF</button>
+      </div>
+      {carregando&&<div style={{textAlign:'center',padding:24,color:'#94A3B8'}}>Carregando...</div>}
+      {!carregando&&divs.length===0&&<div style={{textAlign:'center',padding:'40px 0',color:'#94A3B8'}}><div style={{fontSize:40,marginBottom:8}}>✅</div><div style={{fontWeight:600}}>Nenhuma divergência registrada</div></div>}
+
+      {pendentes.length>0&&<div>
+        <div style={{fontWeight:700,fontSize:14,color:'#D97706',marginBottom:10}}>⏳ Pendentes — aguardando saída fictícia ({pendentes.length})</div>
+        {pendentes.map(function(d){
+          var faltaDar=Math.max(0,(d.saidaPendenteQty||d.notaQty||0)-(d.saidaFicticiaTotal||0));
+          var _qty=useState(String(faltaDar));var qtyFic=_qty[0];var setQtyFic=_qty[1];
+          return(<div key={d.id} style={{background:'#FFFBEB',borderRadius:14,border:'1.5px solid #FCD34D',padding:14,marginBottom:10}}>
+            <div style={{fontWeight:700,fontSize:13,color:'#1E293B',marginBottom:6}}>
+              NF {d.nfNumero||'—'}{d.nfFornecedor?' · '+d.nfFornecedor:''} · {d.date||''}
+            </div>
+            <div style={{fontSize:12,color:'#DC2626',marginBottom:2}}>📄 Nota diz: <strong>{d.notaMedNome}</strong> — {d.notaQty} un.</div>
+            {d.tipo==='substituicao'
+              ?<div style={{fontSize:12,color:'#0C6B3E',marginBottom:4}}>📦 Veio: <strong>{d.realMedNome}</strong> — {d.realQty||0} un. · As saídas de {d.realMedNome} geram espelho automático de {d.notaMedNome}</div>
+              :<div style={{fontSize:12,color:'#DC2626',marginBottom:4}}>🚫 <strong>Não chegou nada</strong> — saída fictícia manual necessária</div>
+            }
+            <div style={{fontSize:11,color:'#64748B',marginBottom:8}}>
+              Já dado saída fictícia: <strong>{d.saidaFicticiaTotal||0}</strong> un. · Falta: <strong style={{color:faltaDar>0?'#DC2626':'#059669'}}>{faltaDar}</strong> un.
+            </div>
+            {faltaDar>0&&<div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+              <span style={{fontSize:12,color:'#64748B'}}>Dar saída fictícia de:</span>
+              <input type="number" value={qtyFic} onChange={function(e){setQtyFic(e.target.value);}} style={{width:80,padding:'7px 10px',border:'1.5px solid #FCD34D',borderRadius:8,fontSize:14,fontWeight:700,textAlign:'center'}}/>
+              <span style={{fontSize:12,color:'#64748B'}}>un. de <strong>{d.notaMedNome}</strong></span>
+              <button onClick={function(){
+                var qty=parseInt(qtyFic)||0;
+                if(qty<=0){alert('Informe uma quantidade válida.');return;}
+                // Registrar saída fictícia
+                var ficObj={criadoEm:new Date().toISOString(),date:todayStr(),
+                  autorId:user.uid,autorNome:user.name,autorCargo:user.role||'',autorColor:user.color||B,
+                  medicamentoId:d.notaMedId,medicamentoNome:d.notaMedNome,
+                  tipo:'saida',quantidade:qty,lote:'',validade:'',
+                  obs:'[FICTÍCIO] Saída manual — Div. NF '+(d.nfNumero||''),
+                  ficticioDiv:true,divId:d.id
+                };
+                db.collection('entries').add(ficObj).then(function(){
+                  var novoTotal=(d.saidaFicticiaTotal||0)+qty;
+                  var novoStatus=novoTotal>=(d.saidaPendenteQty||d.notaQty||0)?'confirmada':'pendente';
+                  return db.collection('divergencias').doc(d.id).update({
+                    saidaFicticiaTotal:novoTotal,
+                    status:novoStatus,
+                    confirmadoPor:novoStatus==='confirmada'?user.name:undefined,
+                    confirmadoEm:novoStatus==='confirmada'?new Date().toISOString():undefined
+                  });
+                }).catch(function(e){alert('Erro: '+e.message);});
+              }} style={{background:'#D97706',border:'none',borderRadius:8,padding:'8px 16px',color:'#fff',fontWeight:700,fontSize:13,cursor:'pointer'}}>
+                ✅ Confirmar saída fictícia
+              </button>
+            </div>}
+            {faltaDar<=0&&<div style={{fontSize:12,color:'#059669',fontWeight:700}}>✅ Saída fictícia completa — aguardando encerramento</div>}
+            {d.motivo&&<div style={{fontSize:11,color:'#64748B',marginTop:6}}>💬 {d.motivo}</div>}
+            <div style={{fontSize:11,color:'#94A3B8',marginTop:4}}>Registrado por {d.registradoPor}</div>
+          </div>);
+        })}
+      </div>}
+
+      {confirmadas.length>0&&<div>
+        <div style={{fontWeight:700,fontSize:14,color:'#059669',marginBottom:10,marginTop:16}}>✅ Confirmadas ({confirmadas.length})</div>
+        {confirmadas.map(function(d){
+          return(<div key={d.id} style={{background:'#F0FDF4',borderRadius:14,border:'1px solid #86EFAC',padding:12,marginBottom:8}}>
+            <div style={{display:'flex',justifyContent:'space-between',gap:8,flexWrap:'wrap'}}>
+              <div>
+                <div style={{fontWeight:600,fontSize:13,color:'#1E293B'}}>NF {d.nfNumero||'—'} · {d.date||''}</div>
+                <div style={{fontSize:12,color:'#64748B'}}>📄 {d.notaMedNome} {d.notaQty}un → {d.tipo==='substituicao'?('📦 '+d.realMedNome+' '+d.realQty+'un'):'🚫 não chegou'}</div>
+                <div style={{fontSize:11,color:'#059669'}}>Saída fictícia: {d.saidaFicticiaTotal||0}un · Confirmada por {d.confirmadoPor||'—'}</div>
+              </div>
+            </div>
+          </div>);
+        })}
+      </div>}
     </div>);
   })()}
 </div>}
@@ -3725,7 +3931,45 @@ function recusarEntradaPlantao(sol){db.collection('plantao_solicitacoes').doc(so
 function encerrarPlantao(){if(!shiftId)return;if(!confirm('Encerrar o plantao de hoje?'))return;db.collection('plantoes').doc(shiftId).update({ativo:false,encerradoEm:new Date().toISOString()}).then(function(){localStorage.setItem('fc_shift_enc_'+todayStr(),'1');setPlantao(null);setIsGuest(true);setShiftId(null);}).catch(function(e){alert('Erro: '+e.message);});}
 function sairDoPlantao(){if(!confirm('Sair do plantao?'))return;localStorage.setItem('fc_shift_saiu_'+todayStr(),'1');if(shiftId&&plantao){var eq=(plantao.equipe||[]).map(function(m){if(m.id===user.uid){var o={};for(var k in m)o[k]=m[k];o.status='saiu';return o;}return m;});db.collection('plantoes').doc(shiftId).update({equipe:eq}).catch(function(){});}setIsGuest(true);}
 function addSolicitacao(data){var obj={medicamentoId:data.medicamentoId,medicamentoNome:data.medicamentoNome,ean:data.ean||'',tipo:data.tipo,quantidade:data.quantidade,lote:data.lote||'',validade:data.validade||'',observacao:data.observação||'',solicitanteId:user.uid,solicitanteNome:user.name,solicitanteCargo:user.role,solicitanteColor:user.color||B,status:'pendente',criadoEm:new Date().toISOString(),origem:'convidado'};return db.collection('solicitacoes').add(obj);}
-function addEntry(data){try{var obj={criadoEm:new Date().toISOString(),date:todayStr(),autorId:user.uid,autorNome:user.name||user.email,autorCargo:user.role||'',autorColor:user.color||B};for(var k in data)obj[k]=data[k];if(obj.quantidade!==undefined)obj.quantidade=Number(obj.quantidade)||0;return db.collection('entries').add(obj);}catch(e){console.error('addEntry erro:',e);return Promise.reject(e);}}
+function addEntry(data){try{var obj={criadoEm:new Date().toISOString(),date:todayStr(),autorId:user.uid,autorNome:user.name||user.email,autorCargo:user.role||'',autorColor:user.color||B};for(var k in data)obj[k]=data[k];if(obj.quantidade!==undefined)obj.quantidade=Number(obj.quantidade)||0;
+  var promise=db.collection('entries').add(obj);
+  // Se for saída real, verificar se há divergência de substituição vinculada
+  if(obj.tipo==='saida'&&obj.medicamentoId&&!obj.ficticioDiv){
+    promise=promise.then(function(ref){
+      // Buscar divergências do tipo substituição onde este med é o 'real'
+      return db.collection('divergencias')
+        .where('realMedId','==',obj.medicamentoId)
+        .where('tipo','==','substituicao')
+        .where('status','!=','encerrada')
+        .get().then(function(snap){
+          if(snap.empty)return ref;
+          var espelhos=[];
+          snap.docs.forEach(function(doc){
+            var div=doc.data();
+            // Gerar saída fictícia do medicamento da nota
+            var ficObj={criadoEm:new Date().toISOString(),date:todayStr(),
+              autorId:user.uid,autorNome:user.name||user.email,autorCargo:user.role||'',autorColor:user.color||B,
+              medicamentoId:div.notaMedId,medicamentoNome:div.notaMedNome,
+              tipo:'saida',quantidade:obj.quantidade,
+              lote:'',validade:'',
+              obs:'[FICTÍCIO] Espelho de saída de '+obj.medicamentoNome+' — Div. NF '+(div.nfNumero||''),
+              ficticioDiv:true,divId:doc.id,divOrigMedId:obj.medicamentoId
+            };
+            espelhos.push(
+              db.collection('entries').add(ficObj).then(function(){
+                // Atualizar total de saídas fictícias na divergência
+                return db.collection('divergencias').doc(doc.id).update({
+                  saidaFicticiaTotal:(div.saidaFicticiaTotal||0)+obj.quantidade
+                });
+              })
+            );
+          });
+          return Promise.all(espelhos).then(function(){return ref;});
+        }).catch(function(){return ref;});
+    });
+  }
+  return promise;
+}catch(e){console.error('addEntry erro:',e);return Promise.reject(e);}}
 function logout(){if(!confirm('Sair do sistema?'))return;db.collection('logs_acesso').add({uid:user.uid,nome:user.name,cargo:user.role,acao:'logout',criadoEm:new Date().toISOString()}).catch(function(){});auth.signOut().catch(function(){});localStorage.removeItem('fc_user');localStorage.removeItem('fc_last_act');setUser(null);setShiftChecked(false);setShowShift(false);setPlantao(null);setIsGuest(false);}
 if(!ready)return <Setup onDone={function(){setReady(true);}}/>;
 if(!user)return <Auth onLogin={function(u){setUser(u);}}/>;
@@ -3852,7 +4096,7 @@ return(
         {tab==='saida'&&<TabSaida user={user} medications={meds} stock={stock} entries={entries} onSave={addEntry} onSolicitar={addSolicitacao} latest={latest} isGuest={isGuest} canMove={canMove} confirm2={confirm2} alert2={alert2}/>}
         {tab==='entrada'&&<TabEntrada user={user} medications={meds} onSave={addEntry} onSolicitar={addSolicitacao} isGuest={isGuest} canMove={canMove} confirm2={confirm2} alert2={alert2}/>}
         {tab==='estoque'&&<TabEstoque user={user} medications={meds} entries={entries} stock={stock}/>}
-        {tab==='relatorio'&&<TabRelatorio entries={entries} medications={meds}/>}
+        {tab==='relatorio'&&<TabRelatorio entries={entries} medications={meds} db={db} user={user}/>}
         {tab==='gestao'&&can(user.role,'gestao')&&<TabGestao currentUser={user} entries={entries}/>}
         {tab==='log'&&can(user.role,'log')&&<TabLog/>}
         {tab==='histnotas'&&(user.role==='gestor'||user.role==='tecnico')&&<ErrBoundary><TabHistoricoNotas user={user} entries={entries} medications={meds} db={db}/></ErrBoundary>}
