@@ -560,12 +560,22 @@ function ValesPendentesPainel(props){
   var db=props.db;var user=props.user;
   var _vales=useState([]);var vales=_vales[0];var setVales=_vales[1];
   var _carregando=useState(true);var carregando=_carregando[0];var setCarregando=_carregando[1];
+  var _erroCarregar=useState('');var erroCarregar=_erroCarregar[0];var setErroCarregar=_erroCarregar[1];
   useEffect(function(){
     if(!db)return;
-    return db.collection('vales').where('status','==','pendente').orderBy('registradoEm','desc').limit(50).onSnapshot(function(s){
-      setVales(s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;}));
+    // Sem orderBy combinado com where (evita exigir índice composto no Firestore).
+    // A ordenação é feita aqui no JavaScript depois de receber os dados.
+    return db.collection('vales').where('status','==','pendente').onSnapshot(function(s){
+      var lista=s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;});
+      lista.sort(function(a,b){return new Date(b.registradoEm||0)-new Date(a.registradoEm||0);});
+      setVales(lista);
       setCarregando(false);
-    },function(){setCarregando(false);});
+      setErroCarregar('');
+    },function(e){
+      console.error('Erro ao carregar vales:',e);
+      setCarregando(false);
+      setErroCarregar((e&&e.code)||(e&&e.message)||'erro desconhecido');
+    });
   },[db]);
   var atrasados=vales.filter(function(v){return Math.floor((new Date()-new Date(v.registradoEm))/86400000)>=15;});
   return(<div className="card" style={{marginBottom:14}}>
@@ -573,8 +583,11 @@ function ValesPendentesPainel(props){
     {atrasados.length>0&&<div style={{background:'#FEF2F2',border:'1.5px solid #FCA5A5',borderRadius:10,padding:'10px 12px',marginBottom:10,fontSize:12,color:'#DC2626',fontWeight:600}}>
       ⚠️ {atrasados.length} vale(s) aguardando nota fiscal há mais de 15 dias!
     </div>}
+    {erroCarregar&&<div style={{background:'#FEF2F2',border:'1.5px solid #FCA5A5',borderRadius:10,padding:'10px 12px',marginBottom:10,fontSize:12,color:'#DC2626'}}>
+      ⚠️ Erro ao carregar vales pendentes: {erroCarregar}
+    </div>}
     {carregando&&<div style={{textAlign:'center',padding:16,color:'#94A3B8',fontSize:13}}>Carregando...</div>}
-    {!carregando&&vales.length===0&&<div style={{textAlign:'center',padding:'24px 0',color:'#94A3B8',fontSize:13}}>✅ Nenhum vale pendente</div>}
+    {!carregando&&!erroCarregar&&vales.length===0&&<div style={{textAlign:'center',padding:'24px 0',color:'#94A3B8',fontSize:13}}>✅ Nenhum vale pendente</div>}
     {vales.map(function(v){return(<VaPendenteCard key={v.id} v={v} db={db} user={user}/>);})}
   </div>);
 }
