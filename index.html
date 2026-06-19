@@ -741,50 +741,68 @@ function save(){if(!sel){setErr('Selecione um medicamento.');return;}var q=parse
     var forn=valeForn.trim();
     var obs=valeObs.trim();
     var items=carrinhoVale.slice();
-    var total=items.length;
-    var concluidos=0;
-    var temErro=false;
-    var ultimoErroVale=null;
     var hoje=new Date().toISOString();
-    function finalizarSeCompleto(){
-      if(concluidos<total)return;
-      if(temErro){
-        setSalvandoVale(false);
-        var msgErro=ultimoErroVale?(ultimoErroVale.code||ultimoErroVale.message||'erro desconhecido'):'erro desconhecido';
-        alert2('Erro ao registrar o vale: '+msgErro+'. Se for "permission-denied", peça para adicionar a coleção "vales" nas regras do Firebase.');
-        return;
-      }
-      setCarrinhoVale([]);setValeForn('');setValeObs('');
+
+    // PASSO 1: testar permissão na coleção 'vales' ANTES de mexer no estoque.
+    // Isso evita dar entrada no estoque sem conseguir registrar o vale como pendente.
+    db.collection('vales').add({
+      teste:true,registradoPor:user.name,registradoEm:hoje
+    }).then(function(testRef){
+      // Permissão OK — apaga o documento de teste e segue com o fluxo real
+      return testRef.delete().then(function(){return true;});
+    }).catch(function(e){
       setSalvandoVale(false);
-      alert2('Vale registrado! O estoque foi atualizado. Lembre-se de vincular a Nota Fiscal quando ela chegar (aba 🧾 Vale → Pendentes).');
-    }
-    items.forEach(function(item2){
-      // 1. Entrada normal no estoque
-      var entryObj={
-        medicamentoId:item2.medId,medicamentoNome:item2.medNome,
-        tipo:'entrada',quantidade:Number(item2.qty)||0,
-        lote:item2.lote,validade:item2.validade,
-        observacao:'VALE'+(forn?' - '+forn:'')+(obs?' - '+obs:''),
-        categoriaMed:item2.categoriaMed,
-        viaVale:true
-      };
-      onSave(entryObj).then(function(){
-        // 2. Registrar o vale como pendente de NF
-        return db.collection('vales').add({
+      var msgErro=(e&&e.code)||(e&&e.message)||'erro desconhecido';
+      alert2('Não foi possível registrar o vale: '+msgErro+'. Nada foi alterado no estoque ainda. Peça para adicionar a coleção "vales" nas regras do Firebase e tente novamente.');
+      return false;
+    }).then(function(podeContinuar){
+      if(!podeContinuar)return;
+
+      // PASSO 2: permissão confirmada, agora processa cada item (entrada + vale juntos)
+      var total=items.length;
+      var concluidos=0;
+      var temErro=false;
+      var ultimoErroVale=null;
+      function finalizarSeCompleto(){
+        if(concluidos<total)return;
+        if(temErro){
+          setSalvandoVale(false);
+          var msgErro=ultimoErroVale?(ultimoErroVale.code||ultimoErroVale.message||'erro desconhecido'):'erro desconhecido';
+          alert2('Parte do vale não foi registrada: '+msgErro+'. Os itens que falharam continuam no carrinho — tente confirmar novamente.');
+          return;
+        }
+        setCarrinhoVale([]);setValeForn('');setValeObs('');
+        setSalvandoVale(false);
+        alert2('Vale registrado! O estoque foi atualizado. Lembre-se de vincular a Nota Fiscal quando ela chegar (aba 🧾 Vale → Pendentes).');
+      }
+      items.forEach(function(item2){
+        var entryObj={
           medicamentoId:item2.medId,medicamentoNome:item2.medNome,
-          quantidade:Number(item2.qty)||0,lote:item2.lote,validade:item2.validade,
-          fornecedor:forn,obs:obs,
-          status:'pendente',
-          nfNumero:'',nfFornecedor:'',nfData:'',
-          registradoPor:user.name,registradoEm:hoje,date:todayStr()
+          tipo:'entrada',quantidade:Number(item2.qty)||0,
+          lote:item2.lote,validade:item2.validade,
+          observacao:'VALE'+(forn?' - '+forn:'')+(obs?' - '+obs:''),
+          categoriaMed:item2.categoriaMed,
+          viaVale:true
+        };
+        onSave(entryObj).then(function(){
+          return db.collection('vales').add({
+            medicamentoId:item2.medId,medicamentoNome:item2.medNome,
+            quantidade:Number(item2.qty)||0,lote:item2.lote,validade:item2.validade,
+            fornecedor:forn,obs:obs,
+            status:'pendente',
+            nfNumero:'',nfFornecedor:'',nfData:'',
+            registradoPor:user.name,registradoEm:hoje,date:todayStr()
+          });
+        }).then(function(){
+          // Remove este item do carrinho local (já está salvo com sucesso)
+          setCarrinhoVale(function(prev){return prev.filter(function(x){return x!==item2;});});
+          concluidos++;
+          finalizarSeCompleto();
+        }).catch(function(e){
+          console.error('Erro vale item:',e);
+          temErro=true;ultimoErroVale=e;concluidos++;
+          finalizarSeCompleto();
         });
-      }).then(function(){
-        concluidos++;
-        finalizarSeCompleto();
-      }).catch(function(e){
-        console.error('Erro vale:',e);
-        temErro=true;ultimoErroVale=e;concluidos++;
-        finalizarSeCompleto();
       });
     });
   }
