@@ -511,60 +511,38 @@ return(
 </div>);}
 
 function VaPendenteCard(props){
-  var v=props.v;var db=props.db;var user=props.user;
-  var _showForm=useState(false);var showForm=_showForm[0];var setShowForm=_showForm[1];
-  var _nfNum=useState('');var nfNum=_nfNum[0];var setNfNum=_nfNum[1];
-  var _nfForn=useState(v.fornecedor||'');var nfForn=_nfForn[0];var setNfForn=_nfForn[1];
-  var _nfData=useState('');var nfData=_nfData[0];var setNfData=_nfData[1];
-  var _salvando=useState(false);var salvando=_salvando[0];var setSalvando=_salvando[1];
+  var v=props.v;var selecionado=props.selecionado;var onToggleSelect=props.onToggleSelect;
   var dias=Math.floor((new Date()-new Date(v.registradoEm))/86400000);
   var atrasado=dias>=15;
-  function vincularNota(){
-    if(!nfNum.trim()){alert('Informe o número da nota.');return;}
-    setSalvando(true);
-    db.collection('vales').doc(v.id).update({
-      status:'concluido',nfNumero:nfNum.trim(),nfFornecedor:nfForn.trim(),nfData:nfData.trim(),
-      vinculadoPor:user.name,vinculadoEm:new Date().toISOString()
-    }).then(function(){
-      setSalvando(false);
-    }).catch(function(e){
-      setSalvando(false);
-      alert('Erro: '+e.message);
-    });
-  }
-  return(<div style={{background:atrasado?'#FEF2F2':'#fff',borderRadius:12,border:'1.5px solid '+(atrasado?'#FCA5A5':'#E2E8F0'),padding:12,marginBottom:8}}>
-    <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
-      <div style={{flex:1}}>
-        <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>{v.medicamentoNome}</div>
-        <div style={{fontSize:11,color:'#64748B'}}>{v.quantidade} un. · Lote {v.lote} · Val {v.validade}{v.fornecedor?' · '+v.fornecedor:''}</div>
-        <div style={{fontSize:11,marginTop:2,color:atrasado?'#DC2626':'#94A3B8',fontWeight:atrasado?700:400}}>
-          {atrasado?'⚠️ ':''}{dias} dia(s) aguardando nota fiscal
-        </div>
+  return(<div style={{background:atrasado?'#FEF2F2':(selecionado?'#EFF6FF':'#fff'),borderRadius:12,border:'1.5px solid '+(selecionado?'#1351B4':(atrasado?'#FCA5A5':'#E2E8F0')),padding:12,marginBottom:8,display:'flex',gap:10,alignItems:'flex-start'}}>
+    <input type="checkbox" checked={selecionado} onChange={function(){onToggleSelect(v.id);}} style={{width:20,height:20,marginTop:2,flexShrink:0,cursor:'pointer'}}/>
+    <div style={{flex:1}}>
+      <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>{v.medicamentoNome}</div>
+      <div style={{fontSize:11,color:'#64748B'}}>{v.quantidade} un. · Lote {v.lote} · Val {v.validade}{v.fornecedor?' · '+v.fornecedor:''}</div>
+      <div style={{fontSize:11,marginTop:2,color:atrasado?'#DC2626':'#94A3B8',fontWeight:atrasado?700:400}}>
+        {atrasado?'⚠️ ':''}{dias} dia(s) aguardando nota fiscal
       </div>
-      <button onClick={function(){setShowForm(!showForm);}} style={{background:'#1351B4',border:'none',borderRadius:8,padding:'7px 12px',color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer',flexShrink:0}}>
-        {showForm?'Fechar':'Vincular Nota'}
-      </button>
     </div>
-    {showForm&&<div style={{marginTop:10,paddingTop:10,borderTop:'1px solid #F1F5F9'}}>
-      <input value={nfNum} onChange={function(e){setNfNum(e.target.value);}} placeholder="Número da NF *" className="inp" style={{fontSize:13}}/>
-      <input value={nfForn} onChange={function(e){setNfForn(e.target.value);}} placeholder="Fornecedor" className="inp" style={{fontSize:13}}/>
-      <input value={nfData} onChange={function(e){setNfData(e.target.value);}} placeholder="Data da nota (DD/MM/AAAA)" className="inp" style={{fontSize:13}}/>
-      <button onClick={vincularNota} disabled={salvando} style={{width:'100%',padding:'10px',background:'#059669',color:'#fff',border:'none',borderRadius:8,fontWeight:700,fontSize:13,cursor:'pointer',opacity:salvando?0.6:1}}>
-        {salvando?'Salvando...':'✅ Confirmar vínculo'}
-      </button>
-    </div>}
   </div>);
 }
 
 function ValesPendentesPainel(props){
-  var db=props.db;var user=props.user;
+  var db=props.db;var user=props.user;var entries=props.entries||[];
   var _vales=useState([]);var vales=_vales[0];var setVales=_vales[1];
   var _carregando=useState(true);var carregando=_carregando[0];var setCarregando=_carregando[1];
   var _erroCarregar=useState('');var erroCarregar=_erroCarregar[0];var setErroCarregar=_erroCarregar[1];
+  var _selecionados=useState({});var selecionados=_selecionados[0];var setSelecionados=_selecionados[1];
+  var _showVincular=useState(false);var showVincular=_showVincular[0];var setShowVincular=_showVincular[1];
+  var _modoNota=useState('existente');var modoNota=_modoNota[0];var setModoNota=_modoNota[1];
+  var _notaEscolhida=useState('');var notaEscolhida=_notaEscolhida[0];var setNotaEscolhida=_notaEscolhida[1];
+  var _buscaNotaExist=useState('');var buscaNotaExist=_buscaNotaExist[0];var setBuscaNotaExist=_buscaNotaExist[1];
+  var _nfNumNovo=useState('');var nfNumNovo=_nfNumNovo[0];var setNfNumNovo=_nfNumNovo[1];
+  var _nfFornNovo=useState('');var nfFornNovo=_nfFornNovo[0];var setNfFornNovo=_nfFornNovo[1];
+  var _nfDataNovo=useState('');var nfDataNovo=_nfDataNovo[0];var setNfDataNovo=_nfDataNovo[1];
+  var _salvandoVinc=useState(false);var salvandoVinc=_salvandoVinc[0];var setSalvandoVinc=_salvandoVinc[1];
+
   useEffect(function(){
     if(!db)return;
-    // Sem orderBy combinado com where (evita exigir índice composto no Firestore).
-    // A ordenação é feita aqui no JavaScript depois de receber os dados.
     return db.collection('vales').where('status','==','pendente').onSnapshot(function(s){
       var lista=s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;});
       lista.sort(function(a,b){return new Date(b.registradoEm||0)-new Date(a.registradoEm||0);});
@@ -577,22 +555,144 @@ function ValesPendentesPainel(props){
       setErroCarregar((e&&e.code)||(e&&e.message)||'erro desconhecido');
     });
   },[db]);
+
+  // Notas fiscais já existentes, extraídas das entradas (Histórico de Notas)
+  var notasExistentes=(function(){
+    var entradas=entries.filter(function(e){return e.tipo==='entrada'&&e.nfNumero;});
+    var gmap={};
+    entradas.forEach(function(e){
+      var k=e.nfNumero+'|||'+(e.nfFornecedor||'');
+      if(!gmap[k])gmap[k]={nf:e.nfNumero,forn:e.nfFornecedor||'',data:e.nfData||'',dt:e.criadoEm||'',count:0};
+      gmap[k].count++;
+      if((e.criadoEm||'')>(gmap[k].dt||''))gmap[k].dt=e.criadoEm||'';
+    });
+    return Object.values(gmap).sort(function(a,b){return (b.dt||'').localeCompare(a.dt||'');});
+  })();
+
+  function toggleSelect(id){
+    setSelecionados(function(prev){
+      var n=Object.assign({},prev);
+      if(n[id])delete n[id];else n[id]=true;
+      return n;
+    });
+  }
+
+  function selecionarTodos(){
+    var n={};
+    vales.forEach(function(v){n[v.id]=true;});
+    setSelecionados(n);
+  }
+
+  function limparSelecao(){
+    setSelecionados({});
+  }
+
+  var idsSelecionados=Object.keys(selecionados).filter(function(id){return selecionados[id];});
+  var qtdSelecionados=idsSelecionados.length;
+
+  function confirmarVinculo(){
+    var nfNum,nfForn,nfData;
+    if(modoNota==='existente'){
+      if(!notaEscolhida){alert('Selecione uma nota fiscal da lista.');return;}
+      var partes=notaEscolhida.split('|||');
+      nfNum=partes[0];nfForn=partes[1]||'';
+      var notaObj=notasExistentes.find(function(n){return n.nf===nfNum&&(n.forn||'')===nfForn;});
+      nfData=notaObj?notaObj.data:'';
+    } else {
+      if(!nfNumNovo.trim()){alert('Informe o número da nova nota.');return;}
+      nfNum=nfNumNovo.trim();nfForn=nfFornNovo.trim();nfData=nfDataNovo.trim();
+    }
+    if(qtdSelecionados===0){alert('Selecione ao menos um vale.');return;}
+    setSalvandoVinc(true);
+    var ids=idsSelecionados.slice();
+    var i=0;
+    function nx(){
+      if(i>=ids.length){
+        setSalvandoVinc(false);setShowVincular(false);setSelecionados({});
+        setNotaEscolhida('');setNfNumNovo('');setNfFornNovo('');setNfDataNovo('');
+        return;
+      }
+      var id=ids[i++];
+      db.collection('vales').doc(id).update({
+        status:'concluido',nfNumero:nfNum,nfFornecedor:nfForn,nfData:nfData,
+        vinculadoPor:user.name,vinculadoEm:new Date().toISOString()
+      }).then(nx).catch(function(e){console.error('Erro vincular vale:',e);nx();});
+    }
+    nx();
+  }
+
   var atrasados=vales.filter(function(v){return Math.floor((new Date()-new Date(v.registradoEm))/86400000)>=15;});
+
   return(<div className="card" style={{marginBottom:14}}>
     <div className="ch"><div className="ch-title"><div style={{width:3,height:16,background:'#1351B4',borderRadius:2}}></div>📋 Vales Pendentes ({vales.length})</div></div>
-    {atrasados.length>0&&<div style={{background:'#FEF2F2',border:'1.5px solid #FCA5A5',borderRadius:10,padding:'10px 12px',marginBottom:10,fontSize:12,color:'#DC2626',fontWeight:600}}>
-      ⚠️ {atrasados.length} vale(s) aguardando nota fiscal há mais de 15 dias!
-    </div>}
     {erroCarregar&&<div style={{background:'#FEF2F2',border:'1.5px solid #FCA5A5',borderRadius:10,padding:'10px 12px',marginBottom:10,fontSize:12,color:'#DC2626'}}>
       ⚠️ Erro ao carregar vales pendentes: {erroCarregar}
     </div>}
+    {atrasados.length>0&&<div style={{background:'#FEF2F2',border:'1.5px solid #FCA5A5',borderRadius:10,padding:'10px 12px',marginBottom:10,fontSize:12,color:'#DC2626',fontWeight:600}}>
+      ⚠️ {atrasados.length} vale(s) aguardando nota fiscal há mais de 15 dias!
+    </div>}
     {carregando&&<div style={{textAlign:'center',padding:16,color:'#94A3B8',fontSize:13}}>Carregando...</div>}
     {!carregando&&!erroCarregar&&vales.length===0&&<div style={{textAlign:'center',padding:'24px 0',color:'#94A3B8',fontSize:13}}>✅ Nenhum vale pendente</div>}
-    {vales.map(function(v){return(<VaPendenteCard key={v.id} v={v} db={db} user={user}/>);})}
+
+    {vales.length>0&&<div style={{display:'flex',gap:8,marginBottom:10,flexWrap:'wrap',alignItems:'center'}}>
+      <button onClick={selecionarTodos} style={{background:'#F1F5F9',border:'none',borderRadius:8,padding:'6px 12px',fontSize:12,color:'#475569',fontWeight:600,cursor:'pointer'}}>Selecionar todos</button>
+      {qtdSelecionados>0&&<button onClick={limparSelecao} style={{background:'#F1F5F9',border:'none',borderRadius:8,padding:'6px 12px',fontSize:12,color:'#475569',fontWeight:600,cursor:'pointer'}}>Limpar seleção</button>}
+      {qtdSelecionados>0&&<span style={{fontSize:12,color:'#1351B4',fontWeight:700,marginLeft:'auto'}}>{qtdSelecionados} selecionado(s)</span>}
+    </div>}
+
+    {qtdSelecionados>0&&<button onClick={function(){setShowVincular(true);}} style={{width:'100%',padding:'12px',background:'#1351B4',color:'#fff',border:'none',borderRadius:10,fontWeight:700,fontSize:14,cursor:'pointer',marginBottom:12}}>
+      🔗 Vincular Nota Fiscal a {qtdSelecionados} vale(s)
+    </button>}
+
+    {vales.map(function(v){return(<VaPendenteCard key={v.id} v={v} selecionado={!!selecionados[v.id]} onToggleSelect={toggleSelect}/>);})}
+
+    {showVincular&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',zIndex:9500,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+      <div style={{background:'#fff',borderRadius:20,padding:20,maxWidth:480,width:'100%',maxHeight:'85vh',overflowY:'auto'}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+          <div style={{fontWeight:800,fontSize:16,color:'#1351B4'}}>🔗 Vincular Nota a {qtdSelecionados} vale(s)</div>
+          <button onClick={function(){setShowVincular(false);}} style={{background:'none',border:'none',fontSize:22,cursor:'pointer',color:'#94A3B8'}}>✕</button>
+        </div>
+        <div style={{display:'flex',gap:8,marginBottom:14}}>
+          <button onClick={function(){setModoNota('existente');}} style={{flex:1,padding:'9px',borderRadius:8,border:'1.5px solid '+(modoNota==='existente'?'#1351B4':'#E2E8F0'),background:modoNota==='existente'?'#1351B4':'#fff',color:modoNota==='existente'?'#fff':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>📋 Nota Existente</button>
+          <button onClick={function(){setModoNota('nova');}} style={{flex:1,padding:'9px',borderRadius:8,border:'1.5px solid '+(modoNota==='nova'?'#1351B4':'#E2E8F0'),background:modoNota==='nova'?'#1351B4':'#fff',color:modoNota==='nova'?'#fff':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>➕ Nota Nova</button>
+        </div>
+
+        {modoNota==='existente'&&<div>
+          {notasExistentes.length===0&&<div style={{textAlign:'center',padding:'20px 0',color:'#94A3B8',fontSize:13}}>Nenhuma nota cadastrada ainda. Use "Nota Nova".</div>}
+          {notasExistentes.length>0&&<div>
+            <input value={buscaNotaExist} onChange={function(e){setBuscaNotaExist(e.target.value);}} placeholder="Buscar por número ou fornecedor..." className="inp" style={{fontSize:13}}/>
+            <div style={{maxHeight:260,overflowY:'auto'}}>
+              {notasExistentes.filter(function(n){
+                if(!buscaNotaExist.trim())return true;
+                var s=buscaNotaExist.toLowerCase();
+                return n.nf.toLowerCase().indexOf(s)>=0||(n.forn||'').toLowerCase().indexOf(s)>=0;
+              }).map(function(n){
+                var key=n.nf+'|||'+n.forn;
+                var sel=notaEscolhida===key;
+                return(<div key={key} onClick={function(){setNotaEscolhida(key);}} style={{padding:'10px 12px',borderRadius:10,border:'1.5px solid '+(sel?'#1351B4':'#E2E8F0'),background:sel?'#EFF6FF':'#fff',marginBottom:6,cursor:'pointer'}}>
+                  <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>NF {n.nf}{n.forn?' · '+n.forn:''}</div>
+                  <div style={{fontSize:11,color:'#94A3B8'}}>{n.count} item(ns) já registrados{n.data?' · '+n.data:''}</div>
+                </div>);
+              })}
+            </div>
+          </div>}
+        </div>}
+
+        {modoNota==='nova'&&<div>
+          <input value={nfNumNovo} onChange={function(e){setNfNumNovo(e.target.value);}} placeholder="Número da NF *" className="inp" style={{fontSize:13}}/>
+          <input value={nfFornNovo} onChange={function(e){setNfFornNovo(e.target.value);}} placeholder="Fornecedor" className="inp" style={{fontSize:13}}/>
+          <input value={nfDataNovo} onChange={function(e){setNfDataNovo(e.target.value);}} placeholder="Data da nota (DD/MM/AAAA)" className="inp" style={{fontSize:13}}/>
+        </div>}
+
+        <button onClick={confirmarVinculo} disabled={salvandoVinc} style={{width:'100%',padding:'13px',background:'#059669',color:'#fff',border:'none',borderRadius:10,fontWeight:700,fontSize:14,cursor:'pointer',opacity:salvandoVinc?0.6:1,marginTop:14}}>
+          {salvandoVinc?'Vinculando...':'✅ Confirmar vínculo de '+qtdSelecionados+' vale(s)'}
+        </button>
+      </div>
+    </div>}
   </div>);
 }
 
-function TabEntrada(props){var user=props.user;var medications=props.medications;var onSave=props.onSave;var isGuest=props.isGuest||false;var canMove=props.canMove!==false;var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};var alert2=props.alert2||function(m){window.alert(m);};var _modo=useState('individual');var modo=_modo[0];var setModo=_modo[1];var _search=useState('');var search=_search[0];var setSearch=_search[1];var _sel=useState(null);var sel=_sel[0];var setSel=_sel[1];var _newNome=useState('');var newNome=_newNome[0];var setNewNome=_newNome[1];var _newEan=useState('');var newEan=_newEan[0];var setNewEan=_newEan[1];var _creating=useState(false);var creating=_creating[0];var setCreating=_creating[1];var _showList=useState(false);var showList=_showList[0];var setShowList=_showList[1];var _qty=useState('');var qty=_qty[0];var setQty=_qty[1];var _lote=useState('');var lote=_lote[0];var setLote=_lote[1];var _val=useState('');var val=_val[0];var setVal=_val[1];var _obs=useState('');var obs=_obs[0];var setObs=_obs[1];var _err=useState('');var err=_err[0];var setErr=_err[1];var _ok=useState('');var ok=_ok[0];var setOk=_ok[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];var _filtEntrada=useState('todos');var filtEntrada=_filtEntrada[0];var setFiltEntrada=_filtEntrada[1];var _loteNota=useState('');var loteNota=_loteNota[0];var setLoteNota=_loteNota[1];var _valNota=useState('');var valNota=_valNota[0];var setValNota=_valNota[1];var _obsNota=useState('');var obsNota=_obsNota[0];var setObsNota=_obsNota[1];var _loteNotaReal=useState('');var loteNotaReal=_loteNotaReal[0];var setLoteNotaReal=_loteNotaReal[1];var _valNotaReal=useState('');var valNotaReal=_valNotaReal[0];var setValNotaReal=_valNotaReal[1];var _qtds=useState({});var qtds=_qtds[0];var setQtds=_qtds[1];var _salvandoNota=useState(false);var salvandoNota=_salvandoNota[0];var setSalvandoNota=_salvandoNota[1];
+function TabEntrada(props){var user=props.user;var medications=props.medications;var entries=props.entries||[];var onSave=props.onSave;var isGuest=props.isGuest||false;var canMove=props.canMove!==false;var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};var alert2=props.alert2||function(m){window.alert(m);};var _modo=useState('individual');var modo=_modo[0];var setModo=_modo[1];var _search=useState('');var search=_search[0];var setSearch=_search[1];var _sel=useState(null);var sel=_sel[0];var setSel=_sel[1];var _newNome=useState('');var newNome=_newNome[0];var setNewNome=_newNome[1];var _newEan=useState('');var newEan=_newEan[0];var setNewEan=_newEan[1];var _creating=useState(false);var creating=_creating[0];var setCreating=_creating[1];var _showList=useState(false);var showList=_showList[0];var setShowList=_showList[1];var _qty=useState('');var qty=_qty[0];var setQty=_qty[1];var _lote=useState('');var lote=_lote[0];var setLote=_lote[1];var _val=useState('');var val=_val[0];var setVal=_val[1];var _obs=useState('');var obs=_obs[0];var setObs=_obs[1];var _err=useState('');var err=_err[0];var setErr=_err[1];var _ok=useState('');var ok=_ok[0];var setOk=_ok[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];var _filtEntrada=useState('todos');var filtEntrada=_filtEntrada[0];var setFiltEntrada=_filtEntrada[1];var _loteNota=useState('');var loteNota=_loteNota[0];var setLoteNota=_loteNota[1];var _valNota=useState('');var valNota=_valNota[0];var setValNota=_valNota[1];var _obsNota=useState('');var obsNota=_obsNota[0];var setObsNota=_obsNota[1];var _loteNotaReal=useState('');var loteNotaReal=_loteNotaReal[0];var setLoteNotaReal=_loteNotaReal[1];var _valNotaReal=useState('');var valNotaReal=_valNotaReal[0];var setValNotaReal=_valNotaReal[1];var _qtds=useState({});var qtds=_qtds[0];var setQtds=_qtds[1];var _salvandoNota=useState(false);var salvandoNota=_salvandoNota[0];var setSalvandoNota=_salvandoNota[1];
 var _showDiv=useState(false);var showDiv=_showDiv[0];var setShowDiv=_showDiv[1];
 var _carrinhoVale=useState(function(){try{var s=localStorage.getItem('fc_rascunho_vale');return s?JSON.parse(s):[];}catch(e){return [];}});var carrinhoVale=_carrinhoVale[0];var setCarrinhoVale=_carrinhoVale[1];
   useEffect(function(){try{if(carrinhoVale.length>0)localStorage.setItem('fc_rascunho_vale',JSON.stringify(carrinhoVale));else localStorage.removeItem('fc_rascunho_vale');}catch(e){}},[carrinhoVale]);
@@ -1161,7 +1261,7 @@ return(
         {salvandoVale?'Registrando...':'🧾 Confirmar Vale ('+carrinhoVale.length+' item'+(carrinhoVale.length===1?'':'s')+')'}
       </button>
 
-      <ValesPendentesPainel db={db} user={user}/>
+      <ValesPendentesPainel db={db} user={user} entries={entries}/>
     </div>
   )}
 
@@ -4387,7 +4487,7 @@ return(
       <div>
         {tab==='dashboard'&&<TabDashboard entries={entries} medications={meds} stock={stock} user={user} plantao={plantao} isGuest={isGuest} onSolicitar={function(){setShowSolicit(true);}} onEncerrar={encerrarPlantao} onSair={sairDoPlantao} onSolicitarEntrada={solicitarEntradaPlantao} shiftId={shiftId} onIniciar={function(){setShowShiftModal(true);}}/>}
         {tab==='saida'&&<TabSaida user={user} medications={meds} stock={stock} entries={entries} onSave={addEntry} onSolicitar={addSolicitacao} latest={latest} isGuest={isGuest} canMove={canMove} confirm2={confirm2} alert2={alert2}/>}
-        {tab==='entrada'&&<TabEntrada user={user} medications={meds} onSave={addEntry} onSolicitar={addSolicitacao} isGuest={isGuest} canMove={canMove} confirm2={confirm2} alert2={alert2}/>}
+        {tab==='entrada'&&<TabEntrada user={user} medications={meds} entries={entries} onSave={addEntry} onSolicitar={addSolicitacao} isGuest={isGuest} canMove={canMove} confirm2={confirm2} alert2={alert2}/>}
         {tab==='estoque'&&<TabEstoque user={user} medications={meds} entries={entries} stock={stock}/>}
         {tab==='relatorio'&&<TabRelatorio entries={entries} medications={meds} db={db} user={user}/>}
         {tab==='gestao'&&can(user.role,'gestao')&&<TabGestao currentUser={user} entries={entries}/>}
