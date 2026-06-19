@@ -581,7 +581,8 @@ function ValesPendentesPainel(props){
 
 function TabEntrada(props){var user=props.user;var medications=props.medications;var onSave=props.onSave;var isGuest=props.isGuest||false;var canMove=props.canMove!==false;var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};var alert2=props.alert2||function(m){window.alert(m);};var _modo=useState('individual');var modo=_modo[0];var setModo=_modo[1];var _search=useState('');var search=_search[0];var setSearch=_search[1];var _sel=useState(null);var sel=_sel[0];var setSel=_sel[1];var _newNome=useState('');var newNome=_newNome[0];var setNewNome=_newNome[1];var _newEan=useState('');var newEan=_newEan[0];var setNewEan=_newEan[1];var _creating=useState(false);var creating=_creating[0];var setCreating=_creating[1];var _showList=useState(false);var showList=_showList[0];var setShowList=_showList[1];var _qty=useState('');var qty=_qty[0];var setQty=_qty[1];var _lote=useState('');var lote=_lote[0];var setLote=_lote[1];var _val=useState('');var val=_val[0];var setVal=_val[1];var _obs=useState('');var obs=_obs[0];var setObs=_obs[1];var _err=useState('');var err=_err[0];var setErr=_err[1];var _ok=useState('');var ok=_ok[0];var setOk=_ok[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];var _filtEntrada=useState('todos');var filtEntrada=_filtEntrada[0];var setFiltEntrada=_filtEntrada[1];var _loteNota=useState('');var loteNota=_loteNota[0];var setLoteNota=_loteNota[1];var _valNota=useState('');var valNota=_valNota[0];var setValNota=_valNota[1];var _obsNota=useState('');var obsNota=_obsNota[0];var setObsNota=_obsNota[1];var _loteNotaReal=useState('');var loteNotaReal=_loteNotaReal[0];var setLoteNotaReal=_loteNotaReal[1];var _valNotaReal=useState('');var valNotaReal=_valNotaReal[0];var setValNotaReal=_valNotaReal[1];var _qtds=useState({});var qtds=_qtds[0];var setQtds=_qtds[1];var _salvandoNota=useState(false);var salvandoNota=_salvandoNota[0];var setSalvandoNota=_salvandoNota[1];
 var _showDiv=useState(false);var showDiv=_showDiv[0];var setShowDiv=_showDiv[1];
-var _carrinhoVale=useState([]);var carrinhoVale=_carrinhoVale[0];var setCarrinhoVale=_carrinhoVale[1];
+var _carrinhoVale=useState(function(){try{var s=localStorage.getItem('fc_rascunho_vale');return s?JSON.parse(s):[];}catch(e){return [];}});var carrinhoVale=_carrinhoVale[0];var setCarrinhoVale=_carrinhoVale[1];
+  useEffect(function(){try{if(carrinhoVale.length>0)localStorage.setItem('fc_rascunho_vale',JSON.stringify(carrinhoVale));else localStorage.removeItem('fc_rascunho_vale');}catch(e){}},[carrinhoVale]);
 var _valeForn=useState('');var valeForn=_valeForn[0];var setValeForn=_valeForn[1];
 var _valeObs=useState('');var valeObs=_valeObs[0];var setValeObs=_valeObs[1];
 var _searchVale=useState('');var searchVale=_searchVale[0];var setSearchVale=_searchVale[1];
@@ -590,6 +591,12 @@ var _qtyVale=useState('');var qtyVale=_qtyVale[0];var setQtyVale=_qtyVale[1];
 var _loteVale=useState('');var loteVale=_loteVale[0];var setLoteVale=_loteVale[1];
 var _valValeItem=useState('');var valValeItem=_valValeItem[0];var setValValeItem=_valValeItem[1];
 var _salvandoVale=useState(false);var salvandoVale=_salvandoVale[0];var setSalvandoVale=_salvandoVale[1];
+var _showNovoMedVale=useState(false);var showNovoMedVale=_showNovoMedVale[0];var setShowNovoMedVale=_showNovoMedVale[1];
+var _novoMedNomeVale=useState('');var novoMedNomeVale=_novoMedNomeVale[0];var setNovoMedNomeVale=_novoMedNomeVale[1];
+var _novoMedCatVale=useState('medicamento');var novoMedCatVale=_novoMedCatVale[0];var setNovoMedCatVale=_novoMedCatVale[1];
+var _novoMedQtyVale=useState('');var novoMedQtyVale=_novoMedQtyVale[0];var setNovoMedQtyVale=_novoMedQtyVale[1];
+var _novoMedLoteVale=useState('');var novoMedLoteVale=_novoMedLoteVale[0];var setNovoMedLoteVale=_novoMedLoteVale[1];
+var _novoMedValVale=useState('');var novoMedValVale=_novoMedValVale[0];var setNovoMedValVale=_novoMedValVale[1];
 var _divNotaMed=useState(null);var divNotaMed=_divNotaMed[0];var setDivNotaMed=_divNotaMed[1];
 var _divNotaQty=useState('');var divNotaQty=_divNotaQty[0];var setDivNotaQty=_divNotaQty[1];
 var _divRealMed=useState(null);var divRealMed=_divRealMed[0];var setDivRealMed=_divRealMed[1];
@@ -600,7 +607,8 @@ var _divMotivo=useState('');var divMotivo=_divMotivo[0];var setDivMotivo=_divMot
 var _divBusca=useState('');var divBusca=_divBusca[0];var setDivBusca=_divBusca[1];
 var _divBuscaNota=useState('');var divBuscaNota=_divBuscaNota[0];var setDivBuscaNota=_divBuscaNota[1];
 var _salvandoDiv=useState(false);var salvandoDiv=_salvandoDiv[0];var setSalvandoDiv=_salvandoDiv[1];
-var _carrinhoNota=useState([]);var carrinhoNota=_carrinhoNota[0];var setCarrinhoNota=_carrinhoNota[1];
+var _carrinhoNota=useState(function(){try{var s=localStorage.getItem('fc_rascunho_nota');return s?JSON.parse(s):[];}catch(e){return [];}});var carrinhoNota=_carrinhoNota[0];var setCarrinhoNota=_carrinhoNota[1];
+  useEffect(function(){try{if(carrinhoNota.length>0)localStorage.setItem('fc_rascunho_nota',JSON.stringify(carrinhoNota));else localStorage.removeItem('fc_rascunho_nota');}catch(e){}},[carrinhoNota]);
 var _editIdx=useState(null);var editIdx=_editIdx[0];var setEditIdx=_editIdx[1];
 var _showNovoMed=useState(false);var showNovoMed=_showNovoMed[0];var setShowNovoMed=_showNovoMed[1];
 var _novoMedNome=useState('');var novoMedNome=_novoMedNome[0];var setNovoMedNome=_novoMedNome[1];
@@ -680,6 +688,29 @@ function save(){if(!sel){setErr('Selecione um medicamento.');return;}var q=parse
     });
   }
 
+  function cadastrarNovoMedVale(){
+    if(!novoMedNomeVale.trim()){alert2('Informe o nome do medicamento.');return;}
+    if(!novoMedLoteVale.trim()){alert2('Informe o lote.');return;}
+    if(!novoMedValVale.trim()){alert2('Informe a validade.');return;}
+    var q2=parseInt(novoMedQtyVale)||0;
+    if(q2<=0){alert2('Informe a quantidade.');return;}
+    setSalvandoVale(true);
+    db.collection('medicamentos').add({
+      nome:novoMedNomeVale.trim().toUpperCase(),categoria:novoMedCatVale,tipo:novoMedCatVale,
+      ean:'',estoqueMin:5,criadoEm:new Date().toISOString(),criadoPor:user.name
+    }).then(function(ref){
+      setCarrinhoVale(function(prev){
+        return prev.concat([{
+          medId:ref.id,medNome:novoMedNomeVale.trim().toUpperCase(),
+          qty:q2,lote:novoMedLoteVale.trim(),validade:novoMedValVale.trim(),
+          categoriaMed:novoMedCatVale,novo:true
+        }]);
+      });
+      setNovoMedNomeVale('');setNovoMedQtyVale('');setNovoMedLoteVale('');setNovoMedValVale('');
+      setShowNovoMedVale(false);setSalvandoVale(false);
+    }).catch(function(e){setSalvandoVale(false);alert2('Erro: '+e.message);});
+  }
+
   function adicionarAoCarrinhoVale(){
     if(!selVale){alert2('Selecione um medicamento.');return;}
     var q=parseInt(qtyVale);
@@ -713,12 +744,14 @@ function save(){if(!sel){setErr('Selecione um medicamento.');return;}var q=parse
     var total=items.length;
     var concluidos=0;
     var temErro=false;
+    var ultimoErroVale=null;
     var hoje=new Date().toISOString();
     function finalizarSeCompleto(){
       if(concluidos<total)return;
       if(temErro){
         setSalvandoVale(false);
-        alert2('Erro ao registrar o vale. Verifique a conexão e tente novamente.');
+        var msgErro=ultimoErroVale?(ultimoErroVale.code||ultimoErroVale.message||'erro desconhecido'):'erro desconhecido';
+        alert2('Erro ao registrar o vale: '+msgErro+'. Se for "permission-denied", peça para adicionar a coleção "vales" nas regras do Firebase.');
         return;
       }
       setCarrinhoVale([]);setValeForn('');setValeObs('');
@@ -750,7 +783,7 @@ function save(){if(!sel){setErr('Selecione um medicamento.');return;}var q=parse
         finalizarSeCompleto();
       }).catch(function(e){
         console.error('Erro vale:',e);
-        temErro=true;concluidos++;
+        temErro=true;ultimoErroVale=e;concluidos++;
         finalizarSeCompleto();
       });
     });
@@ -993,6 +1026,7 @@ return(
 
       {carrinhoNota.length>0&&<div className="card" style={{marginBottom:14,border:'1.5px solid #86EFAC'}}>
         <div className="ch"><div className="ch-title"><div style={{width:3,height:16,background:'#059669',borderRadius:2}}/><span>Carrinho ({carrinhoNota.length} item{carrinhoNota.length>1?'s':''})</span></div></div>
+        <div style={{background:'#F0FDF4',borderRadius:8,padding:'6px 10px',margin:'0 16px 10px',fontSize:11,color:'#0C6B3E'}}>💾 Salvo automaticamente neste dispositivo — não perde se a tela travar ou fechar.</div>
         <div style={{padding:'0 0 12px'}}>
           {carrinhoNota.map(function(item,i){return(
             <div key={i} style={{padding:'10px 16px',borderBottom:i<carrinhoNota.length-1?'1px solid #F0FDF4':'none',background:editIdx===i?'#FFFBEB':'#fff'}}>
@@ -1056,11 +1090,31 @@ return(
         <div style={{display:'flex',gap:8}}>
           <input type="number" value={qtyVale} onChange={function(e){setQtyVale(e.target.value);}} placeholder="Qtd *" className="inp" style={{marginBottom:0,flex:1}}/>
           <button onClick={adicionarAoCarrinhoVale} disabled={!selVale} style={{flex:1,padding:'10px',background:!selVale?'#E2E8F0':'#D97706',color:!selVale?'#94A3B8':'#fff',border:'none',borderRadius:8,fontWeight:700,fontSize:13,cursor:'pointer'}}>+ Adicionar</button>
+          <button onClick={function(){setShowNovoMedVale(!showNovoMedVale);}} style={{padding:'10px 14px',background:'#EFF6FF',border:'1.5px solid #BFDBFE',borderRadius:8,color:'#1351B4',fontWeight:700,fontSize:12,cursor:'pointer'}}>+ Novo</button>
         </div>
+        {showNovoMedVale&&<div style={{marginTop:12,paddingTop:12,borderTop:'1px solid #F1F5F9'}}>
+          <div style={{fontWeight:700,fontSize:12,color:'#1351B4',marginBottom:8}}>📦 Cadastrar medicamento novo</div>
+          <input value={novoMedNomeVale} onChange={function(e){setNovoMedNomeVale(e.target.value);}} placeholder="Nome do medicamento" className="inp"/>
+          <div style={{background:'#FFF7ED',border:'1.5px solid #FCD34D',borderRadius:10,padding:'10px 12px',marginBottom:10}}>
+            <div style={{fontWeight:700,fontSize:12,color:'#92400E',marginBottom:8}}>⚠️ Confirme a categoria antes de salvar:</div>
+            <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+              {Object.keys(TIPOS).map(function(k){var t=TIPOS[k];return(<button key={k} onClick={function(){setNovoMedCatVale(k);}} style={{padding:'7px 12px',borderRadius:20,border:'1.5px solid '+(novoMedCatVale===k?t.cor:'#E2E8F0'),background:novoMedCatVale===k?t.cor:'#fff',color:novoMedCatVale===k?'#fff':'#64748B',cursor:'pointer',fontWeight:novoMedCatVale===k?700:500,fontSize:11}}>{t.icon} {t.label}</button>);})}
+            </div>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+            <div><Lbl c="Lote *"/><input value={novoMedLoteVale} onChange={function(e){setNovoMedLoteVale(e.target.value);}} placeholder="Lote" className="inp" style={{marginBottom:0}}/></div>
+            <div><Lbl c="Validade *"/><input value={novoMedValVale} onChange={function(e){setNovoMedValVale(e.target.value);}} placeholder="MM/AAAA" className="inp" style={{marginBottom:0}}/></div>
+          </div>
+          <input type="number" value={novoMedQtyVale} onChange={function(e){setNovoMedQtyVale(e.target.value);}} placeholder="Quantidade" className="inp"/>
+          <button onClick={cadastrarNovoMedVale} disabled={!novoMedNomeVale.trim()||salvandoVale} style={{width:'100%',padding:'10px',background:'#1351B4',color:'#fff',border:'none',borderRadius:8,fontWeight:700,fontSize:13,cursor:'pointer',opacity:(!novoMedNomeVale.trim()||salvandoVale)?0.6:1}}>
+            {salvandoVale?'Salvando...':'Cadastrar e adicionar ao carrinho'}
+          </button>
+        </div>}
       </div>
 
       {carrinhoVale.length>0&&<div className="card" style={{marginBottom:14,border:'1.5px solid #FCD34D'}}>
         <div className="ch"><div className="ch-title"><div style={{width:3,height:16,background:'#D97706',borderRadius:2}}></div>Carrinho ({carrinhoVale.length} item{carrinhoVale.length>1?'s':''})</div></div>
+        <div style={{background:'#F0FDF4',borderRadius:8,padding:'6px 10px',marginBottom:10,fontSize:11,color:'#0C6B3E'}}>💾 Salvo automaticamente neste dispositivo — não perde se a tela travar ou fechar.</div>
         {carrinhoVale.map(function(item2,i){
           return(<div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 0',borderBottom:i<carrinhoVale.length-1?'1px solid #F1F5F9':'none'}}>
             <div>
