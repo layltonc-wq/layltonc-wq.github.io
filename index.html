@@ -211,7 +211,9 @@ function loadCfg(){
   return cfgs[env];
 }
 function saveCfg(c){localStorage.setItem(CFG_KEY,JSON.stringify(c));}
-function calcStock(entries){var s={};for(var i=0;i<entries.length;i++){var e=entries[i];if(!e.medicamentoId)continue;if(!s[e.medicamentoId])s[e.medicamentoId]=0;if(e.tipo==='entrada')s[e.medicamentoId]+=(Number(e.quantidade)||0);else if(e.tipo==='saida')s[e.medicamentoId]-=(Number(e.quantidade)||0);}return s;}
+function calcStock(entries){var s={};for(var i=0;i<entries.length;i++){var e=entries[i];if(!e.medicamentoId)continue;if(!s[e.medicamentoId])s[e.medicamentoId]=0;if(e.tipo==='entrada'){if(e.divergenciaTipo==='nota')continue;// entrada fictícia de nota — não entra no estoque real
+s[e.medicamentoId]+=(Number(e.quantidade)||0);}else if(e.tipo==='saida'){if(e.ficticioDiv)continue;// saída fictícia — não subtrai do estoque real
+s[e.medicamentoId]-=(Number(e.quantidade)||0);}}return s;}
 function calcLatest(entries){var info={};var sorted=[];for(var i=0;i<entries.length;i++){if(entries[i].tipo==='entrada')sorted.push(entries[i]);}sorted.sort(function(a,b){return (a.criadoEm||'').localeCompare(b.criadoEm||'');});for(var j=0;j<sorted.length;j++){var e=sorted[j];if(e.medicamentoId)info[e.medicamentoId]={lote:e.lote||'',validade:e.validade||''};}return info;}
 function playSound(type){try{var ctx=new (window.AudioContext||window.webkitAudioContext)();var o=ctx.createOscillator();var g=ctx.createGain();o.connect(g);g.connect(ctx.destination);if(type==='success'){o.frequency.setValueAtTime(523,ctx.currentTime);o.frequency.setValueAtTime(659,ctx.currentTime+0.1);g.gain.setValueAtTime(0.18,ctx.currentTime);g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.3);o.start(ctx.currentTime);o.stop(ctx.currentTime+0.3);}else{o.frequency.setValueAtTime(440,ctx.currentTime);g.gain.setValueAtTime(0.2,ctx.currentTime);g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.4);o.start(ctx.currentTime);o.stop(ctx.currentTime+0.4);}}catch(e){}}
 function compressPhoto(file,cb){var reader=new FileReader();reader.onload=function(ev){var img=new Image();img.onload=function(){var canvas=document.createElement('canvas');canvas.width=160;canvas.height=160;var ctx=canvas.getContext('2d');var size=Math.min(img.width,img.height);var sx=(img.width-size)/2;var sy=(img.height-size)/2;ctx.beginPath();ctx.arc(80,80,80,0,Math.PI*2);ctx.clip();ctx.drawImage(img,sx,sy,size,size,0,0,160,160);cb(canvas.toDataURL('image/jpeg',0.8));};img.src=ev.target.result;};reader.readAsDataURL(file);}
@@ -756,7 +758,27 @@ function save(){if(!sel){setErr('Selecione um medicamento.');return;}var q=parse
   }
   function salvarDivergencia(){
     if(!divNotaMed||!divNotaQty){alert2('Informe o medicamento e quantidade da nota.');return;}
-    if(!divRealMed||!divRealQty){alert2('Informe o medicamento e quantidade que chegou de verdade.');return;}
+    // Adicionar ao carrinho da nota como item de divergência
+    var itemDiv={
+      medId:divNotaMed.id,medNome:divNotaMed.nome,
+      qty:Number(divNotaQty)||0,lote:'',validade:'',
+      isDivergencia:true,
+      divRealMedId:divRealMed?divRealMed.id:'',
+      divRealMedNome:divRealMed?divRealMed.nome:'Não chegou',
+      divRealQty:Number(divRealQty)||0,
+      divRealLote:divRealLote.trim(),divRealVal:divRealVal.trim(),
+      divMotivo:divMotivo.trim(),
+      divTipo:divRealMed?'substituicao':'nao_chegou',
+      categoriaMed:divNotaMed.categoria||'medicamento'
+    };
+    setCarrinhoNota(function(prev){return prev.concat([itemDiv]);});
+    setShowDiv(false);
+    setDivNotaMed(null);setDivNotaQty('');
+    setDivRealMed(null);setDivRealQty('');setDivRealLote('');setDivRealVal('');
+    setDivMotivo('');setDivBusca('');setDivBuscaNota('');
+    alert2('⚠️ Divergência adicionada ao carrinho! Confirme a nota para salvar tudo de uma vez.');
+    return;
+    // [CÓDIGO ANTIGO ABAIXO - NUNCA EXECUTADO]
     setSalvandoDiv(true);
     var nfNum=loteNota.trim();
     var nfForn=obsNota.trim();
@@ -775,8 +797,8 @@ function save(){if(!sel){setErr('Selecione um medicamento.');return;}var q=parse
       medicamentoId:divRealMed.id,medicamentoNome:divRealMed.nome,
       tipo:'entrada',quantidade:Number(divRealQty)||0,
       lote:divRealLote.trim(),validade:divRealVal.trim(),
-      observacao:'REAL — NF '+(nfNum||'')+(nfForn?' - '+nfForn:''),
-      nfNumero:nfNum,nfFornecedor:nfForn,nfData:valNota.trim(),
+      observacao:'[DIV] Chegou em substituição — NF '+(nfNum||'')+(nfForn?' - '+nfForn:''),
+      nfNumero:'',nfFornecedor:'',nfData:'',
       categoriaMed:divRealMed.categoria||'medicamento',
       divergencia:true,divergenciaTipo:'real'
     }):Promise.resolve(null);
@@ -968,6 +990,47 @@ function save(){if(!sel){setErr('Selecione um medicamento.');return;}var q=parse
     }
     items.forEach(function(item2){
       var _mO=(medications||[]).find(function(m){return m.id===item2.medId;});
+      // Item de divergência: processar diferente
+      if(item2.isDivergencia){
+        var hoje2=new Date().toISOString();
+        // 1. Entrada da NOTA (medicamento que a nota diz)
+        var pDiv1=onSave({
+          medicamentoId:item2.medId,medicamentoNome:item2.medNome,
+          tipo:'entrada',quantidade:Number(item2.qty)||0,
+          lote:'',validade:'',observacao:obsTexto,
+          nfNumero:nfNum,nfData:nfData,nfFornecedor:nfForn,
+          categoriaMed:item2.categoriaMed||'medicamento',
+          divergencia:true,divergenciaTipo:'nota'
+        });
+        // 2. Entrada do REAL (o que chegou de verdade) — sem nfNumero
+        var pDiv2=item2.divRealMedId?onSave({
+          medicamentoId:item2.divRealMedId,medicamentoNome:item2.divRealMedNome,
+          tipo:'entrada',quantidade:Number(item2.divRealQty)||0,
+          lote:item2.divRealLote||'',validade:item2.divRealVal||'',
+          observacao:'[DIV] Chegou em substituição — NF '+nfNum+(nfForn?' - '+nfForn:''),
+          nfNumero:'',nfData:'',nfFornecedor:'',
+          categoriaMed:'medicamento',divergencia:true,divergenciaTipo:'real'
+        }):Promise.resolve(null);
+        // 3. Registro de divergência para auditoria
+        var pDiv3=db.collection('divergencias').add({
+          nfNumero:nfNum,nfFornecedor:nfForn,nfData:nfData,
+          notaMedId:item2.medId,notaMedNome:item2.medNome,notaQty:Number(item2.qty)||0,
+          realMedId:item2.divRealMedId||'',realMedNome:item2.divRealMedNome||'Não chegou',
+          realQty:Number(item2.divRealQty)||0,realLote:item2.divRealLote||'',realValidade:item2.divRealVal||'',
+          motivo:item2.divMotivo||'',status:'pendente',
+          tipo:item2.divTipo||'substituicao',
+          saidaPendenteQty:Number(item2.qty)||0,saidaFicticiaTotal:0,
+          registradoPor:user.name,registradoEm:hoje2,date:todayStr()
+        });
+        Promise.all([pDiv1,pDiv2,pDiv3]).then(function(){
+          concluidos++;finalizarSeCompleto();
+        }).catch(function(e){
+          console.error('Erro divergência:',e);
+          temErro=true;concluidos++;finalizarSeCompleto();
+        });
+        return;
+      }
+      // Item normal
       var obj={
         medicamentoId:item2.medId,
         medicamentoNome:item2.medNome,
@@ -1164,7 +1227,10 @@ return(
         <div style={{background:'#F0FDF4',borderRadius:8,padding:'6px 10px',margin:'0 16px 10px',fontSize:11,color:'#0C6B3E'}}>💾 Salvo automaticamente neste dispositivo — não perde se a tela travar ou fechar.</div>
         <div style={{padding:'0 0 12px'}}>
           {carrinhoNota.map(function(item,i){return(
-            <div key={i} style={{padding:'10px 16px',borderBottom:i<carrinhoNota.length-1?'1px solid #F0FDF4':'none',background:editIdx===i?'#FFFBEB':'#fff'}}>
+            <div key={i} style={{padding:'10px 16px',borderBottom:i<carrinhoNota.length-1?'1px solid #F0FDF4':'none',background:item.isDivergencia?'#FFF7ED':(editIdx===i?'#FFFBEB':'#fff')}}>
+              {item.isDivergencia&&<div style={{fontSize:11,color:'#D97706',fontWeight:700,marginBottom:4}}>
+                ⚠️ DIVERGÊNCIA — {item.divTipo==='substituicao'?('chegou: '+item.divRealMedNome+' '+item.divRealQty+'un'):'não chegou nada'}
+              </div>}
               {editIdx===i
                 ?<div>
                   <div style={{fontWeight:700,fontSize:13,color:'#1E293B',marginBottom:8}}>{item.medNome}</div>
@@ -1525,7 +1591,7 @@ function delMed(id){if(!confirm('Excluir medicamento?'))return;db.collection('me
 function salvarEditLote(){if(!editLote)return;setSaving(true);var ps=[];if(editLote.medId)ps.push(db.collection('medicamentos').doc(editLote.medId).update({loteAtual:editLoteVal.trim(),validadeAtual:editLoteData.trim()}));if(editLote.entryId)ps.push(db.collection('entries').doc(editLote.entryId).update({lote:editLoteVal.trim(),validade:editLoteData.trim()}).catch(function(){}));Promise.all(ps).then(function(){setEditLote(null);setSaving(false);}).catch(function(e){alert('Erro: '+e.message);setSaving(false);});}
 function salvarAjuste(){if(!ajusteMed)return;var nq=parseInt(ajusteQty);if(isNaN(nq)||nq<0){alert('Quantidade inválida.');return;}if(!ajusteMotivo.trim()){alert('Informe o motivo.');return;}var atual=loteSel?loteSel.qty:(stock[ajusteMed.id]||0);var diff=nq-atual;if(diff===0){setAjusteId(null);setAjusteMed(null);setAjusteQty('');setAjusteMotivo('');setLoteSel(null);return;}setSaving(true);db.collection('entries').add({medicamentoId:ajusteMed.id,medicamentoNome:ajusteMed.nome,ean:ajusteMed.ean||'',tipo:diff>0?'entrada':'saida',quantidade:Math.abs(diff),lote:loteSel?loteSel.lote:'',validade:loteSel?loteSel.validade:'',observacao:'Balanço: '+ajusteMotivo.trim()+' (era '+atual+', passou a '+nq+')',criadoEm:new Date().toISOString(),date:todayStr(),autorId:user.uid,autorNome:user.name,autorCargo:user.role,autorColor:user.color||B,isAjuste:true}).then(function(){setAjusteId(null);setAjusteMed(null);setAjusteQty('');setAjusteMotivo('');setLoteSel(null);setSaving(false);}).catch(function(e){alert(e.message);setSaving(false);});}
 function handleImportXls(file){if(!file)return;setImporting(true);setImportStatus('Lendo arquivo...');var reader=new FileReader();reader.onload=function(ev){try{var data=new Uint8Array(ev.target.result);var wb=XLSX.read(data,{type:'array'});var catMap={'CONTROLADOS':'controlado','CONTROLADO':'controlado','FARMACIA BASICA':'medicamento','FARMACIA':'medicamento','LEITES':'leite','LEITE':'leite','INJETAVEIS':'injetavel','INJETAVEL':'injetavel','PENSOS':'penso','MATERIAIS':'penso'};var batch=[];for(var si=0;si<wb.SheetNames.length;si++){var sn=wb.SheetNames[si];if(sn.toUpperCase().indexOf('INSTRUC')>=0)continue;var ws2=wb.Sheets[sn];var rows=XLSX.utils.sheet_to_json(ws2,{defval:''});if(!rows||rows.length===0)continue;var su=sn.toUpperCase().trim();var sc='medicamento';for(var key in catMap){if(su.indexOf(key)>=0){sc=catMap[key];break;}}for(var i=0;i<rows.length;i++){var row=rows[i];var nome=row['Nome']||row['NOME']||row['nome']||'';if(!nome||!nome.trim())continue;var cat=row['Categoria']||row['CATEGORIA']||sc;var est2=parseInt(row['Estoque Inicial']||row['estoque']||0)||0;var min2=parseInt(row['Estoque Minimo']||row['minimo']||0)||0;var ean=(row['EAN (opcional)']||row['EAN']||'')+'';var val2=(row['Validade (MM/AAAA)']||row['Validade']||'')+'';var cl=cat.toLowerCase().trim();if(cl.indexOf('injet')>=0)cl='injetavel';else if(cl.indexOf('penso')>=0||cl.indexOf('material')>=0)cl='penso';else if(cl.indexOf('control')>=0)cl='controlado';else if(cl.indexOf('leite')>=0)cl='leite';else cl='medicamento';batch.push({nome:nome.trim(),categoria:cl,minEstoque:min2,ean:ean,validade:val2,estoque:est2,criadoEm:new Date().toISOString()});}}if(batch.length===0){setImportStatus('Nenhum item encontrado.');setImporting(false);return;}setImportStatus('Importando '+batch.length+' itens...');var idx=0,done=0;function next2(){if(idx>=batch.length){setImportStatus('Registrando estoques...');var ei=0;function ne(){if(ei>=batch.length){setImportStatus('Concluido! '+done+' itens!');setImporting(false);return;}var item=batch[ei++];if(item.estoque>0){db.collection('medicamentos').where('nome','==',item.nome).limit(1).get().then(function(s){if(!s.empty){db.collection('entries').add({medicamentoId:s.docs[0].id,medicamentoNome:item.nome,ean:item.ean||'',tipo:'entrada',quantidade:item.estoque,lote:'',validade:item.validade||'',observacao:'Estoque inicial',criadoEm:new Date().toISOString(),date:todayStr(),autorId:user.uid,autorNome:user.name,autorCargo:user.role,autorColor:user.color||B}).then(ne).catch(ne);}else ne();}).catch(ne);}else ne();}ne();return;}var item=batch[idx++];db.collection('medicamentos').add({nome:item.nome,categoria:item.categoria,minEstoque:item.minEstoque,ean:item.ean,criadoEm:item.criadoEm}).then(function(){done++;next2();}).catch(function(){done++;next2();});}next2();}catch(ex){setImportStatus('Erro: '+ex.message);setImporting(false);}};reader.readAsArrayBuffer(file);}
-var subTabs=[{id:'estoque',label:'Estoque'},{id:'faltas',label:'Faltas'+(faltas.length>0?' ('+faltas.length+')':'')},{id:'vencimento',label:'Vencimentos'+(totalAlertas>0?' ('+totalAlertas+')':'')}];
+var divergenciasAtivas=(entries||[]).filter(function(e){return e.divergenciaTipo==='real';});var subTabs=[{id:'estoque',label:'Estoque'},{id:'faltas',label:'Faltas'+(faltas.length>0?' ('+faltas.length+')':'')},{id:'vencimento',label:'Vencimentos'+(totalAlertas>0?' ('+totalAlertas+')':'')},{id:'divergencias',label:'⚠️ Divergências'+(divergenciasAtivas.length>0?' ('+divergenciasAtivas.length+')':'')}];
 var TipoBtn=function(props){var t=TIPOS[props.k];var sel=props.sel===props.k;return <button onClick={function(){props.onClick(props.k);}} style={{padding:'7px 12px',borderRadius:20,border:'1.5px solid '+(sel?t.cor:'#E2E8F0'),background:sel?t.cor:'#fff',color:sel?'#fff':'#64748B',cursor:'pointer',fontWeight:sel?700:500,fontSize:12,transition:'all .15s'}}>{t.icon} {t.label}</button>;};
 return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
 {hist&&can(user.role,'historico')&&<HistModal med={hist} entries={entries} user={user} onClose={function(){setHist(null);}}/>}
@@ -1606,11 +1672,41 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
   </div>);})}
 </div>;})()}
 </div>)}</div>)}
+{sub==='divergencias'&&<div style={{padding:'8px 0'}}>
+  {divergenciasAtivas.length===0&&<div style={{textAlign:'center',padding:'40px 0',color:'#94A3B8'}}>
+    <div style={{fontSize:40,marginBottom:8}}>✅</div>
+    <div style={{fontWeight:600}}>Nenhum medicamento em divergência</div>
+  </div>}
+  {divergenciasAtivas.map(function(e){
+    var estoqueReal=stock[e.medicamentoId]||0;
+    return(<div key={e.id} style={{background:'#FFF7ED',borderRadius:14,border:'1.5px solid #FCD34D',padding:14,marginBottom:10}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
+        <div style={{flex:1}}>
+          <span style={{background:'#D97706',color:'#fff',borderRadius:6,padding:'2px 8px',fontSize:10,fontWeight:700,display:'inline-block',marginBottom:6}}>⚠️ DIVERGÊNCIA</span>
+          <div style={{fontWeight:700,fontSize:14,color:'#1E293B',marginBottom:2}}>{e.medicamentoNome}</div>
+          <div style={{fontSize:12,color:'#64748B',marginBottom:4}}>
+            Estoque atual: <strong>{estoqueReal}</strong> un.
+            {e.lote&&<span> · Lote: {e.lote}</span>}
+            {e.validade&&<span> · Val: {e.validade}</span>}
+          </div>
+          <div style={{fontSize:11,color:'#92400E',background:'#FEF3C7',borderRadius:6,padding:'4px 8px',display:'inline-block'}}>
+            📋 Representa outro med. na nota — ver Relatório → ⚠️ Divergências
+          </div>
+          <div style={{fontSize:11,color:'#94A3B8',marginTop:4}}>Entrada em {e.date||'—'}</div>
+        </div>
+        <div style={{textAlign:'center',flexShrink:0}}>
+          <div style={{fontWeight:800,fontSize:22,color:'#D97706'}}>{estoqueReal}</div>
+          <div style={{fontSize:10,color:'#94A3B8'}}>em estoque</div>
+        </div>
+      </div>
+    </div>);
+  })}
+</div>}
 </div>);}
 function TabRelatorio(props){
   var db=props.db;var user=props.user||{};
   function nomeC(n){if(!n)return '?';var p=n.trim().split(' ');return p.length>=2?p[0]+' '+p[1]:p[0];}var entries=props.entries;var medications=props.medications;var _dF=useState(todayStr());var dF=_dF[0];var setDF=_dF[1];var _dT=useState(todayStr());var dT=_dT[0];var setDT=_dT[1];var _tipo=useState('todos');var tipo=_tipo[0];var setTipo=_tipo[1];var _sub=useState('mov');var sub=_sub[0];var setSub=_sub[1];var _filtCatRel=useState('todos');var filtCatRel=_filtCatRel[0];var setFiltCatRel=_filtCatRel[1];
-var filtered=entries.filter(function(e){var dt=(e.criadoEm||'').slice(0,10);if(dt<dF||dt>dT)return false;if(tipo!=='todos'&&e.tipo!==tipo)return false;if(filtCatRel&&filtCatRel!=='todos'){var meds=medications.filter(function(m){return m.nome===e.medicamentoNome&&((m.categoria||'medicamento'))===filtCatRel;});if(meds.length===0)return false;}return true;}).sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});
+var filtered=entries.filter(function(e){if(e.ficticioDiv)return false;if(e.divergenciaTipo==='real')return false;var dt=(e.criadoEm||'').slice(0,10);if(dt<dF||dt>dT)return false;if(tipo!=='todos'&&e.tipo!==tipo)return false;if(filtCatRel&&filtCatRel!=='todos'){var meds=medications.filter(function(m){return m.nome===e.medicamentoNome&&((m.categoria||'medicamento'))===filtCatRel;});if(meds.length===0)return false;}return true;}).sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});
 var totE=0,totS=0;filtered.forEach(function(e){if(e.tipo==='entrada')totE+=(e.quantidade||0);if(e.tipo==='saida')totS+=(e.quantidade||0);});
 var rankMap={};entries.forEach(function(e){if(e.tipo!=='saida')return;var k=e.medicamentoNome||'?';if(!rankMap[k])rankMap[k]={nome:k,total:0,count:0};rankMap[k].total+=(e.quantidade||0);rankMap[k].count++;});var ranking=Object.keys(rankMap).map(function(k){return rankMap[k];}).sort(function(a,b){return b.total-a.total;}).slice(0,10);
 var respMap={};entries.forEach(function(e){var k=e.autorNome||'?';if(!respMap[k])respMap[k]={nome:k,color:e.autorColor,qtdS:0,qtdE:0,cntS:0,cntE:0};if(e.tipo==='saida'){respMap[k].qtdS+=(e.quantidade||0);respMap[k].cntS++;}else{respMap[k].qtdE+=(e.quantidade||0);respMap[k].cntE++;}});var porResp=Object.keys(respMap).map(function(k){return respMap[k];}).sort(function(a,b){return (b.qtdS+b.qtdE)-(a.qtdS+a.qtdE);});
@@ -3396,7 +3492,7 @@ function TabHistoricoNotas(props){
   var COR={medicamento:'#1351B4',controlado:'#DC2626',injetavel:'#7C3AED',leite:'#D97706',penso:'#0C6B3E'};
   var ICO={medicamento:'💊',controlado:'🔒',injetavel:'💉',leite:'🍼',penso:'🩹'};
   var LBL={medicamento:'Farm. Básica',controlado:'Controlado',injetavel:'Injetável',leite:'Leite',penso:'Penso'};
-  var entradas=(entries||[]).filter(function(e){return e.tipo==='entrada';});
+  var entradas=(entries||[]).filter(function(e){return e.tipo==='entrada'&&e.divergenciaTipo!=='real'&&!e.ficticioDiv&&!e.viaVale;});
   var gmap={};
   entradas.forEach(function(e){
     var k=(e.nfNumero||'')+'|||'+(e.nfFornecedor||'');
@@ -3454,6 +3550,16 @@ function TabHistoricoNotas(props){
             </div>
             <span style={{fontSize:16,color:ab?'#1351B4':'#94A3B8'}}>{ab?'▲':'▼'}</span>
           </button>
+          {isMan&&<div style={{padding:'0 16px 10px',display:'flex',justifyContent:'flex-end',background:ab?'#EFF6FF':'#fff'}}>
+            <button onClick={function(e){e.stopPropagation();
+              if(!window.confirm('Excluir TODOS os '+g.itens.length+' item(ns) desta nota (NF '+g.nf+')? Esta ação não pode ser desfeita.'))return;
+              Promise.all(g.itens.map(function(it){return db.collection('entries').doc(it.id).delete();}))
+                .then(function(){setMsg('ok');setTimeout(function(){setMsg('');},3000);})
+                .catch(function(er){setMsg('e:Erro ao excluir: '+er.message);});
+            }} style={{background:'#FEF2F2',border:'1.5px solid #FCA5A5',borderRadius:8,padding:'6px 14px',color:'#DC2626',fontWeight:700,fontSize:12,cursor:'pointer'}}>
+              🗑️ Excluir nota
+            </button>
+          </div>}
           {ab&&isMan&&(editGrupo&&editGrupo.k===g.k?(
             <div style={{background:'#EFF6FF',borderTop:'1.5px solid #1351B4',padding:'14px 16px'}}>
               <div style={{fontWeight:700,fontSize:13,color:'#1351B4',marginBottom:10}}>✏️ Editar dados da nota</div>
@@ -4485,11 +4591,11 @@ function addEntry(data){try{var obj={criadoEm:new Date().toISOString(),date:toda
       return db.collection('divergencias')
         .where('realMedId','==',obj.medicamentoId)
         .where('tipo','==','substituicao')
-        .where('status','!=','encerrada')
         .get().then(function(snap){
           if(snap.empty)return ref;
           var espelhos=[];
           snap.docs.forEach(function(doc){
+            if(doc.data().status==='encerrada')return;
             var div=doc.data();
             // Gerar saída fictícia do medicamento da nota
             var ficObj={criadoEm:new Date().toISOString(),date:todayStr(),
