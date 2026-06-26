@@ -230,6 +230,7 @@ function Auth(props){
   var _color=useState(PALETTE[0]);var color=_color[0];var setColor=_color[1];
   var _email=useState('');var email=_email[0];var setEmail=_email[1];
   var _pass=useState('');var pass=_pass[0];var setPass=_pass[1];
+  var _showPass=useState(false);var showPass=_showPass[0];var setShowPass=_showPass[1];
   var _crf=useState('');var crf=_crf[0];var setCrf=_crf[1];
   var _err=useState('');var err=_err[0];var setErr=_err[1];
   var _load=useState(false);var load=_load[0];var setLoad=_load[1];
@@ -259,7 +260,10 @@ function Auth(props){
 
         </div>)}
         <Lbl c="Email"/><input value={email} onChange={function(e){setEmail(e.target.value);}} type="email" placeholder="seu@email.com" className="inp"/>
-        <Lbl c="Senha"/><input value={pass} onChange={function(e){setPass(e.target.value);}} type="password" placeholder="••••••••" className="inp"/>
+        <Lbl c="Senha"/><div style={{position:'relative'}}>
+          <input value={pass} onChange={function(e){setPass(e.target.value);}} type={showPass?'text':'password'} placeholder="••••••••" className="inp" style={{paddingRight:44}}/>
+          <button type="button" onClick={function(){setShowPass(!showPass);}} style={{position:'absolute',right:8,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',fontSize:18,padding:'4px 6px',lineHeight:1,color:'#64748B'}} title={showPass?'Ocultar senha':'Mostrar senha'}>{showPass?'🙈':'👁️'}</button>
+        </div>
         {err&&<div className={err.indexOf('criada')>=0?'ok':'er'}>{err}</div>}
         <button onClick={mode==='login'?login:register} disabled={load} className="bp" style={{opacity:load?0.7:1,marginBottom:12}}>{load?'Aguarde...':(mode==='login'?'Entrar':'Criar conta')}</button>
         <button onClick={function(){if(!email){setErr('Digite seu email primeiro.');return;}auth.sendPasswordResetEmail(email).then(function(){
