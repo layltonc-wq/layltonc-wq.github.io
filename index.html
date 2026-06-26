@@ -3822,6 +3822,57 @@ function TabPrevisao(props){
     setMsg('ok:Excel exportado!');setTimeout(function(){setMsg('');},2500);
   }
 
+  function gerarPDFAta(ata,grupoMeds,catKey){
+    var hoje=new Date().toLocaleDateString('pt-BR');
+    var nomeAta=ata.nome||'ATA';
+    var totalUn=grupoMeds.reduce(function(s,x){return s+valorPedido(x.med);},0);
+    var totalVal=grupoMeds.reduce(function(s,x){return s+(valorPedido(x.med)*(x.item.vUnit||0));},0);
+    var linhas=grupoMeds.map(function(x){
+      var m=x.med;var item=x.item;
+      var qtd=valorPedido(m);
+      var saldo=item?(item.qtdTeto-((item.pedidoAcumulado)||0)):'-';
+      var vU=item?item.vUnit||0:0;
+      var vT=qtd*vU;
+      return '<tr><td style="padding:6px 8px;border:1px solid #ddd">'+(item?item.num||'':'')+
+        '</td><td style="padding:6px 8px;border:1px solid #ddd">'+(item?item.descricao||m.nome:m.nome)+
+        '</td><td style="padding:6px 8px;border:1px solid #ddd;text-align:center">'+(item?item.unidade||'UN':'UN')+
+        '</td><td style="padding:6px 8px;border:1px solid #ddd;text-align:center">'+qtd+
+        '</td><td style="padding:6px 8px;border:1px solid #ddd;text-align:center">'+saldo+
+        '</td><td style="padding:6px 8px;border:1px solid #ddd;text-align:right">R$ '+vU.toFixed(2).replace('.',',')+
+        '</td><td style="padding:6px 8px;border:1px solid #ddd;text-align:right">R$ '+vT.toFixed(2).replace('.',',')+
+        '</td></tr>';
+    }).join('');
+    var html='<!DOCTYPE html><html><head><meta charset="utf-8">'+
+      '<style>body{font-family:Arial,sans-serif;padding:24px;font-size:12px}'+
+      'h2{color:#1351B4;margin-bottom:4px}h3{color:#475569;margin-bottom:16px;font-size:13px}'+
+      'table{width:100%;border-collapse:collapse;margin-top:12px}'+
+      'th{background:#1351B4;color:#fff;padding:7px 8px;text-align:left;border:1px solid #1351B4;font-size:11px}'+
+      '.total{background:#F8FAFC;font-weight:700}'+
+      '.info{display:flex;gap:24px;margin-bottom:12px;font-size:11px;color:#475569}'+
+      '.info b{color:#1E293B}</style></head><body>'+
+      '<h2>📋 PEDIDO — '+nomeAta.toUpperCase()+'</h2>'+
+      '<h3>Secretaria Municipal de Saúde — Vicência/PE · '+hoje+'</h3>'+
+      '<div class="info">'+
+      (numPedido?'<div>Pedido Nº: <b>'+numPedido+'</b></div>':'')+
+      (empresa?'<div>Empresa: <b>'+empresa+'</b></div>':'')+
+      (cnpjEmpresa?'<div>CNPJ: <b>'+cnpjEmpresa+'</b></div>':'')+
+      '</div>'+
+      '<table><thead><tr>'+
+      '<th style="width:50px">Item</th><th>Descrição</th><th style="width:60px">Unid.</th>'+
+      '<th style="width:70px">Qtd. Pedir</th><th style="width:70px">Saldo ATA</th>'+
+      '<th style="width:80px">V. Unit.</th><th style="width:90px">V. Total</th></tr></thead>'+
+      '<tbody>'+linhas+'</tbody>'+
+      '<tfoot><tr class="total">'+
+      '<td colspan="3" style="padding:7px 8px;border:1px solid #ddd;text-align:right">TOTAL</td>'+
+      '<td style="padding:7px 8px;border:1px solid #ddd;text-align:center">'+totalUn+'</td>'+
+      '<td style="padding:7px 8px;border:1px solid #ddd">—</td>'+
+      '<td style="padding:7px 8px;border:1px solid #ddd"></td>'+
+      '<td style="padding:7px 8px;border:1px solid #ddd;text-align:right">R$ '+totalVal.toFixed(2).replace('.',',')+
+      '</td></tr></tfoot></table></body></html>';
+    var w=window.open('','_blank');
+    if(w){w.document.write(html);w.document.close();setTimeout(function(){w.print();},500);}
+  }
+
   function exportarPDF(){
     var hoje=new Date();
     var dataHoje=hoje.toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'}).replace(' de ',' DE ').toUpperCase();
@@ -3990,6 +4041,7 @@ function TabPrevisao(props){
           var categorias=Object.keys(LBL);
           var algumaMostrada=false;
           var secoes=categorias.map(function(catKey){
+            // Medicamentos desta categoria com consumo configurado
             var medsCat=medications.filter(function(m){
               var temConfig=(Number(m.consumoEstimado||0)>0||Number(m.minEstoque||m.estoqueMin||0)>0);
               var matchCat=(m.categoria||'medicamento')===catKey;
@@ -3999,9 +4051,54 @@ function TabPrevisao(props){
             if(medsCat.length===0)return null;
             algumaMostrada=true;
             var catAberta=pastasAbertas['prev_'+catKey]!==false;
-            var totalCat=medsCat.reduce(function(s,m){return s+valorPedido(m);},0);
             var cor=COR[catKey]||'#475569';
+            var totalCat=medsCat.reduce(function(s,m){return s+valorPedido(m);},0);
+
+            // Separar medicamentos por ATA
+            var atasMapa={};
+            var semAta=[];
+            medsCat.forEach(function(m){
+              var vinculo=null;
+              atas.forEach(function(a){
+                if(a.itens)a.itens.forEach(function(it){if(it.medicamentoId===m.id)vinculo={ata:a,item:it};});
+              });
+              if(vinculo){
+                var aId=vinculo.ata.id;
+                if(!atasMapa[aId])atasMapa[aId]={ata:vinculo.ata,meds:[]};
+                atasMapa[aId].meds.push({med:m,item:vinculo.item});
+              } else {
+                semAta.push(m);
+              }
+            });
+
+            function renderMedCard(m,item,cor2){
+              var p=calcularPrevisao(m);
+              var val=valorPedido(m);
+              var editado=ajustes[m.id]!==undefined;
+              var metodoLbl={estimado:'🎯 estimado',minimo:'📊 mínimo',media:'📉 média',tendencia:'📈 tendência'};
+              var saldoAta=item?(item.qtdTeto-((item.pedidoAcumulado)||0)):null;
+              var excede=saldoAta!==null&&val>saldoAta;
+              return(<div key={m.id} style={{background:'#fff',borderRadius:12,border:'1px solid '+(excede?'#FCA5A5':'#E2E8F0'),padding:'12px 14px',marginBottom:8,display:'flex',alignItems:'center',gap:10}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontWeight:700,fontSize:13,color:'#1E293B',marginBottom:2}}>{m.nome}</div>
+                  <div style={{fontSize:11,color:'#94A3B8'}}>
+                    Estoque: {stock[m.id]||0} · Mín: {m.minEstoque||0} · Consumo/mês: {m.consumoEstimado||0}
+                    {' · '}<span style={{color:cor2,fontWeight:600}}>{metodoLbl[p.metodo]||p.metodo}</span>
+                  </div>
+                  {saldoAta!==null&&<div style={{fontSize:11,marginTop:2,fontWeight:600,color:excede?'#DC2626':'#0C6B3E'}}>
+                    Saldo ATA: {saldoAta} {item.unidade||''}{excede?' ⚠️ excede saldo!':''}
+                  </div>}
+                </div>
+                <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:3}}>
+                  <div style={{fontSize:10,color:'#94A3B8',fontWeight:600}}>PEDIR</div>
+                  <input type="number" value={val} onChange={function(e){var v=e.target.value;setAjustes(function(pr){var n=Object.assign({},pr);n[m.id]=v;return n;});}} style={{width:72,padding:'8px 6px',border:'2px solid '+(editado?'#F59E0B':cor2+'60'),borderRadius:10,fontSize:16,fontWeight:800,textAlign:'center',color:'#1E293B',outline:'none',background:editado?'#FFFBEB':'#fff'}}/>
+                  {editado&&<button onClick={function(){setAjustes(function(pr){var n=Object.assign({},pr);delete n[m.id];return n;});}} style={{fontSize:10,color:'#94A3B8',background:'none',border:'none',cursor:'pointer',padding:0}}>↺ auto</button>}
+                </div>
+              </div>);
+            }
+
             return(<div key={catKey} style={{marginBottom:10}}>
+              {/* Pasta da Categoria */}
               <button onClick={function(){setPastasAbertas(function(p){var n=Object.assign({},p);n['prev_'+catKey]=!catAberta;return n;});}} style={{width:'100%',background:cor,border:'none',borderRadius:catAberta?'14px 14px 0 0':'14px',padding:'12px 16px',cursor:'pointer',display:'flex',alignItems:'center',gap:10,textAlign:'left'}}>
                 <span style={{fontSize:22}}>{ICO[catKey]||'💊'}</span>
                 <div style={{flex:1}}>
@@ -4014,40 +4111,61 @@ function TabPrevisao(props){
                 </div>
                 <span style={{fontSize:18,color:'rgba(255,255,255,0.7)'}}>{catAberta?'▲':'▼'}</span>
               </button>
-              {catAberta&&<div style={{border:'1.5px solid '+cor,borderTop:'none',borderRadius:'0 0 14px 14px',padding:'8px 10px 10px',background:'#F8FAFC'}}>
-                {medsCat.map(function(m){
-                  var p=calcularPrevisao(m);
-                  var val=valorPedido(m);
-                  var editado=ajustes[m.id]!==undefined;
-                  var metodoLbl={estimado:'🎯 estimado',minimo:'📊 mínimo',media:'📉 média',tendencia:'📈 tendência'};
-                  var _iA=null;atas.forEach(function(a){if(a.itens)a.itens.forEach(function(it){if(it.medicamentoId===m.id)_iA={ata:a,item:it};});});
-                  var saldoAta=_iA?(_iA.item.qtdTeto-(_iA.item.pedidoAcumulado||0)):null;
-                  return(<div key={m.id} style={{background:'#fff',borderRadius:12,border:'1px solid #E2E8F0',padding:'12px 14px',marginBottom:8,display:'flex',alignItems:'center',gap:10}}>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontWeight:700,fontSize:13,color:'#1E293B',marginBottom:2}}>{m.nome}</div>
-                      <div style={{fontSize:11,color:'#94A3B8'}}>
-                        Estoque: {stock[m.id]||0} · Mín: {m.minEstoque||0} · Consumo/mês: {m.consumoEstimado||0}
-                        {' · '}<span style={{color:cor,fontWeight:600}}>{metodoLbl[p.metodo]||p.metodo}</span>
+
+              {catAberta&&<div style={{border:'1.5px solid '+cor,borderTop:'none',borderRadius:'0 0 14px 14px',padding:'10px',background:'#F8FAFC'}}>
+
+                {/* Sub-pastas por ATA */}
+                {Object.values(atasMapa).map(function(grupo){
+                  var ata=grupo.ata;
+                  var aKey='prev_ata_'+catKey+'_'+ata.id;
+                  var ataAberta=pastasAbertas[aKey]!==false;
+                  var totalAta=grupo.meds.reduce(function(s,x){return s+(valorPedido(x.med)*x.item.vUnit);},0);
+                  var qtdTotalAta=grupo.meds.reduce(function(s,x){return s+valorPedido(x.med);},0);
+                  var saldoTotalAta=grupo.meds.reduce(function(s,x){return s+(x.item.qtdTeto-(x.item.pedidoAcumulado||0));},0);
+                  var corAta=cor+'CC';
+                  return(<div key={ata.id} style={{marginBottom:8,borderRadius:12,overflow:'hidden',border:'1.5px solid '+cor+'40'}}>
+                    {/* Cabeçalho da ATA */}
+                    <button onClick={function(){setPastasAbertas(function(p){var n=Object.assign({},p);n[aKey]=!ataAberta;return n;});}} style={{width:'100%',background:cor+'22',border:'none',padding:'10px 14px',cursor:'pointer',display:'flex',alignItems:'center',gap:8,textAlign:'left'}}>
+                      <div style={{flex:1}}>
+                        <div style={{fontWeight:700,fontSize:13,color:cor}}>📋 {ata.nome}</div>
+                        <div style={{fontSize:11,color:'#64748B'}}>{grupo.meds.length} item(ns) · Saldo total ATA: {saldoTotalAta} un.</div>
                       </div>
-                      {saldoAta!==null&&<div style={{fontSize:11,marginTop:2,fontWeight:600,color:saldoAta<val?'#DC2626':'#0C6B3E'}}>
-                        ATA: {_iA.ata.nome} · Saldo: {saldoAta} {_iA.item.unidade||''}{val>saldoAta?' ⚠️ excede saldo!':''}
-                      </div>}
-                    </div>
-                    <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:3}}>
-                      <div style={{fontSize:10,color:'#94A3B8',fontWeight:600}}>PEDIR</div>
-                      <input type="number" value={val} onChange={function(e){var v=e.target.value;setAjustes(function(pr){var n=Object.assign({},pr);n[m.id]=v;return n;});}} style={{width:72,padding:'8px 6px',border:'2px solid '+(editado?'#F59E0B':cor+'60'),borderRadius:10,fontSize:16,fontWeight:800,textAlign:'center',color:'#1E293B',outline:'none',background:editado?'#FFFBEB':'#fff'}}/>
-                      {editado&&<button onClick={function(){setAjustes(function(pr){var n=Object.assign({},pr);delete n[m.id];return n;});}} style={{fontSize:10,color:'#94A3B8',background:'none',border:'none',cursor:'pointer',padding:0}}>↺ auto</button>}
-                    </div>
+                      <div style={{textAlign:'right',marginRight:4}}>
+                        <div style={{fontWeight:700,fontSize:14,color:cor}}>{qtdTotalAta} un.</div>
+                        <div style={{fontSize:10,color:'#64748B'}}>a pedir</div>
+                      </div>
+                      {/* Botão PDF desta ATA */}
+                      <button onClick={function(e){e.stopPropagation();gerarPDFAta(ata,grupo.meds,catKey);}} style={{background:cor,border:'none',borderRadius:8,padding:'7px 12px',color:'#fff',fontWeight:700,fontSize:11,cursor:'pointer',flexShrink:0,marginLeft:4}}>📄 PDF</button>
+                      <span style={{fontSize:14,color:cor,marginLeft:4}}>{ataAberta?'▲':'▼'}</span>
+                    </button>
+                    {ataAberta&&<div style={{padding:'8px 10px 10px',background:'#fff'}}>
+                      {grupo.meds.map(function(x){return renderMedCard(x.med,x.item,cor);})}
+                    </div>}
                   </div>);
                 })}
+
+                {/* Medicamentos sem ATA */}
+                {semAta.length>0&&<div style={{marginBottom:8,borderRadius:12,overflow:'hidden',border:'1.5px solid #CBD5E1'}}>
+                  <button onClick={function(){setPastasAbertas(function(p){var n=Object.assign({},p);n['prev_semata_'+catKey]=!pastasAbertas['prev_semata_'+catKey];return n;});}} style={{width:'100%',background:'#F1F5F9',border:'none',padding:'10px 14px',cursor:'pointer',display:'flex',alignItems:'center',gap:8,textAlign:'left'}}>
+                    <div style={{flex:1}}>
+                      <div style={{fontWeight:700,fontSize:13,color:'#64748B'}}>📂 Sem ATA vinculada</div>
+                      <div style={{fontSize:11,color:'#94A3B8'}}>{semAta.length} medicamento(s)</div>
+                    </div>
+                    <span style={{fontSize:14,color:'#94A3B8'}}>{pastasAbertas['prev_semata_'+catKey]?'▲':'▼'}</span>
+                  </button>
+                  {pastasAbertas['prev_semata_'+catKey]&&<div style={{padding:'8px 10px 10px',background:'#fff'}}>
+                    {semAta.map(function(m){return renderMedCard(m,null,cor);})}
+                  </div>}
+                </div>}
+
               </div>}
             </div>);
           });
           if(!algumaMostrada){
-            return(<div style={{textAlign:'center',padding:'40px 16px',color:'#94A3B8'}}>
-              <div style={{fontSize:48,marginBottom:12}}>⚙️</div>
-              <div style={{fontWeight:700,fontSize:15,marginBottom:8}}>{buscaL?'Nenhum medicamento encontrado':'Nenhum medicamento configurado ainda'}</div>
-              {!buscaL&&<div style={{fontSize:13}}>Vá em <strong>⚙️ Mín. e Consumo</strong> e preencha o consumo mensal de cada medicamento para receber sugestões de pedido.</div>}
+            return(<div style={{textAlign:'center',padding:'32px 0',color:'#94A3B8'}}>
+              <div style={{fontSize:40,marginBottom:8}}>📋</div>
+              <div style={{fontWeight:600,marginBottom:4}}>Nenhum medicamento configurado</div>
+              <div style={{fontSize:12}}>Vá em <strong>⚙️ Mín. e Consumo</strong> e preencha o consumo mensal de cada medicamento para receber sugestões de pedido.</div>
             </div>);
           }
           return secoes;
