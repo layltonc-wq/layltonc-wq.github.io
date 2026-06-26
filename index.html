@@ -3676,18 +3676,48 @@ function TabPrevisao(props){
         var div=document.createElement('div');div.innerHTML=res.value;
         var tabs=div.querySelectorAll('table');
         var itens=[];
+        var loteAtual='';
         tabs.forEach(function(tab){
+          // Detectar número do lote no cabeçalho da tabela (ex: "Lote 1", "Lote 25")
+          var primeiraLinha=tab.querySelector('tr');
+          if(primeiraLinha){
+            var txt=primeiraLinha.textContent.trim();
+            var mLote=txt.match(/^Lote\s*(\d+)/i);
+            if(mLote)loteAtual=mLote[1];
+          }
           tab.querySelectorAll('tr').forEach(function(tr){
             var cs=tr.querySelectorAll('td,th');
-            if(cs.length<4)return;
+            if(cs.length<2)return;
             var tx=function(i){return cs[i]?cs[i].textContent.trim():'';}; 
-            var n=tx(0);
-            if(!/^\d+$/.test(n)||(tx(1).toLowerCase().indexOf('descri')>=0))return;
-            var desc='',marca='',qtd='',unid='',vU='',vT='';
-            if(cs.length>=7){desc=tx(1);marca=tx(2);qtd=tx(3);unid=tx(4);vU=tx(5);vT=tx(6);}
-            else if(cs.length===6){desc=tx(1);marca=tx(2);qtd=tx(3);unid=tx(4);vU=tx(5);}
-            else if(cs.length===5){desc=tx(1);qtd=tx(2);unid=tx(3);vU=tx(4);}
-            else{desc=tx(1);qtd=tx(2);}
+            var col0=tx(0);
+            // Ignorar linhas de cabeçalho
+            if(col0.toLowerCase().indexOf('descri')>=0||col0.toLowerCase().indexOf('item')>=0)return;
+            if(col0.toLowerCase().indexOf('lote')>=0||col0.toLowerCase().indexOf('marca')>=0||col0.toLowerCase().indexOf('total')>=0)return;
+
+            var n='',desc='',marca='',qtd='',unid='',vU='';
+
+            // FORMATO SERRA MAR / contratos: num | desc | marca | qtd | unid | vUnit | vTotal
+            if(/^\d+$/.test(col0)&&cs.length>=5){
+              n=col0;
+              if(cs.length>=7){desc=tx(1);marca=tx(2);qtd=tx(3);unid=tx(4);vU=tx(5);}
+              else if(cs.length===6){desc=tx(1);marca=tx(2);qtd=tx(3);unid=tx(4);vU=tx(5);}
+              else if(cs.length===5){desc=tx(1);qtd=tx(2);unid=tx(3);vU=tx(4);}
+              else{desc=tx(1);qtd=tx(2);}
+            }
+            // FORMATO ATAs novas: desc | qtd | unid | vUnit | subTotal (sem número no início)
+            else if(col0&&col0.length>3&&!(/^\d+$/.test(col0))){
+              // É uma linha de item sem número — o número vem do Lote
+              n=loteAtual||'';
+              if(cs.length>=5){desc=tx(0);qtd=tx(1);unid=tx(2);vU=tx(3);}
+              else if(cs.length===4){desc=tx(0);qtd=tx(1);unid=tx(2);vU=tx(3);}
+              else if(cs.length===3){desc=tx(0);qtd=tx(1);unid=tx(2);}
+              else{desc=tx(0);qtd=tx(1);}
+              // Linha de marca — pular
+              if(desc.toLowerCase().indexOf('marca:')>=0||desc.toLowerCase().indexOf('fabricante:')>=0)return;
+              // Linha de valor total — pular
+              if(desc.toLowerCase().indexOf('total')>=0&&qtd===''&&cs.length<4)return;
+            } else return;
+
             var qN=parseInt((qtd||'').replace(/[^0-9]/g,''))||0;
             if(!desc||qN===0)return;
             var vUN=parseFloat((vU||'').replace(/[^0-9,]/g,'').replace(',','.'))||0;
