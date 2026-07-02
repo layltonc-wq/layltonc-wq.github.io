@@ -201,6 +201,19 @@ function fmtD(iso){return iso?new Date(iso).toLocaleDateString('pt-BR'):'--/--';
 function fmtISO(d){return d.toISOString().slice(0,10);}
 function isShiftTime(){var h=new Date().getHours();return h>=8&&h<20;}
 function getShiftEndHour(role){return role==='diarista'?14:20;}
+// Fecha automaticamente qualquer plantão de um dia anterior que tenha ficado ativo
+// (ex: app ficou aberto/suspenso no celular do farmacêutico e o auto-encerramento das 20h não rodou).
+// Roda para qualquer usuário que abrir o app, não depende de quem esqueceu logado.
+function autoFecharPlantoesAntigos(){
+  db.collection('plantoes').where('ativo','==',true).get().then(function(snap){
+    var today=todayStr();
+    snap.docs.forEach(function(d){
+      if(d.id<today){
+        d.ref.update({ativo:false,encerradoEm:new Date().toISOString(),encerradoAuto:true,motivoEncerramentoAuto:'virada_dia'}).catch(function(){});
+      }
+    });
+  }).catch(function(){});
+}
 function initFB(c){try{if(firebase.apps.length)firebase.apps.forEach(function(a){a.delete();});firebase.initializeApp(c);db=firebase.firestore();auth=firebase.auth();return true;}catch(e){return false;}}
 function loadCfg(){
   var env=localStorage.getItem('farmacontrol_env')||'prod';
@@ -1654,10 +1667,11 @@ function HistModal(props){
       </div>);})}
     </div>}
   </Modal>);}
-function TabEstoque(props){var user=props.user;var medications=props.medications;var entries=props.entries;var stock=props.stock;var _search=useState('');var search=_search[0];var setSearch=_search[1];var _sub=useState('estoque');var sub=_sub[0];var setSub=_sub[1];var _showAdd=useState(false);var showAdd=_showAdd[0];var setShowAdd=_showAdd[1];var _hist=useState(null);var hist=_hist[0];var setHist=_hist[1];var _editId=useState(null);var editId=_editId[0];var setEditId=_editId[1];var _editNome=useState('');var editNome=_editNome[0];var setEditNome=_editNome[1];var _editMin=useState('');var editMin=_editMin[0];var setEditMin=_editMin[1];var _editTipo=useState('medicamento');var editTipo=_editTipo[0];var setEditTipo=_editTipo[1];var _newNome=useState('');var newNome=_newNome[0];var setNewNome=_newNome[1];var _newEan=useState('');var newEan=_newEan[0];var setNewEan=_newEan[1];var _newMin=useState('');var newMin=_newMin[0];var setNewMin=_newMin[1];var _newTipo=useState('medicamento');var newTipo=_newTipo[0];var setNewTipo=_newTipo[1];
+function TabEstoque(props){var user=props.user;var medications=props.medications;var entries=props.entries;var stock=props.stock;var onSave=props.onSave;var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};var alert2=props.alert2||function(m){window.alert(m);};var _search=useState('');var search=_search[0];var setSearch=_search[1];var _sub=useState('estoque');var sub=_sub[0];var setSub=_sub[1];var _showAdd=useState(false);var showAdd=_showAdd[0];var setShowAdd=_showAdd[1];var _hist=useState(null);var hist=_hist[0];var setHist=_hist[1];var _editId=useState(null);var editId=_editId[0];var setEditId=_editId[1];var _editNome=useState('');var editNome=_editNome[0];var setEditNome=_editNome[1];var _editMin=useState('');var editMin=_editMin[0];var setEditMin=_editMin[1];var _editTipo=useState('medicamento');var editTipo=_editTipo[0];var setEditTipo=_editTipo[1];var _newNome=useState('');var newNome=_newNome[0];var setNewNome=_newNome[1];var _newEan=useState('');var newEan=_newEan[0];var setNewEan=_newEan[1];var _newMin=useState('');var newMin=_newMin[0];var setNewMin=_newMin[1];var _newTipo=useState('medicamento');var newTipo=_newTipo[0];var setNewTipo=_newTipo[1];
   var _showBaixa=useState(null);var showBaixa=_showBaixa[0];var setShowBaixa=_showBaixa[1];
   var _motivoBaixa=useState('descarte');var motivoBaixa=_motivoBaixa[0];var setMotivoBaixa=_motivoBaixa[1];
   var _motivoLivre=useState('');var motivoLivre=_motivoLivre[0];var setMotivoLivre=_motivoLivre[1];
+  var _qtdBaixa=useState('');var qtdBaixa=_qtdBaixa[0];var setQtdBaixa=_qtdBaixa[1];
   var _salvandoBaixa=useState(false);var salvandoBaixa=_salvandoBaixa[0];var setSalvandoBaixa=_salvandoBaixa[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];var _importStatus=useState('');var importStatus=_importStatus[0];var setImportStatus=_importStatus[1];var _importing=useState(false);var importing=_importing[0];var setImporting=_importing[1];var _filtCat=useState('todos');var filtCat=_filtCat[0];var setFiltCat=_filtCat[1];var _ajusteId=useState(null);var ajusteId=_ajusteId[0];var setAjusteId=_ajusteId[1];var _ajusteQty=useState('');var ajusteQty=_ajusteQty[0];var setAjusteQty=_ajusteQty[1];var _ajusteMotivo=useState('');var ajusteMotivo=_ajusteMotivo[0];var setAjusteMotivo=_ajusteMotivo[1];var _ajusteMed=useState(null);var ajusteMed=_ajusteMed[0];var setAjusteMed=_ajusteMed[1];var _loteSel=useState(null);var loteSel=_loteSel[0];var setLoteSel=_loteSel[1];var _editLote=useState(null);var editLote=_editLote[0];var setEditLote=_editLote[1];var _editLoteVal=useState('');var editLoteVal=_editLoteVal[0];var setEditLoteVal=_editLoteVal[1];var _editLoteData=useState('');var editLoteData=_editLoteData[0];var setEditLoteData=_editLoteData[1];
 var isManager=(user.role==='gestor'||user.role==='tecnico');var hoje=new Date();
 function getDiasVal(val){if(!val)return null;var p=val.split('/');if(p.length!==2)return null;var d=new Date(parseInt(p[1]),parseInt(p[0]),0);return Math.ceil((d-hoje)/86400000);}
@@ -1715,17 +1729,21 @@ function darBaixaVencido(){
       motivoBaixa==='descarte'?'Vencido — encaminhado para descarte correto':
       motivoBaixa==='devolucao'?'Vencido — devolvido ao fornecedor':motivoBaixa;
     if(!motivo){alert2('Informe o motivo da baixa.');return;}
+    var disponivel=showBaixa.est||0;
+    var qtd=parseInt(qtdBaixa);
+    if(!qtd||qtd<=0){alert2('Informe a quantidade real vencida (maior que zero).');return;}
+    if(qtd>disponivel){alert2('Quantidade informada ('+qtd+') é maior que o disponível neste lote ('+disponivel+' un.). Confira a quantidade real.');return;}
     setSalvandoBaixa(true);
     onSave({
       medicamentoId:showBaixa.medId||showBaixa.id,
       medicamentoNome:showBaixa.nome,
-      tipo:'saida',quantidade:showBaixa.est||0,
+      tipo:'saida',quantidade:qtd,
       lote:showBaixa.lote||'',validade:showBaixa.validade||'',
-      observacao:motivo,descarte:true
+      observacao:motivo+(qtd<disponivel?' (baixa parcial: '+qtd+' de '+disponivel+' un. no lote)':''),descarte:true
     }).then(function(){
       setSalvandoBaixa(false);setShowBaixa(null);
-      setMotivoBaixa('descarte');setMotivoLivre('');
-      alert2('Baixa registrada! O lote foi removido do estoque.');
+      setMotivoBaixa('descarte');setMotivoLivre('');setQtdBaixa('');
+      alert2('Baixa registrada! '+qtd+' un. enviada(s) para Descarte.');
     }).catch(function(e){
       setSalvandoBaixa(false);
       alert2('Erro: '+(e&&e.message?e.message:'verifique a conexão'));
@@ -1795,7 +1813,7 @@ function darBaixaVencido(){
 {(vencidos.length+venc30.length+venc60.length+venc90.length)===0?<div className="card" style={{padding:48,textAlign:'center'}}><div style={{fontSize:40,marginBottom:12}}>✅</div><div style={{fontWeight:700,color:'#0C6B3E',fontSize:16}}>Nenhum alerta!</div></div>:(
 <div style={{display:'flex',flexDirection:'column',gap:10}}>
 {vencidos.length>0&&<div style={{fontSize:11,fontWeight:700,color:'#B91C1C',padding:'6px 14px',background:'#FEE2E2',borderRadius:8,textTransform:'uppercase',letterSpacing:'.04em'}}>Vencidos ({vencidos.length})</div>}
-{vencidos.map(function(m,i){return(<div key={i} className="card" style={{padding:'13px 16px',border:'2px solid #FCA5A5',display:'flex',gap:12,alignItems:'center'}}><div style={{flex:1}}><div style={{fontWeight:700,color:'#B91C1C'}}>{m.nome}</div><div style={{fontSize:12,color:'#94A3B8'}}>{m.est} un. · Lote: {m.lote||'—'}</div></div><div style={{textAlign:'right'}}><div style={{fontWeight:700,color:'#B91C1C',fontSize:13}}>{m.validade}</div><div style={{fontSize:11,color:'#B91C1C'}}>Há {Math.abs(m.dias)} dias</div></div><button onClick={function(){setShowBaixa(m);}} style={{background:'#DC2626',border:'none',borderRadius:8,padding:'8px 12px',color:'#fff',fontWeight:700,fontSize:11,cursor:'pointer',flexShrink:0}}>🗑️ Baixa</button></div>);} )}
+{vencidos.map(function(m,i){return(<div key={i} className="card" style={{padding:'13px 16px',border:'2px solid #FCA5A5',display:'flex',gap:12,alignItems:'center'}}><div style={{flex:1}}><div style={{fontWeight:700,color:'#B91C1C'}}>{m.nome}</div><div style={{fontSize:12,color:'#94A3B8'}}>{m.est} un. · Lote: {m.lote||'—'}</div></div><div style={{textAlign:'right'}}><div style={{fontWeight:700,color:'#B91C1C',fontSize:13}}>{m.validade}</div><div style={{fontSize:11,color:'#B91C1C'}}>Há {Math.abs(m.dias)} dias</div></div><button onClick={function(){setShowBaixa(m);setQtdBaixa(String(m.est||0));}} style={{background:'#DC2626',border:'none',borderRadius:8,padding:'8px 12px',color:'#fff',fontWeight:700,fontSize:11,cursor:'pointer',flexShrink:0}}>🗑️ Baixa</button></div>);} )}
 {venc30.length>0&&<div style={{fontSize:11,fontWeight:700,color:'#DC2626',padding:'6px 14px',background:'#FEF2F2',borderRadius:8,textTransform:'uppercase',letterSpacing:'.04em',marginBottom:6}}>🔴 Vence em até 30 dias ({venc30.length})</div>}
 {venc30.map(function(m,i){return(<div key={i} className="card" style={{padding:'13px 16px',border:'1.5px solid #FCA5A5',display:'flex',gap:12,alignItems:'center',marginBottom:6}}><div style={{flex:1}}><div style={{fontWeight:700,color:'#B91C1C'}}>{m.nome}</div><div style={{fontSize:12,color:'#94A3B8'}}>{m.est} un.{m.lote?' · Lote: '+m.lote:''}</div></div><div style={{textAlign:'right'}}><div style={{fontWeight:700,color:'#B91C1C',fontSize:13}}>{m.validade}</div><div style={{fontSize:11,color:'#B91C1C'}}>em {m.dias} dias</div></div></div>);}  )}
 {venc60.length>0&&<div style={{fontSize:11,fontWeight:700,color:'#D97706',padding:'6px 14px',background:'#FFFBEB',borderRadius:8,textTransform:'uppercase',letterSpacing:'.04em',marginBottom:6,marginTop:8}}>🟡 Vence entre 31 e 60 dias ({venc60.length})</div>}
@@ -1839,6 +1857,30 @@ function darBaixaVencido(){
       </div>
     </div>);
   })}
+</div>}
+{showBaixa&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+  <div style={{background:'#fff',borderRadius:20,padding:20,maxWidth:420,width:'100%'}}>
+    <div style={{fontWeight:800,fontSize:17,color:'#DC2626',marginBottom:4}}>🗑️ Baixa por Vencimento</div>
+    <div style={{fontSize:13,color:'#64748B',marginBottom:16}}>
+      <strong>{showBaixa.nome}</strong> · Lote {showBaixa.lote||'—'} · Val {showBaixa.validade} · Disponível no lote: <strong>{showBaixa.est||0} un.</strong>
+    </div>
+    <div style={{fontWeight:700,fontSize:13,color:'#1E293B',marginBottom:6}}>Quantidade real vencida:</div>
+    <input value={qtdBaixa} onChange={function(e){setQtdBaixa(e.target.value.replace(/[^0-9]/g,''));}} placeholder="Quantidade" className="inp" style={{fontSize:22,fontWeight:800,textAlign:'center',color:'#DC2626'}} inputMode="numeric"/>
+    {qtdBaixa!==''&&parseInt(qtdBaixa)>0&&parseInt(qtdBaixa)<(showBaixa.est||0)&&<div style={{fontSize:12,color:'#B45309',marginBottom:8,background:'#FFFBEB',border:'1px solid #FCD34D',borderRadius:8,padding:'6px 10px'}}>ℹ️ Baixa parcial — os {(showBaixa.est||0)-parseInt(qtdBaixa)} un. restantes do lote continuam no estoque.</div>}
+    {qtdBaixa!==''&&parseInt(qtdBaixa)>(showBaixa.est||0)&&<div style={{fontSize:12,color:'#B91C1C',marginBottom:8,background:'#FEF2F2',border:'1px solid #FCA5A5',borderRadius:8,padding:'6px 10px'}}>⚠️ Quantidade maior que o disponível no lote ({showBaixa.est||0} un.).</div>}
+    <div style={{fontWeight:700,fontSize:13,color:'#1E293B',marginBottom:10,marginTop:10}}>Motivo da baixa:</div>
+    {[{v:'descarte',l:'📦 Vencido — encaminhado para descarte correto'},{v:'devolucao',l:'↩️ Vencido — devolvido ao fornecedor'},{v:'outro',l:'✏️ Outro motivo'}].map(function(op){return(
+      <button key={op.v} onClick={function(){setMotivoBaixa(op.v);}} style={{display:'block',width:'100%',textAlign:'left',padding:'12px 14px',marginBottom:8,borderRadius:10,border:'1.5px solid '+(motivoBaixa===op.v?'#DC2626':'#E2E8F0'),background:motivoBaixa===op.v?'#FEF2F2':'#fff',fontWeight:motivoBaixa===op.v?700:400,fontSize:13,cursor:'pointer',color:'#1E293B'}}>
+        {op.l}
+      </button>
+    );})}
+    {motivoBaixa==='outro'&&<input value={motivoLivre} onChange={function(e){setMotivoLivre(e.target.value);}} placeholder="Descreva o motivo..." className="inp" style={{fontSize:13}}/>}
+    {salvandoBaixa&&<div style={{textAlign:'center',color:'#DC2626',fontWeight:600,marginBottom:8}}>⏳ Registrando...</div>}
+    <div style={{display:'flex',gap:8,marginTop:8}}>
+      <button onClick={function(){setShowBaixa(null);setQtdBaixa('');}} className="bs" style={{flex:1,padding:'12px 0'}}>Cancelar</button>
+      <button onClick={darBaixaVencido} disabled={salvandoBaixa||!qtdBaixa||parseInt(qtdBaixa)<=0||parseInt(qtdBaixa)>(showBaixa.est||0)} style={{flex:2,padding:'12px 0',background:'#DC2626',color:'#fff',border:'none',borderRadius:12,fontWeight:700,fontSize:14,cursor:'pointer',opacity:(salvandoBaixa||!qtdBaixa||parseInt(qtdBaixa)<=0||parseInt(qtdBaixa)>(showBaixa.est||0))?0.45:1}}>🗑️ Confirmar Baixa</button>
+    </div>
+  </div>
 </div>}
 </div>);}
 function TabRelatorio(props){
@@ -2181,26 +2223,6 @@ function TabDivergenciasPainel(props){
     {confirmadas.length>0&&<div>
       <div style={{fontSize:12,color:'#64748B',textAlign:'center',padding:'8px 0'}}>✅ Divergências confirmadas ficam no Relatório → ⚠️ Divergências</div>
     </div>}
-  {showBaixa&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
-    <div style={{background:'#fff',borderRadius:20,padding:20,maxWidth:420,width:'100%'}}>
-      <div style={{fontWeight:800,fontSize:17,color:'#DC2626',marginBottom:4}}>🗑️ Baixa por Vencimento</div>
-      <div style={{fontSize:13,color:'#64748B',marginBottom:16}}>
-        <strong>{showBaixa.nome}</strong> · {showBaixa.est} un. · Lote {showBaixa.lote||'—'} · Val {showBaixa.validade}
-      </div>
-      <div style={{fontWeight:700,fontSize:13,color:'#1E293B',marginBottom:10}}>Motivo da baixa:</div>
-      {[{v:'descarte',l:'📦 Vencido — encaminhado para descarte correto'},{v:'devolucao',l:'↩️ Vencido — devolvido ao fornecedor'},{v:'outro',l:'✏️ Outro motivo'}].map(function(op){return(
-        <button key={op.v} onClick={function(){setMotivoBaixa(op.v);}} style={{display:'block',width:'100%',textAlign:'left',padding:'12px 14px',marginBottom:8,borderRadius:10,border:'1.5px solid '+(motivoBaixa===op.v?'#DC2626':'#E2E8F0'),background:motivoBaixa===op.v?'#FEF2F2':'#fff',fontWeight:motivoBaixa===op.v?700:400,fontSize:13,cursor:'pointer',color:'#1E293B'}}>
-          {op.l}
-        </button>
-      );})}
-      {motivoBaixa==='outro'&&<input value={motivoLivre} onChange={function(e){setMotivoLivre(e.target.value);}} placeholder="Descreva o motivo..." className="inp" style={{fontSize:13}}/>}
-      {salvandoBaixa&&<div style={{textAlign:'center',color:'#DC2626',fontWeight:600,marginBottom:8}}>⏳ Registrando...</div>}
-      <div style={{display:'flex',gap:8,marginTop:8}}>
-        <button onClick={function(){setShowBaixa(null);}} className="bs" style={{flex:1,padding:'12px 0'}}>Cancelar</button>
-        <button onClick={darBaixaVencido} disabled={salvandoBaixa} style={{flex:2,padding:'12px 0',background:'#DC2626',color:'#fff',border:'none',borderRadius:12,fontWeight:700,fontSize:14,cursor:'pointer',opacity:salvandoBaixa?0.6:1}}>🗑️ Confirmar Baixa</button>
-      </div>
-    </div>
-  </div>}
   </div>);}
 
 
@@ -4764,7 +4786,7 @@ if(user.role==='gestor'||user.role==='tecnico'){db.collection('medications').onS
 var stock=useMemo(function(){return calcStock(entries);},[entries]);
 var latest=useMemo(function(){return calcLatest(entries);},[entries]);
 var lowCount=useMemo(function(){var c=0;meds.forEach(function(m){if(m.minEstoque&&(stock[m.id]||0)<=m.minEstoque&&(stock[m.id]||0)>0)c++;});return c;},[meds,stock]);
-function checkShift(u){if(shiftChecked)return;setShiftChecked(true);var today=todayStr();var role=u.role;if(role==='gestor'||role==='tecnico'){setIsGuest(false);return;}if(!isShiftTime()){setIsGuest(true);return;}var leftToday=localStorage.getItem('fc_shift_enc_'+today)||localStorage.getItem('fc_shift_saiu_'+today);if(leftToday){db.collection('plantoes').doc(today).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);}}).catch(function(){});setIsGuest(true);return;}db.collection('plantao_convites').where('para','==',u.uid).where('status','==','pendente').get().then(function(invSnap){var todayInvite=null;for(var i=0;i<invSnap.docs.length;i++){var d=invSnap.docs[i].data();if(d.data===today){var o={id:invSnap.docs[i].id};for(var k in d)o[k]=d[k];todayInvite=o;break;}}if(todayInvite){setPendingInvite(todayInvite);return;}db.collection('plantoes').doc(today).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);var inTeam=false;
+function checkShift(u){if(shiftChecked)return;setShiftChecked(true);autoFecharPlantoesAntigos();var today=todayStr();var role=u.role;if(role==='gestor'||role==='tecnico'){setIsGuest(false);db.collection('plantoes').doc(today).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);}else{setPlantao(null);setShiftId(null);}}).catch(function(){});return;}if(!isShiftTime()){setIsGuest(true);return;}var leftToday=localStorage.getItem('fc_shift_enc_'+today)||localStorage.getItem('fc_shift_saiu_'+today);if(leftToday){db.collection('plantoes').doc(today).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);}}).catch(function(){});setIsGuest(true);return;}db.collection('plantao_convites').where('para','==',u.uid).where('status','==','pendente').get().then(function(invSnap){var todayInvite=null;for(var i=0;i<invSnap.docs.length;i++){var d=invSnap.docs[i].data();if(d.data===today){var o={id:invSnap.docs[i].id};for(var k in d)o[k]=d[k];todayInvite=o;break;}}if(todayInvite){setPendingInvite(todayInvite);return;}db.collection('plantoes').doc(today).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);var inTeam=false;
               // Quem iniciou o plantão nunca é convidado
               if(p.iniciadoPor===u.uid){inTeam=true;}
               // Verificar na equipe (confirmado ou próprio farmacêutico que abriu)
@@ -4945,7 +4967,7 @@ return(
         {tab==='dashboard'&&<TabDashboard entries={entries} medications={meds} stock={stock} user={user} plantao={plantao} isGuest={isGuest} onSolicitar={function(){setShowSolicit(true);}} onEncerrar={encerrarPlantao} onSair={sairDoPlantao} onSolicitarEntrada={solicitarEntradaPlantao} shiftId={shiftId} onIniciar={function(){setShowShiftModal(true);}}/>}
         {tab==='saida'&&<TabSaida user={user} medications={meds} stock={stock} entries={entries} onSave={addEntry} onSolicitar={addSolicitacao} latest={latest} isGuest={isGuest} canMove={canMove} confirm2={confirm2} alert2={alert2}/>}
         {tab==='entrada'&&<TabEntrada user={user} medications={meds} entries={entries} onSave={addEntry} onSolicitar={addSolicitacao} isGuest={isGuest} canMove={canMove} confirm2={confirm2} alert2={alert2}/>}
-        {tab==='estoque'&&<TabEstoque user={user} medications={meds} entries={entries} stock={stock}/>}
+        {tab==='estoque'&&<TabEstoque user={user} medications={meds} entries={entries} stock={stock} onSave={addEntry} confirm2={confirm2} alert2={alert2}/>}
         {tab==='relatorio'&&<TabRelatorio entries={entries} medications={meds} db={db} user={user}/>}
         {tab==='gestao'&&can(user.role,'gestao')&&<TabGestao currentUser={user} entries={entries}/>}
         {tab==='log'&&can(user.role,'log')&&<TabLog/>}
