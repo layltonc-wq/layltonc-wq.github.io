@@ -1672,6 +1672,8 @@ function TabEstoque(props){var user=props.user;var medications=props.medications
   var _motivoBaixa=useState('descarte');var motivoBaixa=_motivoBaixa[0];var setMotivoBaixa=_motivoBaixa[1];
   var _motivoLivre=useState('');var motivoLivre=_motivoLivre[0];var setMotivoLivre=_motivoLivre[1];
   var _qtdBaixa=useState('');var qtdBaixa=_qtdBaixa[0];var setQtdBaixa=_qtdBaixa[1];
+  var _descarteMed=useState(null);var descarteMed=_descarteMed[0];var setDescarteMed=_descarteMed[1];
+  var _descarteLoteSel=useState(null);var descarteLoteSel=_descarteLoteSel[0];var setDescarteLoteSel=_descarteLoteSel[1];
   var _salvandoBaixa=useState(false);var salvandoBaixa=_salvandoBaixa[0];var setSalvandoBaixa=_salvandoBaixa[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];var _importStatus=useState('');var importStatus=_importStatus[0];var setImportStatus=_importStatus[1];var _importing=useState(false);var importing=_importing[0];var setImporting=_importing[1];var _filtCat=useState('todos');var filtCat=_filtCat[0];var setFiltCat=_filtCat[1];var _ajusteId=useState(null);var ajusteId=_ajusteId[0];var setAjusteId=_ajusteId[1];var _ajusteQty=useState('');var ajusteQty=_ajusteQty[0];var setAjusteQty=_ajusteQty[1];var _ajusteMotivo=useState('');var ajusteMotivo=_ajusteMotivo[0];var setAjusteMotivo=_ajusteMotivo[1];var _ajusteMed=useState(null);var ajusteMed=_ajusteMed[0];var setAjusteMed=_ajusteMed[1];var _loteSel=useState(null);var loteSel=_loteSel[0];var setLoteSel=_loteSel[1];var _editLote=useState(null);var editLote=_editLote[0];var setEditLote=_editLote[1];var _editLoteVal=useState('');var editLoteVal=_editLoteVal[0];var setEditLoteVal=_editLoteVal[1];var _editLoteData=useState('');var editLoteData=_editLoteData[0];var setEditLoteData=_editLoteData[1];
 var isManager=(user.role==='gestor'||user.role==='tecnico');var hoje=new Date();
 function getDiasVal(val){if(!val)return null;var p=val.split('/');if(p.length!==2)return null;var d=new Date(parseInt(p[1]),parseInt(p[0]),0);return Math.ceil((d-hoje)/86400000);}
@@ -1725,6 +1727,7 @@ var divergenciasAtivas=(entries||[]).filter(function(e){return e.divergenciaTipo
 var TipoBtn=function(props){var t=TIPOS[props.k];var sel=props.sel===props.k;return <button onClick={function(){props.onClick(props.k);}} style={{padding:'7px 12px',borderRadius:20,border:'1.5px solid '+(sel?t.cor:'#E2E8F0'),background:sel?t.cor:'#fff',color:sel?'#fff':'#64748B',cursor:'pointer',fontWeight:sel?700:500,fontSize:12,transition:'all .15s'}}>{t.icon} {t.label}</button>;};
 function darBaixaVencido(){
     if(!showBaixa)return;
+    if(descarteMed&&descarteMed.lotes&&descarteMed.lotes.length>1&&!descarteLoteSel){alert2('Selecione qual lote está sendo descartado.');return;}
     var motivo=motivoBaixa==='outro'?motivoLivre.trim():
       motivoBaixa==='descarte'?'Vencido — encaminhado para descarte correto':
       motivoBaixa==='devolucao'?'Vencido — devolvido ao fornecedor':motivoBaixa;
@@ -1742,8 +1745,8 @@ function darBaixaVencido(){
       observacao:motivo+(qtd<disponivel?' (baixa parcial: '+qtd+' de '+disponivel+' un. no lote)':''),descarte:true
     }).then(function(){
       setSalvandoBaixa(false);setShowBaixa(null);
-      setMotivoBaixa('descarte');setMotivoLivre('');setQtdBaixa('');
-      alert2('Baixa registrada! '+qtd+' un. enviada(s) para Descarte.');
+      setMotivoBaixa('descarte');setMotivoLivre('');setQtdBaixa('');setDescarteMed(null);setDescarteLoteSel(null);
+      alert2('Descarte registrado! '+qtd+' un. enviada(s) para a aba Descartes.');
     }).catch(function(e){
       setSalvandoBaixa(false);
       alert2('Erro: '+(e&&e.message?e.message:'verifique a conexão'));
@@ -1799,7 +1802,7 @@ function darBaixaVencido(){
 <td><span style={{fontWeight:900,fontSize:22,color:zero?'#B91C1C':low?'#B45309':'#0C6B3E'}}>{m.est}</span></td>
 <td style={{color:vc,fontSize:12}}>{m.info.validade||'—'}{dias!==null&&dias<0&&<div style={{fontSize:10,color:'#B91C1C',fontWeight:700}}>VENCIDO</div>}{dias!==null&&dias>=0&&dias<=90&&<div style={{fontSize:10,color:vc}}>em {dias} dias</div>}{m.info.lote&&<div style={{fontSize:11,color:'#94A3B8'}}>Lote: {m.info.lote}</div>}</td>
 <td><span className={'badge '+(zero?'badge-red':low?'badge-amber':'badge-green')}>{zero?'Zerado':low?'Baixo':'OK'}</span></td>
-<td><div style={{display:'flex',gap:4}}>{can(user.role,'editar')&&<button onClick={function(){setEditId(m.id);setEditNome(m.nome);setEditMin(m.minEstoque||'');setEditTipo(m.cat||'medicamento');}} style={{background:'#EFF6FF',border:'none',borderRadius:8,width:32,height:32,cursor:'pointer',fontSize:14}}>✏️</button>}{can(user.role,'editar')&&<button onClick={function(){delMed(m.id);}} style={{background:'#FEE2E2',border:'none',borderRadius:8,width:32,height:32,cursor:'pointer',fontSize:14}}>🗑</button>}<button onClick={function(){setAjusteId(m.id);setAjusteMed(m);setAjusteQty(String(m.est));}} style={{background:'#FEF3C7',border:'none',borderRadius:8,width:32,height:32,cursor:'pointer',fontSize:14}}>⚖️</button><button onClick={function(){var li=m.lotes&&m.lotes.length>0?m.lotes[0]:{entryId:'',lote:m.info.lote||'',validade:m.info.validade||''};setEditLote({entryId:li.entryId,medId:m.id,nome:m.nome});setEditLoteVal(li.lote||'');setEditLoteData(li.validade||'');}} style={{background:'#F0FDF4',border:'none',borderRadius:8,width:32,height:32,cursor:'pointer',fontSize:14}}>📅</button></div></td>
+<td><div style={{display:'flex',gap:4}}>{can(user.role,'editar')&&<button onClick={function(){setEditId(m.id);setEditNome(m.nome);setEditMin(m.minEstoque||'');setEditTipo(m.cat||'medicamento');}} style={{background:'#EFF6FF',border:'none',borderRadius:8,width:32,height:32,cursor:'pointer',fontSize:14}}>✏️</button>}{can(user.role,'editar')&&<button onClick={function(){delMed(m.id);}} style={{background:'#FEE2E2',border:'none',borderRadius:8,width:32,height:32,cursor:'pointer',fontSize:14}}>🗑</button>}<button onClick={function(){setAjusteId(m.id);setAjusteMed(m);setAjusteQty(String(m.est));}} style={{background:'#FEF3C7',border:'none',borderRadius:8,width:32,height:32,cursor:'pointer',fontSize:14}}>⚖️</button><button onClick={function(){setDescarteMed(m);setDescarteLoteSel(m.lotes&&m.lotes.length===1?m.lotes[0]:null);var loteInicial=m.lotes&&m.lotes.length===1?m.lotes[0]:null;setShowBaixa({id:m.id,medId:m.id,nome:m.nome,lote:loteInicial?loteInicial.lote:(m.info.lote||''),validade:loteInicial?loteInicial.validade:(m.info.validade||''),est:loteInicial?loteInicial.qty:m.est});setQtdBaixa('');}} title="Descarte por vencimento" style={{background:'#FEE2E2',border:'none',borderRadius:8,width:32,height:32,cursor:'pointer',fontSize:14}}>♻️</button><button onClick={function(){var li=m.lotes&&m.lotes.length>0?m.lotes[0]:{entryId:'',lote:m.info.lote||'',validade:m.info.validade||''};setEditLote({entryId:li.entryId,medId:m.id,nome:m.nome});setEditLoteVal(li.lote||'');setEditLoteData(li.validade||'');}} style={{background:'#F0FDF4',border:'none',borderRadius:8,width:32,height:32,cursor:'pointer',fontSize:14}}>📅</button></div></td>
 </tr>);})}</tbody></table></div>)}</div></div>)}
 {sub==='faltas'&&(<div><div style={{display:'flex',justifyContent:'flex-end',marginBottom:14}}><button onClick={exportAlertasXL} className="bg" style={{width:'auto',padding:'0 16px'}}>Excel Alertas</button></div>
 {faltas.length===0?<div className="card" style={{padding:48,textAlign:'center'}}><div style={{fontSize:40,marginBottom:12}}>✅</div><div style={{fontWeight:700,color:'#0C6B3E',fontSize:16}}>Nenhuma falta!</div></div>:(
@@ -1813,7 +1816,7 @@ function darBaixaVencido(){
 {(vencidos.length+venc30.length+venc60.length+venc90.length)===0?<div className="card" style={{padding:48,textAlign:'center'}}><div style={{fontSize:40,marginBottom:12}}>✅</div><div style={{fontWeight:700,color:'#0C6B3E',fontSize:16}}>Nenhum alerta!</div></div>:(
 <div style={{display:'flex',flexDirection:'column',gap:10}}>
 {vencidos.length>0&&<div style={{fontSize:11,fontWeight:700,color:'#B91C1C',padding:'6px 14px',background:'#FEE2E2',borderRadius:8,textTransform:'uppercase',letterSpacing:'.04em'}}>Vencidos ({vencidos.length})</div>}
-{vencidos.map(function(m,i){return(<div key={i} className="card" style={{padding:'13px 16px',border:'2px solid #FCA5A5',display:'flex',gap:12,alignItems:'center'}}><div style={{flex:1}}><div style={{fontWeight:700,color:'#B91C1C'}}>{m.nome}</div><div style={{fontSize:12,color:'#94A3B8'}}>{m.est} un. · Lote: {m.lote||'—'}</div></div><div style={{textAlign:'right'}}><div style={{fontWeight:700,color:'#B91C1C',fontSize:13}}>{m.validade}</div><div style={{fontSize:11,color:'#B91C1C'}}>Há {Math.abs(m.dias)} dias</div></div><button onClick={function(){setShowBaixa(m);setQtdBaixa(String(m.est||0));}} style={{background:'#DC2626',border:'none',borderRadius:8,padding:'8px 12px',color:'#fff',fontWeight:700,fontSize:11,cursor:'pointer',flexShrink:0}}>🗑️ Baixa</button></div>);} )}
+{vencidos.map(function(m,i){return(<div key={i} className="card" style={{padding:'13px 16px',border:'2px solid #FCA5A5',display:'flex',gap:12,alignItems:'center'}}><div style={{flex:1}}><div style={{fontWeight:700,color:'#B91C1C'}}>{m.nome}</div><div style={{fontSize:12,color:'#94A3B8'}}>{m.est} un. · Lote: {m.lote||'—'}</div></div><div style={{textAlign:'right'}}><div style={{fontWeight:700,color:'#B91C1C',fontSize:13}}>{m.validade}</div><div style={{fontSize:11,color:'#B91C1C'}}>Há {Math.abs(m.dias)} dias</div></div><button onClick={function(){setDescarteMed(null);setDescarteLoteSel(null);setShowBaixa(m);setQtdBaixa(String(m.est||0));}} style={{background:'#DC2626',border:'none',borderRadius:8,padding:'8px 12px',color:'#fff',fontWeight:700,fontSize:11,cursor:'pointer',flexShrink:0}}>♻️ Descarte</button></div>);} )}
 {venc30.length>0&&<div style={{fontSize:11,fontWeight:700,color:'#DC2626',padding:'6px 14px',background:'#FEF2F2',borderRadius:8,textTransform:'uppercase',letterSpacing:'.04em',marginBottom:6}}>🔴 Vence em até 30 dias ({venc30.length})</div>}
 {venc30.map(function(m,i){return(<div key={i} className="card" style={{padding:'13px 16px',border:'1.5px solid #FCA5A5',display:'flex',gap:12,alignItems:'center',marginBottom:6}}><div style={{flex:1}}><div style={{fontWeight:700,color:'#B91C1C'}}>{m.nome}</div><div style={{fontSize:12,color:'#94A3B8'}}>{m.est} un.{m.lote?' · Lote: '+m.lote:''}</div></div><div style={{textAlign:'right'}}><div style={{fontWeight:700,color:'#B91C1C',fontSize:13}}>{m.validade}</div><div style={{fontSize:11,color:'#B91C1C'}}>em {m.dias} dias</div></div></div>);}  )}
 {venc60.length>0&&<div style={{fontSize:11,fontWeight:700,color:'#D97706',padding:'6px 14px',background:'#FFFBEB',borderRadius:8,textTransform:'uppercase',letterSpacing:'.04em',marginBottom:6,marginTop:8}}>🟡 Vence entre 31 e 60 dias ({venc60.length})</div>}
@@ -1859,13 +1862,27 @@ function darBaixaVencido(){
   })}
 </div>}
 {showBaixa&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
-  <div style={{background:'#fff',borderRadius:20,padding:20,maxWidth:420,width:'100%'}}>
-    <div style={{fontWeight:800,fontSize:17,color:'#DC2626',marginBottom:4}}>🗑️ Baixa por Vencimento</div>
+  <div style={{background:'#fff',borderRadius:20,padding:20,maxWidth:420,width:'100%',maxHeight:'90vh',overflowY:'auto'}}>
+    <div style={{fontWeight:800,fontSize:17,color:'#DC2626',marginBottom:4}}>♻️ Descarte por Vencimento</div>
     <div style={{fontSize:13,color:'#64748B',marginBottom:16}}>
-      <strong>{showBaixa.nome}</strong> · Lote {showBaixa.lote||'—'} · Val {showBaixa.validade} · Disponível no lote: <strong>{showBaixa.est||0} un.</strong>
+      <strong>{showBaixa.nome}</strong>
+    </div>
+    {descarteMed&&descarteMed.lotes&&descarteMed.lotes.length>1&&<div style={{marginBottom:14}}>
+      <div style={{fontWeight:700,fontSize:12,color:'#1E293B',marginBottom:6}}>Selecione o lote vencido:</div>
+      <div style={{display:'flex',flexDirection:'column',gap:6}}>
+        {descarteMed.lotes.map(function(l,i){var sel=descarteLoteSel&&descarteLoteSel.lote===l.lote;return(
+          <button key={i} onClick={function(){setDescarteLoteSel(l);setShowBaixa(Object.assign({},showBaixa,{lote:l.lote,validade:l.validade,est:l.qty}));setQtdBaixa('');}} style={{padding:'10px 12px',borderRadius:10,border:'1.5px solid '+(sel?'#DC2626':'#E2E8F0'),background:sel?'#FEF2F2':'#F8FAFC',fontWeight:sel?700:500,fontSize:12,cursor:'pointer',textAlign:'left',color:sel?'#DC2626':'#1E293B',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <span>📦 Lote {l.lote||'—'}{l.validade?' · Val: '+l.validade:''}</span>
+            <span style={{fontWeight:800}}>{l.qty} un.</span>
+          </button>
+        );})}
+      </div>
+    </div>}
+    <div style={{background:'#FEF2F2',border:'1px solid #FCA5A5',borderRadius:10,padding:'10px 14px',marginBottom:14,fontSize:13,color:'#B91C1C'}}>
+      Lote {showBaixa.lote||'—'} · Val {showBaixa.validade||'—'} · Disponível: <strong>{showBaixa.est||0} un.</strong>
     </div>
     <div style={{fontWeight:700,fontSize:13,color:'#1E293B',marginBottom:6}}>Quantidade real vencida:</div>
-    <input value={qtdBaixa} onChange={function(e){setQtdBaixa(e.target.value.replace(/[^0-9]/g,''));}} placeholder="Quantidade" className="inp" style={{fontSize:22,fontWeight:800,textAlign:'center',color:'#DC2626'}} inputMode="numeric"/>
+    <input value={qtdBaixa} onChange={function(e){setQtdBaixa(e.target.value.replace(/[^0-9]/g,''));}} placeholder="Quantidade" className="inp" style={{fontSize:22,fontWeight:800,textAlign:'center',color:'#DC2626'}} inputMode="numeric" autoFocus/>
     {qtdBaixa!==''&&parseInt(qtdBaixa)>0&&parseInt(qtdBaixa)<(showBaixa.est||0)&&<div style={{fontSize:12,color:'#B45309',marginBottom:8,background:'#FFFBEB',border:'1px solid #FCD34D',borderRadius:8,padding:'6px 10px'}}>ℹ️ Baixa parcial — os {(showBaixa.est||0)-parseInt(qtdBaixa)} un. restantes do lote continuam no estoque.</div>}
     {qtdBaixa!==''&&parseInt(qtdBaixa)>(showBaixa.est||0)&&<div style={{fontSize:12,color:'#B91C1C',marginBottom:8,background:'#FEF2F2',border:'1px solid #FCA5A5',borderRadius:8,padding:'6px 10px'}}>⚠️ Quantidade maior que o disponível no lote ({showBaixa.est||0} un.).</div>}
     <div style={{fontWeight:700,fontSize:13,color:'#1E293B',marginBottom:10,marginTop:10}}>Motivo da baixa:</div>
@@ -1877,8 +1894,8 @@ function darBaixaVencido(){
     {motivoBaixa==='outro'&&<input value={motivoLivre} onChange={function(e){setMotivoLivre(e.target.value);}} placeholder="Descreva o motivo..." className="inp" style={{fontSize:13}}/>}
     {salvandoBaixa&&<div style={{textAlign:'center',color:'#DC2626',fontWeight:600,marginBottom:8}}>⏳ Registrando...</div>}
     <div style={{display:'flex',gap:8,marginTop:8}}>
-      <button onClick={function(){setShowBaixa(null);setQtdBaixa('');}} className="bs" style={{flex:1,padding:'12px 0'}}>Cancelar</button>
-      <button onClick={darBaixaVencido} disabled={salvandoBaixa||!qtdBaixa||parseInt(qtdBaixa)<=0||parseInt(qtdBaixa)>(showBaixa.est||0)} style={{flex:2,padding:'12px 0',background:'#DC2626',color:'#fff',border:'none',borderRadius:12,fontWeight:700,fontSize:14,cursor:'pointer',opacity:(salvandoBaixa||!qtdBaixa||parseInt(qtdBaixa)<=0||parseInt(qtdBaixa)>(showBaixa.est||0))?0.45:1}}>🗑️ Confirmar Baixa</button>
+      <button onClick={function(){setShowBaixa(null);setQtdBaixa('');setDescarteMed(null);setDescarteLoteSel(null);}} className="bs" style={{flex:1,padding:'12px 0'}}>Cancelar</button>
+      <button onClick={darBaixaVencido} disabled={salvandoBaixa||!qtdBaixa||parseInt(qtdBaixa)<=0||parseInt(qtdBaixa)>(showBaixa.est||0)} style={{flex:2,padding:'12px 0',background:'#DC2626',color:'#fff',border:'none',borderRadius:12,fontWeight:700,fontSize:14,cursor:'pointer',opacity:(salvandoBaixa||!qtdBaixa||parseInt(qtdBaixa)<=0||parseInt(qtdBaixa)>(showBaixa.est||0))?0.45:1}}>♻️ Confirmar Descarte</button>
     </div>
   </div>
 </div>}
