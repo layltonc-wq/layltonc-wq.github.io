@@ -5172,6 +5172,42 @@ useEffect(function(){
   var t2=setInterval(verificarHorarioPlantao,60000);
   return function(){clearInterval(t2);};
 },[user,ready,isGuest,shiftId,plantao]);
+// Listener em tempo real do plantao de hoje: mantem plantao e isGuest sincronizados
+// para todos os usuarios (auxiliar/diarista adicionado apos a abertura passa a ver os dados corretos automaticamente).
+useEffect(function(){
+  if(!ready||!user)return;
+  var today=todayStr();
+  var unsub=db.collection('plantoes').doc(today).onSnapshot(function(snap){
+    if(!snap.exists){
+      // Plantao nao existe: se e gestor/tecnico, nao muda nada (podem operar); demais viram convidado
+      if(user.role!=='gestor'&&user.role!=='tecnico'){setPlantao(null);setShiftId(null);}
+      return;
+    }
+    var p=snap.data();
+    if(p.ativo===false){
+      // Plantao encerrado
+      if(user.role!=='gestor'&&user.role!=='tecnico'){setPlantao(null);setShiftId(null);setIsGuest(true);}
+      else {setPlantao(null);setShiftId(null);}
+      return;
+    }
+    setPlantao(p);setShiftId(today);
+    // Gestor/tecnico nunca sao convidados
+    if(user.role==='gestor'||user.role==='tecnico'){setIsGuest(false);return;}
+    // Farmaceutico que abriu, ou membro confirmado da equipe: nao e convidado
+    var inTeam=false;
+    if(p.iniciadoPor===user.uid){inTeam=true;}
+    if(!inTeam&&p.equipe){
+      for(var i=0;i<p.equipe.length;i++){
+        if(p.equipe[i].id===user.uid&&p.equipe[i].status!=='saiu'&&p.equipe[i].status!=='negou'){inTeam=true;break;}
+      }
+    }
+    // Se o usuario ja saiu manualmente ou encerrou o plantao neste dispositivo, mantem como convidado
+    var leftToday=localStorage.getItem('fc_shift_enc_'+today)||localStorage.getItem('fc_shift_saiu_'+today);
+    if(leftToday){setIsGuest(true);return;}
+    setIsGuest(!inTeam);
+  },function(){});
+  return function(){try{unsub();}catch(e){}};
+},[user,ready]);
 useEffect(function(){if(!ready||!user)return;var u1=db.collection('entries').onSnapshot(function(s){var list=s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;});list.sort(function(a,b){return (a.criadoEm||'').localeCompare(b.criadoEm||'');});setEntries(list);setLoading(false);},function(){setLoading(false);});var u2=db.collection('medicamentos').onSnapshot(function(s){var list=s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;});list.sort(function(a,b){return a.nome.localeCompare(b.nome);});setMeds(list);});var u3=db.collection('users').where('status','==','approved').onSnapshot(function(s){setAllUsers(s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;}));
 // Handler botão voltar
 window._backPressed=function(){setShowSairModal(true);};
