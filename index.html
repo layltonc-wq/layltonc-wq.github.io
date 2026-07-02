@@ -589,7 +589,7 @@ return(
     <div style={{padding:'16px'}}>
       <Lbl c="Quantidade"/>
       <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:10}}>
-        {[1,2,30,60,90,120].map(function(n){return <button key={n} onClick={function(){var cur2=parseInt(qty)||0;var nov=cur2===n?cur2+n:n;setQty(String(nov));setWarn('');}} className={'qb'+(parseInt(qty)===n?' on':'')}>{n}</button>;})}
+        {[1,2,5,10,20,30,60,90].map(function(n){return <button key={n} onClick={function(){var cur2=parseInt(qty)||0;var nov=cur2===n?cur2+n:n;setQty(String(nov));setWarn('');}} className={'qb'+(parseInt(qty)===n?' on':'')}>{n}</button>;})}
       </div>
       <input value={qty} onChange={function(e){setQty(e.target.value.replace(/[^0-9]/g,''));setWarn('');}} placeholder="Ou outra quantidade..." className="inp" style={{fontSize:22,fontWeight:800,textAlign:'center',color:B}}/>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
@@ -1723,7 +1723,7 @@ function delMed(id){if(!confirm('Excluir medicamento?'))return;db.collection('me
 function salvarEditLote(){if(!editLote)return;setSaving(true);var ps=[];if(editLote.medId)ps.push(db.collection('medicamentos').doc(editLote.medId).update({loteAtual:editLoteVal.trim(),validadeAtual:editLoteData.trim()}));if(editLote.entryId)ps.push(db.collection('entries').doc(editLote.entryId).update({lote:editLoteVal.trim(),validade:editLoteData.trim()}).catch(function(){}));Promise.all(ps).then(function(){setEditLote(null);setSaving(false);}).catch(function(e){alert('Erro: '+e.message);setSaving(false);});}
 function salvarAjuste(){if(!ajusteMed)return;var nq=parseInt(ajusteQty);if(isNaN(nq)||nq<0){alert('Quantidade inválida.');return;}if(!ajusteMotivo.trim()){alert('Informe o motivo.');return;}var atual=loteSel?loteSel.qty:(stock[ajusteMed.id]||0);var diff=nq-atual;if(diff===0){setAjusteId(null);setAjusteMed(null);setAjusteQty('');setAjusteMotivo('');setLoteSel(null);return;}setSaving(true);db.collection('entries').add({medicamentoId:ajusteMed.id,medicamentoNome:ajusteMed.nome,ean:ajusteMed.ean||'',tipo:diff>0?'entrada':'saida',quantidade:Math.abs(diff),lote:loteSel?loteSel.lote:'',validade:loteSel?loteSel.validade:'',observacao:'Balanço: '+ajusteMotivo.trim()+' (era '+atual+', passou a '+nq+')',criadoEm:new Date().toISOString(),date:todayStr(),autorId:user.uid,autorNome:user.name,autorCargo:user.role,autorColor:user.color||B,isAjuste:true}).then(function(){setAjusteId(null);setAjusteMed(null);setAjusteQty('');setAjusteMotivo('');setLoteSel(null);setSaving(false);}).catch(function(e){alert(e.message);setSaving(false);});}
 function handleImportXls(file){if(!file)return;setImporting(true);setImportStatus('Lendo arquivo...');var reader=new FileReader();reader.onload=function(ev){try{var data=new Uint8Array(ev.target.result);var wb=XLSX.read(data,{type:'array'});var catMap={'CONTROLADOS':'controlado','CONTROLADO':'controlado','FARMACIA BASICA':'medicamento','FARMACIA':'medicamento','LEITES':'leite','LEITE':'leite','INJETAVEIS':'injetavel','INJETAVEL':'injetavel','PENSOS':'penso','MATERIAIS':'penso'};var batch=[];for(var si=0;si<wb.SheetNames.length;si++){var sn=wb.SheetNames[si];if(sn.toUpperCase().indexOf('INSTRUC')>=0)continue;var ws2=wb.Sheets[sn];var rows=XLSX.utils.sheet_to_json(ws2,{defval:''});if(!rows||rows.length===0)continue;var su=sn.toUpperCase().trim();var sc='medicamento';for(var key in catMap){if(su.indexOf(key)>=0){sc=catMap[key];break;}}for(var i=0;i<rows.length;i++){var row=rows[i];var nome=row['Nome']||row['NOME']||row['nome']||'';if(!nome||!nome.trim())continue;var cat=row['Categoria']||row['CATEGORIA']||sc;var est2=parseInt(row['Estoque Inicial']||row['estoque']||0)||0;var min2=parseInt(row['Estoque Minimo']||row['minimo']||0)||0;var ean=(row['EAN (opcional)']||row['EAN']||'')+'';var val2=(row['Validade (MM/AAAA)']||row['Validade']||'')+'';var cl=cat.toLowerCase().trim();if(cl.indexOf('injet')>=0)cl='injetavel';else if(cl.indexOf('penso')>=0||cl.indexOf('material')>=0)cl='penso';else if(cl.indexOf('control')>=0)cl='controlado';else if(cl.indexOf('leite')>=0)cl='leite';else cl='medicamento';batch.push({nome:nome.trim(),categoria:cl,minEstoque:min2,ean:ean,validade:val2,estoque:est2,criadoEm:new Date().toISOString()});}}if(batch.length===0){setImportStatus('Nenhum item encontrado.');setImporting(false);return;}setImportStatus('Importando '+batch.length+' itens...');var idx=0,done=0;function next2(){if(idx>=batch.length){setImportStatus('Registrando estoques...');var ei=0;function ne(){if(ei>=batch.length){setImportStatus('Concluido! '+done+' itens!');setImporting(false);return;}var item=batch[ei++];if(item.estoque>0){db.collection('medicamentos').where('nome','==',item.nome).limit(1).get().then(function(s){if(!s.empty){db.collection('entries').add({medicamentoId:s.docs[0].id,medicamentoNome:item.nome,ean:item.ean||'',tipo:'entrada',quantidade:item.estoque,lote:'',validade:item.validade||'',observacao:'Estoque inicial',criadoEm:new Date().toISOString(),date:todayStr(),autorId:user.uid,autorNome:user.name,autorCargo:user.role,autorColor:user.color||B}).then(ne).catch(ne);}else ne();}).catch(ne);}else ne();}ne();return;}var item=batch[idx++];db.collection('medicamentos').add({nome:item.nome,categoria:item.categoria,minEstoque:item.minEstoque,ean:item.ean,criadoEm:item.criadoEm}).then(function(){done++;next2();}).catch(function(){done++;next2();});}next2();}catch(ex){setImportStatus('Erro: '+ex.message);setImporting(false);}};reader.readAsArrayBuffer(file);}
-var divergenciasAtivas=(entries||[]).filter(function(e){return e.divergenciaTipo==='real';});var subTabs=[{id:'estoque',label:'Estoque'},{id:'faltas',label:'Faltas'+(faltas.length>0?' ('+faltas.length+')':'')},{id:'vencimento',label:'Vencimentos'+(totalAlertas>0?' ('+totalAlertas+')':'')},{id:'divergencias',label:'⚠️ Divergências'+(divergenciasAtivas.length>0?' ('+divergenciasAtivas.length+')':'')}];
+var divergenciasAtivas=(entries||[]).filter(function(e){return e.divergenciaTipo==='real';});var _cutDesc=(function(){var d=new Date();d.setDate(d.getDate()-30);return d.toISOString().slice(0,10);})();var descartes30=(entries||[]).filter(function(e){return e.tipo==='saida'&&e.descarte&&(e.date||'')>=_cutDesc;});var subTabs=[{id:'estoque',label:'Estoque'},{id:'faltas',label:'Faltas'+(faltas.length>0?' ('+faltas.length+')':'')},{id:'vencimento',label:'Vencimentos'+(totalAlertas>0?' ('+totalAlertas+')':'')},{id:'divergencias',label:'⚠️ Divergências'+(divergenciasAtivas.length>0?' ('+divergenciasAtivas.length+')':'')},{id:'descartes',label:'🗑️ Descartes'+(descartes30.length>0?' ('+descartes30.length+')':'')}];
 var TipoBtn=function(props){var t=TIPOS[props.k];var sel=props.sel===props.k;return <button onClick={function(){props.onClick(props.k);}} style={{padding:'7px 12px',borderRadius:20,border:'1.5px solid '+(sel?t.cor:'#E2E8F0'),background:sel?t.cor:'#fff',color:sel?'#fff':'#64748B',cursor:'pointer',fontWeight:sel?700:500,fontSize:12,transition:'all .15s'}}>{t.icon} {t.label}</button>;};
 function darBaixaVencido(){
     if(!showBaixa)return;
@@ -1861,6 +1861,74 @@ function darBaixaVencido(){
     </div>);
   })}
 </div>}
+{sub==='descartes'&&<div>
+  {(function(){
+    var descartes=(entries||[]).filter(function(e){return e.tipo==='saida'&&e.descarte;}).sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});
+    var descPeriodo=descartes;
+    var totalDesc=descPeriodo.reduce(function(s,e){return s+(e.quantidade||0);},0);
+    // vencidos ainda em estoque, com sugestao de balanco antes do descarte
+    var hoje2=todayStr();
+    var vencidosParaBaixar=[];
+    (medications||[]).forEach(function(m){
+      var lotes=(m.lotes||[]);
+      lotes.forEach(function(l){
+        if(l.validade&&l.validade<hoje2&&l.qty>0){
+          vencidosParaBaixar.push({medId:m.id,nome:m.nome,lote:l.lote,validade:l.validade,qty:l.qty,med:m});
+        }
+      });
+    });
+    function exportDescPDF(){
+      var hj=new Date().toLocaleDateString('pt-BR');
+      var html='<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;padding:24px;font-size:12px}table{width:100%;border-collapse:collapse;margin-top:12px}th{background:#DC2626;color:#fff;padding:7px;text-align:left;font-size:11px}td{padding:7px;border:1px solid #ddd}</style></head><body>';
+      html+='<h2>🗑️ Relatório de Descartes por Vencimento</h2><p>Gerado em '+hj+'</p>';
+      html+='<table><tr><th>Data</th><th>Medicamento</th><th>Qtd</th><th>Lote</th><th>Validade</th><th>Motivo</th><th>Registrado por</th></tr>';
+      descPeriodo.forEach(function(e){
+        html+='<tr><td>'+(e.date||'')+'</td><td>'+(e.medicamentoNome||'')+'</td><td>'+(e.quantidade||0)+'</td><td>'+(e.lote||'—')+'</td><td>'+(e.validade||'—')+'</td><td>'+(e.observacao||'—')+'</td><td>'+(e.autorNome||'—')+'</td></tr>';
+      });
+      html+='</table></body></html>';
+      var w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(function(){w.print();},400);}
+    }
+    return(<div>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14,flexWrap:'wrap',gap:8}}>
+        <div>
+          <div style={{fontWeight:800,fontSize:16,color:'#DC2626'}}>🗑️ Descartes por Vencimento</div>
+          <div style={{fontSize:12,color:'#94A3B8',marginTop:2}}>Total geral: {descPeriodo.length} descarte(s) · {totalDesc} un.</div>
+        </div>
+        <button onClick={exportDescPDF} className="bp" style={{background:'#DC2626',width:'auto',padding:'0 16px'}}>📄 Exportar PDF</button>
+      </div>
+      {vencidosParaBaixar.length>0&&<div className="card" style={{padding:14,marginBottom:14,border:'2px solid #FCA5A5',background:'#FFF7F7'}}>
+        <div style={{fontWeight:800,fontSize:14,color:'#B91C1C',marginBottom:4}}>⚖️ Vencidos ainda no estoque — {vencidosParaBaixar.length} item(ns)</div>
+        <div style={{fontSize:12,color:'#64748B',marginBottom:12}}>Confira o físico. Se não bater com o sistema, ajuste primeiro com <strong>⚖️ Balanço</strong> e depois clique em <strong>♻️ Descartar</strong>.</div>
+        {vencidosParaBaixar.map(function(v,i){return(<div key={i} style={{display:'flex',gap:8,alignItems:'center',padding:'10px 0',borderTop:i>0?'1px solid #FEE2E2':'none'}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontWeight:700,fontSize:13,color:'#1E293B',wordBreak:'break-word'}}>{v.nome}</div>
+            <div style={{fontSize:11,color:'#94A3B8'}}>Lote {v.lote||'—'} · Val {v.validade} · <strong style={{color:'#B91C1C'}}>{v.qty} un.</strong> no sistema</div>
+          </div>
+          <button onClick={function(){setAjusteId(v.medId);setAjusteMed(v.med);setAjusteQty(String(v.qty));setLoteSel({lote:v.lote,validade:v.validade,qty:v.qty});setAjusteMotivo('Ajuste antes de descarte por vencimento');}} title="Balanço deste lote" style={{background:'#FEF3C7',border:'none',borderRadius:8,width:36,height:36,cursor:'pointer',fontSize:15,flexShrink:0}}>⚖️</button>
+          <button onClick={function(){setDescarteMed(v.med);setDescarteLoteSel({lote:v.lote,validade:v.validade,qty:v.qty});setShowBaixa({id:v.medId,medId:v.medId,nome:v.nome,lote:v.lote,validade:v.validade,est:v.qty});setQtdBaixa('');}} title="Descartar este lote" style={{background:'#DC2626',border:'none',borderRadius:8,width:36,height:36,cursor:'pointer',fontSize:15,flexShrink:0,color:'#fff'}}>♻️</button>
+        </div>);})}
+      </div>}
+      {descPeriodo.length===0&&<div style={{textAlign:'center',padding:'40px 0',color:'#94A3B8'}}>
+        <div style={{fontSize:40,marginBottom:8}}>✅</div>
+        <div style={{fontWeight:600}}>Nenhum descarte registrado ainda</div>
+      </div>}
+      {descPeriodo.map(function(e){return(<div key={e.id||e.criadoEm} style={{background:'#fff',borderRadius:14,border:'1.5px solid #FCA5A5',padding:14,marginBottom:8}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontWeight:700,fontSize:13,color:'#1E293B',marginBottom:4,wordBreak:'break-word'}}>{e.medicamentoNome}</div>
+            <div style={{fontSize:12,color:'#64748B'}}>{e.quantidade} un. · Lote {e.lote||'—'} · Val {e.validade||'—'}</div>
+            <div style={{fontSize:11,color:'#DC2626',marginTop:2,fontWeight:600}}>📋 {e.observacao||'—'}</div>
+            <div style={{fontSize:11,color:'#94A3B8',marginTop:2}}>{e.date||'—'} · por {e.autorNome||'—'}</div>
+          </div>
+          <div style={{textAlign:'center',flexShrink:0}}>
+            <div style={{fontWeight:800,fontSize:20,color:'#DC2626'}}>-{e.quantidade}</div>
+            <div style={{fontSize:10,color:'#94A3B8'}}>descartado</div>
+          </div>
+        </div>
+      </div>);})}
+    </div>);
+  })()}
+</div>}
 {showBaixa&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
   <div style={{background:'#fff',borderRadius:20,padding:20,maxWidth:420,width:'100%',maxHeight:'90vh',overflowY:'auto'}}>
     <div style={{fontWeight:800,fontSize:17,color:'#DC2626',marginBottom:4}}>♻️ Descarte por Vencimento</div>
@@ -1909,7 +1977,7 @@ var rankMap={};entries.forEach(function(e){if(e.tipo!=='saida')return;var k=e.me
 var respMap={};entries.forEach(function(e){var k=e.autorNome||'?';if(!respMap[k])respMap[k]={nome:k,color:e.autorColor,qtdS:0,qtdE:0,cntS:0,cntE:0};if(e.tipo==='saida'){respMap[k].qtdS+=(e.quantidade||0);respMap[k].cntS++;}else{respMap[k].qtdE+=(e.quantidade||0);respMap[k].cntE++;}});var porResp=Object.keys(respMap).map(function(k){return respMap[k];}).sort(function(a,b){return (b.qtdS+b.qtdE)-(a.qtdS+a.qtdE);});
 function doXL(){var rows=[['Data','Hora','Responsavel','Medicamento','Tipo','Qtd','Lote']];filtered.forEach(function(e){rows.push([fmtD(e.criadoEm),fmtT(e.criadoEm),e.autorNome||'',e.medicamentoNome||'',e.tipo==='entrada'?'Entrada':'Saida',e.quantidade||0,e.lote||'']);});var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'Relatorio');XLSX.writeFile(wb,'relatorio_'+dF+'_'+dT+'.xlsx');}
 return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
-<div className="tab-sw">{[['mov','Movimentações'],['dia','Saídas do Dia'],['desc','🗑️ Descartes'],['div','⚠️ Divergências'],['resp','Por Responsável'],['rank','Ranking']].map(function(t){return <button key={t[0]} onClick={function(){setSub(t[0]);}} className={sub===t[0]?'on':''}>{t[1]}</button>;})}</div>
+<div className="tab-sw">{[['mov','Movimentações'],['dia','Saídas do Dia'],['div','⚠️ Divergências'],['resp','Por Responsável'],['rank','Ranking']].map(function(t){return <button key={t[0]} onClick={function(){setSub(t[0]);}} className={sub===t[0]?'on':''}>{t[1]}</button>;})}</div>
 {sub==='dia'&&<div style={{paddingBottom:8}}>
   <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:14,flexWrap:'wrap'}}>
     <div style={{fontWeight:700,fontSize:16,color:'#1E293B',flex:1}}>📋 Saídas do Dia</div>
@@ -1980,48 +2048,6 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
   })()}
 </div>}
 {sub==='div'&&(user.role==='gestor'||user.role==='tecnico')&&<TabDivergenciasPainel db={db} user={user}/>}
-
-{sub==='desc'&&<div>
-  {(function(){
-    var descartes=(entries||[]).filter(function(e){return e.tipo==='saida'&&e.descarte;})
-      .sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});
-    function exportDescPDF(){
-      var hoje=new Date().toLocaleDateString('pt-BR');
-      var html='<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;padding:24px;font-size:12px}table{width:100%;border-collapse:collapse;margin-top:12px}th{background:#DC2626;color:#fff;padding:7px;text-align:left;font-size:11px}td{padding:7px;border:1px solid #ddd}</style></head><body>';
-      html+='<h2>🗑️ Relatório de Descartes por Vencimento</h2><p>Gerado em '+hoje+'</p>';
-      html+='<table><tr><th>Data</th><th>Medicamento</th><th>Qtd</th><th>Lote</th><th>Validade</th><th>Motivo</th><th>Registrado por</th></tr>';
-      descartes.forEach(function(e){
-        html+='<tr><td>'+(e.date||'')+'</td><td>'+(e.medicamentoNome||'')+'</td><td>'+(e.quantidade||0)+'</td><td>'+(e.lote||'—')+'</td><td>'+(e.validade||'—')+'</td><td>'+(e.observacao||'—')+'</td><td>'+(e.autorNome||'—')+'</td></tr>';
-      });
-      html+='</table></body></html>';
-      var w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(function(){w.print();},400);}
-    }
-    return(<div>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14,flexWrap:'wrap',gap:8}}>
-        <div style={{fontWeight:800,fontSize:16,color:'#DC2626'}}>🗑️ Descartes por Vencimento</div>
-        <button onClick={exportDescPDF} className="bp" style={{background:'#DC2626'}}>📄 Exportar PDF</button>
-      </div>
-      {descartes.length===0&&<div style={{textAlign:'center',padding:'40px 0',color:'#94A3B8'}}>
-        <div style={{fontSize:40,marginBottom:8}}>✅</div>
-        <div style={{fontWeight:600}}>Nenhum descarte registrado</div>
-      </div>}
-      {descartes.map(function(e){return(<div key={e.id||e.criadoEm} style={{background:'#fff',borderRadius:14,border:'1.5px solid #FCA5A5',padding:14,marginBottom:8}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
-          <div style={{flex:1}}>
-            <div style={{fontWeight:700,fontSize:13,color:'#1E293B',marginBottom:4}}>{e.medicamentoNome}</div>
-            <div style={{fontSize:12,color:'#64748B'}}>{e.quantidade} un. · Lote {e.lote||'—'} · Val {e.validade||'—'}</div>
-            <div style={{fontSize:11,color:'#DC2626',marginTop:2,fontWeight:600}}>📋 {e.observacao||'—'}</div>
-            <div style={{fontSize:11,color:'#94A3B8',marginTop:2}}>{e.date||'—'} · por {e.autorNome||'—'}</div>
-          </div>
-          <div style={{textAlign:'center',flexShrink:0}}>
-            <div style={{fontWeight:800,fontSize:20,color:'#DC2626'}}>-{e.quantidade}</div>
-            <div style={{fontSize:10,color:'#94A3B8'}}>descartado</div>
-          </div>
-        </div>
-      </div>);})}
-    </div>);
-  })()}
-</div>}
 
 {sub==='mov'&&<div>
   <div className="card" style={{marginBottom:12,padding:14}}>
@@ -2132,8 +2158,8 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
           var medalCors=['#F59E0B','#9CA3AF','#CD7F32'];
           return <div key={r.nome} style={{padding:'10px 16px',borderBottom:i<ranking.length-1?'1px solid #F8FAFC':'none',display:'flex',gap:12,alignItems:'center'}}>
             <div style={{width:28,height:28,borderRadius:'50%',background:i<3?medalCors[i]:'#F1F5F9',display:'flex',alignItems:'center',justifyContent:'center',fontSize:i<3?16:13,fontWeight:700,color:i<3?'#fff':'#94A3B8',flexShrink:0}}>{i<3?medals[i]:i+1}</div>
-            <div style={{flex:1}}>
-              <div style={{fontWeight:600,fontSize:13,color:'#1E293B'}}>{r.nome}</div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontWeight:600,fontSize:13,color:'#1E293B',wordBreak:'break-word',lineHeight:1.3}}>{r.nome}</div>
               <div style={{background:'#F1F5F9',borderRadius:20,height:5,overflow:'hidden',marginTop:4}}>
                 <div style={{height:'100%',background:'linear-gradient(90deg,#1351B4,#1A64D6)',borderRadius:20,width:pct+'%',transition:'width .4s ease'}}/>
               </div>
