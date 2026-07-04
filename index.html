@@ -1970,7 +1970,7 @@ function darBaixaVencido(){
 </div>);}
 function TabRelatorio(props){
   var db=props.db;var user=props.user||{};
-  function nomeC(n){if(!n)return '?';var p=n.trim().split(' ');return p.length>=2?p[0]+' '+p[1]:p[0];}var entries=props.entries;var medications=props.medications;var _dF=useState(todayStr());var dF=_dF[0];var setDF=_dF[1];var _dT=useState(todayStr());var dT=_dT[0];var setDT=_dT[1];var _tipo=useState('todos');var tipo=_tipo[0];var setTipo=_tipo[1];var _sub=useState('mov');var sub=_sub[0];var setSub=_sub[1];var _filtCatRel=useState('todos');var filtCatRel=_filtCatRel[0];var setFiltCatRel=_filtCatRel[1];var _filtMeds=useState([]);var filtMeds=_filtMeds[0];var setFiltMeds=_filtMeds[1];var _filtBusca=useState('');var filtBusca=_filtBusca[0];var setFiltBusca=_filtBusca[1];var _filtBuscaCat=useState('todos');var filtBuscaCat=_filtBuscaCat[0];var setFiltBuscaCat=_filtBuscaCat[1];var _rankDF=useState((function(){var d=new Date();d.setDate(d.getDate()-30);return d.toISOString().slice(0,10);})());var rankDF=_rankDF[0];var setRankDF=_rankDF[1];var _rankDT=useState(todayStr());var rankDT=_rankDT[0];var setRankDT=_rankDT[1];
+  function nomeC(n){if(!n)return '?';var p=n.trim().split(' ');return p.length>=2?p[0]+' '+p[1]:p[0];}var entries=props.entries;var medications=props.medications;var _dF=useState(todayStr());var dF=_dF[0];var setDF=_dF[1];var _dT=useState(todayStr());var dT=_dT[0];var setDT=_dT[1];var _tipo=useState('todos');var tipo=_tipo[0];var setTipo=_tipo[1];var _sub=useState('mov');var sub=_sub[0];var setSub=_sub[1];var _filtCatRel=useState('todos');var filtCatRel=_filtCatRel[0];var setFiltCatRel=_filtCatRel[1];var _filtMeds=useState([]);var filtMeds=_filtMeds[0];var setFiltMeds=_filtMeds[1];var _filtBusca=useState('');var filtBusca=_filtBusca[0];var setFiltBusca=_filtBusca[1];var _filtBuscaCat=useState('todos');var filtBuscaCat=_filtBuscaCat[0];var setFiltBuscaCat=_filtBuscaCat[1];var _rankDF=useState((function(){var d=new Date();d.setDate(d.getDate()-30);return d.toISOString().slice(0,10);})());var rankDF=_rankDF[0];var setRankDF=_rankDF[1];var _rankDT=useState(todayStr());var rankDT=_rankDT[0];var setRankDT=_rankDT[1];var _rankDiag=useState(null);var rankDiag=_rankDiag[0];var setRankDiag=_rankDiag[1];
 var filtered=entries.filter(function(e){if(e.ficticioDiv)return false;if(e.divergenciaTipo==='real')return false;var dt=(e.criadoEm||'').slice(0,10);if(dt<dF||dt>dT)return false;if(tipo!=='todos'&&e.tipo!==tipo)return false;if(filtMeds&&filtMeds.length>0&&filtMeds.indexOf(e.medicamentoNome)===-1)return false;if(filtCatRel&&filtCatRel!=='todos'){var meds=medications.filter(function(m){return m.nome===e.medicamentoNome&&((m.categoria||'medicamento'))===filtCatRel;});if(meds.length===0)return false;}return true;}).sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});
 var totE=0,totS=0;filtered.forEach(function(e){if(e.tipo==='entrada')totE+=(e.quantidade||0);if(e.tipo==='saida')totS+=(e.quantidade||0);});
 function _norm(s){return (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');}
@@ -2214,11 +2214,11 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
           var pct=Math.round((r.total/maxT)*100);
           var medals=['🥇','🥈','🥉'];
           var medalCors=['#F59E0B','#9CA3AF','#CD7F32'];
-          return <div key={r.nome} style={{padding:'10px 16px',borderBottom:i<ranking.length-1?'1px solid #F8FAFC':'none',display:'flex',gap:12,alignItems:'center'}}>
+          return <div key={r.nome} onClick={function(){setRankDiag(r.nome);}} style={{padding:'10px 16px',borderBottom:i<ranking.length-1?'1px solid #F8FAFC':'none',display:'flex',gap:12,alignItems:'center',cursor:'pointer'}}>
             <div style={{width:28,height:28,borderRadius:'50%',background:i<3?medalCors[i]:'#F1F5F9',display:'flex',alignItems:'center',justifyContent:'center',fontSize:i<3?16:13,fontWeight:700,color:i<3?'#fff':'#94A3B8',flexShrink:0}}>{i<3?medals[i]:i+1}</div>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontWeight:600,fontSize:13,color:'#1E293B',wordBreak:'break-word',lineHeight:1.3}}>{r.nome}</div>
-              <div style={{fontSize:10,color:'#94A3B8',marginTop:1}}>{r.count} saída(s)</div>
+              <div style={{fontSize:10,color:'#94A3B8',marginTop:1}}>{r.count} saída(s) · toque para ver</div>
               <div style={{background:'#F1F5F9',borderRadius:20,height:5,overflow:'hidden',marginTop:4}}>
                 <div style={{height:'100%',background:'linear-gradient(90deg,#1351B4,#1A64D6)',borderRadius:20,width:pct+'%',transition:'width .4s ease'}}/>
               </div>
@@ -2229,6 +2229,33 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
       </div>
     </div>
   }
+{rankDiag&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={function(){setRankDiag(null);}}>
+  <div style={{background:'#fff',borderRadius:20,padding:20,maxWidth:560,width:'100%',maxHeight:'90vh',overflowY:'auto'}} onClick={function(e){e.stopPropagation();}}>
+    <div style={{fontWeight:800,fontSize:16,color:'#1E293B',marginBottom:2}}>🔎 Saídas de {rankDiag}</div>
+    <div style={{fontSize:12,color:'#64748B',marginBottom:14}}>No período {rankDF} a {rankDT}. Verde = contado no ranking · Cinza = excluído (ajuste/descarte/etc)</div>
+    {(function(){
+      var regs=entries.filter(function(e){return e.tipo==='saida'&&e.medicamentoNome===rankDiag;}).filter(function(e){var dr=(e.date||(e.criadoEm||'').slice(0,10));return dr>=rankDF&&dr<=rankDT;}).sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});
+      if(regs.length===0)return(<div style={{textAlign:'center',padding:'30px 0',color:'#94A3B8'}}>Nenhuma saída neste período.</div>);
+      var totalConta=0,totalExcl=0;
+      regs.forEach(function(e){if(_ehSaidaNaoReal(e))totalExcl+=(e.quantidade||0);else totalConta+=(e.quantidade||0);});
+      return(<div>
+        <div style={{display:'flex',gap:8,marginBottom:12}}>
+          <div style={{flex:1,background:'#F0FDF4',borderRadius:10,padding:'8px 10px',textAlign:'center'}}><div style={{fontSize:10,color:'#64748B',fontWeight:700}}>CONTADO</div><div style={{fontSize:18,fontWeight:900,color:'#0C6B3E'}}>{totalConta}</div></div>
+          <div style={{flex:1,background:'#F8FAFC',borderRadius:10,padding:'8px 10px',textAlign:'center'}}><div style={{fontSize:10,color:'#64748B',fontWeight:700}}>EXCLUÍDO</div><div style={{fontSize:18,fontWeight:900,color:'#94A3B8'}}>{totalExcl}</div></div>
+        </div>
+        {regs.map(function(e,i){var excl=_ehSaidaNaoReal(e);return(<div key={e.id||i} style={{padding:'10px 12px',borderRadius:10,marginBottom:6,background:excl?'#F8FAFC':'#F0FDF4',border:'1px solid '+(excl?'#E2E8F0':'#BBF7D0')}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+            <div style={{fontWeight:800,fontSize:15,color:excl?'#94A3B8':'#0C6B3E'}}>{excl?'⊘':'✓'} {e.quantidade} un.</div>
+            <div style={{fontSize:11,color:'#64748B'}}>{e.date||(e.criadoEm||'').slice(0,10)} · {e.autorNome||'—'}</div>
+          </div>
+          {e.observacao&&<div style={{fontSize:11,color:'#64748B',marginTop:4,wordBreak:'break-word'}}>📋 {e.observacao}</div>}
+          {excl&&<div style={{fontSize:10,color:'#B45309',marginTop:2,fontWeight:600}}>Excluído do ranking</div>}
+        </div>);})}
+      </div>);
+    })()}
+    <button onClick={function(){setRankDiag(null);}} className="bs" style={{width:'100%',padding:'12px 0',marginTop:10}}>Fechar</button>
+  </div>
+</div>}
 </div>}
 </div>);}
 
