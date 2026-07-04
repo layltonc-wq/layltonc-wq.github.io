@@ -1970,10 +1970,10 @@ function darBaixaVencido(){
 </div>);}
 function TabRelatorio(props){
   var db=props.db;var user=props.user||{};
-  function nomeC(n){if(!n)return '?';var p=n.trim().split(' ');return p.length>=2?p[0]+' '+p[1]:p[0];}var entries=props.entries;var medications=props.medications;var _dF=useState(todayStr());var dF=_dF[0];var setDF=_dF[1];var _dT=useState(todayStr());var dT=_dT[0];var setDT=_dT[1];var _tipo=useState('todos');var tipo=_tipo[0];var setTipo=_tipo[1];var _sub=useState('mov');var sub=_sub[0];var setSub=_sub[1];var _filtCatRel=useState('todos');var filtCatRel=_filtCatRel[0];var setFiltCatRel=_filtCatRel[1];var _filtMedRel=useState('todos');var filtMedRel=_filtMedRel[0];var setFiltMedRel=_filtMedRel[1];
-var filtered=entries.filter(function(e){if(e.ficticioDiv)return false;if(e.divergenciaTipo==='real')return false;var dt=(e.criadoEm||'').slice(0,10);if(dt<dF||dt>dT)return false;if(tipo!=='todos'&&e.tipo!==tipo)return false;if(filtMedRel&&filtMedRel!=='todos'&&e.medicamentoNome!==filtMedRel)return false;if(filtCatRel&&filtCatRel!=='todos'){var meds=medications.filter(function(m){return m.nome===e.medicamentoNome&&((m.categoria||'medicamento'))===filtCatRel;});if(meds.length===0)return false;}return true;}).sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});
+  function nomeC(n){if(!n)return '?';var p=n.trim().split(' ');return p.length>=2?p[0]+' '+p[1]:p[0];}var entries=props.entries;var medications=props.medications;var _dF=useState(todayStr());var dF=_dF[0];var setDF=_dF[1];var _dT=useState(todayStr());var dT=_dT[0];var setDT=_dT[1];var _tipo=useState('todos');var tipo=_tipo[0];var setTipo=_tipo[1];var _sub=useState('mov');var sub=_sub[0];var setSub=_sub[1];var _filtCatRel=useState('todos');var filtCatRel=_filtCatRel[0];var setFiltCatRel=_filtCatRel[1];var _filtMeds=useState([]);var filtMeds=_filtMeds[0];var setFiltMeds=_filtMeds[1];var _filtBusca=useState('');var filtBusca=_filtBusca[0];var setFiltBusca=_filtBusca[1];var _filtBuscaCat=useState('todos');var filtBuscaCat=_filtBuscaCat[0];var setFiltBuscaCat=_filtBuscaCat[1];var _rankDF=useState((function(){var d=new Date();d.setDate(d.getDate()-30);return d.toISOString().slice(0,10);})());var rankDF=_rankDF[0];var setRankDF=_rankDF[1];var _rankDT=useState(todayStr());var rankDT=_rankDT[0];var setRankDT=_rankDT[1];
+var filtered=entries.filter(function(e){if(e.ficticioDiv)return false;if(e.divergenciaTipo==='real')return false;var dt=(e.criadoEm||'').slice(0,10);if(dt<dF||dt>dT)return false;if(tipo!=='todos'&&e.tipo!==tipo)return false;if(filtMeds&&filtMeds.length>0&&filtMeds.indexOf(e.medicamentoNome)===-1)return false;if(filtCatRel&&filtCatRel!=='todos'){var meds=medications.filter(function(m){return m.nome===e.medicamentoNome&&((m.categoria||'medicamento'))===filtCatRel;});if(meds.length===0)return false;}return true;}).sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});
 var totE=0,totS=0;filtered.forEach(function(e){if(e.tipo==='entrada')totE+=(e.quantidade||0);if(e.tipo==='saida')totS+=(e.quantidade||0);});
-var rankMap={};entries.forEach(function(e){if(e.tipo!=='saida')return;if(e.ficticioDiv)return;if(e.divergenciaTipo==='real')return;if(e.descarte)return;if(e.isAjuste)return;if((e.observacao||'').indexOf('Balanço:')===0)return;var k=e.medicamentoNome||'?';if(!rankMap[k])rankMap[k]={nome:k,total:0,count:0};rankMap[k].total+=(e.quantidade||0);rankMap[k].count++;});var ranking=Object.keys(rankMap).map(function(k){return rankMap[k];}).sort(function(a,b){return b.total-a.total;}).slice(0,10);
+var rankMap={};entries.forEach(function(e){if(e.tipo!=='saida')return;if(e.ficticioDiv)return;if(e.divergenciaTipo==='real')return;if(e.descarte)return;if(e.isAjuste)return;var obs=(e.observacao||'');if(obs.indexOf('alan')>=0&&obs.indexOf('(era ')>=0)return;if(obs.indexOf('Estoque inicial')>=0)return;var dr=(e.date||(e.criadoEm||'').slice(0,10));if(dr<rankDF||dr>rankDT)return;var k=e.medicamentoNome||'?';if(!rankMap[k])rankMap[k]={nome:k,total:0,count:0};rankMap[k].total+=(e.quantidade||0);rankMap[k].count++;});var ranking=Object.keys(rankMap).map(function(k){return rankMap[k];}).sort(function(a,b){return b.total-a.total;}).slice(0,10);
 var respMap={};entries.forEach(function(e){var k=e.autorNome||'?';if(!respMap[k])respMap[k]={nome:k,color:e.autorColor,qtdS:0,qtdE:0,cntS:0,cntE:0};if(e.tipo==='saida'){respMap[k].qtdS+=(e.quantidade||0);respMap[k].cntS++;}else{respMap[k].qtdE+=(e.quantidade||0);respMap[k].cntE++;}});var porResp=Object.keys(respMap).map(function(k){return respMap[k];}).sort(function(a,b){return (b.qtdS+b.qtdE)-(a.qtdS+a.qtdE);});
 function doXL(){var rows=[['Data','Hora','Responsavel','Medicamento','Tipo','Qtd','Lote']];filtered.forEach(function(e){rows.push([fmtD(e.criadoEm),fmtT(e.criadoEm),e.autorNome||'',e.medicamentoNome||'',e.tipo==='entrada'?'Entrada':'Saida',e.quantidade||0,e.lote||'']);});var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'Relatorio');XLSX.writeFile(wb,'relatorio_'+dF+'_'+dT+'.xlsx');}
 return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
@@ -2060,13 +2060,37 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
       <option value="saida">Saídas</option>
       <option value="entrada">Entradas</option>
     </select>
-    <select value={filtMedRel} onChange={function(e){setFiltMedRel(e.target.value);}} className="inp" style={{margin:'8px 0 0 0'}}>
-      <option value="todos">Todos os medicamentos</option>
-      {(function(){var nomes={};(medications||[]).forEach(function(m){if(m.nome)nomes[m.nome]=true;});entries.forEach(function(e){if(e.medicamentoNome)nomes[e.medicamentoNome]=true;});return Object.keys(nomes).sort(function(a,b){return a.localeCompare(b);}).map(function(n){return(<option key={n} value={n}>{n}</option>);});})()}
-    </select>
+    <div style={{marginTop:10,borderTop:'1px solid #F1F5F9',paddingTop:10}}>
+      <div style={{fontSize:12,fontWeight:700,color:'#1E293B',marginBottom:6}}>🔍 Filtrar por medicamento(s)</div>
+      <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:6}}>
+        {[['todos','Todas'],['medicamento','💊 Básica'],['controlado','🔵 Controlado'],['injetavel','💉 Injetável'],['leite','🍼 Leite'],['penso','🩹 Penso']].map(function(c){return(
+          <button key={c[0]} onClick={function(){setFiltBuscaCat(c[0]);}} style={{padding:'5px 10px',borderRadius:20,border:'1.5px solid '+(filtBuscaCat===c[0]?'#1351B4':'#E2E8F0'),background:filtBuscaCat===c[0]?'#EFF6FF':'#fff',fontSize:11,fontWeight:filtBuscaCat===c[0]?700:500,color:filtBuscaCat===c[0]?'#1351B4':'#64748B',cursor:'pointer'}}>{c[1]}</button>
+        );})}
+      </div>
+      <input value={filtBusca} onChange={function(e){setFiltBusca(e.target.value);}} placeholder="Digite o nome do medicamento..." className="inp" style={{margin:0}}/>
+      {filtMeds.length>0&&<div style={{display:'flex',gap:6,flexWrap:'wrap',marginTop:8}}>
+        {filtMeds.map(function(n){return(<span key={n} style={{display:'inline-flex',alignItems:'center',gap:4,background:'#1351B4',color:'#fff',borderRadius:20,padding:'4px 10px',fontSize:11,fontWeight:600}}>{n}<span onClick={function(){setFiltMeds(filtMeds.filter(function(x){return x!==n;}));}} style={{cursor:'pointer',fontWeight:800,marginLeft:2}}>×</span></span>);})}
+        <button onClick={function(){setFiltMeds([]);}} style={{background:'none',border:'none',color:'#DC2626',fontSize:11,fontWeight:700,cursor:'pointer'}}>Limpar tudo</button>
+      </div>}
+      {(function(){
+        var q=filtBusca.toLowerCase().trim();
+        if(!q&&filtBuscaCat==='todos')return null;
+        var nomesSet={};(medications||[]).forEach(function(m){var cat=(m.categoria||'medicamento');if(filtBuscaCat!=='todos'&&cat!==filtBuscaCat)return;if(q&&m.nome.toLowerCase().indexOf(q)===-1)return;nomesSet[m.nome]=true;});
+        var nomes=Object.keys(nomesSet).sort(function(a,b){return a.localeCompare(b);}).slice(0,30);
+        if(nomes.length===0)return(<div style={{fontSize:12,color:'#94A3B8',padding:'8px 0'}}>Nenhum medicamento encontrado.</div>);
+        return(<div style={{marginTop:8,maxHeight:180,overflowY:'auto',border:'1px solid #F1F5F9',borderRadius:10}}>
+          {nomes.map(function(n){var sel=filtMeds.indexOf(n)!==-1;return(
+            <div key={n} onClick={function(){if(sel){setFiltMeds(filtMeds.filter(function(x){return x!==n;}));}else{setFiltMeds(filtMeds.concat([n]));}}} style={{padding:'8px 12px',display:'flex',alignItems:'center',gap:8,cursor:'pointer',borderBottom:'1px solid #F8FAFC',background:sel?'#EFF6FF':'#fff'}}>
+              <div style={{width:18,height:18,borderRadius:4,border:'1.5px solid '+(sel?'#1351B4':'#CBD5E1'),background:sel?'#1351B4':'#fff',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:11,fontWeight:800,flexShrink:0}}>{sel?'✓':''}</div>
+              <span style={{fontSize:12,color:'#1E293B'}}>{n}</span>
+            </div>
+          );})}
+        </div>);
+      })()}
+    </div>
   </div>
   <div className="card" style={{padding:'10px 14px',marginBottom:12,display:'flex',gap:10,justifyContent:'space-between',alignItems:'center',flexWrap:'wrap'}}>
-    <div style={{fontSize:13}}>{filtMedRel!=='todos'&&<div style={{fontWeight:700,color:'#1351B4',fontSize:12,marginBottom:2,width:'100%'}}>💊 {filtMedRel}</div>}<span style={{fontWeight:800,color:'#DC2626'}}>−{totS}</span> saídas &nbsp; <span style={{fontWeight:800,color:'#059669'}}>+{totE}</span> entradas</div>
+    <div style={{fontSize:13}}>{filtMeds.length>0&&<div style={{fontWeight:700,color:'#1351B4',fontSize:12,marginBottom:2,width:'100%'}}>💊 {filtMeds.length===1?filtMeds[0]:filtMeds.length+' medicamentos selecionados'}</div>}<span style={{fontWeight:800,color:'#DC2626'}}>−{totS}</span> saídas &nbsp; <span style={{fontWeight:800,color:'#059669'}}>+{totE}</span> entradas</div>
     <button onClick={doXL} style={{padding:'6px 12px',background:'#059669',border:'none',borderRadius:8,color:'#fff',fontSize:12,fontWeight:700,cursor:'pointer'}}>📥 Excel</button>
   </div>
   {filtered.length===0
@@ -2150,8 +2174,21 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
   })()}
 </div>}
 {sub==='rank'&&<div>
+  <div className="card" style={{marginBottom:12,padding:14}}>
+    <div style={{fontSize:12,fontWeight:700,color:'#1E293B',marginBottom:8}}>📅 Período do ranking (apenas saídas reais)</div>
+    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+      <div><div style={{fontSize:10,color:'#94A3B8',fontWeight:700,marginBottom:4}}>DE</div><input type="date" value={rankDF} onChange={function(e){setRankDF(e.target.value);}} className="inp" style={{margin:0}}/></div>
+      <div><div style={{fontSize:10,color:'#94A3B8',fontWeight:700,marginBottom:4}}>ATÉ</div><input type="date" value={rankDT} onChange={function(e){setRankDT(e.target.value);}} className="inp" style={{margin:0}}/></div>
+    </div>
+    <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+      <button onClick={function(){setRankDF(todayStr());setRankDT(todayStr());}} style={{padding:'6px 12px',background:'#F1F5F9',border:'none',borderRadius:8,fontSize:11,fontWeight:700,color:'#475569',cursor:'pointer'}}>Hoje</button>
+      <button onClick={function(){var d=new Date();d.setDate(d.getDate()-7);setRankDF(d.toISOString().slice(0,10));setRankDT(todayStr());}} style={{padding:'6px 12px',background:'#F1F5F9',border:'none',borderRadius:8,fontSize:11,fontWeight:700,color:'#475569',cursor:'pointer'}}>7 dias</button>
+      <button onClick={function(){var d=new Date();d.setDate(d.getDate()-30);setRankDF(d.toISOString().slice(0,10));setRankDT(todayStr());}} style={{padding:'6px 12px',background:'#F1F5F9',border:'none',borderRadius:8,fontSize:11,fontWeight:700,color:'#475569',cursor:'pointer'}}>30 dias</button>
+      <button onClick={function(){var d=new Date();d.setMonth(d.getMonth()-1);d.setDate(1);var ini=d.toISOString().slice(0,10);var fim=new Date(d.getFullYear(),d.getMonth()+1,0).toISOString().slice(0,10);setRankDF(ini);setRankDT(fim);}} style={{padding:'6px 12px',background:'#F1F5F9',border:'none',borderRadius:8,fontSize:11,fontWeight:700,color:'#475569',cursor:'pointer'}}>Mês passado</button>
+    </div>
+  </div>
   {ranking.length===0
-    ?<div className="card" style={{padding:40,textAlign:'center',color:'#94A3B8'}}>Nenhuma saída registrada.</div>
+    ?<div className="card" style={{padding:40,textAlign:'center',color:'#94A3B8'}}>Nenhuma saída registrada neste período.</div>
     :<div className="card">
       <div className="ch"><div className="ch-title"><div className="ch-accent"/><span>Top Medicamentos mais dispensados</span></div></div>
       <div>
