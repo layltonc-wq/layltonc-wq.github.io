@@ -1970,10 +1970,10 @@ function darBaixaVencido(){
 </div>);}
 function TabRelatorio(props){
   var db=props.db;var user=props.user||{};
-  function nomeC(n){if(!n)return '?';var p=n.trim().split(' ');return p.length>=2?p[0]+' '+p[1]:p[0];}var entries=props.entries;var medications=props.medications;var _dF=useState(todayStr());var dF=_dF[0];var setDF=_dF[1];var _dT=useState(todayStr());var dT=_dT[0];var setDT=_dT[1];var _tipo=useState('todos');var tipo=_tipo[0];var setTipo=_tipo[1];var _sub=useState('mov');var sub=_sub[0];var setSub=_sub[1];var _filtCatRel=useState('todos');var filtCatRel=_filtCatRel[0];var setFiltCatRel=_filtCatRel[1];
-var filtered=entries.filter(function(e){if(e.ficticioDiv)return false;if(e.divergenciaTipo==='real')return false;var dt=(e.criadoEm||'').slice(0,10);if(dt<dF||dt>dT)return false;if(tipo!=='todos'&&e.tipo!==tipo)return false;if(filtCatRel&&filtCatRel!=='todos'){var meds=medications.filter(function(m){return m.nome===e.medicamentoNome&&((m.categoria||'medicamento'))===filtCatRel;});if(meds.length===0)return false;}return true;}).sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});
+  function nomeC(n){if(!n)return '?';var p=n.trim().split(' ');return p.length>=2?p[0]+' '+p[1]:p[0];}var entries=props.entries;var medications=props.medications;var _dF=useState(todayStr());var dF=_dF[0];var setDF=_dF[1];var _dT=useState(todayStr());var dT=_dT[0];var setDT=_dT[1];var _tipo=useState('todos');var tipo=_tipo[0];var setTipo=_tipo[1];var _sub=useState('mov');var sub=_sub[0];var setSub=_sub[1];var _filtCatRel=useState('todos');var filtCatRel=_filtCatRel[0];var setFiltCatRel=_filtCatRel[1];var _filtMedRel=useState('todos');var filtMedRel=_filtMedRel[0];var setFiltMedRel=_filtMedRel[1];
+var filtered=entries.filter(function(e){if(e.ficticioDiv)return false;if(e.divergenciaTipo==='real')return false;var dt=(e.criadoEm||'').slice(0,10);if(dt<dF||dt>dT)return false;if(tipo!=='todos'&&e.tipo!==tipo)return false;if(filtMedRel&&filtMedRel!=='todos'&&e.medicamentoNome!==filtMedRel)return false;if(filtCatRel&&filtCatRel!=='todos'){var meds=medications.filter(function(m){return m.nome===e.medicamentoNome&&((m.categoria||'medicamento'))===filtCatRel;});if(meds.length===0)return false;}return true;}).sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});
 var totE=0,totS=0;filtered.forEach(function(e){if(e.tipo==='entrada')totE+=(e.quantidade||0);if(e.tipo==='saida')totS+=(e.quantidade||0);});
-var rankMap={};entries.forEach(function(e){if(e.tipo!=='saida')return;var k=e.medicamentoNome||'?';if(!rankMap[k])rankMap[k]={nome:k,total:0,count:0};rankMap[k].total+=(e.quantidade||0);rankMap[k].count++;});var ranking=Object.keys(rankMap).map(function(k){return rankMap[k];}).sort(function(a,b){return b.total-a.total;}).slice(0,10);
+var rankMap={};entries.forEach(function(e){if(e.tipo!=='saida')return;if(e.ficticioDiv)return;if(e.divergenciaTipo==='real')return;if(e.descarte)return;if(e.isAjuste)return;if((e.observacao||'').indexOf('Balanço:')===0)return;var k=e.medicamentoNome||'?';if(!rankMap[k])rankMap[k]={nome:k,total:0,count:0};rankMap[k].total+=(e.quantidade||0);rankMap[k].count++;});var ranking=Object.keys(rankMap).map(function(k){return rankMap[k];}).sort(function(a,b){return b.total-a.total;}).slice(0,10);
 var respMap={};entries.forEach(function(e){var k=e.autorNome||'?';if(!respMap[k])respMap[k]={nome:k,color:e.autorColor,qtdS:0,qtdE:0,cntS:0,cntE:0};if(e.tipo==='saida'){respMap[k].qtdS+=(e.quantidade||0);respMap[k].cntS++;}else{respMap[k].qtdE+=(e.quantidade||0);respMap[k].cntE++;}});var porResp=Object.keys(respMap).map(function(k){return respMap[k];}).sort(function(a,b){return (b.qtdS+b.qtdE)-(a.qtdS+a.qtdE);});
 function doXL(){var rows=[['Data','Hora','Responsavel','Medicamento','Tipo','Qtd','Lote']];filtered.forEach(function(e){rows.push([fmtD(e.criadoEm),fmtT(e.criadoEm),e.autorNome||'',e.medicamentoNome||'',e.tipo==='entrada'?'Entrada':'Saida',e.quantidade||0,e.lote||'']);});var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'Relatorio');XLSX.writeFile(wb,'relatorio_'+dF+'_'+dT+'.xlsx');}
 return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
@@ -2060,9 +2060,13 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
       <option value="saida">Saídas</option>
       <option value="entrada">Entradas</option>
     </select>
+    <select value={filtMedRel} onChange={function(e){setFiltMedRel(e.target.value);}} className="inp" style={{margin:'8px 0 0 0'}}>
+      <option value="todos">Todos os medicamentos</option>
+      {(function(){var nomes={};(medications||[]).forEach(function(m){if(m.nome)nomes[m.nome]=true;});entries.forEach(function(e){if(e.medicamentoNome)nomes[e.medicamentoNome]=true;});return Object.keys(nomes).sort(function(a,b){return a.localeCompare(b);}).map(function(n){return(<option key={n} value={n}>{n}</option>);});})()}
+    </select>
   </div>
-  <div className="card" style={{padding:'10px 14px',marginBottom:12,display:'flex',gap:10,justifyContent:'space-between',alignItems:'center'}}>
-    <div style={{fontSize:13}}><span style={{fontWeight:800,color:'#DC2626'}}>−{totS}</span> saídas &nbsp; <span style={{fontWeight:800,color:'#059669'}}>+{totE}</span> entradas</div>
+  <div className="card" style={{padding:'10px 14px',marginBottom:12,display:'flex',gap:10,justifyContent:'space-between',alignItems:'center',flexWrap:'wrap'}}>
+    <div style={{fontSize:13}}>{filtMedRel!=='todos'&&<div style={{fontWeight:700,color:'#1351B4',fontSize:12,marginBottom:2,width:'100%'}}>💊 {filtMedRel}</div>}<span style={{fontWeight:800,color:'#DC2626'}}>−{totS}</span> saídas &nbsp; <span style={{fontWeight:800,color:'#059669'}}>+{totE}</span> entradas</div>
     <button onClick={doXL} style={{padding:'6px 12px',background:'#059669',border:'none',borderRadius:8,color:'#fff',fontSize:12,fontWeight:700,cursor:'pointer'}}>📥 Excel</button>
   </div>
   {filtered.length===0
@@ -2958,6 +2962,7 @@ return(
       </div>
     </div>
   </div>}
+  {(function(){var td=todayStr();var flag=localStorage.getItem('fc_shift_enc_'+td)||localStorage.getItem('fc_shift_saiu_'+td);if(!flag)return null;return(<button onClick={function(){localStorage.removeItem('fc_shift_enc_'+td);localStorage.removeItem('fc_shift_saiu_'+td);window.location.reload();}} style={{width:'100%',padding:'12px',background:'#EFF6FF',border:'1.5px solid #BFDBFE',borderRadius:12,color:'#1351B4',fontWeight:700,fontSize:13,cursor:'pointer',marginBottom:10}}>🔓 Voltar ao Plantão de hoje</button>);})()}
   <button onClick={function(){setShowLogoutConfirm(true);}} style={{width:'100%',padding:'14px',background:'#FEF2F2',border:'1.5px solid #FECACA',borderRadius:12,color:'#DC2626',fontWeight:700,fontSize:14,cursor:'pointer',marginBottom:20}}>👋 Sair da conta</button>
 </div>);}
 
@@ -5195,14 +5200,29 @@ useEffect(function(){
     if(user.role==='gestor'||user.role==='tecnico'){setIsGuest(false);return;}
     // Farmaceutico que abriu, ou membro confirmado da equipe: nao e convidado
     var inTeam=false;
-    if(p.iniciadoPor===user.uid){inTeam=true;}
+    var meuStatus=null;
+    if(p.iniciadoPor===user.uid){inTeam=true;meuStatus='confirmado';}
     if(!inTeam&&p.equipe){
       for(var i=0;i<p.equipe.length;i++){
-        if(p.equipe[i].id===user.uid&&p.equipe[i].status!=='saiu'&&p.equipe[i].status!=='negou'){inTeam=true;break;}
+        if(p.equipe[i].id===user.uid){
+          meuStatus=p.equipe[i].status;
+          if(p.equipe[i].status!=='saiu'&&p.equipe[i].status!=='negou'){inTeam=true;}
+          break;
+        }
       }
     }
-    // Se o usuario ja saiu manualmente ou encerrou o plantao neste dispositivo, mantem como convidado
-    var leftToday=localStorage.getItem('fc_shift_enc_'+today)||localStorage.getItem('fc_shift_saiu_'+today);
+    // Se o usuario saiu/encerrou neste dispositivo MAS foi readicionado ao plantao pelo lider,
+    // limpar a flag e reintegrar (respeitar a decisao do lider de trazer a pessoa de volta).
+    var leftKey='fc_shift_saiu_'+today;
+    var encKey='fc_shift_enc_'+today;
+    var leftToday=localStorage.getItem(encKey)||localStorage.getItem(leftKey);
+    if(leftToday&&inTeam&&meuStatus==='confirmado'){
+      // Foi readicionado -> limpar flag e voltar ao plantao
+      localStorage.removeItem(leftKey);
+      localStorage.removeItem(encKey);
+      setIsGuest(false);
+      return;
+    }
     if(leftToday){setIsGuest(true);return;}
     setIsGuest(!inTeam);
   },function(){});
@@ -5218,7 +5238,7 @@ if(user.role==='gestor'||user.role==='tecnico'){db.collection('medications').onS
 var stock=useMemo(function(){return calcStock(entries);},[entries]);
 var latest=useMemo(function(){return calcLatest(entries);},[entries]);
 var lowCount=useMemo(function(){var c=0;meds.forEach(function(m){if(m.minEstoque&&(stock[m.id]||0)<=m.minEstoque&&(stock[m.id]||0)>0)c++;});return c;},[meds,stock]);
-function checkShift(u){if(shiftChecked)return;setShiftChecked(true);autoFecharPlantoesAntigos();var today=todayStr();var role=u.role;if(role==='gestor'||role==='tecnico'){setIsGuest(false);db.collection('plantoes').doc(today).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);}else{setPlantao(null);setShiftId(null);}}).catch(function(){});return;}if(!isShiftTime()){setIsGuest(true);return;}var leftToday=localStorage.getItem('fc_shift_enc_'+today)||localStorage.getItem('fc_shift_saiu_'+today);if(leftToday){db.collection('plantoes').doc(today).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);}}).catch(function(){});setIsGuest(true);return;}db.collection('plantao_convites').where('para','==',u.uid).where('status','==','pendente').get().then(function(invSnap){var todayInvite=null;for(var i=0;i<invSnap.docs.length;i++){var d=invSnap.docs[i].data();if(d.data===today){var o={id:invSnap.docs[i].id};for(var k in d)o[k]=d[k];todayInvite=o;break;}}if(todayInvite){setPendingInvite(todayInvite);return;}db.collection('plantoes').doc(today).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);var inTeam=false;
+function checkShift(u){if(shiftChecked)return;setShiftChecked(true);autoFecharPlantoesAntigos();var today=todayStr();var role=u.role;if(role==='gestor'||role==='tecnico'){setIsGuest(false);db.collection('plantoes').doc(today).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);}else{setPlantao(null);setShiftId(null);}}).catch(function(){});return;}if(!isShiftTime()){setIsGuest(true);return;}var leftKey='fc_shift_saiu_'+today;var encKey='fc_shift_enc_'+today;var leftToday=localStorage.getItem(encKey)||localStorage.getItem(leftKey);if(leftToday){db.collection('plantoes').doc(today).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);var readicionado=false;if(p.iniciadoPor===u.uid){readicionado=true;}else if(p.equipe){for(var j=0;j<p.equipe.length;j++){if(p.equipe[j].id===u.uid&&p.equipe[j].status==='confirmado'){readicionado=true;break;}}}if(readicionado){localStorage.removeItem(leftKey);localStorage.removeItem(encKey);setIsGuest(false);}else{setIsGuest(true);}}else{setIsGuest(true);}}).catch(function(){setIsGuest(true);});return;}db.collection('plantao_convites').where('para','==',u.uid).where('status','==','pendente').get().then(function(invSnap){var todayInvite=null;for(var i=0;i<invSnap.docs.length;i++){var d=invSnap.docs[i].data();if(d.data===today){var o={id:invSnap.docs[i].id};for(var k in d)o[k]=d[k];todayInvite=o;break;}}if(todayInvite){setPendingInvite(todayInvite);return;}db.collection('plantoes').doc(today).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);var inTeam=false;
               // Quem iniciou o plantão nunca é convidado
               if(p.iniciadoPor===u.uid){inTeam=true;}
               // Verificar na equipe (confirmado ou próprio farmacêutico que abriu)
