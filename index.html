@@ -1973,7 +1973,24 @@ function TabRelatorio(props){
   function nomeC(n){if(!n)return '?';var p=n.trim().split(' ');return p.length>=2?p[0]+' '+p[1]:p[0];}var entries=props.entries;var medications=props.medications;var _dF=useState(todayStr());var dF=_dF[0];var setDF=_dF[1];var _dT=useState(todayStr());var dT=_dT[0];var setDT=_dT[1];var _tipo=useState('todos');var tipo=_tipo[0];var setTipo=_tipo[1];var _sub=useState('mov');var sub=_sub[0];var setSub=_sub[1];var _filtCatRel=useState('todos');var filtCatRel=_filtCatRel[0];var setFiltCatRel=_filtCatRel[1];var _filtMeds=useState([]);var filtMeds=_filtMeds[0];var setFiltMeds=_filtMeds[1];var _filtBusca=useState('');var filtBusca=_filtBusca[0];var setFiltBusca=_filtBusca[1];var _filtBuscaCat=useState('todos');var filtBuscaCat=_filtBuscaCat[0];var setFiltBuscaCat=_filtBuscaCat[1];var _rankDF=useState((function(){var d=new Date();d.setDate(d.getDate()-30);return d.toISOString().slice(0,10);})());var rankDF=_rankDF[0];var setRankDF=_rankDF[1];var _rankDT=useState(todayStr());var rankDT=_rankDT[0];var setRankDT=_rankDT[1];
 var filtered=entries.filter(function(e){if(e.ficticioDiv)return false;if(e.divergenciaTipo==='real')return false;var dt=(e.criadoEm||'').slice(0,10);if(dt<dF||dt>dT)return false;if(tipo!=='todos'&&e.tipo!==tipo)return false;if(filtMeds&&filtMeds.length>0&&filtMeds.indexOf(e.medicamentoNome)===-1)return false;if(filtCatRel&&filtCatRel!=='todos'){var meds=medications.filter(function(m){return m.nome===e.medicamentoNome&&((m.categoria||'medicamento'))===filtCatRel;});if(meds.length===0)return false;}return true;}).sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});
 var totE=0,totS=0;filtered.forEach(function(e){if(e.tipo==='entrada')totE+=(e.quantidade||0);if(e.tipo==='saida')totS+=(e.quantidade||0);});
-var rankMap={};entries.forEach(function(e){if(e.tipo!=='saida')return;if(e.ficticioDiv)return;if(e.divergenciaTipo==='real')return;if(e.descarte)return;if(e.isAjuste)return;var obs=(e.observacao||'');if(obs.indexOf('alan')>=0&&obs.indexOf('(era ')>=0)return;if(obs.indexOf('Estoque inicial')>=0)return;var dr=(e.date||(e.criadoEm||'').slice(0,10));if(dr<rankDF||dr>rankDT)return;var k=e.medicamentoNome||'?';if(!rankMap[k])rankMap[k]={nome:k,total:0,count:0};rankMap[k].total+=(e.quantidade||0);rankMap[k].count++;});var ranking=Object.keys(rankMap).map(function(k){return rankMap[k];}).sort(function(a,b){return b.total-a.total;}).slice(0,10);
+function _norm(s){return (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');}
+function _ehSaidaNaoReal(e){
+  if(e.ficticioDiv)return true;
+  if(e.divergenciaTipo==='real')return true;
+  if(e.descarte)return true;
+  if(e.isAjuste)return true;
+  var o=_norm(e.observacao);
+  if(o.indexOf('balanc')>=0)return true;        // balanço / balanco
+  if(o.indexOf('ajuste')>=0)return true;         // ajuste de inventário
+  if(o.indexOf('invent')>=0)return true;         // inventário
+  if(o.indexOf('era ')>=0&&o.indexOf('passou')>=0)return true; // "(era X, passou a Y)"
+  if(o.indexOf('vencid')>=0)return true;         // vencido / vencidos
+  if(o.indexOf('descart')>=0)return true;        // descarte / descartado
+  if(o.indexOf('estoque inicial')>=0)return true;
+  if(o.indexOf('correc')>=0)return true;         // correção
+  return false;
+}
+var rankMap={};entries.forEach(function(e){if(e.tipo!=='saida')return;if(_ehSaidaNaoReal(e))return;var dr=(e.date||(e.criadoEm||'').slice(0,10));if(dr<rankDF||dr>rankDT)return;var k=e.medicamentoNome||'?';if(!rankMap[k])rankMap[k]={nome:k,total:0,count:0};rankMap[k].total+=(e.quantidade||0);rankMap[k].count++;});var ranking=Object.keys(rankMap).map(function(k){return rankMap[k];}).sort(function(a,b){return b.total-a.total;}).slice(0,10);
 var respMap={};entries.forEach(function(e){var k=e.autorNome||'?';if(!respMap[k])respMap[k]={nome:k,color:e.autorColor,qtdS:0,qtdE:0,cntS:0,cntE:0};if(e.tipo==='saida'){respMap[k].qtdS+=(e.quantidade||0);respMap[k].cntS++;}else{respMap[k].qtdE+=(e.quantidade||0);respMap[k].cntE++;}});var porResp=Object.keys(respMap).map(function(k){return respMap[k];}).sort(function(a,b){return (b.qtdS+b.qtdE)-(a.qtdS+a.qtdE);});
 function doXL(){var rows=[['Data','Hora','Responsavel','Medicamento','Tipo','Qtd','Lote']];filtered.forEach(function(e){rows.push([fmtD(e.criadoEm),fmtT(e.criadoEm),e.autorNome||'',e.medicamentoNome||'',e.tipo==='entrada'?'Entrada':'Saida',e.quantidade||0,e.lote||'']);});var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'Relatorio');XLSX.writeFile(wb,'relatorio_'+dF+'_'+dT+'.xlsx');}
 return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
@@ -2201,6 +2218,7 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
             <div style={{width:28,height:28,borderRadius:'50%',background:i<3?medalCors[i]:'#F1F5F9',display:'flex',alignItems:'center',justifyContent:'center',fontSize:i<3?16:13,fontWeight:700,color:i<3?'#fff':'#94A3B8',flexShrink:0}}>{i<3?medals[i]:i+1}</div>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontWeight:600,fontSize:13,color:'#1E293B',wordBreak:'break-word',lineHeight:1.3}}>{r.nome}</div>
+              <div style={{fontSize:10,color:'#94A3B8',marginTop:1}}>{r.count} saída(s)</div>
               <div style={{background:'#F1F5F9',borderRadius:20,height:5,overflow:'hidden',marginTop:4}}>
                 <div style={{height:'100%',background:'linear-gradient(90deg,#1351B4,#1A64D6)',borderRadius:20,width:pct+'%',transition:'width .4s ease'}}/>
               </div>
