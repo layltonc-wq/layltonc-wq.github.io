@@ -1988,6 +1988,9 @@ function _ehSaidaNaoReal(e){
   if(o.indexOf('descart')>=0)return true;        // descarte / descartado
   if(o.indexOf('estoque inicial')>=0)return true;
   if(o.indexOf('correc')>=0)return true;         // correção
+  if(o.indexOf('atribui')>=0)return true;        // Atribuição de lote
+  if(o.indexOf('reclassif')>=0)return true;      // reclassificação de lote
+  if(o.indexOf('transfer')>=0)return true;       // transferência entre lotes
   return false;
 }
 var rankMap={};entries.forEach(function(e){if(e.tipo!=='saida')return;if(_ehSaidaNaoReal(e))return;var dr=(e.date||(e.criadoEm||'').slice(0,10));if(dr<rankDF||dr>rankDT)return;var k=e.medicamentoNome||'?';if(!rankMap[k])rankMap[k]={nome:k,total:0,count:0};rankMap[k].total+=(e.quantidade||0);rankMap[k].count++;});var ranking=Object.keys(rankMap).map(function(k){return rankMap[k];}).sort(function(a,b){return b.total-a.total;}).slice(0,10);
