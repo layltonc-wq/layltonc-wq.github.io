@@ -534,7 +534,7 @@ function adicionarCarrinho(){
     }
     next();
   }
-  function save(){if(!sel){setErr('Selecione um medicamento.');return;}var q=parseInt(qty);if(!q||q<=0){setErr('Quantidade inválida.');return;}if(q>cur){setErr('Estoque insuficiente! Disponivel: '+cur+' un.');return;}if(q>cur*0.7&&!warn){setWarn('Saida alta: '+q+' de '+cur+' un. disponivel. Confirme clicando novamente.');return;}setSaving(true);setErr('');setWarn('');var lt=lote||(latest[sel.id]?latest[sel.id].lote:'')||'';var vl=val||(latest[sel.id]?latest[sel.id].validade:'')||'';var data={medicamentoId:sel.id,medicamentoNome:sel.nome,ean:sel.ean||'',tipo:'saida',quantidade:q,lote:lt.trim(),validade:vl.trim(),observacao:obs.trim()};var saveFn=(!canMove&&isGuest&&props.onSolicitar)?props.onSolicitar:onSave;saveFn(data).then(function(){if(q>500)db.collection('alertas').add({tipo:'saida_excessiva',medicamentoNome:sel.nome,quantidade:q,estoqueAntes:cur,autorNome:user.name,criadoEm:new Date().toISOString(),lido:false}).catch(function(){});playSound('success');setOk((!canMove&&isGuest)?'Solicitação enviada!':'Saida de '+q+'x '+sel.nome+' registrada!');setQty('');setLote('');setVal('');setObs('');setWarn('');setTimeout(function(){setOk('');},4000);setSaving(false);}).catch(function(e){setErr('Erro: '+(e.message||'tente novamente'));setSaving(false);});}
+  function save(){if(!sel){setErr('Selecione um medicamento.');return;}var q=parseInt(qty);if(!q||q<=0){setErr('Quantidade inválida.');return;}if(q>cur){setErr('Estoque insuficiente! Disponivel: '+cur+' un.');return;}if(q>=500&&!obs.trim()){setErr('⚠️ Saída de '+q+' un. (500 ou mais) exige justificativa. Preencha o campo de observação antes de continuar.');return;}if(q>cur*0.7&&!warn){setWarn('Saida alta: '+q+' de '+cur+' un. disponivel. Confirme clicando novamente.');return;}setSaving(true);setErr('');setWarn('');var lt=lote||(latest[sel.id]?latest[sel.id].lote:'')||'';var vl=val||(latest[sel.id]?latest[sel.id].validade:'')||'';var data={medicamentoId:sel.id,medicamentoNome:sel.nome,ean:sel.ean||'',tipo:'saida',quantidade:q,lote:lt.trim(),validade:vl.trim(),observacao:obs.trim()};if(q>=500)data.saidaGrande=true;var saveFn=(!canMove&&isGuest&&props.onSolicitar)?props.onSolicitar:onSave;saveFn(data).then(function(){if(q>500)db.collection('alertas').add({tipo:'saida_excessiva',medicamentoNome:sel.nome,quantidade:q,estoqueAntes:cur,autorNome:user.name,justificativa:obs.trim(),criadoEm:new Date().toISOString(),lido:false}).catch(function(){});playSound('success');setOk((!canMove&&isGuest)?'Solicitação enviada!':'Saida de '+q+'x '+sel.nome+' registrada!');setQty('');setLote('');setVal('');setObs('');setWarn('');setTimeout(function(){setOk('');},4000);setSaving(false);}).catch(function(e){setErr('Erro: '+(e.message||'tente novamente'));setSaving(false);});}
 var last10=entries.filter(function(e){return e.tipo==='saida';}).slice(-10).reverse();
 return(
 <div style={{maxWidth:600,margin:'0 auto',padding:'16px 14px'}}>
@@ -596,8 +596,11 @@ return(
         <div><Lbl c="Lote"/><input value={lote} onChange={function(e){setLote(e.target.value);}} placeholder="Ex: ABC1234" className="inp"/></div>
         <div><Lbl c="Validade"/><input value={val} onChange={function(e){setVal(e.target.value);}} placeholder="MM/AAAA" className="inp"/></div>
       </div>
-      <Lbl c="Observação (opcional)"/>
-      <textarea value={obs} onChange={function(e){setObs(e.target.value);}} rows={2} className="inp" style={{resize:'vertical',lineHeight:1.6}}/>
+      {parseInt(qty)>=500
+        ?<div style={{fontSize:12,fontWeight:800,color:'#B91C1C',marginBottom:6,marginTop:8}}>⚠️ Justificativa obrigatória (saída de 500+ un.)</div>
+        :<Lbl c="Observação (opcional)"/>
+      }
+      <textarea value={obs} onChange={function(e){setObs(e.target.value);}} rows={2} className="inp" placeholder={parseInt(qty)>=500?'Descreva o motivo desta saída elevada...':''} style={{resize:'vertical',lineHeight:1.6,border:parseInt(qty)>=500&&!obs.trim()?'1.5px solid #FCA5A5':undefined}}/>
       {warn&&<div className="wn">{warn}</div>}
       {err&&<div className="er">{err}</div>}
       {ok&&<div className="ok">{ok}</div>}
@@ -1672,6 +1675,7 @@ function TabEstoque(props){var user=props.user;var medications=props.medications
   var _motivoBaixa=useState('descarte');var motivoBaixa=_motivoBaixa[0];var setMotivoBaixa=_motivoBaixa[1];
   var _motivoLivre=useState('');var motivoLivre=_motivoLivre[0];var setMotivoLivre=_motivoLivre[1];
   var _qtdBaixa=useState('');var qtdBaixa=_qtdBaixa[0];var setQtdBaixa=_qtdBaixa[1];
+  var _ajustarSobra=useState(true);var ajustarSobra=_ajustarSobra[0];var setAjustarSobra=_ajustarSobra[1];
   var _descarteMed=useState(null);var descarteMed=_descarteMed[0];var setDescarteMed=_descarteMed[1];
   var _descarteLoteSel=useState(null);var descarteLoteSel=_descarteLoteSel[0];var setDescarteLoteSel=_descarteLoteSel[1];
   var _salvandoBaixa=useState(false);var salvandoBaixa=_salvandoBaixa[0];var setSalvandoBaixa=_salvandoBaixa[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];var _importStatus=useState('');var importStatus=_importStatus[0];var setImportStatus=_importStatus[1];var _importing=useState(false);var importing=_importing[0];var setImporting=_importing[1];var _filtCat=useState('todos');var filtCat=_filtCat[0];var setFiltCat=_filtCat[1];var _ajusteId=useState(null);var ajusteId=_ajusteId[0];var setAjusteId=_ajusteId[1];var _ajusteQty=useState('');var ajusteQty=_ajusteQty[0];var setAjusteQty=_ajusteQty[1];var _ajusteMotivo=useState('');var ajusteMotivo=_ajusteMotivo[0];var setAjusteMotivo=_ajusteMotivo[1];var _ajusteMed=useState(null);var ajusteMed=_ajusteMed[0];var setAjusteMed=_ajusteMed[1];var _loteSel=useState(null);var loteSel=_loteSel[0];var setLoteSel=_loteSel[1];var _editLote=useState(null);var editLote=_editLote[0];var setEditLote=_editLote[1];var _editLoteVal=useState('');var editLoteVal=_editLoteVal[0];var setEditLoteVal=_editLoteVal[1];var _editLoteData=useState('');var editLoteData=_editLoteData[0];var setEditLoteData=_editLoteData[1];
@@ -1736,17 +1740,31 @@ function darBaixaVencido(){
     var qtd=parseInt(qtdBaixa);
     if(!qtd||qtd<=0){alert2('Informe a quantidade real vencida (maior que zero).');return;}
     if(qtd>disponivel){alert2('Quantidade informada ('+qtd+') é maior que o disponível neste lote ('+disponivel+' un.). Confira a quantidade real.');return;}
+    var sobra=disponivel-qtd;
     setSalvandoBaixa(true);
+    // 1. saida de descarte (quantidade fisica real vencida)
     onSave({
       medicamentoId:showBaixa.medId||showBaixa.id,
       medicamentoNome:showBaixa.nome,
       tipo:'saida',quantidade:qtd,
       lote:showBaixa.lote||'',validade:showBaixa.validade||'',
-      observacao:motivo+(qtd<disponivel?' (baixa parcial: '+qtd+' de '+disponivel+' un. no lote)':''),descarte:true
+      observacao:motivo+(sobra>0?' (descarte de '+qtd+' de '+disponivel+' un.; sobra de '+sobra+' un. ajustada no sistema)':''),descarte:true
+    }).then(function(){
+      // 2. se sobrou saldo no sistema que fisicamente nao existe, zerar via ajuste
+      if(sobra>0&&ajustarSobra){
+        return onSave({
+          medicamentoId:showBaixa.medId||showBaixa.id,
+          medicamentoNome:showBaixa.nome,
+          tipo:'saida',quantidade:sobra,
+          lote:showBaixa.lote||'',validade:showBaixa.validade||'',
+          observacao:'Ajuste de estoque — sobra de lote vencido não localizada fisicamente (baixa de '+sobra+' un. após descarte de '+qtd+')',isAjuste:true
+        });
+      }
+      return Promise.resolve();
     }).then(function(){
       setSalvandoBaixa(false);setShowBaixa(null);
-      setMotivoBaixa('descarte');setMotivoLivre('');setQtdBaixa('');setDescarteMed(null);setDescarteLoteSel(null);
-      alert2('Descarte registrado! '+qtd+' un. enviada(s) para a aba Descartes.');
+      setMotivoBaixa('descarte');setMotivoLivre('');setQtdBaixa('');setDescarteMed(null);setDescarteLoteSel(null);setAjustarSobra(true);
+      alert2(sobra>0&&ajustarSobra?('Descarte de '+qtd+' un. registrado. Sobra de '+sobra+' un. ajustada — lote zerado.'):('Descarte registrado! '+qtd+' un. enviada(s) para a aba Descartes.'));
     }).catch(function(e){
       setSalvandoBaixa(false);
       alert2('Erro: '+(e&&e.message?e.message:'verifique a conexão'));
@@ -1951,7 +1969,17 @@ function darBaixaVencido(){
     </div>
     <div style={{fontWeight:700,fontSize:13,color:'#1E293B',marginBottom:6}}>Quantidade real vencida:</div>
     <input value={qtdBaixa} onChange={function(e){setQtdBaixa(e.target.value.replace(/[^0-9]/g,''));}} placeholder="Quantidade" className="inp" style={{fontSize:22,fontWeight:800,textAlign:'center',color:'#DC2626'}} inputMode="numeric" autoFocus/>
-    {qtdBaixa!==''&&parseInt(qtdBaixa)>0&&parseInt(qtdBaixa)<(showBaixa.est||0)&&<div style={{fontSize:12,color:'#B45309',marginBottom:8,background:'#FFFBEB',border:'1px solid #FCD34D',borderRadius:8,padding:'6px 10px'}}>ℹ️ Baixa parcial — os {(showBaixa.est||0)-parseInt(qtdBaixa)} un. restantes do lote continuam no estoque.</div>}
+    {qtdBaixa!==''&&parseInt(qtdBaixa)>0&&parseInt(qtdBaixa)<(showBaixa.est||0)&&<div style={{marginBottom:8}}>
+      <div onClick={function(){setAjustarSobra(!ajustarSobra);}} style={{display:'flex',alignItems:'flex-start',gap:8,cursor:'pointer',background:ajustarSobra?'#FEF2F2':'#FFFBEB',border:'1px solid '+(ajustarSobra?'#FCA5A5':'#FCD34D'),borderRadius:8,padding:'8px 10px'}}>
+        <div style={{width:20,height:20,borderRadius:5,border:'1.5px solid '+(ajustarSobra?'#DC2626':'#94A3B8'),background:ajustarSobra?'#DC2626':'#fff',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:13,fontWeight:800,flexShrink:0,marginTop:1}}>{ajustarSobra?'✓':''}</div>
+        <div style={{fontSize:12,color:'#1E293B'}}>
+          {ajustarSobra
+            ?<span><strong style={{color:'#B91C1C'}}>Zerar sobra:</strong> descartar {parseInt(qtdBaixa)} un. e dar baixa dos {(showBaixa.est||0)-parseInt(qtdBaixa)} un. restantes (lote fica zerado, sem sobra vencida solta).</span>
+            :<span><strong style={{color:'#B45309'}}>Baixa parcial:</strong> os {(showBaixa.est||0)-parseInt(qtdBaixa)} un. restantes continuam no estoque como vencidos. Toque para zerar.</span>
+          }
+        </div>
+      </div>
+    </div>}
     {qtdBaixa!==''&&parseInt(qtdBaixa)>(showBaixa.est||0)&&<div style={{fontSize:12,color:'#B91C1C',marginBottom:8,background:'#FEF2F2',border:'1px solid #FCA5A5',borderRadius:8,padding:'6px 10px'}}>⚠️ Quantidade maior que o disponível no lote ({showBaixa.est||0} un.).</div>}
     <div style={{fontWeight:700,fontSize:13,color:'#1E293B',marginBottom:10,marginTop:10}}>Motivo da baixa:</div>
     {[{v:'descarte',l:'📦 Vencido — encaminhado para descarte correto'},{v:'devolucao',l:'↩️ Vencido — devolvido ao fornecedor'},{v:'outro',l:'✏️ Outro motivo'}].map(function(op){return(
@@ -1962,7 +1990,7 @@ function darBaixaVencido(){
     {motivoBaixa==='outro'&&<input value={motivoLivre} onChange={function(e){setMotivoLivre(e.target.value);}} placeholder="Descreva o motivo..." className="inp" style={{fontSize:13}}/>}
     {salvandoBaixa&&<div style={{textAlign:'center',color:'#DC2626',fontWeight:600,marginBottom:8}}>⏳ Registrando...</div>}
     <div style={{display:'flex',gap:8,marginTop:8}}>
-      <button onClick={function(){setShowBaixa(null);setQtdBaixa('');setDescarteMed(null);setDescarteLoteSel(null);}} className="bs" style={{flex:1,padding:'12px 0'}}>Cancelar</button>
+      <button onClick={function(){setShowBaixa(null);setQtdBaixa('');setDescarteMed(null);setDescarteLoteSel(null);setAjustarSobra(true);}} className="bs" style={{flex:1,padding:'12px 0'}}>Cancelar</button>
       <button onClick={darBaixaVencido} disabled={salvandoBaixa||!qtdBaixa||parseInt(qtdBaixa)<=0||parseInt(qtdBaixa)>(showBaixa.est||0)} style={{flex:2,padding:'12px 0',background:'#DC2626',color:'#fff',border:'none',borderRadius:12,fontWeight:700,fontSize:14,cursor:'pointer',opacity:(salvandoBaixa||!qtdBaixa||parseInt(qtdBaixa)<=0||parseInt(qtdBaixa)>(showBaixa.est||0))?0.45:1}}>♻️ Confirmar Descarte</button>
     </div>
   </div>
@@ -1970,7 +1998,7 @@ function darBaixaVencido(){
 </div>);}
 function TabRelatorio(props){
   var db=props.db;var user=props.user||{};
-  function nomeC(n){if(!n)return '?';var p=n.trim().split(' ');return p.length>=2?p[0]+' '+p[1]:p[0];}var entries=props.entries;var medications=props.medications;var _dF=useState(todayStr());var dF=_dF[0];var setDF=_dF[1];var _dT=useState(todayStr());var dT=_dT[0];var setDT=_dT[1];var _tipo=useState('todos');var tipo=_tipo[0];var setTipo=_tipo[1];var _sub=useState('mov');var sub=_sub[0];var setSub=_sub[1];var _filtCatRel=useState('todos');var filtCatRel=_filtCatRel[0];var setFiltCatRel=_filtCatRel[1];var _filtMeds=useState([]);var filtMeds=_filtMeds[0];var setFiltMeds=_filtMeds[1];var _filtBusca=useState('');var filtBusca=_filtBusca[0];var setFiltBusca=_filtBusca[1];var _filtBuscaCat=useState('todos');var filtBuscaCat=_filtBuscaCat[0];var setFiltBuscaCat=_filtBuscaCat[1];var _rankDF=useState((function(){var d=new Date();d.setDate(d.getDate()-30);return d.toISOString().slice(0,10);})());var rankDF=_rankDF[0];var setRankDF=_rankDF[1];var _rankDT=useState(todayStr());var rankDT=_rankDT[0];var setRankDT=_rankDT[1];var _rankDiag=useState(null);var rankDiag=_rankDiag[0];var setRankDiag=_rankDiag[1];
+  function nomeC(n){if(!n)return '?';var p=n.trim().split(' ');return p.length>=2?p[0]+' '+p[1]:p[0];}var entries=props.entries;var medications=props.medications;var _dF=useState(todayStr());var dF=_dF[0];var setDF=_dF[1];var _dT=useState(todayStr());var dT=_dT[0];var setDT=_dT[1];var _tipo=useState('todos');var tipo=_tipo[0];var setTipo=_tipo[1];var _sub=useState('mov');var sub=_sub[0];var setSub=_sub[1];var _filtCatRel=useState('todos');var filtCatRel=_filtCatRel[0];var setFiltCatRel=_filtCatRel[1];var _filtMeds=useState([]);var filtMeds=_filtMeds[0];var setFiltMeds=_filtMeds[1];var _filtBusca=useState('');var filtBusca=_filtBusca[0];var setFiltBusca=_filtBusca[1];var _filtBuscaCat=useState('todos');var filtBuscaCat=_filtBuscaCat[0];var setFiltBuscaCat=_filtBuscaCat[1];var _rankDF=useState((function(){var d=new Date();d.setDate(d.getDate()-30);return d.toISOString().slice(0,10);})());var rankDF=_rankDF[0];var setRankDF=_rankDF[1];var _rankDT=useState(todayStr());var rankDT=_rankDT[0];var setRankDT=_rankDT[1];var _rankDiag=useState(null);var rankDiag=_rankDiag[0];var setRankDiag=_rankDiag[1];var _rankCat=useState('todos');var rankCat=_rankCat[0];var setRankCat=_rankCat[1];
 var filtered=entries.filter(function(e){if(e.ficticioDiv)return false;if(e.divergenciaTipo==='real')return false;var dt=(e.criadoEm||'').slice(0,10);if(dt<dF||dt>dT)return false;if(tipo!=='todos'&&e.tipo!==tipo)return false;if(filtMeds&&filtMeds.length>0&&filtMeds.indexOf(e.medicamentoNome)===-1)return false;if(filtCatRel&&filtCatRel!=='todos'){var meds=medications.filter(function(m){return m.nome===e.medicamentoNome&&((m.categoria||'medicamento'))===filtCatRel;});if(meds.length===0)return false;}return true;}).sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});
 var totE=0,totS=0;filtered.forEach(function(e){if(e.tipo==='entrada')totE+=(e.quantidade||0);if(e.tipo==='saida')totS+=(e.quantidade||0);});
 function _norm(s){return (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');}
@@ -1993,7 +2021,9 @@ function _ehSaidaNaoReal(e){
   if(o.indexOf('transfer')>=0)return true;       // transferência entre lotes
   return false;
 }
-var rankMap={};entries.forEach(function(e){if(e.tipo!=='saida')return;if(_ehSaidaNaoReal(e))return;var dr=(e.date||(e.criadoEm||'').slice(0,10));if(dr<rankDF||dr>rankDT)return;var k=e.medicamentoNome||'?';if(!rankMap[k])rankMap[k]={nome:k,total:0,count:0};rankMap[k].total+=(e.quantidade||0);rankMap[k].count++;});var ranking=Object.keys(rankMap).map(function(k){return rankMap[k];}).sort(function(a,b){return b.total-a.total;}).slice(0,10);
+var _catPorNome={};(medications||[]).forEach(function(m){if(m.nome)_catPorNome[m.nome]=(m.categoria||'medicamento');});
+var rankMap={};entries.forEach(function(e){if(e.tipo!=='saida')return;if(_ehSaidaNaoReal(e))return;var dr=(e.date||(e.criadoEm||'').slice(0,10));if(dr<rankDF||dr>rankDT)return;var cat=_catPorNome[e.medicamentoNome]||'medicamento';if(rankCat!=='todos'&&cat!==rankCat)return;var k=e.medicamentoNome||'?';if(!rankMap[k])rankMap[k]={nome:k,total:0,count:0,cat:cat};rankMap[k].total+=(e.quantidade||0);rankMap[k].count++;});var ranking=Object.keys(rankMap).map(function(k){return rankMap[k];}).sort(function(a,b){return b.total-a.total;}).slice(0,rankCat==='todos'?10:50);
+function exportRankXL(){var rows=[['#','Medicamento','Categoria','Qtd Total','Nº Saídas']];ranking.forEach(function(r,i){rows.push([i+1,r.nome,(TIPOS[r.cat]?TIPOS[r.cat].label:r.cat),r.total,r.count]);});var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'Ranking');var catNome=rankCat==='todos'?'geral':rankCat;XLSX.writeFile(wb,'ranking_'+catNome+'_'+rankDF+'_'+rankDT+'.xlsx');}
 var respMap={};entries.forEach(function(e){var k=e.autorNome||'?';if(!respMap[k])respMap[k]={nome:k,color:e.autorColor,qtdS:0,qtdE:0,cntS:0,cntE:0};if(e.tipo==='saida'){respMap[k].qtdS+=(e.quantidade||0);respMap[k].cntS++;}else{respMap[k].qtdE+=(e.quantidade||0);respMap[k].cntE++;}});var porResp=Object.keys(respMap).map(function(k){return respMap[k];}).sort(function(a,b){return (b.qtdS+b.qtdE)-(a.qtdS+a.qtdE);});
 function doXL(){var rows=[['Data','Hora','Responsavel','Medicamento','Tipo','Qtd','Lote']];filtered.forEach(function(e){rows.push([fmtD(e.criadoEm),fmtT(e.criadoEm),e.autorNome||'',e.medicamentoNome||'',e.tipo==='entrada'?'Entrada':'Saida',e.quantidade||0,e.lote||'']);});var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'Relatorio');XLSX.writeFile(wb,'relatorio_'+dF+'_'+dT+'.xlsx');}
 return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
@@ -2206,11 +2236,22 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
       <button onClick={function(){var d=new Date();d.setDate(d.getDate()-30);setRankDF(d.toISOString().slice(0,10));setRankDT(todayStr());}} style={{padding:'6px 12px',background:'#F1F5F9',border:'none',borderRadius:8,fontSize:11,fontWeight:700,color:'#475569',cursor:'pointer'}}>30 dias</button>
       <button onClick={function(){var d=new Date();d.setMonth(d.getMonth()-1);d.setDate(1);var ini=d.toISOString().slice(0,10);var fim=new Date(d.getFullYear(),d.getMonth()+1,0).toISOString().slice(0,10);setRankDF(ini);setRankDT(fim);}} style={{padding:'6px 12px',background:'#F1F5F9',border:'none',borderRadius:8,fontSize:11,fontWeight:700,color:'#475569',cursor:'pointer'}}>Mês passado</button>
     </div>
+    <div style={{borderTop:'1px solid #F1F5F9',marginTop:12,paddingTop:12}}>
+      <div style={{fontSize:12,fontWeight:700,color:'#1E293B',marginBottom:6}}>📂 Categoria</div>
+      <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+        {[['todos','Todas'],['medicamento','💊 Básica'],['controlado','🔵 Controlado'],['injetavel','💉 Injetável'],['leite','🍼 Leite'],['penso','🩹 Penso']].map(function(c){return(
+          <button key={c[0]} onClick={function(){setRankCat(c[0]);}} style={{padding:'6px 12px',borderRadius:20,border:'1.5px solid '+(rankCat===c[0]?'#1351B4':'#E2E8F0'),background:rankCat===c[0]?'#EFF6FF':'#fff',fontSize:11,fontWeight:rankCat===c[0]?700:500,color:rankCat===c[0]?'#1351B4':'#64748B',cursor:'pointer'}}>{c[1]}</button>
+        );})}
+      </div>
+    </div>
   </div>
   {ranking.length===0
     ?<div className="card" style={{padding:40,textAlign:'center',color:'#94A3B8'}}>Nenhuma saída registrada neste período.</div>
     :<div className="card">
-      <div className="ch"><div className="ch-title"><div className="ch-accent"/><span>Top Medicamentos mais dispensados</span></div></div>
+      <div className="ch" style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+        <div className="ch-title"><div className="ch-accent"/><span>{rankCat==='todos'?'Top Medicamentos mais dispensados':'Ranking — '+(TIPOS[rankCat]?TIPOS[rankCat].label:rankCat)}</span></div>
+        <button onClick={exportRankXL} style={{padding:'6px 12px',background:'#059669',border:'none',borderRadius:8,color:'#fff',fontSize:12,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap'}}>📥 Excel</button>
+      </div>
       <div>
         {ranking.map(function(r,i){
           var maxT=ranking[0].total||1;
@@ -2220,7 +2261,7 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
           return <div key={r.nome} onClick={function(){setRankDiag(r.nome);}} style={{padding:'10px 16px',borderBottom:i<ranking.length-1?'1px solid #F8FAFC':'none',display:'flex',gap:12,alignItems:'center',cursor:'pointer'}}>
             <div style={{width:28,height:28,borderRadius:'50%',background:i<3?medalCors[i]:'#F1F5F9',display:'flex',alignItems:'center',justifyContent:'center',fontSize:i<3?16:13,fontWeight:700,color:i<3?'#fff':'#94A3B8',flexShrink:0}}>{i<3?medals[i]:i+1}</div>
             <div style={{flex:1,minWidth:0}}>
-              <div style={{fontWeight:600,fontSize:13,color:'#1E293B',wordBreak:'break-word',lineHeight:1.3}}>{r.nome}</div>
+              <div style={{fontWeight:600,fontSize:13,color:'#1E293B',wordBreak:'break-word',lineHeight:1.3}}>{r.nome}{rankCat==='todos'&&r.cat&&TIPOS[r.cat]&&<span style={{fontSize:9,fontWeight:700,color:TIPOS[r.cat].cor,background:TIPOS[r.cat].cor+'18',borderRadius:6,padding:'1px 6px',marginLeft:6,whiteSpace:'nowrap'}}>{TIPOS[r.cat].icon} {TIPOS[r.cat].label}</span>}</div>
               <div style={{fontSize:10,color:'#94A3B8',marginTop:1}}>{r.count} saída(s) · toque para ver</div>
               <div style={{background:'#F1F5F9',borderRadius:20,height:5,overflow:'hidden',marginTop:4}}>
                 <div style={{height:'100%',background:'linear-gradient(90deg,#1351B4,#1A64D6)',borderRadius:20,width:pct+'%',transition:'width .4s ease'}}/>
