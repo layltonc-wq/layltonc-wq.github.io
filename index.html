@@ -3692,7 +3692,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
   var _np=sl('');var nomePac=_np[0];var setNomePac=_np[1];
   var _dt=sl('');var diasTrat=_dt[0];var setDiasTrat=_dt[1];
   var _di=sl(new Date().toISOString().split('T')[0]);var dataIni=_di[0];var setDataIni=_di[1];
-  var _da=sl('1');var diaAt=_da[0];var setDiaAt=_da[1];
+  var _da=sl('1');var diaAt=_da[0];var setDiaAt=_da[1];var _diasAntes=sl('0');var diasAntes=_diasAntes[0];var setDiasAntes=_diasAntes[1];
   var _ob=sl('');var obsForm=_ob[0];var setObsForm=_ob[1];
   var _ms=sl('');var medSel=_ms[0];var setMedSel=_ms[1];
   var _nm=sl('');var nomeMed=_nm[0];var setNomeMed=_nm[1];
@@ -3745,7 +3745,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
   function cCor(s){if(s==='ativo')return'#10B981';if(s==='espera')return'#F59E0B';if(s==='dose_ataque')return'#8B5CF6';if(s==='concluido'||s==='finalizado')return'#3B82F6';if(s==='desistiu')return'#EF4444';return'#64748B';}
   function cLbl(s){if(s==='ativo')return'Em Tratamento';if(s==='espera')return'Aguardando';if(s==='dose_ataque')return'Dose de Ataque';if(s==='concluido')return'Concluido';if(s==='finalizado')return'Finalizado';if(s==='desistiu')return'Desistiu';return s;}
   function cIco(s){if(s==='ativo')return'💉';if(s==='espera')return'⏳';if(s==='dose_ataque')return'⚡';if(s==='concluido'||s==='finalizado')return'✅';if(s==='desistiu')return'❌';return'';}
-  function rForm(){setNomePac('');setDiasTrat('');setDataIni(new Date().toISOString().split('T')[0]);setDiaAt('1');setObsForm('');setMedSel('');setNomeMed('');setCrmMed('');setStatusIni('ativo');setQtdEsp(2);}
+  function rForm(){setNomePac('');setDiasTrat('');setDataIni(new Date().toISOString().split('T')[0]);setDiaAt('1');setDiasAntes('0');setObsForm('');setMedSel('');setNomeMed('');setCrmMed('');setStatusIni('ativo');setQtdEsp(2);}
 
   async function salvar(){
     if(!nomePac.trim()||!medSel)return alert('Preencha nome do paciente e medicamento!');
@@ -3757,17 +3757,21 @@ function TabAntibiotico({user,medications,stock,allUsers}){
     var hr=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
     var doses=[];
     if(statusIni==='ativo'){
-      var daN=Math.max(1,Math.min(parseInt(diaAt)||1,parseInt(diasTrat)||1));
-      for(var i=0;i<daN-1;i++){var d=new Date(dataIni);d.setDate(d.getDate()+i);doses.push({data:d.toISOString().split('T')[0],hora:'--:--',responsavel:'Retroativo',responsavelCor:'#94A3B8',qtd:2,retroativo:true});}
-      // Saída automática da 1ª dose do dia ao cadastrar
-      doses.push({data:hj,hora:hr,responsavel:user.name,responsavelCor:user.color||B,qtd:2,primeiraDose:true});
-      await db.collection('entries').add({tipo:'saida',medicamentoId:medSel,medicamentoNome:mO.nome||'',quantidade:2,autorNome:user.name,autorCor:user.color||B,autorId:user.uid,lote:'',validade:'',obs:'ATB 1ª dose - '+nomePac.trim(),criadoEm:new Date().toISOString(),date:hj});
+      var nAntes=Math.max(0,Math.min(parseInt(diasAntes)||0,(parseInt(diasTrat)||1)-1));
+      var qDose=parseInt(qtdEsp)||2;
+      // Doses retroativas: contadas para tras a partir de HOJE (nAntes dias atras ate ontem). NAO baixam estoque.
+      for(var i=nAntes;i>=1;i--){var d=new Date(hj);d.setDate(d.getDate()-i);doses.push({data:d.toISOString().split('T')[0],hora:'--:--',responsavel:'Já tomava',responsavelCor:'#94A3B8',qtd:qDose,retroativo:true});}
+      // Dose de hoje (1ª que registramos) - baixa estoque
+      doses.push({data:hj,hora:hr,responsavel:user.name,responsavelCor:user.color||B,qtd:qDose,primeiraDose:true});
+      await db.collection('entries').add({tipo:'saida',medicamentoId:medSel,medicamentoNome:mO.nome||'',quantidade:qDose,autorNome:user.name,autorCor:user.color||B,autorId:user.uid,lote:'',validade:'',obs:'ATB 1ª dose - '+nomePac.trim(),criadoEm:new Date().toISOString(),date:hj});
     }
     if(statusIni==='espera'){
       doses=[{data:hj,hora:hr,responsavel:user.name,responsavelCor:user.color||B,qtd:qtdEsp,doseEspera:true}];
       await db.collection('entries').add({tipo:'saida',medicamentoId:medSel,medicamentoNome:mO.nome||'',quantidade:qtdEsp,autorNome:user.name,autorCor:user.color||B,autorId:user.uid,lote:'',validade:'',obs:'Espera ATB - '+nomePac.trim(),criadoEm:new Date().toISOString(),date:hj});
     }
-    await db.collection('tratamentos_atb').add({pacienteNome:nomePac.trim(),diasTratamento:parseInt(diasTrat)||0,dataInicio:dataIni||hj,medicamentoId:medSel,medicamentoNome:mO.nome||'',nomeMedico:nomeMed.trim(),crmMedico:crmMed.trim(),obs:obsForm.trim(),doses:doses,status:statusIni,criadoPor:user.name,criadoEm:new Date().toISOString()});
+    var dataInicioCalc=dataIni||hj;
+    if(statusIni==='ativo'){var nA=Math.max(0,Math.min(parseInt(diasAntes)||0,(parseInt(diasTrat)||1)-1));var di=new Date(hj);di.setDate(di.getDate()-nA);dataInicioCalc=di.toISOString().split('T')[0];}
+    await db.collection('tratamentos_atb').add({pacienteNome:nomePac.trim(),diasTratamento:parseInt(diasTrat)||0,dataInicio:dataInicioCalc,diasAntesInicio:(parseInt(diasAntes)||0),medicamentoId:medSel,medicamentoNome:mO.nome||'',nomeMedico:nomeMed.trim(),crmMedico:crmMed.trim(),obs:obsForm.trim(),doses:doses,status:statusIni,criadoPor:user.name,criadoEm:new Date().toISOString()});
     setSaving(false);setShowForm(false);rForm();
   }
 
@@ -3960,20 +3964,36 @@ function TabAntibiotico({user,medications,stock,allUsers}){
                   <input type="number" value={diasTrat} onChange={function(e){setDiasTrat(e.target.value);}} placeholder="Ex: 7" min="1" max="30" style={{width:'100%',padding:'12px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:14,boxSizing:'border-box'}}/>
                 </div>
                 <div>
-                  <label style={{fontSize:12,fontWeight:700,color:'#475569',display:'block',marginBottom:5}}>Data de Inicio *</label>
-                  <input type="date" value={dataIni} onChange={function(e){setDataIni(e.target.value);}} style={{width:'100%',padding:'12px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:14,boxSizing:'border-box'}}/>
+                  <label style={{fontSize:12,fontWeight:700,color:'#475569',display:'block',marginBottom:5}}>Qtd por dose</label>
+                  <input type="number" value={qtdEsp} onChange={function(e){setQtdEsp(parseInt(e.target.value)||2);}} min="1" style={{width:'100%',padding:'12px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:14,boxSizing:'border-box'}}/>
                 </div>
               </div>
               <div style={{background:'#EFF6FF',borderRadius:12,padding:12,border:'1.5px solid #BFDBFE'}}>
-                <div style={{fontSize:13,fontWeight:700,color:B,marginBottom:4}}>📅 Paciente ja em tratamento?</div>
-                <div style={{fontSize:12,color:'#64748B',marginBottom:8}}>Se ja iniciou, informe em qual dia esta.</div>
+                <div style={{fontSize:13,fontWeight:700,color:B,marginBottom:4}}>📅 O paciente já vinha tomando antes de hoje?</div>
+                <div style={{fontSize:12,color:'#64748B',marginBottom:8}}>Informe quantos dias ele <strong>já tomou antes de hoje</strong>. Deixe 0 se hoje é o primeiro dia.</div>
                 <div style={{display:'flex',alignItems:'center',gap:10}}>
-                  <input type="number" value={diaAt} onChange={function(e){setDiaAt(e.target.value);}} min="1" max={diasTrat||30} style={{width:70,padding:'10px',borderRadius:10,border:'1.5px solid #BFDBFE',fontSize:16,fontWeight:700,textAlign:'center',boxSizing:'border-box'}}/>
-                  <span style={{fontSize:13,color:'#64748B'}}>de {diasTrat||'?'} dias</span>
+                  <input type="number" value={diasAntes} onChange={function(e){setDiasAntes(e.target.value);}} min="0" max={diasTrat?(parseInt(diasTrat)-1):29} style={{width:70,padding:'10px',borderRadius:10,border:'1.5px solid #BFDBFE',fontSize:16,fontWeight:700,textAlign:'center',boxSizing:'border-box'}}/>
+                  <span style={{fontSize:13,color:'#64748B'}}>dia(s) já tomado(s) antes de hoje</span>
                 </div>
-                {parseInt(diaAt)>1&&<div style={{marginTop:6,fontSize:12,color:'#2563EB',fontWeight:600}}>✓ {parseInt(diaAt)-1} dose{parseInt(diaAt)-1>1?'s':''} retroativa{parseInt(diaAt)-1>1?'s':''} marcadas automaticamente</div>}
+                {(function(){
+                  var nA=Math.max(0,Math.min(parseInt(diasAntes)||0,(parseInt(diasTrat)||1)-1));
+                  var total=parseInt(diasTrat)||0;
+                  if(!total)return null;
+                  var hojeDia=nA+1;
+                  return(<div style={{marginTop:10,paddingTop:10,borderTop:'1px solid #BFDBFE'}}>
+                    {nA>0
+                      ?<div style={{fontSize:12,color:'#2563EB',fontWeight:600}}>✓ {nA} dose(s) anterior(es) marcada(s) como "já tomava" (sem baixar estoque)</div>
+                      :<div style={{fontSize:12,color:'#64748B'}}>Hoje é o primeiro dia do tratamento.</div>
+                    }
+                    <div style={{fontSize:13,color:'#1E293B',fontWeight:700,marginTop:6}}>Hoje = dia {hojeDia} de {total} · restam {Math.max(0,total-hojeDia)} dia(s) após hoje</div>
+                    <div style={{fontSize:11,color:'#94A3B8',marginTop:2}}>A dose de hoje será registrada agora (baixa o estoque). As próximas você dá baixa dia a dia.</div>
+                  </div>);
+                })()}
               </div>
             </div>}
+            <div style={{display:'none'}}>
+              <input type="date" value={dataIni} onChange={function(e){setDataIni(e.target.value);}}/>
+            </div>
             <div>
               <label style={{fontSize:12,fontWeight:700,color:'#475569',display:'block',marginBottom:5}}>Observacoes</label>
               <textarea value={obsForm} onChange={function(e){setObsForm(e.target.value);}} placeholder="Observacoes..." rows={2} style={{width:'100%',padding:'12px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:14,resize:'none',boxSizing:'border-box'}}/>
