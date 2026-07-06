@@ -228,6 +228,44 @@ function calcStock(entries){var s={};for(var i=0;i<entries.length;i++){var e=ent
 s[e.medicamentoId]+=(Number(e.quantidade)||0);}else if(e.tipo==='saida'){if(e.ficticioDiv)continue;// saída fictícia — não subtrai do estoque real
 s[e.medicamentoId]-=(Number(e.quantidade)||0);}}return s;}
 function calcLatest(entries){var info={};var sorted=[];for(var i=0;i<entries.length;i++){if(entries[i].tipo==='entrada')sorted.push(entries[i]);}sorted.sort(function(a,b){return (a.criadoEm||'').localeCompare(b.criadoEm||'');});for(var j=0;j<sorted.length;j++){var e=sorted[j];if(e.medicamentoId)info[e.medicamentoId]={lote:e.lote||'',validade:e.validade||''};}return info;}
+function getDiasVal(val,hoje){if(!val)return null;var p=val.split('/');if(p.length!==2)return null;var d=new Date(parseInt(p[1]),parseInt(p[0]),0);return Math.ceil((d-hoje)/86400000);}
+function computeVencimentos(medications,entries,stock){
+  var hoje=new Date();
+  var medList=medications.map(function(m){
+    var me=entries.filter(function(e){return e.medicamentoId===m.id&&e.tipo==='entrada'&&e.lote;});
+    var loteMap={};me.forEach(function(e){if(!e.lote)return;var lk=e.lote;if(!loteMap[lk])loteMap[lk]={lote:e.lote,validade:e.validade||'',entrada:0,saida:0};loteMap[lk].entrada+=(e.quantidade||0);if(e.validade&&!loteMap[lk].validade)loteMap[lk].validade=e.validade;});
+    var saidas=entries.filter(function(e){return e.medicamentoId===m.id&&e.tipo==='saida'&&e.lote;});
+    saidas.forEach(function(e){var lk=e.lote;if(loteMap[lk])loteMap[lk].saida+=(e.quantidade||0);});
+    var lotes=Object.keys(loteMap).map(function(k){var l=loteMap[k];return Object.assign({},l,{qty:Math.max(0,l.entrada-l.saida)});}).filter(function(l){return l.qty>0;});
+    var ul=me.slice().sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});
+    var info=ul.length>0?{lote:ul[0].lote||'',validade:ul[0].validade||''}:{lote:'',validade:''};
+    if(m.loteAtual)info.lote=m.loteAtual;if(m.validadeAtual)info.validade=m.validadeAtual;
+    return {id:m.id,nome:m.nome,est:stock[m.id]||0,info:info,lotes:lotes};
+  });
+  var venc30=[],venc60=[],venc90=[],vencidos=[];
+  medList.forEach(function(m){
+    var est=stock[m.id]||0;if(est<=0)return;
+    var temLoteValidade=false;
+    var lotesComVal=(m.lotes||[]).filter(function(l){return l.validade&&l.qty>0;});
+    if(lotesComVal.length>0){
+      lotesComVal.forEach(function(l){
+        var dias=getDiasVal(l.validade,hoje);if(dias===null)return;
+        var obj={id:m.id,nome:m.nome,validade:l.validade,lote:l.lote||'',est:l.qty,dias:dias};
+        if(dias<0)vencidos.push(obj);else if(dias<=30)venc30.push(obj);else if(dias<=60)venc60.push(obj);else if(dias<=90)venc90.push(obj);
+        temLoteValidade=true;
+      });
+    }
+    var valDireta=m.info&&m.info.validade?m.info.validade:'';
+    if(valDireta&&!temLoteValidade){
+      var dias2=getDiasVal(valDireta,hoje);
+      if(dias2!==null){
+        var obj2={id:m.id,nome:m.nome,validade:valDireta,lote:m.info.lote||'',est:est,dias:dias2};
+        if(dias2<0)vencidos.push(obj2);else if(dias2<=30)venc30.push(obj2);else if(dias2<=60)venc60.push(obj2);else if(dias2<=90)venc90.push(obj2);
+      }
+    }
+  });
+  return {vencidos:vencidos,venc30:venc30,venc60:venc60,venc90:venc90};
+}
 function playSound(type){try{var ctx=new (window.AudioContext||window.webkitAudioContext)();var o=ctx.createOscillator();var g=ctx.createGain();o.connect(g);g.connect(ctx.destination);if(type==='success'){o.frequency.setValueAtTime(523,ctx.currentTime);o.frequency.setValueAtTime(659,ctx.currentTime+0.1);g.gain.setValueAtTime(0.18,ctx.currentTime);g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.3);o.start(ctx.currentTime);o.stop(ctx.currentTime+0.3);}else{o.frequency.setValueAtTime(440,ctx.currentTime);g.gain.setValueAtTime(0.2,ctx.currentTime);g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.4);o.start(ctx.currentTime);o.stop(ctx.currentTime+0.4);}}catch(e){}}
 function compressPhoto(file,cb){var reader=new FileReader();reader.onload=function(ev){var img=new Image();img.onload=function(){var canvas=document.createElement('canvas');canvas.width=160;canvas.height=160;var ctx=canvas.getContext('2d');var size=Math.min(img.width,img.height);var sx=(img.width-size)/2;var sy=(img.height-size)/2;ctx.beginPath();ctx.arc(80,80,80,0,Math.PI*2);ctx.clip();ctx.drawImage(img,sx,sy,size,size,0,0,160,160);cb(canvas.toDataURL('image/jpeg',0.8));};img.src=ev.target.result;};reader.readAsDataURL(file);}
 function UserAvatar(p){var sz=p.size||28;var u=p.user;var st=p.style||{};if(u&&u.photoURL){return React.createElement('img',{src:u.photoURL,style:Object.assign({width:sz,height:sz,borderRadius:'50%',objectFit:'cover',flexShrink:0},st)});}return React.createElement('div',{className:'av',style:Object.assign({width:sz,height:sz,background:u&&u.color?u.color:B,fontSize:Math.round(sz*0.4),fontWeight:700},st)},u&&u.name?u.name.charAt(0):'?');}
@@ -426,9 +464,7 @@ function handleFotoMural(e){var f=e.target.files[0];if(!f||!f.type.startsWith('i
 function post(){if(!aviso.trim()&&!fotoMural)return;setSaving(true);var expAt=new Date();expAt.setHours(expAt.getHours()+48);db.collection('avisos').add({texto:aviso.trim(),foto:fotoMural||'',autorNome:user.name,autorColor:user.color||B,autorFoto:user.photoURL||'',criadoEm:new Date().toISOString(),expiraEm:expAt.toISOString()}).then(function(){setAviso('');setFotoMural('');setSaving(false);});}
 function del(id){db.collection('avisos').doc(id).delete();}
 var today=todayStr();var te=entries.filter(function(e){return (e.criadoEm||'').startsWith(today);});var ts=0;te.forEach(function(e){if(e.tipo==='saida')ts+=(e.quantidade||0);});var tin=0;te.forEach(function(e){if(e.tipo==='entrada')tin+=(e.quantidade||0);});var low=medications.filter(function(m){return m.minEstoque&&(stock[m.id]||0)<=m.minEstoque&&(stock[m.id]||0)>0;});
-var hoje=new Date();var lotesMap={};entries.forEach(function(e){var key=e.medicamentoId+'|'+(e.lote||'')+'|'+(e.validade||'');if(!lotesMap[key])lotesMap[key]={medId:e.medicamentoId,validade:e.validade||'',qty:0};if(e.tipo==='entrada')lotesMap[key].qty+=(Number(e.quantidade)||0);else if(e.tipo==='saida')lotesMap[key].qty-=(Number(e.quantidade)||0);});
-var vencProdutos={};Object.values(lotesMap).forEach(function(l){if(!l.validade||l.qty<=0)return;var p=l.validade.split('/');if(p.length!==2)return;var dVenc=new Date(parseInt(p[1]),parseInt(p[0]),0);var dias=Math.ceil((dVenc-hoje)/86400000);if(dias>=0&&dias<=30)vencProdutos[l.medId]=true;});
-var vencendo=Object.keys(vencProdutos).length;
+var vencendo=computeVencimentos(medications,entries,stock).venc30.length;
 var week=[];for(var wi=0;wi<7;wi++){var wd=new Date();wd.setDate(wd.getDate()-(6-wi));var wk=fmtISO(wd);var wv=0;entries.forEach(function(e){if(e.tipo==='saida'&&(e.criadoEm||'').startsWith(wk))wv+=(e.quantidade||0);});week.push({l:wd.toLocaleDateString('pt-BR',{weekday:'short'}).slice(0,3),v:wv});}
 var stats=[
   {icon:'💊',label:'Saídas hoje',val:ts,sub:te.filter(function(e){return e.tipo==='saida';}).length+' registros',color:'#DC2626',bg:'#FEE2E2'},
