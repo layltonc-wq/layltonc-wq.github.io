@@ -464,7 +464,7 @@ function handleFotoMural(e){var f=e.target.files[0];if(!f||!f.type.startsWith('i
 function post(){if(!aviso.trim()&&!fotoMural)return;setSaving(true);var expAt=new Date();expAt.setHours(expAt.getHours()+48);db.collection('avisos').add({texto:aviso.trim(),foto:fotoMural||'',autorNome:user.name,autorColor:user.color||B,autorFoto:user.photoURL||'',criadoEm:new Date().toISOString(),expiraEm:expAt.toISOString()}).then(function(){setAviso('');setFotoMural('');setSaving(false);});}
 function del(id){db.collection('avisos').doc(id).delete();}
 var today=todayStr();var te=entries.filter(function(e){return (e.criadoEm||'').startsWith(today);});var ts=0;te.forEach(function(e){if(e.tipo==='saida')ts+=(e.quantidade||0);});var tin=0;te.forEach(function(e){if(e.tipo==='entrada')tin+=(e.quantidade||0);});var low=medications.filter(function(m){return m.minEstoque&&(stock[m.id]||0)<=m.minEstoque&&(stock[m.id]||0)>0;});
-var vencendo=computeVencimentos(medications,entries,stock).venc30.length;
+var vencendoIds={};computeVencimentos(medications,entries,stock).venc30.forEach(function(v){vencendoIds[v.id]=true;});var vencendo=Object.keys(vencendoIds).length;
 var week=[];for(var wi=0;wi<7;wi++){var wd=new Date();wd.setDate(wd.getDate()-(6-wi));var wk=fmtISO(wd);var wv=0;entries.forEach(function(e){if(e.tipo==='saida'&&(e.criadoEm||'').startsWith(wk))wv+=(e.quantidade||0);});week.push({l:wd.toLocaleDateString('pt-BR',{weekday:'short'}).slice(0,3),v:wv});}
 var stats=[
   {icon:'💊',label:'Saídas hoje',val:ts,sub:te.filter(function(e){return e.tipo==='saida';}).length+' registros',color:'#DC2626',bg:'#FEE2E2'},
