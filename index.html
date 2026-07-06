@@ -425,12 +425,15 @@ var _fotoMural=useState('');var fotoMural=_fotoMural[0];var setFotoMural=_fotoMu
 function handleFotoMural(e){var f=e.target.files[0];if(!f||!f.type.startsWith('image/'))return;compressPhoto(f,function(b64){setFotoMural(b64);});e.target.value='';}
 function post(){if(!aviso.trim()&&!fotoMural)return;setSaving(true);var expAt=new Date();expAt.setHours(expAt.getHours()+48);db.collection('avisos').add({texto:aviso.trim(),foto:fotoMural||'',autorNome:user.name,autorColor:user.color||B,autorFoto:user.photoURL||'',criadoEm:new Date().toISOString(),expiraEm:expAt.toISOString()}).then(function(){setAviso('');setFotoMural('');setSaving(false);});}
 function del(id){db.collection('avisos').doc(id).delete();}
-var today=todayStr();var te=entries.filter(function(e){return (e.criadoEm||'').startsWith(today);});var ts=0;te.forEach(function(e){if(e.tipo==='saida')ts+=(e.quantidade||0);});var tin=0;te.forEach(function(e){if(e.tipo==='entrada')tin+=(e.quantidade||0);});var low=medications.filter(function(m){return m.minEstoque&&(stock[m.id]||0)<=m.minEstoque&&(stock[m.id]||0)>0;});var zero=medications.filter(function(m){return m.minEstoque&&(stock[m.id]||0)<=0;});
+var today=todayStr();var te=entries.filter(function(e){return (e.criadoEm||'').startsWith(today);});var ts=0;te.forEach(function(e){if(e.tipo==='saida')ts+=(e.quantidade||0);});var tin=0;te.forEach(function(e){if(e.tipo==='entrada')tin+=(e.quantidade||0);});var low=medications.filter(function(m){return m.minEstoque&&(stock[m.id]||0)<=m.minEstoque&&(stock[m.id]||0)>0;});
+var hoje=new Date();var lotesMap={};entries.forEach(function(e){var key=e.medicamentoId+'|'+(e.lote||'')+'|'+(e.validade||'');if(!lotesMap[key])lotesMap[key]={medId:e.medicamentoId,validade:e.validade||'',qty:0};if(e.tipo==='entrada')lotesMap[key].qty+=(Number(e.quantidade)||0);else if(e.tipo==='saida')lotesMap[key].qty-=(Number(e.quantidade)||0);});
+var vencProdutos={};Object.values(lotesMap).forEach(function(l){if(!l.validade||l.qty<=0)return;var p=l.validade.split('/');if(p.length!==2)return;var dVenc=new Date(parseInt(p[1]),parseInt(p[0]),0);var dias=Math.ceil((dVenc-hoje)/86400000);if(dias<=30)vencProdutos[l.medId]=true;});
+var vencendo=Object.keys(vencProdutos).length;
 var week=[];for(var wi=0;wi<7;wi++){var wd=new Date();wd.setDate(wd.getDate()-(6-wi));var wk=fmtISO(wd);var wv=0;entries.forEach(function(e){if(e.tipo==='saida'&&(e.criadoEm||'').startsWith(wk))wv+=(e.quantidade||0);});week.push({l:wd.toLocaleDateString('pt-BR',{weekday:'short'}).slice(0,3),v:wv});}
 var stats=[
   {icon:'💊',label:'Saídas hoje',val:ts,sub:te.filter(function(e){return e.tipo==='saida';}).length+' registros',color:'#DC2626',bg:'#FEE2E2'},
   {icon:'📥',label:'Entradas hoje',val:tin,sub:te.filter(function(e){return e.tipo==='entrada';}).length+' registros',color:'#0C6B3E',bg:'#DCFCE7'},
-  {icon:'⚠️',label:'Estoque zerado',val:zero.length,sub:'produtos',color:zero.length>0?'#DC2626':'#0C6B3E',bg:zero.length>0?'#FEE2E2':'#DCFCE7'},
+  {icon:'⏳',label:'Vencimento',val:vencendo,sub:'produtos',color:vencendo>0?'#DC2626':'#0C6B3E',bg:vencendo>0?'#FEE2E2':'#DCFCE7'},
   {icon:'📉',label:'Estoque baixo',val:low.length,sub:'produtos',color:low.length>0?'#B45309':'#0C6B3E',bg:low.length>0?'#FEF3C7':'#DCFCE7'},
 ];
 return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
