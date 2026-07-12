@@ -5304,12 +5304,14 @@ function TabConferencia(props){
   var _recontagens=useState([]);var recontagens=_recontagens[0];var setRecontagens=_recontagens[1];
   var _acheiForm=useState(null);var acheiForm=_acheiForm[0];var setAcheiForm=_acheiForm[1];// key da linha em edição
   var _acheiQty=useState('');var acheiQty=_acheiQty[0];var setAcheiQty=_acheiQty[1];
-  var pendingRef=useRef({});var timersRef=useRef({});
+  var _erro=useState('');var erro=_erro[0];var setErro=_erro[1];
+  var pendingRef=useRef({});var timersRef=useRef({});var remoteRef=useRef({});
 
   useEffect(function(){
     var unsub=docRef().onSnapshot(function(snap){
       var data=snap.exists?snap.data():{};
       var remote=data.contagens||{};
+      remoteRef.current=remote;// fonte da verdade p/ rollback de escrita falha
       setContagens(function(prev){
         var n=Object.assign({},prev);
         Object.keys(remote).forEach(function(k){if(!pendingRef.current[k])n[k]=String(remote[k]);});
@@ -5319,9 +5321,13 @@ function TabConferencia(props){
       setContadoPor(data.contadoPor||{});
       setNovosLotes(data.novosLotes||[]);
       setRecontagens(data.recontagens||[]);
-    },function(){});
+    },function(e){setErro('Não foi possível ler a conferência: '+e.message+' (verifique as regras/permissões do Firestore).');});
     return unsub;
   },[]);
+
+  // Reverte o valor local de uma chave para o último estado confirmado no servidor (rollback)
+  function revertKey(key){setContagens(function(p){var n=Object.assign({},p);var rv=remoteRef.current[key];if(rv===undefined)delete n[key];else n[key]=String(rv);return n;});}
+  function erroEscrita(e){setErro('⚠️ Não foi possível salvar no banco: '+(e&&e.message?e.message:'erro desconhecido')+'. As alterações NÃO foram gravadas — verifique as permissões do Firestore e tente novamente.');}
 
   // "Achei mais": soma unidades a um lote já contado, sem gerar divergência nova — fica registrado como recontagem
   function acheiMais(key,med,lote,validade){
@@ -5331,23 +5337,24 @@ function TabConferencia(props){
     var rec={id:'rc_'+Date.now()+'_'+Math.floor(Math.random()*9999),key:key,medId:med.id,medNome:med.nome,lote:lote||'',validade:validade||'',qty:found,por:user.name,em:now};
     var contUpd={},porUpd={};contUpd[key]=novo;porUpd[key]={nome:user.name,em:now};
     pendingRef.current[key]=Date.now();
-    setContagens(function(p){var n=Object.assign({},p);n[key]=String(novo);return n;});
+    setContagens(function(p){var n=Object.assign({},p);n[key]=String(novo);return n;});// otimista
     docRef().set({contagens:contUpd,contadoPor:porUpd,recontagens:firebase.firestore.FieldValue.arrayUnion(rec),atualizadoEm:now,atualizadoPor:user.name},{merge:true})
-      .then(function(){delete pendingRef.current[key];}).catch(function(e){delete pendingRef.current[key];alert('Erro: '+e.message);});
-    setAcheiForm(null);setAcheiQty('');
+      .then(function(){delete pendingRef.current[key];setErro('');setAcheiForm(null);setAcheiQty('');})
+      .catch(function(e){delete pendingRef.current[key];revertKey(key);erroEscrita(e);});// desfaz a soma otimista
   }
   // total de recontagem por chave de lote
   var recByKey=useMemo(function(){var m={};(recontagens||[]).forEach(function(r){if(!m[r.key])m[r.key]={total:0,list:[]};m[r.key].total+=(Number(r.qty)||0);m[r.key].list.push(r);});return m;},[recontagens]);
 
   function commitKey(key,valStr){
-    var done=function(){delete pendingRef.current[key];};
+    var ok=function(){delete pendingRef.current[key];setErro('');};
+    var fail=function(e){delete pendingRef.current[key];revertKey(key);erroEscrita(e);};// desfaz a digitação otimista
     if(valStr===''){
       // chaves são sanitizadas (sem pontos), então o caminho de campo é seguro; delete() aninhado exige update()
       var del=firebase.firestore.FieldValue.delete();var u={};u['contagens.'+key]=del;u['contadoPor.'+key]=del;u['atualizadoEm']=new Date().toISOString();u['atualizadoPor']=user.name;
-      docRef().update(u).then(done).catch(done);
+      docRef().update(u).then(ok).catch(fail);
     } else {
       var contUpd={},porUpd={};contUpd[key]=parseInt(valStr)||0;porUpd[key]={nome:user.name,em:new Date().toISOString()};
-      docRef().set({contagens:contUpd,contadoPor:porUpd,atualizadoEm:new Date().toISOString(),atualizadoPor:user.name},{merge:true}).then(done).catch(done);
+      docRef().set({contagens:contUpd,contadoPor:porUpd,atualizadoEm:new Date().toISOString(),atualizadoPor:user.name},{merge:true}).then(ok).catch(fail);
     }
   }
   function onCount(key,raw){
@@ -5362,12 +5369,14 @@ function TabConferencia(props){
     if(!lote){alert('Informe o número do lote.');return;}
     if(qty<=0){alert('Informe a quantidade contada (maior que zero).');return;}
     var obj={id:'nl_'+Date.now()+'_'+Math.floor(Math.random()*9999),medId:med.id,medNome:med.nome,lote:lote,validade:val,qty:qty,por:user.name,em:new Date().toISOString()};
-    docRef().set({novosLotes:firebase.firestore.FieldValue.arrayUnion(obj),atualizadoEm:new Date().toISOString(),atualizadoPor:user.name},{merge:true}).catch(function(e){alert('Erro: '+e.message);});
-    setNovoForm(null);setNlLote('');setNlVal('');setNlQty('');
+    // novosLotes vem via snapshot; só limpa o formulário se a gravação confirmar
+    docRef().set({novosLotes:firebase.firestore.FieldValue.arrayUnion(obj),atualizadoEm:new Date().toISOString(),atualizadoPor:user.name},{merge:true})
+      .then(function(){setErro('');setNovoForm(null);setNlLote('');setNlVal('');setNlQty('');})
+      .catch(function(e){erroEscrita(e);});
   }
   function removeNovoLote(obj){
     if(!confirm('Remover lote novo "'+obj.lote+'"?'))return;
-    docRef().update({novosLotes:firebase.firestore.FieldValue.arrayRemove(obj)}).catch(function(e){alert('Erro: '+e.message);});
+    docRef().update({novosLotes:firebase.firestore.FieldValue.arrayRemove(obj)}).then(function(){setErro('');}).catch(function(e){erroEscrita(e);});
   }
   function toggleCega(){var nv=!cega;setCega(nv);localStorage.setItem('fc_conf_cega',nv?'1':'0');}
 
@@ -5442,10 +5451,11 @@ function TabConferencia(props){
       // Zera a conferência ativa: os ajustes já corrigiram o estoque (evita reaplicar lotes novos)
       return docRef().set({contagens:{},contadoPor:{},novosLotes:[],aplicadoEm:now,aplicadoPor:user.name,atualizadoEm:now,atualizadoPor:user.name});
     }).then(function(){
+      // Só limpa o estado local após a gravação confirmar no banco
       setContagens({});setNovosLotes([]);setContadoPor({});setRecontagens([]);pendingRef.current={};
-      setAplicando(false);setShowResumo(false);
+      setAplicando(false);setShowResumo(false);setErro('');
       alert('✅ '+lista.length+' ajuste(s) de estoque aplicado(s). Estoque atualizado.');
-    }).catch(function(e){setAplicando(false);alert('Erro ao aplicar ajustes: '+e.message);});
+    }).catch(function(e){setAplicando(false);erroEscrita(e);alert('Erro ao aplicar ajustes: '+e.message+'\n\nNenhuma alteração foi confirmada. Verifique as permissões do Firestore.');});
   }
 
   var buscaLc=busca.trim().toLowerCase();
@@ -5495,6 +5505,12 @@ function TabConferencia(props){
         <span style={{fontSize:11,fontWeight:700,color:cega?'#fff':'#64748B'}}>Às cegas</span>
       </button>
     </div>
+
+    {erro&&<div style={{background:'#FEF2F2',border:'1.5px solid #FECACA',borderRadius:12,padding:'11px 14px',marginBottom:12,display:'flex',alignItems:'flex-start',gap:8}}>
+      <span style={{fontSize:15,lineHeight:1.3}}>🚫</span>
+      <div style={{flex:1,fontSize:12,color:'#991B1B',lineHeight:1.5}}>{erro}</div>
+      <button onClick={function(){setErro('');}} style={{background:'none',border:'none',color:'#991B1B',cursor:'pointer',fontSize:15,lineHeight:1,padding:0}}>✕</button>
+    </div>}
 
     {/* Barra de progresso */}
     <div style={{background:'#fff',borderRadius:14,padding:'14px 16px',marginBottom:14,border:'1.5px solid #E2E8F0'}}>
