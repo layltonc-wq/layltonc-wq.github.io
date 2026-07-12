@@ -5282,6 +5282,218 @@ function TabPrevisao(props){
   );
 }
 
+// ===== Conferência de Estoque (contagem física colaborativa) =====
+function confKey(medId,lote,val){return (medId+'~'+(lote||'SEM')+'~'+(val||'SEM')).replace(/[^A-Za-z0-9_~-]/g,'_');}
+function TabConferencia(props){
+  var user=props.user;var medications=props.medications||[];var entries=props.entries||[];var stock=props.stock||{};
+  var CCOR={medicamento:'#1351B4',controlado:'#DC2626',injetavel:'#7C3AED',leite:'#D97706',penso:'#0891B2'};
+  var docRef=function(){return db.collection('conferencias').doc(todayStr());};
+  var _contagens=useState({});var contagens=_contagens[0];var setContagens=_contagens[1];
+  var _contadoPor=useState({});var contadoPor=_contadoPor[0];var setContadoPor=_contadoPor[1];
+  var _novosLotes=useState([]);var novosLotes=_novosLotes[0];var setNovosLotes=_novosLotes[1];
+  var _cega=useState(localStorage.getItem('fc_conf_cega')==='1');var cega=_cega[0];var setCega=_cega[1];
+  var _busca=useState('');var busca=_busca[0];var setBusca=_busca[1];
+  var _abertos=useState({});var abertos=_abertos[0];var setAbertos=_abertos[1];
+  var _catAberta=useState({medicamento:true});var catAberta=_catAberta[0];var setCatAberta=_catAberta[1];
+  var _novoForm=useState(null);var novoForm=_novoForm[0];var setNovoForm=_novoForm[1];// medId em edição
+  var _nlLote=useState('');var nlLote=_nlLote[0];var setNlLote=_nlLote[1];
+  var _nlVal=useState('');var nlVal=_nlVal[0];var setNlVal=_nlVal[1];
+  var _nlQty=useState('');var nlQty=_nlQty[0];var setNlQty=_nlQty[1];
+  var pendingRef=useRef({});var timersRef=useRef({});
+
+  useEffect(function(){
+    var unsub=docRef().onSnapshot(function(snap){
+      var data=snap.exists?snap.data():{};
+      var remote=data.contagens||{};
+      setContagens(function(prev){
+        var n=Object.assign({},prev);
+        Object.keys(remote).forEach(function(k){if(!pendingRef.current[k])n[k]=String(remote[k]);});
+        Object.keys(n).forEach(function(k){if(!(k in remote)&&!pendingRef.current[k])delete n[k];});
+        return n;
+      });
+      setContadoPor(data.contadoPor||{});
+      setNovosLotes(data.novosLotes||[]);
+    },function(){});
+    return unsub;
+  },[]);
+
+  function commitKey(key,valStr){
+    var done=function(){delete pendingRef.current[key];};
+    if(valStr===''){
+      // chaves são sanitizadas (sem pontos), então o caminho de campo é seguro; delete() aninhado exige update()
+      var del=firebase.firestore.FieldValue.delete();var u={};u['contagens.'+key]=del;u['contadoPor.'+key]=del;u['atualizadoEm']=new Date().toISOString();u['atualizadoPor']=user.name;
+      docRef().update(u).then(done).catch(done);
+    } else {
+      var contUpd={},porUpd={};contUpd[key]=parseInt(valStr)||0;porUpd[key]={nome:user.name,em:new Date().toISOString()};
+      docRef().set({contagens:contUpd,contadoPor:porUpd,atualizadoEm:new Date().toISOString(),atualizadoPor:user.name},{merge:true}).then(done).catch(done);
+    }
+  }
+  function onCount(key,raw){
+    var v=(raw||'').replace(/[^0-9]/g,'');
+    pendingRef.current[key]=Date.now();
+    setContagens(function(p){var n=Object.assign({},p);if(v==='')delete n[key];else n[key]=v;return n;});
+    if(timersRef.current[key])clearTimeout(timersRef.current[key]);
+    timersRef.current[key]=setTimeout(function(){commitKey(key,v);},600);
+  }
+  function addNovoLote(med){
+    var lote=nlLote.trim();var val=nlVal.trim();var qty=parseInt(nlQty)||0;
+    if(!lote){alert('Informe o número do lote.');return;}
+    if(qty<=0){alert('Informe a quantidade contada (maior que zero).');return;}
+    var obj={id:'nl_'+Date.now()+'_'+Math.floor(Math.random()*9999),medId:med.id,medNome:med.nome,lote:lote,validade:val,qty:qty,por:user.name,em:new Date().toISOString()};
+    docRef().set({novosLotes:firebase.firestore.FieldValue.arrayUnion(obj),atualizadoEm:new Date().toISOString(),atualizadoPor:user.name},{merge:true}).catch(function(e){alert('Erro: '+e.message);});
+    setNovoForm(null);setNlLote('');setNlVal('');setNlQty('');
+  }
+  function removeNovoLote(obj){
+    if(!confirm('Remover lote novo "'+obj.lote+'"?'))return;
+    docRef().update({novosLotes:firebase.firestore.FieldValue.arrayRemove(obj)}).catch(function(e){alert('Erro: '+e.message);});
+  }
+  function toggleCega(){var nv=!cega;setCega(nv);localStorage.setItem('fc_conf_cega',nv?'1':'0');}
+
+  // Computa lotes por medicamento (mesma lógica da aba Estoque)
+  var medList=useMemo(function(){
+    return medications.map(function(m){
+      var me=entries.filter(function(e){return e.medicamentoId===m.id&&e.tipo==='entrada'&&e.lote;});
+      var loteMap={};me.forEach(function(e){if(!e.lote)return;var lk=e.lote;if(!loteMap[lk])loteMap[lk]={lote:e.lote,validade:e.validade||'',entrada:0,saida:0};loteMap[lk].entrada+=(e.quantidade||0);if(e.validade&&!loteMap[lk].validade)loteMap[lk].validade=e.validade;});
+      var saidas=entries.filter(function(e){return e.medicamentoId===m.id&&e.tipo==='saida'&&e.lote;});
+      saidas.forEach(function(e){var lk=e.lote;if(loteMap[lk])loteMap[lk].saida+=(e.quantidade||0);});
+      var lotes=Object.keys(loteMap).map(function(k){var l=loteMap[k];return {lote:l.lote,validade:l.validade,qty:Math.max(0,l.entrada-l.saida)};}).filter(function(l){return l.qty>0;});
+      var est=stock[m.id]||0;
+      var totalLotado=lotes.reduce(function(s,l){return s+l.qty;},0);
+      var semLote=Math.max(0,est-totalLotado);
+      return {id:m.id,nome:m.nome,cat:m.categoria||'medicamento',est:est,lotes:lotes,semLote:semLote};
+    });
+  },[medications,entries,stock]);
+
+  function medKeys(m){var ks=[];m.lotes.forEach(function(l){ks.push(confKey(m.id,l.lote,l.validade));});if(m.semLote>0)ks.push(confKey(m.id,'__SEMLOTE__',''));return ks;}
+  function medConferido(m){
+    var ks=medKeys(m);
+    for(var i=0;i<ks.length;i++){if(contagens[ks[i]]!==undefined&&contagens[ks[i]]!=='')return true;}
+    for(var j=0;j<novosLotes.length;j++){if(novosLotes[j].medId===m.id)return true;}
+    return false;
+  }
+
+  var buscaLc=busca.trim().toLowerCase();
+  var filtrada=buscaLc?medList.filter(function(m){return m.nome.toLowerCase().indexOf(buscaLc)>=0;}):medList;
+  var totalItens=filtrada.length;
+  var conferidos=filtrada.filter(medConferido).length;
+  var pct=totalItens>0?Math.round((conferidos/totalItens)*100):0;
+
+  var cats=Object.keys(TIPOS);
+  var grupos=cats.map(function(cat){return {cat:cat,meds:filtrada.filter(function(m){return (m.cat||'medicamento')===cat;}).sort(function(a,b){return a.nome.localeCompare(b.nome);})};}).filter(function(g){return g.meds.length>0;});
+
+  return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
+    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,marginBottom:12}}>
+      <div>
+        <div style={{fontWeight:800,fontSize:18,color:'#1E293B'}}>🧾 Conferência de Estoque</div>
+        <div style={{fontSize:11,color:'#94A3B8'}}>Contagem física · {todayStr().split('-').reverse().join('/')}</div>
+      </div>
+      <button onClick={toggleCega} style={{display:'flex',alignItems:'center',gap:6,background:cega?'#1351B4':'#F1F5F9',border:'1.5px solid '+(cega?'#1351B4':'#E2E8F0'),borderRadius:20,padding:'7px 12px',cursor:'pointer'}}>
+        <span style={{fontSize:14}}>{cega?'🙈':'👁️'}</span>
+        <span style={{fontSize:11,fontWeight:700,color:cega?'#fff':'#64748B'}}>Às cegas</span>
+      </button>
+    </div>
+
+    {/* Barra de progresso */}
+    <div style={{background:'#fff',borderRadius:14,padding:'14px 16px',marginBottom:14,border:'1.5px solid #E2E8F0'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:8}}>
+        <span style={{fontSize:13,fontWeight:700,color:'#1E293B'}}>{conferidos} de {totalItens} itens conferidos</span>
+        <span style={{fontSize:13,fontWeight:800,color:pct===100&&totalItens>0?'#0C6B3E':'#1351B4'}}>{pct}%</span>
+      </div>
+      <div style={{height:10,background:'#F1F5F9',borderRadius:99,overflow:'hidden'}}>
+        <div style={{height:'100%',width:pct+'%',background:pct===100&&totalItens>0?'linear-gradient(90deg,#0C6B3E,#22C55E)':'linear-gradient(90deg,#1351B4,#3B82F6)',borderRadius:99,transition:'width .3s ease'}}/>
+      </div>
+    </div>
+
+    <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="🔍 Buscar medicamento..." className="inp" style={{marginBottom:14}}/>
+
+    {grupos.length===0&&<div style={{textAlign:'center',padding:32,color:'#94A3B8',fontSize:13}}>Nenhum medicamento encontrado.</div>}
+
+    {grupos.map(function(g){
+      var t=TIPOS[g.cat]||TIPOS.medicamento;var cor=CCOR[g.cat]||'#1351B4';
+      var confCat=g.meds.filter(medConferido).length;
+      var open=catAberta[g.cat];
+      return(<div key={g.cat} style={{marginBottom:12}}>
+        <button onClick={function(){setCatAberta(function(p){var n=Object.assign({},p);n[g.cat]=!open;return n;});}} style={{width:'100%',display:'flex',alignItems:'center',gap:10,background:cor,border:'none',borderRadius:open?'12px 12px 0 0':'12px',padding:'11px 14px',cursor:'pointer',textAlign:'left'}}>
+          <span style={{fontSize:19}}>{t.icon}</span>
+          <span style={{flex:1,fontWeight:700,fontSize:14,color:'#fff'}}>{t.label}</span>
+          <span style={{fontSize:11,fontWeight:700,color:'#fff',background:'rgba(255,255,255,.22)',borderRadius:99,padding:'2px 9px'}}>{confCat}/{g.meds.length}</span>
+          <span style={{fontSize:13,color:'#fff'}}>{open?'▲':'▼'}</span>
+        </button>
+        {open&&<div style={{border:'1.5px solid '+cor,borderTop:'none',borderRadius:'0 0 12px 12px',padding:'8px',background:'#F8FAFC'}}>
+          {g.meds.map(function(m){
+            var conf=medConferido(m);var exp=abertos[m.id];
+            var nlDoMed=novosLotes.filter(function(x){return x.medId===m.id;});
+            return(<div key={m.id} style={{marginBottom:6,background:'#fff',borderRadius:10,border:'1.5px solid '+(conf?'#BBF7D0':'#E2E8F0'),overflow:'hidden'}}>
+              <button onClick={function(){setAbertos(function(p){var n=Object.assign({},p);n[m.id]=!exp;return n;});}} style={{width:'100%',display:'flex',alignItems:'center',gap:10,background:'none',border:'none',padding:'11px 12px',cursor:'pointer',textAlign:'left'}}>
+                <span style={{fontSize:16}}>{conf?'✅':'⬜'}</span>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontWeight:600,fontSize:13,color:'#1E293B',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{m.nome}</div>
+                  <div style={{fontSize:10,color:'#94A3B8'}}>{m.lotes.length+(m.semLote>0?1:0)} lote(s){!cega&&' · sistema: '+m.est+' un.'}</div>
+                </div>
+                <span style={{fontSize:13,color:'#94A3B8'}}>{exp?'▲':'▼'}</span>
+              </button>
+              {exp&&<div style={{padding:'0 12px 12px'}}>
+                {m.lotes.length===0&&m.semLote===0&&<div style={{fontSize:12,color:'#94A3B8',padding:'6px 0'}}>Sem estoque registrado no sistema.</div>}
+                {m.lotes.map(function(l,li){
+                  var key=confKey(m.id,l.lote,l.validade);
+                  var val=contagens[key];var cont=val===undefined?'':val;
+                  var diff=cont!==''?(parseInt(cont)||0)-l.qty:null;
+                  return(<div key={li} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 0',borderTop:li>0?'1px solid #F1F5F9':'none'}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:12,fontWeight:700,color:'#334155'}}>Lote {l.lote||'—'}</div>
+                      <div style={{fontSize:10,color:'#94A3B8'}}>{l.validade?'Val '+l.validade:'sem validade'}{!cega&&' · sistema: '+l.qty+' un.'}{!cega&&diff!==null&&diff!==0&&<span style={{color:diff>0?'#0C6B3E':'#DC2626',fontWeight:700}}>{' · '+(diff>0?'+':'')+diff}</span>}</div>
+                    </div>
+                    <input value={cont} onChange={function(e){onCount(key,e.target.value);}} inputMode="numeric" placeholder="0" style={{width:66,padding:'8px 6px',border:'1.5px solid '+(cont!==''?'#1351B4':'#CBD5E1'),borderRadius:8,fontSize:16,fontWeight:700,textAlign:'center',outline:'none'}}/>
+                  </div>);
+                })}
+                {m.semLote>0&&(function(){
+                  var key=confKey(m.id,'__SEMLOTE__','');var val=contagens[key];var cont=val===undefined?'':val;
+                  var diff=cont!==''?(parseInt(cont)||0)-m.semLote:null;
+                  return(<div style={{display:'flex',alignItems:'center',gap:10,padding:'8px 0',borderTop:m.lotes.length>0?'1px solid #F1F5F9':'none'}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:12,fontWeight:700,color:'#334155'}}>Sem lote</div>
+                      <div style={{fontSize:10,color:'#94A3B8'}}>unidades sem lote/validade{!cega&&' · sistema: '+m.semLote+' un.'}{!cega&&diff!==null&&diff!==0&&<span style={{color:diff>0?'#0C6B3E':'#DC2626',fontWeight:700}}>{' · '+(diff>0?'+':'')+diff}</span>}</div>
+                    </div>
+                    <input value={cont} onChange={function(e){onCount(key,e.target.value);}} inputMode="numeric" placeholder="0" style={{width:66,padding:'8px 6px',border:'1.5px solid '+(cont!==''?'#1351B4':'#CBD5E1'),borderRadius:8,fontSize:16,fontWeight:700,textAlign:'center',outline:'none'}}/>
+                  </div>);
+                })()}
+                {nlDoMed.map(function(nl){return(
+                  <div key={nl.id} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 10px',marginTop:6,background:'#EFF6FF',borderRadius:8,border:'1px dashed #93C5FD'}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:12,fontWeight:700,color:'#1351B4'}}>🆕 Lote {nl.lote}</div>
+                      <div style={{fontSize:10,color:'#64748B'}}>{nl.validade?'Val '+nl.validade+' · ':''}contado: {nl.qty} un.{nl.por?' · '+nl.por:''}</div>
+                    </div>
+                    <button onClick={function(){removeNovoLote(nl);}} style={{background:'none',border:'none',color:'#DC2626',cursor:'pointer',fontSize:16,padding:'0 4px'}} title="Remover">×</button>
+                  </div>
+                );})}
+                {novoForm===m.id
+                  ?<div style={{marginTop:8,background:'#F0F9FF',borderRadius:10,padding:'10px 12px',border:'1.5px solid #93C5FD'}}>
+                    <div style={{fontSize:12,fontWeight:700,color:'#1351B4',marginBottom:8}}>🆕 Novo lote encontrado</div>
+                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+                      <div><div style={{fontSize:10,color:'#64748B',fontWeight:600,marginBottom:2}}>LOTE *</div><input value={nlLote} onChange={function(e){setNlLote(e.target.value);}} placeholder="Ex: ABC123" style={{width:'100%',padding:'8px',borderRadius:7,border:'1.5px solid #CBD5E1',fontSize:13,boxSizing:'border-box'}}/></div>
+                      <div><div style={{fontSize:10,color:'#64748B',fontWeight:600,marginBottom:2}}>VALIDADE</div><input value={nlVal} onChange={function(e){setNlVal(e.target.value);}} placeholder="MM/AAAA" style={{width:'100%',padding:'8px',borderRadius:7,border:'1.5px solid #CBD5E1',fontSize:13,boxSizing:'border-box'}}/></div>
+                    </div>
+                    <div style={{marginBottom:8}}>
+                      <div style={{fontSize:10,color:'#64748B',fontWeight:600,marginBottom:2}}>QUANTIDADE CONTADA *</div>
+                      <input value={nlQty} onChange={function(e){setNlQty(e.target.value.replace(/[^0-9]/g,''));}} inputMode="numeric" placeholder="0" style={{width:'100%',padding:'8px',borderRadius:7,border:'1.5px solid #CBD5E1',fontSize:16,fontWeight:700,textAlign:'center',boxSizing:'border-box'}}/>
+                    </div>
+                    <div style={{display:'flex',gap:8}}>
+                      <button onClick={function(){setNovoForm(null);setNlLote('');setNlVal('');setNlQty('');}} style={{flex:1,padding:'8px',background:'#F1F5F9',border:'none',borderRadius:8,fontWeight:600,fontSize:12,cursor:'pointer'}}>Cancelar</button>
+                      <button onClick={function(){addNovoLote(m);}} style={{flex:2,padding:'8px',background:'#1351B4',border:'none',borderRadius:8,color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>✅ Adicionar lote</button>
+                    </div>
+                  </div>
+                  :<button onClick={function(){setNovoForm(m.id);setNlLote('');setNlVal('');setNlQty('');}} style={{marginTop:8,width:'100%',padding:'9px',background:'#EFF6FF',border:'1.5px dashed #93C5FD',borderRadius:8,color:'#1351B4',fontWeight:700,fontSize:12,cursor:'pointer'}}>+ Achei um lote novo</button>
+                }
+              </div>}
+            </div>);
+          })}
+        </div>}
+      </div>);
+    })}
+    <div style={{textAlign:'center',fontSize:10,color:'#CBD5E1',marginTop:8}}>Progresso salvo automaticamente · colaborativo em tempo real</div>
+  </div>);
+}
+
 function App(){
 var {confirm2,alert2,ModalRender,modal}=useModal();
 var _ready=useState(false);var ready=_ready[0];var setReady=_ready[1];var _user=useState(null);var user=_user[0];var setUser=_user[1];var _entries=useState([]);var entries=_entries[0];var setEntries=_entries[1];var _meds=useState([]);var meds=_meds[0];var setMeds=_meds[1];var _loading=useState(true);var loading=_loading[0];var setLoading=_loading[1];var _tab=useState('dashboard');var tab=_tab[0];var setTab=_tab[1];var _menuAberto=useState(false);var menuAberto=_menuAberto[0];var setMenuAberto=_menuAberto[1];var _showSairModal=useState(false);var showSairModal=_showSairModal[0];var setShowSairModal=_showSairModal[1];var _pending=useState(0);var pending=_pending[0];var setPending=_pending[1];var _alertCount=useState(0);var alertCount=_alertCount[0];var setAlertCount=_alertCount[1];
@@ -5605,6 +5817,7 @@ return(
         {tab==='saida'&&<TabSaida user={user} medications={meds} stock={stock} entries={entries} onSave={addEntry} onSolicitar={addSolicitacao} latest={latest} isGuest={isGuest} canMove={canMove} confirm2={confirm2} alert2={alert2}/>}
         {tab==='entrada'&&<TabEntrada user={user} medications={meds} entries={entries} onSave={addEntry} onSolicitar={addSolicitacao} isGuest={isGuest} canMove={canMove} confirm2={confirm2} alert2={alert2}/>}
         {tab==='estoque'&&<TabEstoque user={user} medications={meds} entries={entries} stock={stock} onSave={addEntry} confirm2={confirm2} alert2={alert2}/>}
+        {tab==='conferencia'&&<ErrBoundary><TabConferencia user={user} medications={meds} entries={entries} stock={stock}/></ErrBoundary>}
         {tab==='relatorio'&&<TabRelatorio entries={entries} medications={meds} db={db} user={user}/>}
         {tab==='gestao'&&can(user.role,'gestao')&&<TabGestao currentUser={user} entries={entries}/>}
         {tab==='log'&&can(user.role,'log')&&<TabLog/>}
@@ -5651,6 +5864,7 @@ return(
           <div style={{flex:1,overflowY:'auto',padding:'8px 0'}}>
             {[
               {id:'estoque',icon:'📦',label:'Estoque',show:true},
+              {id:'conferencia',icon:'🧾',label:'Conferência',show:true},
               {id:'leites',icon:'🍼',label:'Leites',show:true},
               {id:'relatorio',icon:'📊',label:'Relatório',show:true},
               {id:'gestao',icon:'👥',label:'Gestão',badge:badge,show:can(user.role,'gestao')},
@@ -5697,7 +5911,7 @@ return(
             <div style={{fontSize:11,color:'rgba(255,255,255,0.5)',marginTop:2}}>{ROLES[user.role]||user.role}</div>
           </div>
           <div style={{flex:1,overflowY:'auto',padding:'8px 0'}}>
-            {[{id:'estoque',icon:'📦',label:'Estoque'},{id:'leites',icon:'🍼',label:'Leites'},{id:'relatorio',icon:'📊',label:'Relatório'}].map(function(t){return(
+            {[{id:'estoque',icon:'📦',label:'Estoque'},{id:'conferencia',icon:'🧾',label:'Conferência'},{id:'leites',icon:'🍼',label:'Leites'},{id:'relatorio',icon:'📊',label:'Relatório'}].map(function(t){return(
               <button key={t.id} onClick={function(){setTab(t.id);setMenuAberto(false);}} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'13px 20px',border:'none',background:tab===t.id?'#EFF6FF':'transparent',cursor:'pointer',borderLeft:tab===t.id?'3px solid #1351B4':'3px solid transparent'}}>
                 <span style={{fontSize:20}}>{t.icon}</span>
                 <span style={{fontSize:14,fontWeight:tab===t.id?700:500,color:tab===t.id?'#1351B4':'#1E293B'}}>{t.label}</span>
