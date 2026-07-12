@@ -5301,6 +5301,9 @@ function TabConferencia(props){
   var _nlQty=useState('');var nlQty=_nlQty[0];var setNlQty=_nlQty[1];
   var _showResumo=useState(false);var showResumo=_showResumo[0];var setShowResumo=_showResumo[1];
   var _aplicando=useState(false);var aplicando=_aplicando[0];var setAplicando=_aplicando[1];
+  var _recontagens=useState([]);var recontagens=_recontagens[0];var setRecontagens=_recontagens[1];
+  var _acheiForm=useState(null);var acheiForm=_acheiForm[0];var setAcheiForm=_acheiForm[1];// key da linha em edição
+  var _acheiQty=useState('');var acheiQty=_acheiQty[0];var setAcheiQty=_acheiQty[1];
   var pendingRef=useRef({});var timersRef=useRef({});
 
   useEffect(function(){
@@ -5315,9 +5318,26 @@ function TabConferencia(props){
       });
       setContadoPor(data.contadoPor||{});
       setNovosLotes(data.novosLotes||[]);
+      setRecontagens(data.recontagens||[]);
     },function(){});
     return unsub;
   },[]);
+
+  // "Achei mais": soma unidades a um lote já contado, sem gerar divergência nova — fica registrado como recontagem
+  function acheiMais(key,med,lote,validade){
+    var found=parseInt(acheiQty)||0;
+    if(found<=0){alert('Informe quantas unidades você encontrou.');return;}
+    var atual=parseInt(contagens[key]||'0')||0;var novo=atual+found;var now=new Date().toISOString();
+    var rec={id:'rc_'+Date.now()+'_'+Math.floor(Math.random()*9999),key:key,medId:med.id,medNome:med.nome,lote:lote||'',validade:validade||'',qty:found,por:user.name,em:now};
+    var contUpd={},porUpd={};contUpd[key]=novo;porUpd[key]={nome:user.name,em:now};
+    pendingRef.current[key]=Date.now();
+    setContagens(function(p){var n=Object.assign({},p);n[key]=String(novo);return n;});
+    docRef().set({contagens:contUpd,contadoPor:porUpd,recontagens:firebase.firestore.FieldValue.arrayUnion(rec),atualizadoEm:now,atualizadoPor:user.name},{merge:true})
+      .then(function(){delete pendingRef.current[key];}).catch(function(e){delete pendingRef.current[key];alert('Erro: '+e.message);});
+    setAcheiForm(null);setAcheiQty('');
+  }
+  // total de recontagem por chave de lote
+  var recByKey=useMemo(function(){var m={};(recontagens||[]).forEach(function(r){if(!m[r.key])m[r.key]={total:0,list:[]};m[r.key].total+=(Number(r.qty)||0);m[r.key].list.push(r);});return m;},[recontagens]);
 
   function commitKey(key,valStr){
     var done=function(){delete pendingRef.current[key];};
@@ -5382,22 +5402,22 @@ function TabConferencia(props){
       m.lotes.forEach(function(l){
         var key=confKey(m.id,l.lote,l.validade);var raw=contagens[key];
         if(raw===undefined||raw==='')return;
-        var contado=parseInt(raw)||0;
-        itens.push({medId:m.id,medNome:m.nome,cat:m.cat,lote:l.lote,validade:l.validade,sistema:l.qty,contado:contado,diff:contado-l.qty,novo:false,semLote:false});
+        var contado=parseInt(raw)||0;var rc=recByKey[key]?recByKey[key].total:0;
+        itens.push({medId:m.id,medNome:m.nome,cat:m.cat,lote:l.lote,validade:l.validade,sistema:l.qty,contado:contado,diff:contado-l.qty,novo:false,semLote:false,recontagem:rc});
       });
       if(m.semLote>0){
         var keyS=confKey(m.id,'__SEMLOTE__','');var rawS=contagens[keyS];
-        if(rawS!==undefined&&rawS!==''){var contadoS=parseInt(rawS)||0;itens.push({medId:m.id,medNome:m.nome,cat:m.cat,lote:'',validade:'',sistema:m.semLote,contado:contadoS,diff:contadoS-m.semLote,novo:false,semLote:true});}
+        if(rawS!==undefined&&rawS!==''){var contadoS=parseInt(rawS)||0;var rcS=recByKey[keyS]?recByKey[keyS].total:0;itens.push({medId:m.id,medNome:m.nome,cat:m.cat,lote:'',validade:'',sistema:m.semLote,contado:contadoS,diff:contadoS-m.semLote,novo:false,semLote:true,recontagem:rcS});}
       }
     });
     novosLotes.forEach(function(nl){
-      itens.push({medId:nl.medId,medNome:nl.medNome,cat:catById[nl.medId]||'medicamento',lote:nl.lote,validade:nl.validade||'',sistema:0,contado:nl.qty,diff:nl.qty,novo:true,semLote:false});
+      itens.push({medId:nl.medId,medNome:nl.medNome,cat:catById[nl.medId]||'medicamento',lote:nl.lote,validade:nl.validade||'',sistema:0,contado:nl.qty,diff:nl.qty,novo:true,semLote:false,recontagem:0});
     });
     // divergências primeiro, depois por nome
     itens.sort(function(a,b){var da=a.diff===0?1:0,db2=b.diff===0?1:0;if(da!==db2)return da-db2;return a.medNome.localeCompare(b.medNome);});
     var ajustes=itens.filter(function(i){return i.diff!==0;});
     return {itens:itens,total:itens.length,bateram:itens.length-ajustes.length,divergiram:ajustes.length,ajustes:ajustes};
-  },[medList,contagens,novosLotes]);
+  },[medList,contagens,novosLotes,recByKey]);
 
   function aplicarAjustes(){
     var lista=resumo.ajustes;
@@ -5408,7 +5428,7 @@ function TabConferencia(props){
     lista.forEach(function(it){
       var ref=db.collection('entries').doc();
       // observação com "balanç" e "(era X, passou a Y)" + isAjuste => fora do ranking (ver _ehSaidaNaoReal)
-      var obs='Balanço (conferência '+todayStr()+'): '+(it.novo?'lote novo encontrado — ':'')+'(era '+it.sistema+', passou a '+it.contado+')';
+      var obs='Balanço (conferência '+todayStr()+'): '+(it.novo?'lote novo encontrado — ':'')+'(era '+it.sistema+', passou a '+it.contado+')'+(it.recontagem>0?' — inclui '+it.recontagem+' un. encontrada(s) em recontagem':'');
       batch.set(ref,{
         medicamentoId:it.medId,medicamentoNome:it.medNome,
         tipo:it.diff>0?'entrada':'saida',quantidade:Math.abs(it.diff),
@@ -5422,7 +5442,7 @@ function TabConferencia(props){
       // Zera a conferência ativa: os ajustes já corrigiram o estoque (evita reaplicar lotes novos)
       return docRef().set({contagens:{},contadoPor:{},novosLotes:[],aplicadoEm:now,aplicadoPor:user.name,atualizadoEm:now,atualizadoPor:user.name});
     }).then(function(){
-      setContagens({});setNovosLotes([]);setContadoPor({});pendingRef.current={};
+      setContagens({});setNovosLotes([]);setContadoPor({});setRecontagens([]);pendingRef.current={};
       setAplicando(false);setShowResumo(false);
       alert('✅ '+lista.length+' ajuste(s) de estoque aplicado(s). Estoque atualizado.');
     }).catch(function(e){setAplicando(false);alert('Erro ao aplicar ajustes: '+e.message);});
@@ -5436,6 +5456,33 @@ function TabConferencia(props){
 
   var cats=Object.keys(TIPOS);
   var grupos=cats.map(function(cat){return {cat:cat,meds:filtrada.filter(function(m){return (m.cat||'medicamento')===cat;}).sort(function(a,b){return a.nome.localeCompare(b.nome);})};}).filter(function(g){return g.meds.length>0;});
+
+  // Renderiza uma linha de lote com campo de contagem, histórico de recontagem e botão "Achei mais"
+  function loteRow(o){
+    var key=o.key;var val=contagens[key];var cont=val===undefined?'':val;
+    var diff=cont!==''?(parseInt(cont)||0)-o.sistema:null;
+    var rc=recByKey[key];var jaContado=cont!=='';
+    return(<div key={key} style={{padding:'8px 0',borderTop:o.topBorder?'1px solid #F1F5F9':'none'}}>
+      <div style={{display:'flex',alignItems:'center',gap:10}}>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:12,fontWeight:700,color:'#334155'}}>{o.titulo}</div>
+          <div style={{fontSize:10,color:'#94A3B8'}}>{o.sub}{!cega&&' · sistema: '+o.sistema+' un.'}{!cega&&diff!==null&&diff!==0&&<span style={{color:diff>0?'#0C6B3E':'#DC2626',fontWeight:700}}>{' · '+(diff>0?'+':'')+diff}</span>}</div>
+        </div>
+        <input value={cont} onChange={function(e){onCount(key,e.target.value);}} inputMode="numeric" placeholder="0" style={{width:66,padding:'8px 6px',border:'1.5px solid '+(cont!==''?'#1351B4':'#CBD5E1'),borderRadius:8,fontSize:16,fontWeight:700,textAlign:'center',outline:'none'}}/>
+      </div>
+      {rc&&rc.total>0&&<div style={{marginTop:6,background:'#FFFBEB',border:'1px solid #FDE68A',borderRadius:8,padding:'6px 9px'}}>
+        {rc.list.map(function(r,ri){return(<div key={ri} style={{fontSize:10,color:'#92400E'}}>🔎 +{r.qty} un. em recontagem · {r.por}{r.em?' · '+fmtD(r.em)+' '+fmtT(r.em):''}</div>);})}
+      </div>}
+      {jaContado&&(acheiForm===key
+        ?<div style={{marginTop:6,display:'flex',gap:8,alignItems:'center'}}>
+          <input value={acheiQty} onChange={function(e){setAcheiQty(e.target.value.replace(/[^0-9]/g,''));}} inputMode="numeric" placeholder="Qtd encontrada" style={{flex:1,padding:'8px',borderRadius:7,border:'1.5px solid #F59E0B',fontSize:14,fontWeight:700,textAlign:'center',boxSizing:'border-box'}}/>
+          <button onClick={function(){setAcheiForm(null);setAcheiQty('');}} style={{padding:'8px 10px',background:'#F1F5F9',border:'none',borderRadius:7,fontSize:12,fontWeight:600,cursor:'pointer'}}>✕</button>
+          <button onClick={function(){acheiMais(key,o.med,o.lote,o.validade);}} style={{padding:'8px 12px',background:'#F59E0B',border:'none',borderRadius:7,color:'#fff',fontSize:12,fontWeight:700,cursor:'pointer'}}>+ Somar</button>
+        </div>
+        :<button onClick={function(){setAcheiForm(key);setAcheiQty('');}} style={{marginTop:6,background:'none',border:'none',color:'#B45309',fontSize:11,fontWeight:700,cursor:'pointer',padding:'2px 0'}}>🔎 Achei mais</button>
+      )}
+    </div>);
+  }
 
   return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
     <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,marginBottom:12}}>
@@ -5491,29 +5538,8 @@ function TabConferencia(props){
               </button>
               {exp&&<div style={{padding:'0 12px 12px'}}>
                 {m.lotes.length===0&&m.semLote===0&&<div style={{fontSize:12,color:'#94A3B8',padding:'6px 0'}}>Sem estoque registrado no sistema.</div>}
-                {m.lotes.map(function(l,li){
-                  var key=confKey(m.id,l.lote,l.validade);
-                  var val=contagens[key];var cont=val===undefined?'':val;
-                  var diff=cont!==''?(parseInt(cont)||0)-l.qty:null;
-                  return(<div key={li} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 0',borderTop:li>0?'1px solid #F1F5F9':'none'}}>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontSize:12,fontWeight:700,color:'#334155'}}>Lote {l.lote||'—'}</div>
-                      <div style={{fontSize:10,color:'#94A3B8'}}>{l.validade?'Val '+l.validade:'sem validade'}{!cega&&' · sistema: '+l.qty+' un.'}{!cega&&diff!==null&&diff!==0&&<span style={{color:diff>0?'#0C6B3E':'#DC2626',fontWeight:700}}>{' · '+(diff>0?'+':'')+diff}</span>}</div>
-                    </div>
-                    <input value={cont} onChange={function(e){onCount(key,e.target.value);}} inputMode="numeric" placeholder="0" style={{width:66,padding:'8px 6px',border:'1.5px solid '+(cont!==''?'#1351B4':'#CBD5E1'),borderRadius:8,fontSize:16,fontWeight:700,textAlign:'center',outline:'none'}}/>
-                  </div>);
-                })}
-                {m.semLote>0&&(function(){
-                  var key=confKey(m.id,'__SEMLOTE__','');var val=contagens[key];var cont=val===undefined?'':val;
-                  var diff=cont!==''?(parseInt(cont)||0)-m.semLote:null;
-                  return(<div style={{display:'flex',alignItems:'center',gap:10,padding:'8px 0',borderTop:m.lotes.length>0?'1px solid #F1F5F9':'none'}}>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontSize:12,fontWeight:700,color:'#334155'}}>Sem lote</div>
-                      <div style={{fontSize:10,color:'#94A3B8'}}>unidades sem lote/validade{!cega&&' · sistema: '+m.semLote+' un.'}{!cega&&diff!==null&&diff!==0&&<span style={{color:diff>0?'#0C6B3E':'#DC2626',fontWeight:700}}>{' · '+(diff>0?'+':'')+diff}</span>}</div>
-                    </div>
-                    <input value={cont} onChange={function(e){onCount(key,e.target.value);}} inputMode="numeric" placeholder="0" style={{width:66,padding:'8px 6px',border:'1.5px solid '+(cont!==''?'#1351B4':'#CBD5E1'),borderRadius:8,fontSize:16,fontWeight:700,textAlign:'center',outline:'none'}}/>
-                  </div>);
-                })()}
+                {m.lotes.map(function(l,li){return loteRow({key:confKey(m.id,l.lote,l.validade),titulo:'Lote '+(l.lote||'—'),sub:(l.validade?'Val '+l.validade:'sem validade'),sistema:l.qty,med:m,lote:l.lote,validade:l.validade,topBorder:li>0});})}
+                {m.semLote>0&&loteRow({key:confKey(m.id,'__SEMLOTE__',''),titulo:'Sem lote',sub:'unidades sem lote/validade',sistema:m.semLote,med:m,lote:'',validade:'',topBorder:m.lotes.length>0})}
                 {nlDoMed.map(function(nl){return(
                   <div key={nl.id} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 10px',marginTop:6,background:'#EFF6FF',borderRadius:8,border:'1px dashed #93C5FD'}}>
                     <div style={{flex:1,minWidth:0}}>
@@ -5582,6 +5608,7 @@ function TabConferencia(props){
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:13,fontWeight:700,color:'#1E293B',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{it.medNome}</div>
                 <div style={{fontSize:10,color:'#64748B'}}>{loteLbl}{it.validade?' · Val '+it.validade:''}</div>
+                {it.recontagem>0&&<div style={{fontSize:10,color:'#B45309',fontWeight:700,marginTop:1}}>🔎 inclui {it.recontagem} un. em recontagem</div>}
               </div>
               <div style={{textAlign:'right',flexShrink:0}}>
                 <div style={{fontSize:11,color:'#64748B'}}>{it.sistema} → <strong style={{color:'#1E293B'}}>{it.contado}</strong></div>
