@@ -5299,6 +5299,8 @@ function TabConferencia(props){
   var _nlLote=useState('');var nlLote=_nlLote[0];var setNlLote=_nlLote[1];
   var _nlVal=useState('');var nlVal=_nlVal[0];var setNlVal=_nlVal[1];
   var _nlQty=useState('');var nlQty=_nlQty[0];var setNlQty=_nlQty[1];
+  var _showResumo=useState(false);var showResumo=_showResumo[0];var setShowResumo=_showResumo[1];
+  var _aplicando=useState(false);var aplicando=_aplicando[0];var setAplicando=_aplicando[1];
   var pendingRef=useRef({});var timersRef=useRef({});
 
   useEffect(function(){
@@ -5372,6 +5374,60 @@ function TabConferencia(props){
     return false;
   }
 
+  // Resumo de divergências: compara contado x sistema, lote a lote (só o que foi contado)
+  var resumo=useMemo(function(){
+    var catById={};medList.forEach(function(m){catById[m.id]=m.cat;});
+    var itens=[];
+    medList.forEach(function(m){
+      m.lotes.forEach(function(l){
+        var key=confKey(m.id,l.lote,l.validade);var raw=contagens[key];
+        if(raw===undefined||raw==='')return;
+        var contado=parseInt(raw)||0;
+        itens.push({medId:m.id,medNome:m.nome,cat:m.cat,lote:l.lote,validade:l.validade,sistema:l.qty,contado:contado,diff:contado-l.qty,novo:false,semLote:false});
+      });
+      if(m.semLote>0){
+        var keyS=confKey(m.id,'__SEMLOTE__','');var rawS=contagens[keyS];
+        if(rawS!==undefined&&rawS!==''){var contadoS=parseInt(rawS)||0;itens.push({medId:m.id,medNome:m.nome,cat:m.cat,lote:'',validade:'',sistema:m.semLote,contado:contadoS,diff:contadoS-m.semLote,novo:false,semLote:true});}
+      }
+    });
+    novosLotes.forEach(function(nl){
+      itens.push({medId:nl.medId,medNome:nl.medNome,cat:catById[nl.medId]||'medicamento',lote:nl.lote,validade:nl.validade||'',sistema:0,contado:nl.qty,diff:nl.qty,novo:true,semLote:false});
+    });
+    // divergências primeiro, depois por nome
+    itens.sort(function(a,b){var da=a.diff===0?1:0,db2=b.diff===0?1:0;if(da!==db2)return da-db2;return a.medNome.localeCompare(b.medNome);});
+    var ajustes=itens.filter(function(i){return i.diff!==0;});
+    return {itens:itens,total:itens.length,bateram:itens.length-ajustes.length,divergiram:ajustes.length,ajustes:ajustes};
+  },[medList,contagens,novosLotes]);
+
+  function aplicarAjustes(){
+    var lista=resumo.ajustes;
+    if(lista.length===0){setShowResumo(false);return;}
+    setAplicando(true);
+    var now=new Date().toISOString();
+    var batch=db.batch();
+    lista.forEach(function(it){
+      var ref=db.collection('entries').doc();
+      // observação com "balanç" e "(era X, passou a Y)" + isAjuste => fora do ranking (ver _ehSaidaNaoReal)
+      var obs='Balanço (conferência '+todayStr()+'): '+(it.novo?'lote novo encontrado — ':'')+'(era '+it.sistema+', passou a '+it.contado+')';
+      batch.set(ref,{
+        medicamentoId:it.medId,medicamentoNome:it.medNome,
+        tipo:it.diff>0?'entrada':'saida',quantidade:Math.abs(it.diff),
+        lote:it.lote||'',validade:it.validade||'',
+        observacao:obs,isAjuste:true,conferencia:todayStr(),
+        criadoEm:now,date:todayStr(),
+        autorId:user.uid||'',autorNome:user.name,autorCargo:user.role||'',autorColor:user.color||B
+      });
+    });
+    batch.commit().then(function(){
+      // Zera a conferência ativa: os ajustes já corrigiram o estoque (evita reaplicar lotes novos)
+      return docRef().set({contagens:{},contadoPor:{},novosLotes:[],aplicadoEm:now,aplicadoPor:user.name,atualizadoEm:now,atualizadoPor:user.name});
+    }).then(function(){
+      setContagens({});setNovosLotes([]);setContadoPor({});pendingRef.current={};
+      setAplicando(false);setShowResumo(false);
+      alert('✅ '+lista.length+' ajuste(s) de estoque aplicado(s). Estoque atualizado.');
+    }).catch(function(e){setAplicando(false);alert('Erro ao aplicar ajustes: '+e.message);});
+  }
+
   var buscaLc=busca.trim().toLowerCase();
   var filtrada=buscaLc?medList.filter(function(m){return m.nome.toLowerCase().indexOf(buscaLc)>=0;}):medList;
   var totalItens=filtrada.length;
@@ -5402,6 +5458,7 @@ function TabConferencia(props){
       <div style={{height:10,background:'#F1F5F9',borderRadius:99,overflow:'hidden'}}>
         <div style={{height:'100%',width:pct+'%',background:pct===100&&totalItens>0?'linear-gradient(90deg,#0C6B3E,#22C55E)':'linear-gradient(90deg,#1351B4,#3B82F6)',borderRadius:99,transition:'width .3s ease'}}/>
       </div>
+      <button onClick={function(){setShowResumo(true);}} disabled={resumo.total===0} style={{marginTop:12,width:'100%',padding:'11px',background:resumo.total===0?'#E2E8F0':'#0C6B3E',border:'none',borderRadius:10,color:resumo.total===0?'#94A3B8':'#fff',fontWeight:700,fontSize:13,cursor:resumo.total===0?'default':'pointer'}}>✅ Finalizar e ver divergências{resumo.divergiram>0?' ('+resumo.divergiram+')':''}</button>
     </div>
 
     <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="🔍 Buscar medicamento..." className="inp" style={{marginBottom:14}}/>
@@ -5491,6 +5548,63 @@ function TabConferencia(props){
       </div>);
     })}
     <div style={{textAlign:'center',fontSize:10,color:'#CBD5E1',marginTop:8}}>Progresso salvo automaticamente · colaborativo em tempo real</div>
+
+    {showResumo&&<div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.7)',zIndex:9999,display:'flex',alignItems:'flex-end',justifyContent:'center',backdropFilter:'blur(4px)'}} onClick={function(){if(!aplicando)setShowResumo(false);}}>
+      <div onClick={function(e){e.stopPropagation();}} style={{background:'#F8FAFC',borderRadius:'22px 22px 0 0',width:'100%',maxWidth:700,maxHeight:'88vh',display:'flex',flexDirection:'column',boxShadow:'0 -12px 48px rgba(0,0,0,0.3)'}}>
+        <div style={{padding:'18px 18px 12px',borderBottom:'1px solid #E2E8F0'}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+            <div style={{fontWeight:800,fontSize:17,color:'#1E293B'}}>Resumo da Conferência</div>
+            <button onClick={function(){if(!aplicando)setShowResumo(false);}} style={{background:'#F1F5F9',border:'none',borderRadius:99,width:30,height:30,fontSize:15,cursor:'pointer',color:'#64748B'}}>✕</button>
+          </div>
+          <div style={{display:'flex',gap:8}}>
+            <div style={{flex:1,background:'#DCFCE7',borderRadius:10,padding:'8px 10px',textAlign:'center'}}>
+              <div style={{fontSize:19,fontWeight:800,color:'#0C6B3E'}}>{resumo.bateram}</div>
+              <div style={{fontSize:10,color:'#166534',fontWeight:600}}>✓ Bateram</div>
+            </div>
+            <div style={{flex:1,background:resumo.divergiram>0?'#FEE2E2':'#F1F5F9',borderRadius:10,padding:'8px 10px',textAlign:'center'}}>
+              <div style={{fontSize:19,fontWeight:800,color:resumo.divergiram>0?'#DC2626':'#94A3B8'}}>{resumo.divergiram}</div>
+              <div style={{fontSize:10,color:resumo.divergiram>0?'#991B1B':'#94A3B8',fontWeight:600}}>⚠ Divergiram</div>
+            </div>
+            <div style={{flex:1,background:'#EFF6FF',borderRadius:10,padding:'8px 10px',textAlign:'center'}}>
+              <div style={{fontSize:19,fontWeight:800,color:'#1351B4'}}>{resumo.total}</div>
+              <div style={{fontSize:10,color:'#1E40AF',fontWeight:600}}>Conferidos</div>
+            </div>
+          </div>
+        </div>
+        <div style={{flex:1,overflowY:'auto',padding:'12px 14px'}}>
+          {resumo.total===0&&<div style={{textAlign:'center',padding:32,color:'#94A3B8',fontSize:13}}>Nenhum lote contado ainda.</div>}
+          {resumo.itens.map(function(it,i){
+            var ok=it.diff===0;
+            var bg=it.novo?'#EFF6FF':ok?'#F0FDF4':'#FEF2F2';
+            var bd=it.novo?'#93C5FD':ok?'#BBF7D0':'#FECACA';
+            var loteLbl=it.novo?'🆕 Lote '+it.lote:it.semLote?'Sem lote':'Lote '+(it.lote||'—');
+            return(<div key={i} style={{display:'flex',alignItems:'center',gap:10,background:bg,border:'1.5px solid '+bd,borderRadius:10,padding:'10px 12px',marginBottom:6}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13,fontWeight:700,color:'#1E293B',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{it.medNome}</div>
+                <div style={{fontSize:10,color:'#64748B'}}>{loteLbl}{it.validade?' · Val '+it.validade:''}</div>
+              </div>
+              <div style={{textAlign:'right',flexShrink:0}}>
+                <div style={{fontSize:11,color:'#64748B'}}>{it.sistema} → <strong style={{color:'#1E293B'}}>{it.contado}</strong></div>
+                {ok
+                  ?<div style={{fontSize:11,fontWeight:800,color:'#0C6B3E'}}>✓ bateu</div>
+                  :<div style={{fontSize:13,fontWeight:800,color:it.diff>0?'#0C6B3E':'#DC2626'}}>{(it.diff>0?'+':'')+it.diff}</div>
+                }
+              </div>
+            </div>);
+          })}
+        </div>
+        <div style={{padding:'12px 16px 18px',borderTop:'1px solid #E2E8F0',background:'#fff'}}>
+          {resumo.divergiram===0
+            ?<div style={{textAlign:'center',fontSize:13,color:'#0C6B3E',fontWeight:700,padding:'6px 0'}}>🎉 Tudo bateu! Nenhum ajuste necessário.</div>
+            :<div style={{fontSize:11,color:'#64748B',textAlign:'center',marginBottom:10}}>Os ajustes corrigem o estoque e ficam fora do ranking de saídas.</div>
+          }
+          <div style={{display:'flex',gap:10}}>
+            <button onClick={function(){if(!aplicando)setShowResumo(false);}} disabled={aplicando} style={{flex:1,padding:'13px',background:'#F1F5F9',border:'none',borderRadius:12,fontWeight:700,fontSize:14,color:'#64748B',cursor:'pointer'}}>{resumo.divergiram===0?'Fechar':'Cancelar'}</button>
+            {resumo.divergiram>0&&<button onClick={aplicarAjustes} disabled={aplicando} style={{flex:2,padding:'13px',background:aplicando?'#94A3B8':'#0C6B3E',border:'none',borderRadius:12,fontWeight:700,fontSize:14,color:'#fff',cursor:aplicando?'default':'pointer'}}>{aplicando?'Aplicando...':'Confirmar e aplicar '+resumo.divergiram+' ajuste(s)'}</button>}
+          </div>
+        </div>
+      </div>
+    </div>}
   </div>);
 }
 
