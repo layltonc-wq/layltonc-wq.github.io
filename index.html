@@ -266,6 +266,28 @@ function computeVencimentos(medications,entries,stock){
   });
   return {vencidos:vencidos,venc30:venc30,venc60:venc60,venc90:venc90};
 }
+// Normaliza texto (minúsculas, sem acentos) — usado na detecção de saídas não-reais
+function _norm(s){return (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');}
+// Identifica saídas que NÃO são consumo real (dispensação). Fonte única usada pelo ranking, pela conferência e pela previsão.
+function _ehSaidaNaoReal(e){
+  if(e.ficticioDiv)return true;
+  if(e.divergenciaTipo==='real')return true;
+  if(e.descarte)return true;
+  if(e.isAjuste)return true;
+  var o=_norm(e.observacao);
+  if(o.indexOf('balanc')>=0)return true;        // balanço / balanco
+  if(o.indexOf('ajuste')>=0)return true;         // ajuste de inventário
+  if(o.indexOf('invent')>=0)return true;         // inventário
+  if(o.indexOf('era ')>=0&&o.indexOf('passou')>=0)return true; // "(era X, passou a Y)"
+  if(o.indexOf('vencid')>=0)return true;         // vencido / vencidos
+  if(o.indexOf('descart')>=0)return true;        // descarte / descartado
+  if(o.indexOf('estoque inicial')>=0)return true;
+  if(o.indexOf('correc')>=0)return true;         // correção
+  if(o.indexOf('atribui')>=0)return true;        // Atribuição de lote
+  if(o.indexOf('reclassif')>=0)return true;      // reclassificação de lote
+  if(o.indexOf('transfer')>=0)return true;       // transferência entre lotes
+  return false;
+}
 function playSound(type){try{var ctx=new (window.AudioContext||window.webkitAudioContext)();var o=ctx.createOscillator();var g=ctx.createGain();o.connect(g);g.connect(ctx.destination);if(type==='success'){o.frequency.setValueAtTime(523,ctx.currentTime);o.frequency.setValueAtTime(659,ctx.currentTime+0.1);g.gain.setValueAtTime(0.18,ctx.currentTime);g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.3);o.start(ctx.currentTime);o.stop(ctx.currentTime+0.3);}else{o.frequency.setValueAtTime(440,ctx.currentTime);g.gain.setValueAtTime(0.2,ctx.currentTime);g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.4);o.start(ctx.currentTime);o.stop(ctx.currentTime+0.4);}}catch(e){}}
 function compressPhoto(file,cb){var reader=new FileReader();reader.onload=function(ev){var img=new Image();img.onload=function(){var canvas=document.createElement('canvas');canvas.width=160;canvas.height=160;var ctx=canvas.getContext('2d');var size=Math.min(img.width,img.height);var sx=(img.width-size)/2;var sy=(img.height-size)/2;ctx.beginPath();ctx.arc(80,80,80,0,Math.PI*2);ctx.clip();ctx.drawImage(img,sx,sy,size,size,0,0,160,160);cb(canvas.toDataURL('image/jpeg',0.8));};img.src=ev.target.result;};reader.readAsDataURL(file);}
 function UserAvatar(p){var sz=p.size||28;var u=p.user;var st=p.style||{};if(u&&u.photoURL){return React.createElement('img',{src:u.photoURL,style:Object.assign({width:sz,height:sz,borderRadius:'50%',objectFit:'cover',flexShrink:0},st)});}return React.createElement('div',{className:'av',style:Object.assign({width:sz,height:sz,background:u&&u.color?u.color:B,fontSize:Math.round(sz*0.4),fontWeight:700},st)},u&&u.name?u.name.charAt(0):'?');}
@@ -2040,26 +2062,7 @@ function TabRelatorio(props){
   function nomeC(n){if(!n)return '?';var p=n.trim().split(' ');return p.length>=2?p[0]+' '+p[1]:p[0];}var entries=props.entries;var medications=props.medications;var _dF=useState(todayStr());var dF=_dF[0];var setDF=_dF[1];var _dT=useState(todayStr());var dT=_dT[0];var setDT=_dT[1];var _tipo=useState('todos');var tipo=_tipo[0];var setTipo=_tipo[1];var _sub=useState('mov');var sub=_sub[0];var setSub=_sub[1];var _filtCatRel=useState('todos');var filtCatRel=_filtCatRel[0];var setFiltCatRel=_filtCatRel[1];var _filtMeds=useState([]);var filtMeds=_filtMeds[0];var setFiltMeds=_filtMeds[1];var _filtBusca=useState('');var filtBusca=_filtBusca[0];var setFiltBusca=_filtBusca[1];var _filtBuscaCat=useState('todos');var filtBuscaCat=_filtBuscaCat[0];var setFiltBuscaCat=_filtBuscaCat[1];var _rankDF=useState((function(){var d=new Date();d.setDate(d.getDate()-30);return d.toISOString().slice(0,10);})());var rankDF=_rankDF[0];var setRankDF=_rankDF[1];var _rankDT=useState(todayStr());var rankDT=_rankDT[0];var setRankDT=_rankDT[1];var _rankDiag=useState(null);var rankDiag=_rankDiag[0];var setRankDiag=_rankDiag[1];var _rankCat=useState('todos');var rankCat=_rankCat[0];var setRankCat=_rankCat[1];
 var filtered=entries.filter(function(e){if(e.ficticioDiv)return false;if(e.divergenciaTipo==='real')return false;var dt=(e.criadoEm||'').slice(0,10);if(dt<dF||dt>dT)return false;if(tipo!=='todos'&&e.tipo!==tipo)return false;if(filtMeds&&filtMeds.length>0&&filtMeds.indexOf(e.medicamentoNome)===-1)return false;if(filtCatRel&&filtCatRel!=='todos'){var meds=medications.filter(function(m){return m.nome===e.medicamentoNome&&((m.categoria||'medicamento'))===filtCatRel;});if(meds.length===0)return false;}return true;}).sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});
 var totE=0,totS=0;filtered.forEach(function(e){if(e.tipo==='entrada')totE+=(e.quantidade||0);if(e.tipo==='saida')totS+=(e.quantidade||0);});
-function _norm(s){return (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');}
-function _ehSaidaNaoReal(e){
-  if(e.ficticioDiv)return true;
-  if(e.divergenciaTipo==='real')return true;
-  if(e.descarte)return true;
-  if(e.isAjuste)return true;
-  var o=_norm(e.observacao);
-  if(o.indexOf('balanc')>=0)return true;        // balanço / balanco
-  if(o.indexOf('ajuste')>=0)return true;         // ajuste de inventário
-  if(o.indexOf('invent')>=0)return true;         // inventário
-  if(o.indexOf('era ')>=0&&o.indexOf('passou')>=0)return true; // "(era X, passou a Y)"
-  if(o.indexOf('vencid')>=0)return true;         // vencido / vencidos
-  if(o.indexOf('descart')>=0)return true;        // descarte / descartado
-  if(o.indexOf('estoque inicial')>=0)return true;
-  if(o.indexOf('correc')>=0)return true;         // correção
-  if(o.indexOf('atribui')>=0)return true;        // Atribuição de lote
-  if(o.indexOf('reclassif')>=0)return true;      // reclassificação de lote
-  if(o.indexOf('transfer')>=0)return true;       // transferência entre lotes
-  return false;
-}
+// _norm e _ehSaidaNaoReal agora são globais (fonte única, reaproveitada por ranking, conferência e previsão)
 var _catPorNome={};(medications||[]).forEach(function(m){if(m.nome)_catPorNome[m.nome]=(m.categoria||'medicamento');});
 var rankMap={};entries.forEach(function(e){if(e.tipo!=='saida')return;if(_ehSaidaNaoReal(e))return;var dr=(e.date||(e.criadoEm||'').slice(0,10));if(dr<rankDF||dr>rankDT)return;var cat=_catPorNome[e.medicamentoNome]||'medicamento';if(rankCat!=='todos'&&cat!==rankCat)return;var k=e.medicamentoNome||'?';if(!rankMap[k])rankMap[k]={nome:k,total:0,count:0,cat:cat};rankMap[k].total+=(e.quantidade||0);rankMap[k].count++;});var ranking=Object.keys(rankMap).map(function(k){return rankMap[k];}).sort(function(a,b){return b.total-a.total;}).slice(0,rankCat==='todos'?10:50);
 function exportRankXL(){var rows=[['#','Medicamento','Categoria','Qtd Total','Nº Saídas']];ranking.forEach(function(r,i){rows.push([i+1,r.nome,(TIPOS[r.cat]?TIPOS[r.cat].label:r.cat),r.total,r.count]);});var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'Ranking');var catNome=rankCat==='todos'?'geral':rankCat;XLSX.writeFile(wb,'ranking_'+catNome+'_'+rankDF+'_'+rankDT+'.xlsx');}
@@ -4487,11 +4490,15 @@ function TabPrevisao(props){
   }
 
   // Consumo total de um medicamento num período (em dias atrás)
+  // Considera APENAS saídas reais (dispensação). Exclui balanço, descarte, ajuste,
+  // reclassificação, saída fictícia de divergência, etc. — via _ehSaidaNaoReal (mesma
+  // regra do ranking), para não inflar as sugestões de compra.
   function consumoPeriodo(medId,diasAtras){
     var limite=new Date();limite.setDate(limite.getDate()-diasAtras);
     var total=0;
     entries.forEach(function(e){
       if(e.tipo!=='saida'||e.medicamentoId!==medId)return;
+      if(_ehSaidaNaoReal(e))return;
       var d=new Date((e.date||(e.criadoEm||'').slice(0,10))+'T12:00:00');
       if(d>=limite)total+=(Number(e.quantidade)||0);
     });
