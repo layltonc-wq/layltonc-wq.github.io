@@ -266,6 +266,28 @@ function computeVencimentos(medications,entries,stock){
   });
   return {vencidos:vencidos,venc30:venc30,venc60:venc60,venc90:venc90};
 }
+// Normaliza texto (minúsculas, sem acentos) — usado na detecção de saídas não-reais
+function _norm(s){return (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');}
+// Identifica saídas que NÃO são consumo real (dispensação). Fonte única usada pelo ranking, pela conferência e pela previsão.
+function _ehSaidaNaoReal(e){
+  if(e.ficticioDiv)return true;
+  if(e.divergenciaTipo==='real')return true;
+  if(e.descarte)return true;
+  if(e.isAjuste)return true;
+  var o=_norm(e.observacao);
+  if(o.indexOf('balanc')>=0)return true;        // balanço / balanco
+  if(o.indexOf('ajuste')>=0)return true;         // ajuste de inventário
+  if(o.indexOf('invent')>=0)return true;         // inventário
+  if(o.indexOf('era ')>=0&&o.indexOf('passou')>=0)return true; // "(era X, passou a Y)"
+  if(o.indexOf('vencid')>=0)return true;         // vencido / vencidos
+  if(o.indexOf('descart')>=0)return true;        // descarte / descartado
+  if(o.indexOf('estoque inicial')>=0)return true;
+  if(o.indexOf('correc')>=0)return true;         // correção
+  if(o.indexOf('atribui')>=0)return true;        // Atribuição de lote
+  if(o.indexOf('reclassif')>=0)return true;      // reclassificação de lote
+  if(o.indexOf('transfer')>=0)return true;       // transferência entre lotes
+  return false;
+}
 function playSound(type){try{var ctx=new (window.AudioContext||window.webkitAudioContext)();var o=ctx.createOscillator();var g=ctx.createGain();o.connect(g);g.connect(ctx.destination);if(type==='success'){o.frequency.setValueAtTime(523,ctx.currentTime);o.frequency.setValueAtTime(659,ctx.currentTime+0.1);g.gain.setValueAtTime(0.18,ctx.currentTime);g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.3);o.start(ctx.currentTime);o.stop(ctx.currentTime+0.3);}else{o.frequency.setValueAtTime(440,ctx.currentTime);g.gain.setValueAtTime(0.2,ctx.currentTime);g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.4);o.start(ctx.currentTime);o.stop(ctx.currentTime+0.4);}}catch(e){}}
 function compressPhoto(file,cb){var reader=new FileReader();reader.onload=function(ev){var img=new Image();img.onload=function(){var canvas=document.createElement('canvas');canvas.width=160;canvas.height=160;var ctx=canvas.getContext('2d');var size=Math.min(img.width,img.height);var sx=(img.width-size)/2;var sy=(img.height-size)/2;ctx.beginPath();ctx.arc(80,80,80,0,Math.PI*2);ctx.clip();ctx.drawImage(img,sx,sy,size,size,0,0,160,160);cb(canvas.toDataURL('image/jpeg',0.8));};img.src=ev.target.result;};reader.readAsDataURL(file);}
 function UserAvatar(p){var sz=p.size||28;var u=p.user;var st=p.style||{};if(u&&u.photoURL){return React.createElement('img',{src:u.photoURL,style:Object.assign({width:sz,height:sz,borderRadius:'50%',objectFit:'cover',flexShrink:0},st)});}return React.createElement('div',{className:'av',style:Object.assign({width:sz,height:sz,background:u&&u.color?u.color:B,fontSize:Math.round(sz*0.4),fontWeight:700},st)},u&&u.name?u.name.charAt(0):'?');}
@@ -2040,26 +2062,7 @@ function TabRelatorio(props){
   function nomeC(n){if(!n)return '?';var p=n.trim().split(' ');return p.length>=2?p[0]+' '+p[1]:p[0];}var entries=props.entries;var medications=props.medications;var _dF=useState(todayStr());var dF=_dF[0];var setDF=_dF[1];var _dT=useState(todayStr());var dT=_dT[0];var setDT=_dT[1];var _tipo=useState('todos');var tipo=_tipo[0];var setTipo=_tipo[1];var _sub=useState('mov');var sub=_sub[0];var setSub=_sub[1];var _filtCatRel=useState('todos');var filtCatRel=_filtCatRel[0];var setFiltCatRel=_filtCatRel[1];var _filtMeds=useState([]);var filtMeds=_filtMeds[0];var setFiltMeds=_filtMeds[1];var _filtBusca=useState('');var filtBusca=_filtBusca[0];var setFiltBusca=_filtBusca[1];var _filtBuscaCat=useState('todos');var filtBuscaCat=_filtBuscaCat[0];var setFiltBuscaCat=_filtBuscaCat[1];var _rankDF=useState((function(){var d=new Date();d.setDate(d.getDate()-30);return d.toISOString().slice(0,10);})());var rankDF=_rankDF[0];var setRankDF=_rankDF[1];var _rankDT=useState(todayStr());var rankDT=_rankDT[0];var setRankDT=_rankDT[1];var _rankDiag=useState(null);var rankDiag=_rankDiag[0];var setRankDiag=_rankDiag[1];var _rankCat=useState('todos');var rankCat=_rankCat[0];var setRankCat=_rankCat[1];
 var filtered=entries.filter(function(e){if(e.ficticioDiv)return false;if(e.divergenciaTipo==='real')return false;var dt=(e.criadoEm||'').slice(0,10);if(dt<dF||dt>dT)return false;if(tipo!=='todos'&&e.tipo!==tipo)return false;if(filtMeds&&filtMeds.length>0&&filtMeds.indexOf(e.medicamentoNome)===-1)return false;if(filtCatRel&&filtCatRel!=='todos'){var meds=medications.filter(function(m){return m.nome===e.medicamentoNome&&((m.categoria||'medicamento'))===filtCatRel;});if(meds.length===0)return false;}return true;}).sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});
 var totE=0,totS=0;filtered.forEach(function(e){if(e.tipo==='entrada')totE+=(e.quantidade||0);if(e.tipo==='saida')totS+=(e.quantidade||0);});
-function _norm(s){return (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');}
-function _ehSaidaNaoReal(e){
-  if(e.ficticioDiv)return true;
-  if(e.divergenciaTipo==='real')return true;
-  if(e.descarte)return true;
-  if(e.isAjuste)return true;
-  var o=_norm(e.observacao);
-  if(o.indexOf('balanc')>=0)return true;        // balanço / balanco
-  if(o.indexOf('ajuste')>=0)return true;         // ajuste de inventário
-  if(o.indexOf('invent')>=0)return true;         // inventário
-  if(o.indexOf('era ')>=0&&o.indexOf('passou')>=0)return true; // "(era X, passou a Y)"
-  if(o.indexOf('vencid')>=0)return true;         // vencido / vencidos
-  if(o.indexOf('descart')>=0)return true;        // descarte / descartado
-  if(o.indexOf('estoque inicial')>=0)return true;
-  if(o.indexOf('correc')>=0)return true;         // correção
-  if(o.indexOf('atribui')>=0)return true;        // Atribuição de lote
-  if(o.indexOf('reclassif')>=0)return true;      // reclassificação de lote
-  if(o.indexOf('transfer')>=0)return true;       // transferência entre lotes
-  return false;
-}
+// _norm e _ehSaidaNaoReal agora são globais (fonte única, reaproveitada por ranking, conferência e previsão)
 var _catPorNome={};(medications||[]).forEach(function(m){if(m.nome)_catPorNome[m.nome]=(m.categoria||'medicamento');});
 var rankMap={};entries.forEach(function(e){if(e.tipo!=='saida')return;if(_ehSaidaNaoReal(e))return;var dr=(e.date||(e.criadoEm||'').slice(0,10));if(dr<rankDF||dr>rankDT)return;var cat=_catPorNome[e.medicamentoNome]||'medicamento';if(rankCat!=='todos'&&cat!==rankCat)return;var k=e.medicamentoNome||'?';if(!rankMap[k])rankMap[k]={nome:k,total:0,count:0,cat:cat};rankMap[k].total+=(e.quantidade||0);rankMap[k].count++;});var ranking=Object.keys(rankMap).map(function(k){return rankMap[k];}).sort(function(a,b){return b.total-a.total;}).slice(0,rankCat==='todos'?10:50);
 function exportRankXL(){var rows=[['#','Medicamento','Categoria','Qtd Total','Nº Saídas']];ranking.forEach(function(r,i){rows.push([i+1,r.nome,(TIPOS[r.cat]?TIPOS[r.cat].label:r.cat),r.total,r.count]);});var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'Ranking');var catNome=rankCat==='todos'?'geral':rankCat;XLSX.writeFile(wb,'ranking_'+catNome+'_'+rankDF+'_'+rankDT+'.xlsx');}
@@ -4476,9 +4479,17 @@ function TabPrevisao(props){
   },[]);
 
   // ── CÁLCULO DE PREVISÃO ──────────────────────────────────────
-  // Descobrir quantos dias de histórico existem
-  function diasHistorico(){
-    var datas=entries.filter(function(e){return e.tipo==='saida';}).map(function(e){return e.date||(e.criadoEm||'').slice(0,10);}).filter(Boolean);
+  // Descobrir quantos dias de histórico de CONSUMO REAL existem.
+  // Só conta dispensação real (via _ehSaidaNaoReal): descartes, ajustes, balanços etc. não
+  // contam como histórico. Com medId, mede só aquele medicamento — assim um item que só teve
+  // descartes/ajustes fica com 0 dias e cai na Fase 1 (conservadora), em vez da Fase 3.
+  function diasHistorico(medId){
+    var datas=entries.filter(function(e){
+      if(e.tipo!=='saida')return false;
+      if(_ehSaidaNaoReal(e))return false;
+      if(medId&&e.medicamentoId!==medId)return false;
+      return true;
+    }).map(function(e){return e.date||(e.criadoEm||'').slice(0,10);}).filter(Boolean);
     if(datas.length===0)return 0;
     datas.sort();
     var primeira=new Date(datas[0]+'T12:00:00');
@@ -4487,61 +4498,75 @@ function TabPrevisao(props){
   }
 
   // Consumo total de um medicamento num período (em dias atrás)
+  // Considera APENAS saídas reais (dispensação). Exclui balanço, descarte, ajuste,
+  // reclassificação, saída fictícia de divergência, etc. — via _ehSaidaNaoReal (mesma
+  // regra do ranking), para não inflar as sugestões de compra.
   function consumoPeriodo(medId,diasAtras){
     var limite=new Date();limite.setDate(limite.getDate()-diasAtras);
     var total=0;
     entries.forEach(function(e){
       if(e.tipo!=='saida'||e.medicamentoId!==medId)return;
+      if(_ehSaidaNaoReal(e))return;
       var d=new Date((e.date||(e.criadoEm||'').slice(0,10))+'T12:00:00');
       if(d>=limite)total+=(Number(e.quantidade)||0);
     });
     return total;
   }
 
-  // Calcular previsão de um medicamento — retorna {pedir, metodo, detalhe}
+  // Calcular previsão de um medicamento — retorna {pedir, metodo, detalhe, ...}
   function calcularPrevisao(med){
-    var dias=diasHistorico();
+    var dias=diasHistorico(med.id);// histórico de consumo real DESTE medicamento
     var estoqueAtual=stock[med.id]||0;
     var minimo=Number(med.minEstoque||med.estoqueMin||0);
-
-    // FASE 1: pouco histórico (<25 dias) → usa consumo mensal estimado
     var consEstim=Number(med.consumoEstimado||0);
+    var projEstim=consEstim>0?Math.ceil((consEstim/30)*diasPrev):0;// consumo estimado (manual) projetado p/ o horizonte
+
+    // Rede de segurança: a sugestão nunca pode deixar o estoque final abaixo do mínimo cadastrado,
+    // qualquer que seja o método/fase. Também nunca é negativa.
+    function finalizar(pedirCalc,extra){
+      var pedir=Math.max(0,Math.round(pedirCalc));
+      if(minimo>0)pedir=Math.max(pedir,minimo-estoqueAtual);
+      pedir=Math.max(0,pedir);
+      return Object.assign({pedir:pedir},extra);
+    }
+
+    // FASE 1: pouco histórico real (<25 dias) → usa consumo mensal estimado (ou o mínimo)
     if(dias<25){
       if(consEstim>0){
-        // projetar o consumo estimado para o período escolhido
-        var projEstim=Math.ceil((consEstim/30)*diasPrev);
         var margemE=Math.ceil(projEstim*0.15);
-        var pedirE=Math.max(0,projEstim+margemE-estoqueAtual);
-        return {pedir:pedirE,metodo:'estimado',detalhe:'Estimado '+consEstim+'/mês → '+projEstim+' em '+diasPrev+'d + margem '+margemE+' − estoque '+estoqueAtual,fase:1,consumoMes:projEstim};
+        return finalizar(projEstim+margemE-estoqueAtual,{metodo:'estimado',detalhe:'Estimado '+consEstim+'/mês → '+projEstim+' em '+diasPrev+'d + margem '+margemE+' − estoque '+estoqueAtual,fase:1,consumoMes:projEstim,consumoRealMes:0});
       }
-      // fallback: se não tem consumo estimado, usa o mínimo
-      var alvo=minimo>0?minimo:0;
-      var pedir1=Math.max(0,alvo-estoqueAtual);
-      return {pedir:pedir1,metodo:'minimo',detalhe:minimo>0?('Alvo mínimo '+minimo+' − estoque '+estoqueAtual):'Defina o consumo estimado ou o mínimo deste item',fase:1,consumoMes:null};
+      return finalizar(minimo-estoqueAtual,{metodo:'minimo',detalhe:minimo>0?('Alvo mínimo '+minimo+' − estoque '+estoqueAtual):'Defina o consumo estimado ou o mínimo deste item',fase:1,consumoMes:null,consumoRealMes:0});
     }
 
-    // FASE 2: 25-55 dias → média de consumo diário projetada
+    // Consumo REAL dos últimos 30 dias (só dispensação; ver _ehSaidaNaoReal)
     var cons30=consumoPeriodo(med.id,30);
     var consDiario=cons30/Math.min(dias,30);
-    var projecaoMes=Math.ceil(consDiario*diasPrev);
+    var realMes=Math.round(consDiario*30);// consumo real ~mensal (p/ exibição)
 
+    // FASE 2: 25-55 dias → média diária projetada, com PISO no consumo estimado configurado
     if(dias<55){
-      var margem=minimo>0?Math.ceil(minimo*0.2):Math.ceil(projecaoMes*0.15);
-      var pedir2=Math.max(0,projecaoMes+margem-estoqueAtual);
-      return {pedir:pedir2,metodo:'media',detalhe:'Consumo ~'+consDiario.toFixed(1)+'/dia × '+diasPrev+'d = '+projecaoMes+' + margem '+margem+' − estoque '+estoqueAtual,fase:2,consumoMes:projecaoMes};
+      var projReal=Math.ceil(consDiario*diasPrev);
+      var proj=Math.max(projReal,projEstim);// nunca abaixo do que o farmacêutico configurou (evita subestimar consumo alto)
+      var usouEstim=projEstim>projReal;
+      var margem=minimo>0?Math.ceil(minimo*0.2):Math.ceil(proj*0.15);
+      var det2=usouEstim?('Estimado '+consEstim+'/mês (≥ real ~'+realMes+'/mês) → '+proj):('Consumo real ~'+consDiario.toFixed(1)+'/dia × '+diasPrev+'d = '+proj);
+      return finalizar(proj+margem-estoqueAtual,{metodo:usouEstim?'estimado':'media',detalhe:det2+' + margem '+margem+' − estoque '+estoqueAtual,fase:2,consumoMes:proj,consumoRealMes:realMes});
     }
 
-    // FASE 3: 55+ dias → tendência (compara últimos 30d vs 30d anteriores)
+    // FASE 3: 55+ dias → tendência (últimos 30d vs 30d anteriores), com PISO no estimado
     var consRecente=consumoPeriodo(med.id,30);
     var consAnterior=consumoPeriodo(med.id,60)-consRecente;
     var tendencia=0;
     if(consAnterior>0)tendencia=(consRecente-consAnterior)/consAnterior;
     var fatorTend=1+Math.max(-0.3,Math.min(0.5,tendencia));
-    var projTend=Math.ceil((consRecente/30)*diasPrev*fatorTend);
-    var margem3=minimo>0?Math.ceil(minimo*0.2):Math.ceil(projTend*0.15);
-    var pedir3=Math.max(0,projTend+margem3-estoqueAtual);
+    var projTendReal=Math.ceil((consRecente/30)*diasPrev*fatorTend);
+    var projT=Math.max(projTendReal,projEstim);// piso no estimado
+    var usouEstim3=projEstim>projTendReal;
+    var margem3=minimo>0?Math.ceil(minimo*0.2):Math.ceil(projT*0.15);
     var tendStr=tendencia>0.05?('alta +'+Math.round(tendencia*100)+'%'):(tendencia<-0.05?('queda '+Math.round(tendencia*100)+'%'):'estável');
-    return {pedir:pedir3,metodo:'tendencia',detalhe:'Tendência '+tendStr+' · proj '+projTend+' + margem '+margem3+' − estoque '+estoqueAtual,fase:3,consumoMes:projTend};
+    var det3=usouEstim3?('Estimado '+consEstim+'/mês (≥ tendência) → '+projT):('Tendência '+tendStr+' · proj '+projT);
+    return finalizar(projT+margem3-estoqueAtual,{metodo:usouEstim3?'estimado':'tendencia',detalhe:det3+' + margem '+margem3+' − estoque '+estoqueAtual,fase:3,consumoMes:projT,consumoRealMes:realMes});
   }
 
   // Medicamentos de uma ata
@@ -4988,9 +5013,10 @@ function TabPrevisao(props){
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{fontWeight:700,fontSize:13,color:'#1E293B',marginBottom:2}}>{m.nome}</div>
                   <div style={{fontSize:11,color:'#94A3B8'}}>
-                    Estoque: {stock[m.id]||0} · Mín: {m.minEstoque||0} · Consumo/mês: {m.consumoEstimado||0}
+                    Estoque: {stock[m.id]||0} · Mín: {m.minEstoque||0} · Estimado: {m.consumoEstimado||0}/mês{p.consumoRealMes>0?' · Real: '+p.consumoRealMes+'/mês':''}
                     {' · '}<span style={{color:cor2,fontWeight:600}}>{metodoLbl[p.metodo]||p.metodo}</span>
                   </div>
+                  {p.detalhe&&<div style={{fontSize:10,color:'#B0B8C4',marginTop:2}}>{p.detalhe}</div>}
                   {saldoAta!==null&&<div style={{fontSize:11,marginTop:2,fontWeight:600,color:excede?'#DC2626':'#0C6B3E'}}>
                     Saldo ATA: {saldoAta} {item.unidade||''}{excede?' ⚠️ excede saldo!':''}
                   </div>}
