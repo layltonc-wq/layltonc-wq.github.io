@@ -5282,6 +5282,375 @@ function TabPrevisao(props){
   );
 }
 
+// ===== Conferência de Estoque (contagem física colaborativa) =====
+function confKey(medId,lote,val){return (medId+'~'+(lote||'SEM')+'~'+(val||'SEM')).replace(/[^A-Za-z0-9_~-]/g,'_');}
+function TabConferencia(props){
+  var user=props.user;var medications=props.medications||[];var entries=props.entries||[];var stock=props.stock||{};
+  var CCOR={medicamento:'#1351B4',controlado:'#DC2626',injetavel:'#7C3AED',leite:'#D97706',penso:'#0891B2'};
+  var docRef=function(){return db.collection('conferencias').doc(todayStr());};
+  var _contagens=useState({});var contagens=_contagens[0];var setContagens=_contagens[1];
+  var _contadoPor=useState({});var contadoPor=_contadoPor[0];var setContadoPor=_contadoPor[1];
+  var _novosLotes=useState([]);var novosLotes=_novosLotes[0];var setNovosLotes=_novosLotes[1];
+  var _cega=useState(localStorage.getItem('fc_conf_cega')==='1');var cega=_cega[0];var setCega=_cega[1];
+  var _busca=useState('');var busca=_busca[0];var setBusca=_busca[1];
+  var _abertos=useState({});var abertos=_abertos[0];var setAbertos=_abertos[1];
+  var _catAberta=useState({medicamento:true});var catAberta=_catAberta[0];var setCatAberta=_catAberta[1];
+  var _novoForm=useState(null);var novoForm=_novoForm[0];var setNovoForm=_novoForm[1];// medId em edição
+  var _nlLote=useState('');var nlLote=_nlLote[0];var setNlLote=_nlLote[1];
+  var _nlVal=useState('');var nlVal=_nlVal[0];var setNlVal=_nlVal[1];
+  var _nlQty=useState('');var nlQty=_nlQty[0];var setNlQty=_nlQty[1];
+  var _showResumo=useState(false);var showResumo=_showResumo[0];var setShowResumo=_showResumo[1];
+  var _aplicando=useState(false);var aplicando=_aplicando[0];var setAplicando=_aplicando[1];
+  var _recontagens=useState([]);var recontagens=_recontagens[0];var setRecontagens=_recontagens[1];
+  var _acheiForm=useState(null);var acheiForm=_acheiForm[0];var setAcheiForm=_acheiForm[1];// key da linha em edição
+  var _acheiQty=useState('');var acheiQty=_acheiQty[0];var setAcheiQty=_acheiQty[1];
+  var _erro=useState('');var erro=_erro[0];var setErro=_erro[1];
+  var pendingRef=useRef({});var timersRef=useRef({});var remoteRef=useRef({});
+
+  useEffect(function(){
+    var unsub=docRef().onSnapshot(function(snap){
+      var data=snap.exists?snap.data():{};
+      var remote=data.contagens||{};
+      remoteRef.current=remote;// fonte da verdade p/ rollback de escrita falha
+      setContagens(function(prev){
+        var n=Object.assign({},prev);
+        Object.keys(remote).forEach(function(k){if(!pendingRef.current[k])n[k]=String(remote[k]);});
+        Object.keys(n).forEach(function(k){if(!(k in remote)&&!pendingRef.current[k])delete n[k];});
+        return n;
+      });
+      setContadoPor(data.contadoPor||{});
+      setNovosLotes(data.novosLotes||[]);
+      setRecontagens(data.recontagens||[]);
+    },function(e){setErro('Não foi possível ler a conferência: '+e.message+' (verifique as regras/permissões do Firestore).');});
+    return unsub;
+  },[]);
+
+  // Reverte o valor local de uma chave para o último estado confirmado no servidor (rollback)
+  function revertKey(key){setContagens(function(p){var n=Object.assign({},p);var rv=remoteRef.current[key];if(rv===undefined)delete n[key];else n[key]=String(rv);return n;});}
+  function erroEscrita(e){setErro('⚠️ Não foi possível salvar no banco: '+(e&&e.message?e.message:'erro desconhecido')+'. As alterações NÃO foram gravadas — verifique as permissões do Firestore e tente novamente.');}
+
+  // "Achei mais": soma unidades a um lote já contado, sem gerar divergência nova — fica registrado como recontagem
+  function acheiMais(key,med,lote,validade){
+    var found=parseInt(acheiQty)||0;
+    if(found<=0){alert('Informe quantas unidades você encontrou.');return;}
+    var atual=parseInt(contagens[key]||'0')||0;var novo=atual+found;var now=new Date().toISOString();
+    var rec={id:'rc_'+Date.now()+'_'+Math.floor(Math.random()*9999),key:key,medId:med.id,medNome:med.nome,lote:lote||'',validade:validade||'',qty:found,por:user.name,em:now};
+    var contUpd={},porUpd={};contUpd[key]=novo;porUpd[key]={nome:user.name,em:now};
+    pendingRef.current[key]=Date.now();
+    setContagens(function(p){var n=Object.assign({},p);n[key]=String(novo);return n;});// otimista
+    docRef().set({contagens:contUpd,contadoPor:porUpd,recontagens:firebase.firestore.FieldValue.arrayUnion(rec),atualizadoEm:now,atualizadoPor:user.name},{merge:true})
+      .then(function(){delete pendingRef.current[key];setErro('');setAcheiForm(null);setAcheiQty('');})
+      .catch(function(e){delete pendingRef.current[key];revertKey(key);erroEscrita(e);});// desfaz a soma otimista
+  }
+  // total de recontagem por chave de lote
+  var recByKey=useMemo(function(){var m={};(recontagens||[]).forEach(function(r){if(!m[r.key])m[r.key]={total:0,list:[]};m[r.key].total+=(Number(r.qty)||0);m[r.key].list.push(r);});return m;},[recontagens]);
+
+  function commitKey(key,valStr){
+    var ok=function(){delete pendingRef.current[key];setErro('');};
+    var fail=function(e){delete pendingRef.current[key];revertKey(key);erroEscrita(e);};// desfaz a digitação otimista
+    if(valStr===''){
+      // chaves são sanitizadas (sem pontos), então o caminho de campo é seguro; delete() aninhado exige update()
+      var del=firebase.firestore.FieldValue.delete();var u={};u['contagens.'+key]=del;u['contadoPor.'+key]=del;u['atualizadoEm']=new Date().toISOString();u['atualizadoPor']=user.name;
+      docRef().update(u).then(ok).catch(fail);
+    } else {
+      var contUpd={},porUpd={};contUpd[key]=parseInt(valStr)||0;porUpd[key]={nome:user.name,em:new Date().toISOString()};
+      docRef().set({contagens:contUpd,contadoPor:porUpd,atualizadoEm:new Date().toISOString(),atualizadoPor:user.name},{merge:true}).then(ok).catch(fail);
+    }
+  }
+  function onCount(key,raw){
+    var v=(raw||'').replace(/[^0-9]/g,'');
+    pendingRef.current[key]=Date.now();
+    setContagens(function(p){var n=Object.assign({},p);if(v==='')delete n[key];else n[key]=v;return n;});
+    if(timersRef.current[key])clearTimeout(timersRef.current[key]);
+    timersRef.current[key]=setTimeout(function(){commitKey(key,v);},600);
+  }
+  function addNovoLote(med){
+    var lote=nlLote.trim();var val=nlVal.trim();var qty=parseInt(nlQty)||0;
+    if(!lote){alert('Informe o número do lote.');return;}
+    if(qty<=0){alert('Informe a quantidade contada (maior que zero).');return;}
+    var obj={id:'nl_'+Date.now()+'_'+Math.floor(Math.random()*9999),medId:med.id,medNome:med.nome,lote:lote,validade:val,qty:qty,por:user.name,em:new Date().toISOString()};
+    // novosLotes vem via snapshot; só limpa o formulário se a gravação confirmar
+    docRef().set({novosLotes:firebase.firestore.FieldValue.arrayUnion(obj),atualizadoEm:new Date().toISOString(),atualizadoPor:user.name},{merge:true})
+      .then(function(){setErro('');setNovoForm(null);setNlLote('');setNlVal('');setNlQty('');})
+      .catch(function(e){erroEscrita(e);});
+  }
+  function removeNovoLote(obj){
+    if(!confirm('Remover lote novo "'+obj.lote+'"?'))return;
+    docRef().update({novosLotes:firebase.firestore.FieldValue.arrayRemove(obj)}).then(function(){setErro('');}).catch(function(e){erroEscrita(e);});
+  }
+  function toggleCega(){var nv=!cega;setCega(nv);localStorage.setItem('fc_conf_cega',nv?'1':'0');}
+
+  // Computa lotes por medicamento (mesma lógica da aba Estoque)
+  var medList=useMemo(function(){
+    return medications.map(function(m){
+      var me=entries.filter(function(e){return e.medicamentoId===m.id&&e.tipo==='entrada'&&e.lote;});
+      var loteMap={};me.forEach(function(e){if(!e.lote)return;var lk=e.lote;if(!loteMap[lk])loteMap[lk]={lote:e.lote,validade:e.validade||'',entrada:0,saida:0};loteMap[lk].entrada+=(e.quantidade||0);if(e.validade&&!loteMap[lk].validade)loteMap[lk].validade=e.validade;});
+      var saidas=entries.filter(function(e){return e.medicamentoId===m.id&&e.tipo==='saida'&&e.lote;});
+      saidas.forEach(function(e){var lk=e.lote;if(loteMap[lk])loteMap[lk].saida+=(e.quantidade||0);});
+      var lotes=Object.keys(loteMap).map(function(k){var l=loteMap[k];return {lote:l.lote,validade:l.validade,qty:Math.max(0,l.entrada-l.saida)};}).filter(function(l){return l.qty>0;});
+      var est=stock[m.id]||0;
+      var totalLotado=lotes.reduce(function(s,l){return s+l.qty;},0);
+      var semLote=Math.max(0,est-totalLotado);
+      return {id:m.id,nome:m.nome,cat:m.categoria||'medicamento',est:est,lotes:lotes,semLote:semLote};
+    });
+  },[medications,entries,stock]);
+
+  function medKeys(m){var ks=[];m.lotes.forEach(function(l){ks.push(confKey(m.id,l.lote,l.validade));});if(m.semLote>0)ks.push(confKey(m.id,'__SEMLOTE__',''));return ks;}
+  function medConferido(m){
+    var ks=medKeys(m);
+    for(var i=0;i<ks.length;i++){if(contagens[ks[i]]!==undefined&&contagens[ks[i]]!=='')return true;}
+    for(var j=0;j<novosLotes.length;j++){if(novosLotes[j].medId===m.id)return true;}
+    return false;
+  }
+
+  // Resumo de divergências: compara contado x sistema, lote a lote (só o que foi contado)
+  var resumo=useMemo(function(){
+    var catById={};medList.forEach(function(m){catById[m.id]=m.cat;});
+    var itens=[];
+    medList.forEach(function(m){
+      m.lotes.forEach(function(l){
+        var key=confKey(m.id,l.lote,l.validade);var raw=contagens[key];
+        if(raw===undefined||raw==='')return;
+        var contado=parseInt(raw)||0;var rc=recByKey[key]?recByKey[key].total:0;
+        itens.push({medId:m.id,medNome:m.nome,cat:m.cat,lote:l.lote,validade:l.validade,sistema:l.qty,contado:contado,diff:contado-l.qty,novo:false,semLote:false,recontagem:rc});
+      });
+      if(m.semLote>0){
+        var keyS=confKey(m.id,'__SEMLOTE__','');var rawS=contagens[keyS];
+        if(rawS!==undefined&&rawS!==''){var contadoS=parseInt(rawS)||0;var rcS=recByKey[keyS]?recByKey[keyS].total:0;itens.push({medId:m.id,medNome:m.nome,cat:m.cat,lote:'',validade:'',sistema:m.semLote,contado:contadoS,diff:contadoS-m.semLote,novo:false,semLote:true,recontagem:rcS});}
+      }
+    });
+    novosLotes.forEach(function(nl){
+      itens.push({medId:nl.medId,medNome:nl.medNome,cat:catById[nl.medId]||'medicamento',lote:nl.lote,validade:nl.validade||'',sistema:0,contado:nl.qty,diff:nl.qty,novo:true,semLote:false,recontagem:0});
+    });
+    // divergências primeiro, depois por nome
+    itens.sort(function(a,b){var da=a.diff===0?1:0,db2=b.diff===0?1:0;if(da!==db2)return da-db2;return a.medNome.localeCompare(b.medNome);});
+    var ajustes=itens.filter(function(i){return i.diff!==0;});
+    return {itens:itens,total:itens.length,bateram:itens.length-ajustes.length,divergiram:ajustes.length,ajustes:ajustes};
+  },[medList,contagens,novosLotes,recByKey]);
+
+  function aplicarAjustes(){
+    var lista=resumo.ajustes;
+    if(lista.length===0){setShowResumo(false);return;}
+    setAplicando(true);
+    var now=new Date().toISOString();
+    var batch=db.batch();
+    lista.forEach(function(it){
+      var ref=db.collection('entries').doc();
+      // observação com "balanç" e "(era X, passou a Y)" + isAjuste => fora do ranking (ver _ehSaidaNaoReal)
+      var obs='Balanço (conferência '+todayStr()+'): '+(it.novo?'lote novo encontrado — ':'')+'(era '+it.sistema+', passou a '+it.contado+')'+(it.recontagem>0?' — inclui '+it.recontagem+' un. encontrada(s) em recontagem':'');
+      batch.set(ref,{
+        medicamentoId:it.medId,medicamentoNome:it.medNome,
+        tipo:it.diff>0?'entrada':'saida',quantidade:Math.abs(it.diff),
+        lote:it.lote||'',validade:it.validade||'',
+        observacao:obs,isAjuste:true,conferencia:todayStr(),
+        criadoEm:now,date:todayStr(),
+        autorId:user.uid||'',autorNome:user.name,autorCargo:user.role||'',autorColor:user.color||B
+      });
+    });
+    batch.commit().then(function(){
+      // Zera a conferência ativa: os ajustes já corrigiram o estoque (evita reaplicar lotes novos)
+      return docRef().set({contagens:{},contadoPor:{},novosLotes:[],aplicadoEm:now,aplicadoPor:user.name,atualizadoEm:now,atualizadoPor:user.name});
+    }).then(function(){
+      // Só limpa o estado local após a gravação confirmar no banco
+      setContagens({});setNovosLotes([]);setContadoPor({});setRecontagens([]);pendingRef.current={};
+      setAplicando(false);setShowResumo(false);setErro('');
+      alert('✅ '+lista.length+' ajuste(s) de estoque aplicado(s). Estoque atualizado.');
+    }).catch(function(e){setAplicando(false);erroEscrita(e);alert('Erro ao aplicar ajustes: '+e.message+'\n\nNenhuma alteração foi confirmada. Verifique as permissões do Firestore.');});
+  }
+
+  var buscaLc=busca.trim().toLowerCase();
+  var filtrada=buscaLc?medList.filter(function(m){return m.nome.toLowerCase().indexOf(buscaLc)>=0;}):medList;
+  var totalItens=filtrada.length;
+  var conferidos=filtrada.filter(medConferido).length;
+  var pct=totalItens>0?Math.round((conferidos/totalItens)*100):0;
+
+  var cats=Object.keys(TIPOS);
+  var grupos=cats.map(function(cat){return {cat:cat,meds:filtrada.filter(function(m){return (m.cat||'medicamento')===cat;}).sort(function(a,b){return a.nome.localeCompare(b.nome);})};}).filter(function(g){return g.meds.length>0;});
+
+  // Renderiza uma linha de lote com campo de contagem, histórico de recontagem e botão "Achei mais"
+  function loteRow(o){
+    var key=o.key;var val=contagens[key];var cont=val===undefined?'':val;
+    var diff=cont!==''?(parseInt(cont)||0)-o.sistema:null;
+    var rc=recByKey[key];var jaContado=cont!=='';
+    return(<div key={key} style={{padding:'8px 0',borderTop:o.topBorder?'1px solid #F1F5F9':'none'}}>
+      <div style={{display:'flex',alignItems:'center',gap:10}}>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:12,fontWeight:700,color:'#334155'}}>{o.titulo}</div>
+          <div style={{fontSize:10,color:'#94A3B8'}}>{o.sub}{!cega&&' · sistema: '+o.sistema+' un.'}{!cega&&diff!==null&&diff!==0&&<span style={{color:diff>0?'#0C6B3E':'#DC2626',fontWeight:700}}>{' · '+(diff>0?'+':'')+diff}</span>}</div>
+        </div>
+        <input value={cont} onChange={function(e){onCount(key,e.target.value);}} inputMode="numeric" placeholder="0" style={{width:66,padding:'8px 6px',border:'1.5px solid '+(cont!==''?'#1351B4':'#CBD5E1'),borderRadius:8,fontSize:16,fontWeight:700,textAlign:'center',outline:'none'}}/>
+      </div>
+      {rc&&rc.total>0&&<div style={{marginTop:6,background:'#FFFBEB',border:'1px solid #FDE68A',borderRadius:8,padding:'6px 9px'}}>
+        {rc.list.map(function(r,ri){return(<div key={ri} style={{fontSize:10,color:'#92400E'}}>🔎 +{r.qty} un. em recontagem · {r.por}{r.em?' · '+fmtD(r.em)+' '+fmtT(r.em):''}</div>);})}
+      </div>}
+      {jaContado&&(acheiForm===key
+        ?<div style={{marginTop:6,display:'flex',gap:8,alignItems:'center'}}>
+          <input value={acheiQty} onChange={function(e){setAcheiQty(e.target.value.replace(/[^0-9]/g,''));}} inputMode="numeric" placeholder="Qtd encontrada" style={{flex:1,padding:'8px',borderRadius:7,border:'1.5px solid #F59E0B',fontSize:14,fontWeight:700,textAlign:'center',boxSizing:'border-box'}}/>
+          <button onClick={function(){setAcheiForm(null);setAcheiQty('');}} style={{padding:'8px 10px',background:'#F1F5F9',border:'none',borderRadius:7,fontSize:12,fontWeight:600,cursor:'pointer'}}>✕</button>
+          <button onClick={function(){acheiMais(key,o.med,o.lote,o.validade);}} style={{padding:'8px 12px',background:'#F59E0B',border:'none',borderRadius:7,color:'#fff',fontSize:12,fontWeight:700,cursor:'pointer'}}>+ Somar</button>
+        </div>
+        :<button onClick={function(){setAcheiForm(key);setAcheiQty('');}} style={{marginTop:6,background:'none',border:'none',color:'#B45309',fontSize:11,fontWeight:700,cursor:'pointer',padding:'2px 0'}}>🔎 Achei mais</button>
+      )}
+    </div>);
+  }
+
+  return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
+    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,marginBottom:12}}>
+      <div>
+        <div style={{fontWeight:800,fontSize:18,color:'#1E293B'}}>🧾 Conferência de Estoque</div>
+        <div style={{fontSize:11,color:'#94A3B8'}}>Contagem física · {todayStr().split('-').reverse().join('/')}</div>
+      </div>
+      <button onClick={toggleCega} style={{display:'flex',alignItems:'center',gap:6,background:cega?'#1351B4':'#F1F5F9',border:'1.5px solid '+(cega?'#1351B4':'#E2E8F0'),borderRadius:20,padding:'7px 12px',cursor:'pointer'}}>
+        <span style={{fontSize:14}}>{cega?'🙈':'👁️'}</span>
+        <span style={{fontSize:11,fontWeight:700,color:cega?'#fff':'#64748B'}}>Às cegas</span>
+      </button>
+    </div>
+
+    {erro&&<div style={{background:'#FEF2F2',border:'1.5px solid #FECACA',borderRadius:12,padding:'11px 14px',marginBottom:12,display:'flex',alignItems:'flex-start',gap:8}}>
+      <span style={{fontSize:15,lineHeight:1.3}}>🚫</span>
+      <div style={{flex:1,fontSize:12,color:'#991B1B',lineHeight:1.5}}>{erro}</div>
+      <button onClick={function(){setErro('');}} style={{background:'none',border:'none',color:'#991B1B',cursor:'pointer',fontSize:15,lineHeight:1,padding:0}}>✕</button>
+    </div>}
+
+    {/* Barra de progresso */}
+    <div style={{background:'#fff',borderRadius:14,padding:'14px 16px',marginBottom:14,border:'1.5px solid #E2E8F0'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:8}}>
+        <span style={{fontSize:13,fontWeight:700,color:'#1E293B'}}>{conferidos} de {totalItens} itens conferidos</span>
+        <span style={{fontSize:13,fontWeight:800,color:pct===100&&totalItens>0?'#0C6B3E':'#1351B4'}}>{pct}%</span>
+      </div>
+      <div style={{height:10,background:'#F1F5F9',borderRadius:99,overflow:'hidden'}}>
+        <div style={{height:'100%',width:pct+'%',background:pct===100&&totalItens>0?'linear-gradient(90deg,#0C6B3E,#22C55E)':'linear-gradient(90deg,#1351B4,#3B82F6)',borderRadius:99,transition:'width .3s ease'}}/>
+      </div>
+      <button onClick={function(){setShowResumo(true);}} disabled={resumo.total===0} style={{marginTop:12,width:'100%',padding:'11px',background:resumo.total===0?'#E2E8F0':'#0C6B3E',border:'none',borderRadius:10,color:resumo.total===0?'#94A3B8':'#fff',fontWeight:700,fontSize:13,cursor:resumo.total===0?'default':'pointer'}}>✅ Finalizar e ver divergências{resumo.divergiram>0?' ('+resumo.divergiram+')':''}</button>
+    </div>
+
+    <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="🔍 Buscar medicamento..." className="inp" style={{marginBottom:14}}/>
+
+    {grupos.length===0&&<div style={{textAlign:'center',padding:32,color:'#94A3B8',fontSize:13}}>Nenhum medicamento encontrado.</div>}
+
+    {grupos.map(function(g){
+      var t=TIPOS[g.cat]||TIPOS.medicamento;var cor=CCOR[g.cat]||'#1351B4';
+      var confCat=g.meds.filter(medConferido).length;
+      var open=catAberta[g.cat];
+      return(<div key={g.cat} style={{marginBottom:12}}>
+        <button onClick={function(){setCatAberta(function(p){var n=Object.assign({},p);n[g.cat]=!open;return n;});}} style={{width:'100%',display:'flex',alignItems:'center',gap:10,background:cor,border:'none',borderRadius:open?'12px 12px 0 0':'12px',padding:'11px 14px',cursor:'pointer',textAlign:'left'}}>
+          <span style={{fontSize:19}}>{t.icon}</span>
+          <span style={{flex:1,fontWeight:700,fontSize:14,color:'#fff'}}>{t.label}</span>
+          <span style={{fontSize:11,fontWeight:700,color:'#fff',background:'rgba(255,255,255,.22)',borderRadius:99,padding:'2px 9px'}}>{confCat}/{g.meds.length}</span>
+          <span style={{fontSize:13,color:'#fff'}}>{open?'▲':'▼'}</span>
+        </button>
+        {open&&<div style={{border:'1.5px solid '+cor,borderTop:'none',borderRadius:'0 0 12px 12px',padding:'8px',background:'#F8FAFC'}}>
+          {g.meds.map(function(m){
+            var conf=medConferido(m);var exp=abertos[m.id];
+            var nlDoMed=novosLotes.filter(function(x){return x.medId===m.id;});
+            return(<div key={m.id} style={{marginBottom:6,background:'#fff',borderRadius:10,border:'1.5px solid '+(conf?'#BBF7D0':'#E2E8F0'),overflow:'hidden'}}>
+              <button onClick={function(){setAbertos(function(p){var n=Object.assign({},p);n[m.id]=!exp;return n;});}} style={{width:'100%',display:'flex',alignItems:'center',gap:10,background:'none',border:'none',padding:'11px 12px',cursor:'pointer',textAlign:'left'}}>
+                <span style={{fontSize:16}}>{conf?'✅':'⬜'}</span>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontWeight:600,fontSize:13,color:'#1E293B',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{m.nome}</div>
+                  <div style={{fontSize:10,color:'#94A3B8'}}>{m.lotes.length+(m.semLote>0?1:0)} lote(s){!cega&&' · sistema: '+m.est+' un.'}</div>
+                </div>
+                <span style={{fontSize:13,color:'#94A3B8'}}>{exp?'▲':'▼'}</span>
+              </button>
+              {exp&&<div style={{padding:'0 12px 12px'}}>
+                {m.lotes.length===0&&m.semLote===0&&<div style={{fontSize:12,color:'#94A3B8',padding:'6px 0'}}>Sem estoque registrado no sistema.</div>}
+                {m.lotes.map(function(l,li){return loteRow({key:confKey(m.id,l.lote,l.validade),titulo:'Lote '+(l.lote||'—'),sub:(l.validade?'Val '+l.validade:'sem validade'),sistema:l.qty,med:m,lote:l.lote,validade:l.validade,topBorder:li>0});})}
+                {m.semLote>0&&loteRow({key:confKey(m.id,'__SEMLOTE__',''),titulo:'Sem lote',sub:'unidades sem lote/validade',sistema:m.semLote,med:m,lote:'',validade:'',topBorder:m.lotes.length>0})}
+                {nlDoMed.map(function(nl){return(
+                  <div key={nl.id} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 10px',marginTop:6,background:'#EFF6FF',borderRadius:8,border:'1px dashed #93C5FD'}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:12,fontWeight:700,color:'#1351B4'}}>🆕 Lote {nl.lote}</div>
+                      <div style={{fontSize:10,color:'#64748B'}}>{nl.validade?'Val '+nl.validade+' · ':''}contado: {nl.qty} un.{nl.por?' · '+nl.por:''}</div>
+                    </div>
+                    <button onClick={function(){removeNovoLote(nl);}} style={{background:'none',border:'none',color:'#DC2626',cursor:'pointer',fontSize:16,padding:'0 4px'}} title="Remover">×</button>
+                  </div>
+                );})}
+                {novoForm===m.id
+                  ?<div style={{marginTop:8,background:'#F0F9FF',borderRadius:10,padding:'10px 12px',border:'1.5px solid #93C5FD'}}>
+                    <div style={{fontSize:12,fontWeight:700,color:'#1351B4',marginBottom:8}}>🆕 Novo lote encontrado</div>
+                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+                      <div><div style={{fontSize:10,color:'#64748B',fontWeight:600,marginBottom:2}}>LOTE *</div><input value={nlLote} onChange={function(e){setNlLote(e.target.value);}} placeholder="Ex: ABC123" style={{width:'100%',padding:'8px',borderRadius:7,border:'1.5px solid #CBD5E1',fontSize:13,boxSizing:'border-box'}}/></div>
+                      <div><div style={{fontSize:10,color:'#64748B',fontWeight:600,marginBottom:2}}>VALIDADE</div><input value={nlVal} onChange={function(e){setNlVal(e.target.value);}} placeholder="MM/AAAA" style={{width:'100%',padding:'8px',borderRadius:7,border:'1.5px solid #CBD5E1',fontSize:13,boxSizing:'border-box'}}/></div>
+                    </div>
+                    <div style={{marginBottom:8}}>
+                      <div style={{fontSize:10,color:'#64748B',fontWeight:600,marginBottom:2}}>QUANTIDADE CONTADA *</div>
+                      <input value={nlQty} onChange={function(e){setNlQty(e.target.value.replace(/[^0-9]/g,''));}} inputMode="numeric" placeholder="0" style={{width:'100%',padding:'8px',borderRadius:7,border:'1.5px solid #CBD5E1',fontSize:16,fontWeight:700,textAlign:'center',boxSizing:'border-box'}}/>
+                    </div>
+                    <div style={{display:'flex',gap:8}}>
+                      <button onClick={function(){setNovoForm(null);setNlLote('');setNlVal('');setNlQty('');}} style={{flex:1,padding:'8px',background:'#F1F5F9',border:'none',borderRadius:8,fontWeight:600,fontSize:12,cursor:'pointer'}}>Cancelar</button>
+                      <button onClick={function(){addNovoLote(m);}} style={{flex:2,padding:'8px',background:'#1351B4',border:'none',borderRadius:8,color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>✅ Adicionar lote</button>
+                    </div>
+                  </div>
+                  :<button onClick={function(){setNovoForm(m.id);setNlLote('');setNlVal('');setNlQty('');}} style={{marginTop:8,width:'100%',padding:'9px',background:'#EFF6FF',border:'1.5px dashed #93C5FD',borderRadius:8,color:'#1351B4',fontWeight:700,fontSize:12,cursor:'pointer'}}>+ Achei um lote novo</button>
+                }
+              </div>}
+            </div>);
+          })}
+        </div>}
+      </div>);
+    })}
+    <div style={{textAlign:'center',fontSize:10,color:'#CBD5E1',marginTop:8}}>Progresso salvo automaticamente · colaborativo em tempo real</div>
+
+    {showResumo&&<div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.7)',zIndex:9999,display:'flex',alignItems:'flex-end',justifyContent:'center',backdropFilter:'blur(4px)'}} onClick={function(){if(!aplicando)setShowResumo(false);}}>
+      <div onClick={function(e){e.stopPropagation();}} style={{background:'#F8FAFC',borderRadius:'22px 22px 0 0',width:'100%',maxWidth:700,maxHeight:'88vh',display:'flex',flexDirection:'column',boxShadow:'0 -12px 48px rgba(0,0,0,0.3)'}}>
+        <div style={{padding:'18px 18px 12px',borderBottom:'1px solid #E2E8F0'}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+            <div style={{fontWeight:800,fontSize:17,color:'#1E293B'}}>Resumo da Conferência</div>
+            <button onClick={function(){if(!aplicando)setShowResumo(false);}} style={{background:'#F1F5F9',border:'none',borderRadius:99,width:30,height:30,fontSize:15,cursor:'pointer',color:'#64748B'}}>✕</button>
+          </div>
+          <div style={{display:'flex',gap:8}}>
+            <div style={{flex:1,background:'#DCFCE7',borderRadius:10,padding:'8px 10px',textAlign:'center'}}>
+              <div style={{fontSize:19,fontWeight:800,color:'#0C6B3E'}}>{resumo.bateram}</div>
+              <div style={{fontSize:10,color:'#166534',fontWeight:600}}>✓ Bateram</div>
+            </div>
+            <div style={{flex:1,background:resumo.divergiram>0?'#FEE2E2':'#F1F5F9',borderRadius:10,padding:'8px 10px',textAlign:'center'}}>
+              <div style={{fontSize:19,fontWeight:800,color:resumo.divergiram>0?'#DC2626':'#94A3B8'}}>{resumo.divergiram}</div>
+              <div style={{fontSize:10,color:resumo.divergiram>0?'#991B1B':'#94A3B8',fontWeight:600}}>⚠ Divergiram</div>
+            </div>
+            <div style={{flex:1,background:'#EFF6FF',borderRadius:10,padding:'8px 10px',textAlign:'center'}}>
+              <div style={{fontSize:19,fontWeight:800,color:'#1351B4'}}>{resumo.total}</div>
+              <div style={{fontSize:10,color:'#1E40AF',fontWeight:600}}>Conferidos</div>
+            </div>
+          </div>
+        </div>
+        <div style={{flex:1,overflowY:'auto',padding:'12px 14px'}}>
+          {resumo.total===0&&<div style={{textAlign:'center',padding:32,color:'#94A3B8',fontSize:13}}>Nenhum lote contado ainda.</div>}
+          {resumo.itens.map(function(it,i){
+            var ok=it.diff===0;
+            var bg=it.novo?'#EFF6FF':ok?'#F0FDF4':'#FEF2F2';
+            var bd=it.novo?'#93C5FD':ok?'#BBF7D0':'#FECACA';
+            var loteLbl=it.novo?'🆕 Lote '+it.lote:it.semLote?'Sem lote':'Lote '+(it.lote||'—');
+            return(<div key={i} style={{display:'flex',alignItems:'center',gap:10,background:bg,border:'1.5px solid '+bd,borderRadius:10,padding:'10px 12px',marginBottom:6}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13,fontWeight:700,color:'#1E293B',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{it.medNome}</div>
+                <div style={{fontSize:10,color:'#64748B'}}>{loteLbl}{it.validade?' · Val '+it.validade:''}</div>
+                {it.recontagem>0&&<div style={{fontSize:10,color:'#B45309',fontWeight:700,marginTop:1}}>🔎 inclui {it.recontagem} un. em recontagem</div>}
+              </div>
+              <div style={{textAlign:'right',flexShrink:0}}>
+                <div style={{fontSize:11,color:'#64748B'}}>{it.sistema} → <strong style={{color:'#1E293B'}}>{it.contado}</strong></div>
+                {ok
+                  ?<div style={{fontSize:11,fontWeight:800,color:'#0C6B3E'}}>✓ bateu</div>
+                  :<div style={{fontSize:13,fontWeight:800,color:it.diff>0?'#0C6B3E':'#DC2626'}}>{(it.diff>0?'+':'')+it.diff}</div>
+                }
+              </div>
+            </div>);
+          })}
+        </div>
+        <div style={{padding:'12px 16px 18px',borderTop:'1px solid #E2E8F0',background:'#fff'}}>
+          {resumo.divergiram===0
+            ?<div style={{textAlign:'center',fontSize:13,color:'#0C6B3E',fontWeight:700,padding:'6px 0'}}>🎉 Tudo bateu! Nenhum ajuste necessário.</div>
+            :<div style={{fontSize:11,color:'#64748B',textAlign:'center',marginBottom:10}}>Os ajustes corrigem o estoque e ficam fora do ranking de saídas.</div>
+          }
+          <div style={{display:'flex',gap:10}}>
+            <button onClick={function(){if(!aplicando)setShowResumo(false);}} disabled={aplicando} style={{flex:1,padding:'13px',background:'#F1F5F9',border:'none',borderRadius:12,fontWeight:700,fontSize:14,color:'#64748B',cursor:'pointer'}}>{resumo.divergiram===0?'Fechar':'Cancelar'}</button>
+            {resumo.divergiram>0&&<button onClick={aplicarAjustes} disabled={aplicando} style={{flex:2,padding:'13px',background:aplicando?'#94A3B8':'#0C6B3E',border:'none',borderRadius:12,fontWeight:700,fontSize:14,color:'#fff',cursor:aplicando?'default':'pointer'}}>{aplicando?'Aplicando...':'Confirmar e aplicar '+resumo.divergiram+' ajuste(s)'}</button>}
+          </div>
+        </div>
+      </div>
+    </div>}
+  </div>);
+}
+
 function App(){
 var {confirm2,alert2,ModalRender,modal}=useModal();
 var _ready=useState(false);var ready=_ready[0];var setReady=_ready[1];var _user=useState(null);var user=_user[0];var setUser=_user[1];var _entries=useState([]);var entries=_entries[0];var setEntries=_entries[1];var _meds=useState([]);var meds=_meds[0];var setMeds=_meds[1];var _loading=useState(true);var loading=_loading[0];var setLoading=_loading[1];var _tab=useState('dashboard');var tab=_tab[0];var setTab=_tab[1];var _menuAberto=useState(false);var menuAberto=_menuAberto[0];var setMenuAberto=_menuAberto[1];var _showSairModal=useState(false);var showSairModal=_showSairModal[0];var setShowSairModal=_showSairModal[1];var _pending=useState(0);var pending=_pending[0];var setPending=_pending[1];var _alertCount=useState(0);var alertCount=_alertCount[0];var setAlertCount=_alertCount[1];
@@ -5605,6 +5974,7 @@ return(
         {tab==='saida'&&<TabSaida user={user} medications={meds} stock={stock} entries={entries} onSave={addEntry} onSolicitar={addSolicitacao} latest={latest} isGuest={isGuest} canMove={canMove} confirm2={confirm2} alert2={alert2}/>}
         {tab==='entrada'&&<TabEntrada user={user} medications={meds} entries={entries} onSave={addEntry} onSolicitar={addSolicitacao} isGuest={isGuest} canMove={canMove} confirm2={confirm2} alert2={alert2}/>}
         {tab==='estoque'&&<TabEstoque user={user} medications={meds} entries={entries} stock={stock} onSave={addEntry} confirm2={confirm2} alert2={alert2}/>}
+        {tab==='conferencia'&&<ErrBoundary><TabConferencia user={user} medications={meds} entries={entries} stock={stock}/></ErrBoundary>}
         {tab==='relatorio'&&<TabRelatorio entries={entries} medications={meds} db={db} user={user}/>}
         {tab==='gestao'&&can(user.role,'gestao')&&<TabGestao currentUser={user} entries={entries}/>}
         {tab==='log'&&can(user.role,'log')&&<TabLog/>}
@@ -5651,6 +6021,7 @@ return(
           <div style={{flex:1,overflowY:'auto',padding:'8px 0'}}>
             {[
               {id:'estoque',icon:'📦',label:'Estoque',show:true},
+              {id:'conferencia',icon:'🧾',label:'Conferência',show:true},
               {id:'leites',icon:'🍼',label:'Leites',show:true},
               {id:'relatorio',icon:'📊',label:'Relatório',show:true},
               {id:'gestao',icon:'👥',label:'Gestão',badge:badge,show:can(user.role,'gestao')},
@@ -5697,7 +6068,7 @@ return(
             <div style={{fontSize:11,color:'rgba(255,255,255,0.5)',marginTop:2}}>{ROLES[user.role]||user.role}</div>
           </div>
           <div style={{flex:1,overflowY:'auto',padding:'8px 0'}}>
-            {[{id:'estoque',icon:'📦',label:'Estoque'},{id:'leites',icon:'🍼',label:'Leites'},{id:'relatorio',icon:'📊',label:'Relatório'}].map(function(t){return(
+            {[{id:'estoque',icon:'📦',label:'Estoque'},{id:'conferencia',icon:'🧾',label:'Conferência'},{id:'leites',icon:'🍼',label:'Leites'},{id:'relatorio',icon:'📊',label:'Relatório'}].map(function(t){return(
               <button key={t.id} onClick={function(){setTab(t.id);setMenuAberto(false);}} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'13px 20px',border:'none',background:tab===t.id?'#EFF6FF':'transparent',cursor:'pointer',borderLeft:tab===t.id?'3px solid #1351B4':'3px solid transparent'}}>
                 <span style={{fontSize:20}}>{t.icon}</span>
                 <span style={{fontSize:14,fontWeight:tab===t.id?700:500,color:tab===t.id?'#1351B4':'#1E293B'}}>{t.label}</span>
