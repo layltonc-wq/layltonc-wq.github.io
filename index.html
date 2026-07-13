@@ -4513,50 +4513,60 @@ function TabPrevisao(props){
     return total;
   }
 
-  // Calcular previsão de um medicamento — retorna {pedir, metodo, detalhe}
+  // Calcular previsão de um medicamento — retorna {pedir, metodo, detalhe, ...}
   function calcularPrevisao(med){
     var dias=diasHistorico(med.id);// histórico de consumo real DESTE medicamento
     var estoqueAtual=stock[med.id]||0;
     var minimo=Number(med.minEstoque||med.estoqueMin||0);
-
-    // FASE 1: pouco histórico (<25 dias) → usa consumo mensal estimado
     var consEstim=Number(med.consumoEstimado||0);
+    var projEstim=consEstim>0?Math.ceil((consEstim/30)*diasPrev):0;// consumo estimado (manual) projetado p/ o horizonte
+
+    // Rede de segurança: a sugestão nunca pode deixar o estoque final abaixo do mínimo cadastrado,
+    // qualquer que seja o método/fase. Também nunca é negativa.
+    function finalizar(pedirCalc,extra){
+      var pedir=Math.max(0,Math.round(pedirCalc));
+      if(minimo>0)pedir=Math.max(pedir,minimo-estoqueAtual);
+      pedir=Math.max(0,pedir);
+      return Object.assign({pedir:pedir},extra);
+    }
+
+    // FASE 1: pouco histórico real (<25 dias) → usa consumo mensal estimado (ou o mínimo)
     if(dias<25){
       if(consEstim>0){
-        // projetar o consumo estimado para o período escolhido
-        var projEstim=Math.ceil((consEstim/30)*diasPrev);
         var margemE=Math.ceil(projEstim*0.15);
-        var pedirE=Math.max(0,projEstim+margemE-estoqueAtual);
-        return {pedir:pedirE,metodo:'estimado',detalhe:'Estimado '+consEstim+'/mês → '+projEstim+' em '+diasPrev+'d + margem '+margemE+' − estoque '+estoqueAtual,fase:1,consumoMes:projEstim};
+        return finalizar(projEstim+margemE-estoqueAtual,{metodo:'estimado',detalhe:'Estimado '+consEstim+'/mês → '+projEstim+' em '+diasPrev+'d + margem '+margemE+' − estoque '+estoqueAtual,fase:1,consumoMes:projEstim,consumoRealMes:0});
       }
-      // fallback: se não tem consumo estimado, usa o mínimo
-      var alvo=minimo>0?minimo:0;
-      var pedir1=Math.max(0,alvo-estoqueAtual);
-      return {pedir:pedir1,metodo:'minimo',detalhe:minimo>0?('Alvo mínimo '+minimo+' − estoque '+estoqueAtual):'Defina o consumo estimado ou o mínimo deste item',fase:1,consumoMes:null};
+      return finalizar(minimo-estoqueAtual,{metodo:'minimo',detalhe:minimo>0?('Alvo mínimo '+minimo+' − estoque '+estoqueAtual):'Defina o consumo estimado ou o mínimo deste item',fase:1,consumoMes:null,consumoRealMes:0});
     }
 
-    // FASE 2: 25-55 dias → média de consumo diário projetada
+    // Consumo REAL dos últimos 30 dias (só dispensação; ver _ehSaidaNaoReal)
     var cons30=consumoPeriodo(med.id,30);
     var consDiario=cons30/Math.min(dias,30);
-    var projecaoMes=Math.ceil(consDiario*diasPrev);
+    var realMes=Math.round(consDiario*30);// consumo real ~mensal (p/ exibição)
 
+    // FASE 2: 25-55 dias → média diária projetada, com PISO no consumo estimado configurado
     if(dias<55){
-      var margem=minimo>0?Math.ceil(minimo*0.2):Math.ceil(projecaoMes*0.15);
-      var pedir2=Math.max(0,projecaoMes+margem-estoqueAtual);
-      return {pedir:pedir2,metodo:'media',detalhe:'Consumo ~'+consDiario.toFixed(1)+'/dia × '+diasPrev+'d = '+projecaoMes+' + margem '+margem+' − estoque '+estoqueAtual,fase:2,consumoMes:projecaoMes};
+      var projReal=Math.ceil(consDiario*diasPrev);
+      var proj=Math.max(projReal,projEstim);// nunca abaixo do que o farmacêutico configurou (evita subestimar consumo alto)
+      var usouEstim=projEstim>projReal;
+      var margem=minimo>0?Math.ceil(minimo*0.2):Math.ceil(proj*0.15);
+      var det2=usouEstim?('Estimado '+consEstim+'/mês (≥ real ~'+realMes+'/mês) → '+proj):('Consumo real ~'+consDiario.toFixed(1)+'/dia × '+diasPrev+'d = '+proj);
+      return finalizar(proj+margem-estoqueAtual,{metodo:usouEstim?'estimado':'media',detalhe:det2+' + margem '+margem+' − estoque '+estoqueAtual,fase:2,consumoMes:proj,consumoRealMes:realMes});
     }
 
-    // FASE 3: 55+ dias → tendência (compara últimos 30d vs 30d anteriores)
+    // FASE 3: 55+ dias → tendência (últimos 30d vs 30d anteriores), com PISO no estimado
     var consRecente=consumoPeriodo(med.id,30);
     var consAnterior=consumoPeriodo(med.id,60)-consRecente;
     var tendencia=0;
     if(consAnterior>0)tendencia=(consRecente-consAnterior)/consAnterior;
     var fatorTend=1+Math.max(-0.3,Math.min(0.5,tendencia));
-    var projTend=Math.ceil((consRecente/30)*diasPrev*fatorTend);
-    var margem3=minimo>0?Math.ceil(minimo*0.2):Math.ceil(projTend*0.15);
-    var pedir3=Math.max(0,projTend+margem3-estoqueAtual);
+    var projTendReal=Math.ceil((consRecente/30)*diasPrev*fatorTend);
+    var projT=Math.max(projTendReal,projEstim);// piso no estimado
+    var usouEstim3=projEstim>projTendReal;
+    var margem3=minimo>0?Math.ceil(minimo*0.2):Math.ceil(projT*0.15);
     var tendStr=tendencia>0.05?('alta +'+Math.round(tendencia*100)+'%'):(tendencia<-0.05?('queda '+Math.round(tendencia*100)+'%'):'estável');
-    return {pedir:pedir3,metodo:'tendencia',detalhe:'Tendência '+tendStr+' · proj '+projTend+' + margem '+margem3+' − estoque '+estoqueAtual,fase:3,consumoMes:projTend};
+    var det3=usouEstim3?('Estimado '+consEstim+'/mês (≥ tendência) → '+projT):('Tendência '+tendStr+' · proj '+projT);
+    return finalizar(projT+margem3-estoqueAtual,{metodo:usouEstim3?'estimado':'tendencia',detalhe:det3+' + margem '+margem3+' − estoque '+estoqueAtual,fase:3,consumoMes:projT,consumoRealMes:realMes});
   }
 
   // Medicamentos de uma ata
@@ -5003,9 +5013,10 @@ function TabPrevisao(props){
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{fontWeight:700,fontSize:13,color:'#1E293B',marginBottom:2}}>{m.nome}</div>
                   <div style={{fontSize:11,color:'#94A3B8'}}>
-                    Estoque: {stock[m.id]||0} · Mín: {m.minEstoque||0} · Consumo/mês: {m.consumoEstimado||0}
+                    Estoque: {stock[m.id]||0} · Mín: {m.minEstoque||0} · Estimado: {m.consumoEstimado||0}/mês{p.consumoRealMes>0?' · Real: '+p.consumoRealMes+'/mês':''}
                     {' · '}<span style={{color:cor2,fontWeight:600}}>{metodoLbl[p.metodo]||p.metodo}</span>
                   </div>
+                  {p.detalhe&&<div style={{fontSize:10,color:'#B0B8C4',marginTop:2}}>{p.detalhe}</div>}
                   {saldoAta!==null&&<div style={{fontSize:11,marginTop:2,fontWeight:600,color:excede?'#DC2626':'#0C6B3E'}}>
                     Saldo ATA: {saldoAta} {item.unidade||''}{excede?' ⚠️ excede saldo!':''}
                   </div>}
