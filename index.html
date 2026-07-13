@@ -4479,9 +4479,17 @@ function TabPrevisao(props){
   },[]);
 
   // ── CÁLCULO DE PREVISÃO ──────────────────────────────────────
-  // Descobrir quantos dias de histórico existem
-  function diasHistorico(){
-    var datas=entries.filter(function(e){return e.tipo==='saida';}).map(function(e){return e.date||(e.criadoEm||'').slice(0,10);}).filter(Boolean);
+  // Descobrir quantos dias de histórico de CONSUMO REAL existem.
+  // Só conta dispensação real (via _ehSaidaNaoReal): descartes, ajustes, balanços etc. não
+  // contam como histórico. Com medId, mede só aquele medicamento — assim um item que só teve
+  // descartes/ajustes fica com 0 dias e cai na Fase 1 (conservadora), em vez da Fase 3.
+  function diasHistorico(medId){
+    var datas=entries.filter(function(e){
+      if(e.tipo!=='saida')return false;
+      if(_ehSaidaNaoReal(e))return false;
+      if(medId&&e.medicamentoId!==medId)return false;
+      return true;
+    }).map(function(e){return e.date||(e.criadoEm||'').slice(0,10);}).filter(Boolean);
     if(datas.length===0)return 0;
     datas.sort();
     var primeira=new Date(datas[0]+'T12:00:00');
@@ -4507,7 +4515,7 @@ function TabPrevisao(props){
 
   // Calcular previsão de um medicamento — retorna {pedir, metodo, detalhe}
   function calcularPrevisao(med){
-    var dias=diasHistorico();
+    var dias=diasHistorico(med.id);// histórico de consumo real DESTE medicamento
     var estoqueAtual=stock[med.id]||0;
     var minimo=Number(med.minEstoque||med.estoqueMin||0);
 
