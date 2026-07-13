@@ -5305,7 +5305,10 @@ function TabConferencia(props){
   var _acheiForm=useState(null);var acheiForm=_acheiForm[0];var setAcheiForm=_acheiForm[1];// key da linha em edição
   var _acheiQty=useState('');var acheiQty=_acheiQty[0];var setAcheiQty=_acheiQty[1];
   var _erro=useState('');var erro=_erro[0];var setErro=_erro[1];
+  var _participantes=useState({});var participantes=_participantes[0];var setParticipantes=_participantes[1];
+  var _showTrocar=useState(false);var showTrocar=_showTrocar[0];var setShowTrocar=_showTrocar[1];
   var pendingRef=useRef({});var timersRef=useRef({});var remoteRef=useRef({});
+  var minhaCatRef=useRef(null);var entrouRef=useRef(null);
 
   useEffect(function(){
     var unsub=docRef().onSnapshot(function(snap){
@@ -5321,9 +5324,33 @@ function TabConferencia(props){
       setContadoPor(data.contadoPor||{});
       setNovosLotes(data.novosLotes||[]);
       setRecontagens(data.recontagens||[]);
+      var parts=data.participantes||{};setParticipantes(parts);
+      // mantém a categoria própria sincronizada p/ o heartbeat
+      var meu=parts[user.uid];minhaCatRef.current=meu?(meu.cat||null):minhaCatRef.current;
     },function(e){setErro('Não foi possível ler a conferência: '+e.message+' (verifique as regras/permissões do Firestore).');});
     return unsub;
   },[]);
+
+  // ===== Presença colaborativa: registra quem está na conferência (campo participantes do mesmo doc) =====
+  function escreverPresenca(cat){
+    var now=new Date().toISOString();if(!entrouRef.current)entrouRef.current=now;
+    var p={nome:user.name,cor:user.color||B,cat:(cat!==undefined?cat:minhaCatRef.current)||null,em:now,entrou:entrouRef.current};
+    var upd={};upd[user.uid]=p;
+    return docRef().set({participantes:upd},{merge:true});
+  }
+  useEffect(function(){
+    if(!user||!user.uid)return;
+    escreverPresenca(undefined).catch(function(){});
+    var iv=setInterval(function(){escreverPresenca(undefined).catch(function(){});},15000);// heartbeat
+    var sair=function(){var u={};u['participantes.'+user.uid]=firebase.firestore.FieldValue.delete();docRef().update(u).catch(function(){});};
+    window.addEventListener('beforeunload',sair);
+    return function(){clearInterval(iv);window.removeEventListener('beforeunload',sair);sair();};
+  },[]);
+  function definirMinhaCat(cat){
+    minhaCatRef.current=cat;
+    escreverPresenca(cat).then(function(){setErro('');setShowTrocar(false);if(cat)setCatAberta(function(p){var n=Object.assign({},p);n[cat]=true;return n;});}).catch(function(e){erroEscrita(e);});
+  }
+  function sairDaContagem(){definirMinhaCat(null);}
 
   // Reverte o valor local de uma chave para o último estado confirmado no servidor (rollback)
   function revertKey(key){setContagens(function(p){var n=Object.assign({},p);var rv=remoteRef.current[key];if(rv===undefined)delete n[key];else n[key]=String(rv);return n;});}
@@ -5467,16 +5494,41 @@ function TabConferencia(props){
   var cats=Object.keys(TIPOS);
   var grupos=cats.map(function(cat){return {cat:cat,meds:filtrada.filter(function(m){return (m.cat||'medicamento')===cat;}).sort(function(a,b){return a.nome.localeCompare(b.nome);})};}).filter(function(g){return g.meds.length>0;});
 
+  // Progresso por categoria (sobre todos os medicamentos, não filtrado pela busca)
+  var catStats={};cats.forEach(function(c){catStats[c]={total:0,conf:0};});
+  medList.forEach(function(m){var c=m.cat||'medicamento';if(!catStats[c])catStats[c]={total:0,conf:0};catStats[c].total++;if(medConferido(m))catStats[c].conf++;});
+  // Participantes online (heartbeat < 45s) e quem está em cada categoria
+  var agoraMs=Date.now();
+  var online=Object.keys(participantes).map(function(uid){return Object.assign({uid:uid},participantes[uid]);}).filter(function(p){return p.em&&(agoraMs-new Date(p.em).getTime())<45000;}).sort(function(a,b){return (a.entrou||'').localeCompare(b.entrou||'');});
+  var donoCat={};online.forEach(function(p){if(p.cat){if(!donoCat[p.cat])donoCat[p.cat]=[];donoCat[p.cat].push(p);}});
+  var meuP=participantes[user.uid];var minhaCat=meuP?(meuP.cat||null):null;
+  var catsComMeds=grupos.map(function(g){return g.cat;});
+  function pegarCategoria(){
+    var ocupadas={};online.forEach(function(p){if(p.uid!==user.uid&&p.cat)ocupadas[p.cat]=true;});
+    var livres=catsComMeds.filter(function(c){return !ocupadas[c];});
+    var pref=livres.filter(function(c){return (catStats[c]?catStats[c].conf:0)<(catStats[c]?catStats[c].total:0);});// não concluídas primeiro
+    var escolha=pref[0]||livres[0]||catsComMeds[0];
+    if(!escolha){setErro('Nenhuma categoria com itens para distribuir.');return;}
+    definirMinhaCat(escolha);
+  }
+  function escolherCategoria(cat){
+    var outros=(donoCat[cat]||[]).filter(function(p){return p.uid!==user.uid;});
+    if(outros.length>0&&!confirm(outros[0].nome+' já está contando '+(TIPOS[cat]?TIPOS[cat].label:cat)+'. Quer contar junto mesmo assim?'))return;
+    definirMinhaCat(cat);
+  }
+
   // Renderiza uma linha de lote com campo de contagem, histórico de recontagem e botão "Achei mais"
   function loteRow(o){
     var key=o.key;var val=contagens[key];var cont=val===undefined?'':val;
     var diff=cont!==''?(parseInt(cont)||0)-o.sistema:null;
     var rc=recByKey[key];var jaContado=cont!=='';
+    var por=contadoPor[key];var porOutro=jaContado&&por&&por.nome&&por.nome!==user.name;
     return(<div key={key} style={{padding:'8px 0',borderTop:o.topBorder?'1px solid #F1F5F9':'none'}}>
       <div style={{display:'flex',alignItems:'center',gap:10}}>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontSize:12,fontWeight:700,color:'#334155'}}>{o.titulo}</div>
           <div style={{fontSize:10,color:'#94A3B8'}}>{o.sub}{!cega&&' · sistema: '+o.sistema+' un.'}{!cega&&diff!==null&&diff!==0&&<span style={{color:diff>0?'#0C6B3E':'#DC2626',fontWeight:700}}>{' · '+(diff>0?'+':'')+diff}</span>}</div>
+          {jaContado&&por&&por.nome&&<div style={{fontSize:9,color:porOutro?'#B45309':'#94A3B8',fontWeight:porOutro?700:400}}>✍️ {por.nome}{por.em?' · '+fmtT(por.em):''}</div>}
         </div>
         <input value={cont} onChange={function(e){onCount(key,e.target.value);}} inputMode="numeric" placeholder="0" style={{width:66,padding:'8px 6px',border:'1.5px solid '+(cont!==''?'#1351B4':'#CBD5E1'),borderRadius:8,fontSize:16,fontWeight:700,textAlign:'center',outline:'none'}}/>
       </div>
@@ -5512,6 +5564,33 @@ function TabConferencia(props){
       <button onClick={function(){setErro('');}} style={{background:'none',border:'none',color:'#991B1B',cursor:'pointer',fontSize:15,lineHeight:1,padding:0}}>✕</button>
     </div>}
 
+    {/* Painel de colaboração — equipe na conferência e distribuição de categorias */}
+    <div style={{background:'#fff',borderRadius:14,padding:'12px 14px',marginBottom:14,border:'1.5px solid #E2E8F0'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+        <span style={{fontSize:13,fontWeight:800,color:'#1E293B'}}>👥 Equipe na conferência ({online.length})</span>
+        {minhaCat
+          ?<div style={{display:'flex',gap:6}}>
+            <button onClick={function(){setShowTrocar(true);}} style={{background:'#EFF6FF',border:'1px solid #BFDBFE',borderRadius:8,padding:'5px 10px',fontSize:11,fontWeight:700,color:'#1351B4',cursor:'pointer'}}>Trocar</button>
+            <button onClick={sairDaContagem} style={{background:'#F1F5F9',border:'none',borderRadius:8,padding:'5px 10px',fontSize:11,fontWeight:700,color:'#64748B',cursor:'pointer'}}>Sair</button>
+          </div>
+          :<button onClick={pegarCategoria} style={{background:'#0C6B3E',border:'none',borderRadius:8,padding:'6px 12px',fontSize:11,fontWeight:700,color:'#fff',cursor:'pointer'}}>🙋 Pegar uma categoria</button>
+        }
+      </div>
+      {online.length===0&&<div style={{fontSize:11,color:'#94A3B8'}}>Ninguém online no momento.</div>}
+      {online.map(function(p){
+        var isMe=p.uid===user.uid;var ct=p.cat?catStats[p.cat]:null;var tl=p.cat&&TIPOS[p.cat]?TIPOS[p.cat].label:null;
+        return(<div key={p.uid} style={{display:'flex',alignItems:'center',gap:9,padding:'6px 0'}}>
+          <div style={{width:26,height:26,borderRadius:'50%',background:p.cor||'#1351B4',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:800,color:'#fff',flexShrink:0}}>{p.nome?p.nome.charAt(0).toUpperCase():'?'}</div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:12,fontWeight:700,color:'#1E293B'}}>{p.nome}{isMe?' (você)':''} <span style={{color:'#22C55E',fontSize:9}}>●</span></div>
+            <div style={{fontSize:10,color:p.cat?'#475569':'#94A3B8'}}>{p.cat?(tl+': '+(ct?ct.conf:0)+' de '+(ct?ct.total:0)):'escolhendo categoria...'}</div>
+          </div>
+          {p.cat&&<span style={{fontSize:15}}>{TIPOS[p.cat]?TIPOS[p.cat].icon:''}</span>}
+        </div>);
+      })}
+      <div style={{fontSize:10,color:'#94A3B8',marginTop:8,lineHeight:1.5,borderTop:'1px solid #F1F5F9',paddingTop:8}}>💡 Cada contagem é salva por item, em tempo real. Se duas pessoas contarem o mesmo item, vale a última — o app registra quem contou.</div>
+    </div>
+
     {/* Barra de progresso */}
     <div style={{background:'#fff',borderRadius:14,padding:'14px 16px',marginBottom:14,border:'1.5px solid #E2E8F0'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:8}}>
@@ -5532,10 +5611,14 @@ function TabConferencia(props){
       var t=TIPOS[g.cat]||TIPOS.medicamento;var cor=CCOR[g.cat]||'#1351B4';
       var confCat=g.meds.filter(medConferido).length;
       var open=catAberta[g.cat];
+      var donos=donoCat[g.cat]||[];var euAqui=g.cat===minhaCat;
       return(<div key={g.cat} style={{marginBottom:12}}>
-        <button onClick={function(){setCatAberta(function(p){var n=Object.assign({},p);n[g.cat]=!open;return n;});}} style={{width:'100%',display:'flex',alignItems:'center',gap:10,background:cor,border:'none',borderRadius:open?'12px 12px 0 0':'12px',padding:'11px 14px',cursor:'pointer',textAlign:'left'}}>
+        <button onClick={function(){setCatAberta(function(p){var n=Object.assign({},p);n[g.cat]=!open;return n;});}} style={{width:'100%',display:'flex',alignItems:'center',gap:10,background:cor,border:euAqui?'2px solid #FBBF24':'none',borderRadius:open?'12px 12px 0 0':'12px',padding:'11px 14px',cursor:'pointer',textAlign:'left'}}>
           <span style={{fontSize:19}}>{t.icon}</span>
-          <span style={{flex:1,fontWeight:700,fontSize:14,color:'#fff'}}>{t.label}</span>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontWeight:700,fontSize:14,color:'#fff'}}>{t.label}</div>
+            {donos.length>0&&<div style={{fontSize:10,color:'rgba(255,255,255,.9)',marginTop:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>👤 {donos.map(function(p){return p.uid===user.uid?'você':p.nome;}).join(', ')}</div>}
+          </div>
           <span style={{fontSize:11,fontWeight:700,color:'#fff',background:'rgba(255,255,255,.22)',borderRadius:99,padding:'2px 9px'}}>{confCat}/{g.meds.length}</span>
           <span style={{fontSize:13,color:'#fff'}}>{open?'▲':'▼'}</span>
         </button>
@@ -5590,6 +5673,29 @@ function TabConferencia(props){
       </div>);
     })}
     <div style={{textAlign:'center',fontSize:10,color:'#CBD5E1',marginTop:8}}>Progresso salvo automaticamente · colaborativo em tempo real</div>
+
+    {showTrocar&&<div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.7)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:18,backdropFilter:'blur(4px)'}} onClick={function(){setShowTrocar(false);}}>
+      <div onClick={function(e){e.stopPropagation();}} style={{background:'#fff',borderRadius:18,width:'100%',maxWidth:420,maxHeight:'80vh',overflowY:'auto',boxShadow:'0 20px 60px rgba(0,0,0,0.3)',padding:18}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+          <div style={{fontWeight:800,fontSize:16,color:'#1E293B'}}>Escolher categoria</div>
+          <button onClick={function(){setShowTrocar(false);}} style={{background:'#F1F5F9',border:'none',borderRadius:99,width:28,height:28,fontSize:14,cursor:'pointer',color:'#64748B'}}>✕</button>
+        </div>
+        {catsComMeds.length===0&&<div style={{fontSize:12,color:'#94A3B8'}}>Nenhuma categoria com itens.</div>}
+        {catsComMeds.map(function(c){
+          var t=TIPOS[c]||TIPOS.medicamento;var st=catStats[c]||{conf:0,total:0};var donos=(donoCat[c]||[]).filter(function(p){return p.uid!==user.uid;});
+          var eu=c===minhaCat;var done=st.total>0&&st.conf>=st.total;
+          return(<button key={c} onClick={function(){escolherCategoria(c);}} style={{width:'100%',display:'flex',alignItems:'center',gap:10,textAlign:'left',background:eu?'#EFF6FF':'#F8FAFC',border:'1.5px solid '+(eu?'#1351B4':'#E2E8F0'),borderRadius:12,padding:'11px 12px',marginBottom:8,cursor:'pointer'}}>
+            <span style={{fontSize:20}}>{t.icon}</span>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:13,fontWeight:700,color:'#1E293B'}}>{t.label}{eu?' (você)':''}</div>
+              <div style={{fontSize:10,color:done?'#0C6B3E':'#64748B'}}>{st.conf} de {st.total} conferidos{done?' ✓':''}{donos.length>0?' · 👤 '+donos.map(function(p){return p.nome;}).join(', '):''}</div>
+            </div>
+            {donos.length>0&&<span style={{fontSize:9,fontWeight:700,color:'#B45309',background:'#FEF3C7',borderRadius:6,padding:'2px 6px'}}>ocupada</span>}
+          </button>);
+        })}
+        <div style={{fontSize:10,color:'#94A3B8',marginTop:4}}>A distribuição automática evita repetir categoria. Você ainda pode escolher uma ocupada para contar junto.</div>
+      </div>
+    </div>}
 
     {showResumo&&<div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.7)',zIndex:9999,display:'flex',alignItems:'flex-end',justifyContent:'center',backdropFilter:'blur(4px)'}} onClick={function(){if(!aplicando)setShowResumo(false);}}>
       <div onClick={function(e){e.stopPropagation();}} style={{background:'#F8FAFC',borderRadius:'22px 22px 0 0',width:'100%',maxWidth:700,maxHeight:'88vh',display:'flex',flexDirection:'column',boxShadow:'0 -12px 48px rgba(0,0,0,0.3)'}}>
