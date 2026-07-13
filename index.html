@@ -4452,6 +4452,7 @@ function TabPrevisao(props){
   var _buscaLote=useState('');var buscaLote=_buscaLote[0];var setBuscaLote=_buscaLote[1];
   var _filtCatLote=useState('todos');var filtCatLote=_filtCatLote[0];var setFiltCatLote=_filtCatLote[1];
   var _ajBusca=useState('');var ajBusca=_ajBusca[0];var setAjBusca=_ajBusca[1];
+  var _soUrg=useState(false);var soUrg=_soUrg[0];var setSoUrg=_soUrg[1];// filtro: mostrar só itens com risco de ruptura
   var _numPedido=useState('');var numPedido=_numPedido[0];var setNumPedido=_numPedido[1];
   var _empresa=useState('');var empresa=_empresa[0];var setEmpresa=_empresa[1];
   var _cnpjEmpresa=useState('');var cnpjEmpresa=_cnpjEmpresa[0];var setCnpjEmpresa=_cnpjEmpresa[1];
@@ -4527,7 +4528,10 @@ function TabPrevisao(props){
       var pedir=Math.max(0,Math.round(pedirCalc));
       if(minimo>0)pedir=Math.max(pedir,minimo-estoqueAtual);
       pedir=Math.max(0,pedir);
-      return Object.assign({pedir:pedir},extra);
+      // Dias até acabar no ritmo de consumo REAL. Sem consumo real => não dá para prever (null).
+      var crm=(extra&&extra.consumoRealMes)||0;
+      var diasParaAcabar=crm>0?Math.floor(estoqueAtual*30/crm):null;
+      return Object.assign({pedir:pedir,diasParaAcabar:diasParaAcabar},extra);
     }
 
     // FASE 1: pouco histórico real (<25 dias) → usa consumo mensal estimado (ou o mínimo)
@@ -4953,7 +4957,9 @@ function TabPrevisao(props){
             <option value={60}>60 dias</option>
           </select>
           <input value={ajBusca||''} onChange={function(e){setAjBusca(e.target.value);}} placeholder="🔍 Buscar medicamento..." className="inp" style={{marginBottom:0,flex:1}}/>
+          <button onClick={function(){setSoUrg(!soUrg);}} style={{marginBottom:0,padding:'8px 14px',borderRadius:8,border:'1.5px solid '+(soUrg?'#DC2626':'#E2E8F0'),background:soUrg?'#DC2626':'#fff',color:soUrg?'#fff':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer',whiteSpace:'nowrap'}}>🚨 Só urgentes</button>
         </div>
+        <div style={{fontSize:11,color:'#94A3B8',marginBottom:12,marginTop:-4}}>Itens ordenados por urgência (os que acabam antes aparecem primeiro).{soUrg?' Mostrando só ruptura em ≤30 dias.':''}</div>
 
         {/* Botões exportar */}
         <div style={{background:'#F8FAFC',borderRadius:10,border:'1px solid #E2E8F0',padding:'12px 14px',marginBottom:12}}>
@@ -4979,6 +4985,9 @@ function TabPrevisao(props){
               var matchBusca=!buscaL||m.nome.toLowerCase().indexOf(buscaL)>=0;
               return temConfig&&matchCat&&matchBusca;
             });
+            // Filtro "só urgentes" (ruptura em ≤30d) e ordenação por urgência (acaba antes primeiro; sem previsão por último)
+            if(soUrg)medsCat=medsCat.filter(function(m){var d=calcularPrevisao(m).diasParaAcabar;return d!==null&&d<=30;});
+            medsCat.sort(function(a,b){var da=calcularPrevisao(a).diasParaAcabar;var db2=calcularPrevisao(b).diasParaAcabar;return (da===null?Infinity:da)-(db2===null?Infinity:db2);});
             if(medsCat.length===0)return null;
             algumaMostrada=true;
             var catAberta=pastasAbertas['prev_'+catKey]!==false;
@@ -5009,9 +5018,12 @@ function TabPrevisao(props){
               var metodoLbl={estimado:'🎯 estimado',minimo:'📊 mínimo',media:'📉 média',tendencia:'📈 tendência'};
               var saldoAta=item?(item.qtdTeto-((item.pedidoAcumulado)||0)):null;
               var excede=saldoAta!==null&&val>saldoAta;
-              return(<div key={m.id} style={{background:'#fff',borderRadius:12,border:'1px solid '+(excede?'#FCA5A5':'#E2E8F0'),padding:'12px 14px',marginBottom:8,display:'flex',alignItems:'center',gap:10}}>
+              var dAcaba=p.diasParaAcabar;var critico=dAcaba!==null&&dAcaba<15;var atencao=dAcaba!==null&&dAcaba>=15&&dAcaba<=30;
+              var alerta=critico||atencao;
+              return(<div key={m.id} style={{background:'#fff',borderRadius:12,border:'1.5px solid '+(critico?'#FCA5A5':atencao?'#FDE68A':excede?'#FCA5A5':'#E2E8F0'),borderLeft:alerta?('4px solid '+(critico?'#DC2626':'#F59E0B')):('1.5px solid '+(excede?'#FCA5A5':'#E2E8F0')),padding:'12px 14px',marginBottom:8,display:'flex',alignItems:'center',gap:10}}>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{fontWeight:700,fontSize:13,color:'#1E293B',marginBottom:2}}>{m.nome}</div>
+                  {alerta&&<div style={{display:'inline-block',fontSize:11,fontWeight:800,color:critico?'#B91C1C':'#92400E',background:critico?'#FEE2E2':'#FEF3C7',borderRadius:6,padding:'2px 8px',marginBottom:3}}>⚠️ Acaba em {dAcaba} dia{dAcaba===1?'':'s'}</div>}
                   <div style={{fontSize:11,color:'#94A3B8'}}>
                     Estoque: {stock[m.id]||0} · Mín: {m.minEstoque||0} · Estimado: {m.consumoEstimado||0}/mês{p.consumoRealMes>0?' · Real: '+p.consumoRealMes+'/mês':''}
                     {' · '}<span style={{color:cor2,fontWeight:600}}>{metodoLbl[p.metodo]||p.metodo}</span>
@@ -5094,6 +5106,13 @@ function TabPrevisao(props){
             </div>);
           });
           if(!algumaMostrada){
+            if(soUrg){
+              return(<div style={{textAlign:'center',padding:'32px 0',color:'#0C6B3E'}}>
+                <div style={{fontSize:40,marginBottom:8}}>✅</div>
+                <div style={{fontWeight:700,marginBottom:4}}>Nenhum item em risco de ruptura</div>
+                <div style={{fontSize:12,color:'#64748B'}}>Nenhum medicamento com consumo real deve acabar nos próximos 30 dias.{ajBusca?' (com o filtro de busca atual)':''}</div>
+              </div>);
+            }
             return(<div style={{textAlign:'center',padding:'32px 0',color:'#94A3B8'}}>
               <div style={{fontSize:40,marginBottom:8}}>📋</div>
               <div style={{fontWeight:600,marginBottom:4}}>Nenhum medicamento configurado</div>
