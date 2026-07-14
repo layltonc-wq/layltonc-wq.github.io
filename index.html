@@ -4486,43 +4486,42 @@ function TabPrevisao(props){
   },[]);
 
   // ── CÁLCULO DE PREVISÃO ──────────────────────────────────────
-  // Descobrir quantos dias de histórico de CONSUMO REAL existem.
-  // Só conta dispensação real (via _ehSaidaNaoReal): descartes, ajustes, balanços etc. não
-  // contam como histórico. Com medId, mede só aquele medicamento — assim um item que só teve
-  // descartes/ajustes fica com 0 dias e cai na Fase 1 (conservadora), em vez da Fase 3.
-  function diasHistorico(medId){
-    var datas=entries.filter(function(e){
-      if(e.tipo!=='saida')return false;
-      if(_ehSaidaNaoReal(e))return false;
-      if(medId&&e.medicamentoId!==medId)return false;
-      return true;
-    }).map(function(e){return e.date||(e.criadoEm||'').slice(0,10);}).filter(Boolean);
-    if(datas.length===0)return 0;
-    datas.sort();
-    var primeira=new Date(datas[0]+'T12:00:00');
-    var hoje=new Date();
-    return Math.max(1,Math.round((hoje-primeira)/(1000*60*60*24)));
-  }
-
-  // Consumo total de um medicamento num período (em dias atrás)
-  // Considera APENAS saídas reais (dispensação). Exclui balanço, descarte, ajuste,
-  // reclassificação, saída fictícia de divergência, etc. — via _ehSaidaNaoReal (mesma
-  // regra do ranking), para não inflar as sugestões de compra.
-  function consumoPeriodo(medId,diasAtras){
-    var limite=new Date();limite.setDate(limite.getDate()-diasAtras);
-    var total=0;
-    entries.forEach(function(e){
-      if(e.tipo!=='saida'||e.medicamentoId!==medId)return;
+  // Índice de consumo REAL por medicamento, calculado UMA única vez por mudança de entries.
+  // Percorre o histórico uma só vez e agrega, por medicamento: a primeira saída real (para
+  // diasHistorico) e o total consumido nos últimos 30 e 60 dias (para média/tendência).
+  // Só conta dispensação real (via _ehSaidaNaoReal): descartes, ajustes, balanços etc. ficam de fora.
+  // Antes, cada medicamento varria o histórico inteiro várias vezes (consumoPeriodo 30/60 + diasHistorico),
+  // dezenas de vezes por render — o que travava o celular. Agora é uma passada + consultas O(1).
+  var consumoIndex=useMemo(function(){
+    var lim30=new Date();lim30.setDate(lim30.getDate()-30);
+    var lim60=new Date();lim60.setDate(lim60.getDate()-60);
+    var idx={};var primeiraGlobal=null;
+    (entries||[]).forEach(function(e){
+      if(e.tipo!=='saida')return;
       if(_ehSaidaNaoReal(e))return;
-      var d=new Date((e.date||(e.criadoEm||'').slice(0,10))+'T12:00:00');
-      if(d>=limite)total+=(Number(e.quantidade)||0);
+      var ds=e.date||(e.criadoEm||'').slice(0,10);
+      if(!ds)return;
+      if(primeiraGlobal===null||ds<primeiraGlobal)primeiraGlobal=ds;// histórico global (diasHistorico() sem medId)
+      var medId=e.medicamentoId;if(!medId)return;
+      var o=idx[medId];if(!o){o=idx[medId]={primeira:ds,cons30:0,cons60:0};}
+      if(ds<o.primeira)o.primeira=ds;
+      var d=new Date(ds+'T12:00:00');var q=Number(e.quantidade)||0;
+      if(d>=lim60){o.cons60+=q;if(d>=lim30)o.cons30+=q;}
     });
-    return total;
+    return {idx:idx,primeiraGlobal:primeiraGlobal};
+  },[entries]);
+
+  // Dias de histórico de consumo real. Com medId, do próprio medicamento; sem medId, global. O(1) no índice.
+  function diasHistorico(medId){
+    var pg=medId?(consumoIndex.idx[medId]?consumoIndex.idx[medId].primeira:null):consumoIndex.primeiraGlobal;
+    if(!pg)return 0;
+    return Math.max(1,Math.round((Date.now()-new Date(pg+'T12:00:00').getTime())/(1000*60*60*24)));
   }
 
-  // Calcular previsão de um medicamento — retorna {pedir, metodo, detalhe, ...}
-  function calcularPrevisao(med){
-    var dias=diasHistorico(med.id);// histórico de consumo real DESTE medicamento
+  // Núcleo do cálculo de previsão (puro). Lê os agregados já indexados — mesma lógica/números de antes.
+  function calcularPrevisaoCore(med){
+    var info=consumoIndex.idx[med.id];
+    var dias=diasHistorico(med.id);// histórico de consumo real DESTE medicamento (O(1) no índice)
     var estoqueAtual=stock[med.id]||0;
     var minimo=Number(med.minEstoque||med.estoqueMin||0);
     var consEstim=Number(med.consumoEstimado||0);
@@ -4549,8 +4548,8 @@ function TabPrevisao(props){
       return finalizar(minimo-estoqueAtual,{metodo:'minimo',detalhe:minimo>0?('Alvo mínimo '+minimo+' − estoque '+estoqueAtual):'Defina o consumo estimado ou o mínimo deste item',fase:1,consumoMes:null,consumoRealMes:0});
     }
 
-    // Consumo REAL dos últimos 30 dias (só dispensação; ver _ehSaidaNaoReal)
-    var cons30=consumoPeriodo(med.id,30);
+    // Consumo REAL dos últimos 30 dias (só dispensação; via índice)
+    var cons30=info?info.cons30:0;
     var consDiario=cons30/Math.min(dias,30);
     var realMes=Math.round(consDiario*30);// consumo real ~mensal (p/ exibição)
 
@@ -4565,8 +4564,8 @@ function TabPrevisao(props){
     }
 
     // FASE 3: 55+ dias → tendência (últimos 30d vs 30d anteriores), com PISO no estimado
-    var consRecente=consumoPeriodo(med.id,30);
-    var consAnterior=consumoPeriodo(med.id,60)-consRecente;
+    var consRecente=cons30;
+    var consAnterior=(info?info.cons60:0)-consRecente;
     var tendencia=0;
     if(consAnterior>0)tendencia=(consRecente-consAnterior)/consAnterior;
     var fatorTend=1+Math.max(-0.3,Math.min(0.5,tendencia));
@@ -4578,6 +4577,14 @@ function TabPrevisao(props){
     var det3=usouEstim3?('Estimado '+consEstim+'/mês (≥ tendência) → '+projT):('Tendência '+tendStr+' · proj '+projT);
     return finalizar(projT+margem3-estoqueAtual,{metodo:usouEstim3?'estimado':'tendencia',detalhe:det3+' + margem '+margem3+' − estoque '+estoqueAtual,fase:3,consumoMes:projT,consumoRealMes:realMes});
   }
+
+  // Resultado memoizado por medicamento — evita recomputar em valorPedido/sort/filter/render/export.
+  var previsaoMap=useMemo(function(){
+    var m={};(medications||[]).forEach(function(med){m[med.id]=calcularPrevisaoCore(med);});
+    return m;
+  },[medications,consumoIndex,stock,diasPrev]);
+  // API pública mantida: mesma assinatura, agora só uma consulta ao mapa memoizado.
+  function calcularPrevisao(med){return (med&&previsaoMap[med.id])||calcularPrevisaoCore(med);}
 
   // Medicamentos de uma ata
   function medsDaAta(ataId){
