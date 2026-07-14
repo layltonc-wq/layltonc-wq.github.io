@@ -214,7 +214,13 @@ function autoFecharPlantoesAntigos(){
     });
   }).catch(function(){});
 }
-function initFB(c){try{if(firebase.apps.length)firebase.apps.forEach(function(a){a.delete();});firebase.initializeApp(c);db=firebase.firestore();auth=firebase.auth();return true;}catch(e){return false;}}
+function initFB(c){try{if(firebase.apps.length)firebase.apps.forEach(function(a){a.delete();});firebase.initializeApp(c);db=firebase.firestore();
+  // Persistência offline (cache IndexedDB). Faz os listeners retomarem do cache com resume token:
+  // reconexões/refresh buscam só os documentos que mudaram, em vez de reler a coleção inteira.
+  // Reduz drasticamente as leituras do Firestore. Precisa ser chamada antes de qualquer consulta.
+  // synchronizeTabs=true suporta várias abas; se o navegador não suportar, cai no comportamento atual sem quebrar.
+  try{if(db.enablePersistence)db.enablePersistence({synchronizeTabs:true}).catch(function(err){try{console.warn('Persistência offline indisponível:',err&&err.code);}catch(e){}});}catch(e){}
+  auth=firebase.auth();return true;}catch(e){return false;}}
 function loadCfg(){
   var env=localStorage.getItem('farmacontrol_env')||'prod';
   var cfgs={
