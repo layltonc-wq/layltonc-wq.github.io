@@ -5946,13 +5946,28 @@ useEffect(function(){
   },function(){});
   return function(){try{unsub();}catch(e){}};
 },[user,ready]);
-useEffect(function(){if(!ready||!user)return;var u1=db.collection('entries').onSnapshot(function(s){var list=s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;});list.sort(function(a,b){return (a.criadoEm||'').localeCompare(b.criadoEm||'');});setEntries(list);setLoading(false);},function(){setLoading(false);});var u2=db.collection('medicamentos').onSnapshot(function(s){var list=s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;});list.sort(function(a,b){return a.nome.localeCompare(b.nome);});setMeds(list);});var u3=db.collection('users').where('status','==','approved').onSnapshot(function(s){setAllUsers(s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;}));
-// Handler botão voltar
-window._backPressed=function(){setShowSairModal(true);};
-// Listener de convites de plantão para o usuário atual
-db.collection('plantao_convites').where('para','==',currentUser?currentUser.uid:user.uid).where('status','==','pendente').onSnapshot(function(s){setConvites(s.docs.map(function(d){return Object.assign({id:d.id},d.data());}));});
-// Estoque mínimo - só gestor
-if(user.role==='gestor'||user.role==='tecnico'){db.collection('medications').onSnapshot(function(s){var mds=s.docs.map(function(d){return Object.assign({id:d.id},d.data());});setLowStock(mds.filter(function(m){return m.estoqueMin&&m.estoqueMin>0;}));});}});if(can(user.role,'gestao')){db.collection('users').where('status','==','pending').onSnapshot(function(s){setPending(s.size);});db.collection('alertas').where('lido','==',false).where('tipo','==','saida_excessiva').onSnapshot(function(s){setAlertCount(s.size);});db.collection('solicitacoes').where('status','==','pendente').onSnapshot(function(s){setSolicitCount(s.size);});}if(user.role==='farmaceutico'){db.collection('plantao_solicitacoes').where('para','==',user.uid).where('status','==','pendente').onSnapshot(function(s){setSolicitacoesPlantao(s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;}));});}setTimeout(function(){checkShift(user);},1000);return function(){u1();u2();u3();};},[ready,user]);
+useEffect(function(){if(!ready||!user)return;
+  // Todos os listeners deste efeito são coletados e limpos no return (antes vazavam:
+  // plantao_convites/medications eram recriados a cada snapshot de users, e vários nunca
+  // eram removidos). Deps por uid+role: não re-executa a cada troca do objeto user (ex.: refresh de token).
+  var unsubs=[];
+  window._backPressed=function(){setShowSairModal(true);};
+  unsubs.push(db.collection('entries').onSnapshot(function(s){var list=s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;});list.sort(function(a,b){return (a.criadoEm||'').localeCompare(b.criadoEm||'');});setEntries(list);setLoading(false);},function(){setLoading(false);}));
+  unsubs.push(db.collection('medicamentos').onSnapshot(function(s){var list=s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;});list.sort(function(a,b){return a.nome.localeCompare(b.nome);});setMeds(list);}));
+  unsubs.push(db.collection('users').where('status','==','approved').onSnapshot(function(s){setAllUsers(s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;}));}));
+  // Convites de plantão do usuário atual (fora do callback de users p/ não recriar/vazar). user.uid: currentUser não existe no escopo do App.
+  unsubs.push(db.collection('plantao_convites').where('para','==',user.uid).where('status','==','pendente').onSnapshot(function(s){setConvites(s.docs.map(function(d){return Object.assign({id:d.id},d.data());}));}));
+  // Estoque mínimo - só gestor/técnico
+  if(user.role==='gestor'||user.role==='tecnico'){unsubs.push(db.collection('medications').onSnapshot(function(s){var mds=s.docs.map(function(d){return Object.assign({id:d.id},d.data());});setLowStock(mds.filter(function(m){return m.estoqueMin&&m.estoqueMin>0;}));}));}
+  if(can(user.role,'gestao')){
+    unsubs.push(db.collection('users').where('status','==','pending').onSnapshot(function(s){setPending(s.size);}));
+    unsubs.push(db.collection('alertas').where('lido','==',false).where('tipo','==','saida_excessiva').onSnapshot(function(s){setAlertCount(s.size);}));
+    unsubs.push(db.collection('solicitacoes').where('status','==','pendente').onSnapshot(function(s){setSolicitCount(s.size);}));
+  }
+  if(user.role==='farmaceutico'){unsubs.push(db.collection('plantao_solicitacoes').where('para','==',user.uid).where('status','==','pendente').onSnapshot(function(s){setSolicitacoesPlantao(s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;}));}));}
+  setTimeout(function(){checkShift(user);},1000);
+  return function(){unsubs.forEach(function(u){try{u();}catch(e){}});};
+},[ready,user&&user.uid,user&&user.role]);
 var stock=useMemo(function(){return calcStock(entries);},[entries]);
 var latest=useMemo(function(){return calcLatest(entries);},[entries]);
 var lowCount=useMemo(function(){var c=0;meds.forEach(function(m){if(m.minEstoque&&(stock[m.id]||0)<=m.minEstoque&&(stock[m.id]||0)>0)c++;});return c;},[meds,stock]);
