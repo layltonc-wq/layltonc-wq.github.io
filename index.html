@@ -4518,6 +4518,7 @@ function TabPrevisao(props){
   var _buscaItemMed=useState({});var buscaItemMed=_buscaItemMed[0];var setBuscaItemMed=_buscaItemMed[1];
   var _editAta=useState(null);var editAta=_editAta[0];var setEditAta=_editAta[1];// ata em edição (busca fuzzy)
   var _editBusca=useState('');var editBusca=_editBusca[0];var setEditBusca=_editBusca[1];
+  var _editDraft=useState(null);var editDraft=_editDraft[0];var setEditDraft=_editDraft[1];// rascunho: IDs dos medicamentos da ata em edição (não gravado até Salvar)
 
   var COR={medicamento:'#1351B4',controlado:'#DC2626',injetavel:'#7C3AED',leite:'#D97706',penso:'#0C6B3E'};
   var ICO={medicamento:'💊',controlado:'🔒',injetavel:'💉',leite:'🍼',penso:'🩹'};
@@ -4796,14 +4797,38 @@ function TabPrevisao(props){
   function setLimite(ataId,val){
     db.collection('atas').doc(ataId).update({limite:parseInt(val)||0}).catch(function(){});
   }
-  // Vincula um medicamento a uma ata via busca fuzzy. Bloqueia duplicata e salva no Firestore.
-  function addMedAta(ata,med){
-    var jaTem=medsDaAta(ata.id).some(function(x){return x.id===med.id;});
-    if(jaTem){setMsg('e:"'+med.nome+'" já está nesta ata.');setTimeout(function(){setMsg('');},2500);return;}
-    db.collection('medicamentos').doc(med.id).update({ataId:ata.id}).then(function(){
-      setEditBusca('');
-      setMsg('ok:"'+med.nome+'" vinculado a '+ata.nome);setTimeout(function(){setMsg('');},2500);
-    }).catch(function(){setMsg('e:Erro ao vincular. Tente de novo.');});
+  // ── EDIÇÃO DE ATA EM RASCUNHO (não grava no Firestore até clicar Salvar) ──
+  // Abre o editor copiando os medicamentos atuais da ata para o rascunho local.
+  function abrirEditAta(ata){
+    setEditAta(ata.id);
+    setEditDraft(medsDaAta(ata.id).map(function(m){return m.id;}));
+    setEditBusca('');
+  }
+  // Fecha o editor DESCARTANDO o rascunho (não grava nada).
+  function fecharEditAta(){setEditAta(null);setEditDraft(null);setEditBusca('');}
+  // Adiciona um medicamento ao rascunho (só estado local). Bloqueia duplicata.
+  function addMedDraft(med){
+    if((editDraft||[]).indexOf(med.id)>=0){setMsg('e:"'+med.nome+'" já está nesta ata.');setTimeout(function(){setMsg('');},2500);return;}
+    setEditDraft(function(prev){return (prev||[]).concat([med.id]);});
+    setEditBusca('');
+  }
+  // Remove um medicamento do rascunho (só estado local).
+  function removeMedDraft(medId){
+    setEditDraft(function(prev){return (prev||[]).filter(function(id){return id!==medId;});});
+  }
+  // Grava o rascunho inteiro no Firestore de uma vez: reconcilia adições e remoções via ataId.
+  function salvarEditAta(ata){
+    var original=medsDaAta(ata.id).map(function(m){return m.id;});
+    var draft=editDraft||[];
+    var adicionar=draft.filter(function(id){return original.indexOf(id)<0;});
+    var remover=original.filter(function(id){return draft.indexOf(id)<0;});
+    var ops=[];
+    adicionar.forEach(function(id){ops.push(db.collection('medicamentos').doc(id).update({ataId:ata.id}));});
+    remover.forEach(function(id){ops.push(db.collection('medicamentos').doc(id).update({ataId:''}));});
+    Promise.all(ops).then(function(){
+      fecharEditAta();
+      setMsg('ok:Ata atualizada! ('+adicionar.length+' incluído(s), '+remover.length+' removido(s))');setTimeout(function(){setMsg('');},2800);
+    }).catch(function(){setMsg('e:Erro ao salvar. Tente de novo.');});
   }
 
   // ── EXPORTAÇÃO ───────────────────────────────────────────────
@@ -5304,7 +5329,12 @@ function TabPrevisao(props){
               {ata.itens&&ata.itens.length>0&&<button onClick={function(){setAtaDetalhe(ataDetalhe===ata.id?null:ata.id);}} style={{background:'#EFF6FF',border:'none',borderRadius:8,padding:'6px 12px',fontSize:12,color:'#1351B4',fontWeight:600,cursor:'pointer',marginRight:6}}>{ataDetalhe===ata.id?'▲ Fechar':'📋 Itens'}</button>}<button onClick={function(){excluirAta(ata);}} style={{background:'#FEE2E2',border:'none',borderRadius:8,padding:'6px 10px',fontSize:12,color:'#DC2626',fontWeight:600,cursor:'pointer'}}>🗑️</button>
             </div>
             <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:10}}>
-              <button onClick={function(){if(editAta===ata.id){setEditAta(null);setEditBusca('');setMsg('ok:Ata atualizada!');setTimeout(function(){setMsg('');},2000);}else{setEditAta(ata.id);setEditBusca('');}}} style={{background:editAta===ata.id?cor:cor+'18',border:'none',borderRadius:8,padding:'6px 12px',fontSize:12,color:editAta===ata.id?'#fff':cor,fontWeight:700,cursor:'pointer'}}>{editAta===ata.id?'✅ Salvar':'✏️ Editar'}</button>
+              {editAta===ata.id
+                ?<React.Fragment>
+                  <button onClick={function(){salvarEditAta(ata);}} style={{background:cor,border:'none',borderRadius:8,padding:'6px 12px',fontSize:12,color:'#fff',fontWeight:700,cursor:'pointer'}}>✅ Salvar</button>
+                  <button onClick={fecharEditAta} style={{background:'#F1F5F9',border:'none',borderRadius:8,padding:'6px 12px',fontSize:12,color:'#64748B',fontWeight:700,cursor:'pointer'}}>✖ Cancelar</button>
+                </React.Fragment>
+                :<button onClick={function(){abrirEditAta(ata);}} style={{background:cor+'18',border:'none',borderRadius:8,padding:'6px 12px',fontSize:12,color:cor,fontWeight:700,cursor:'pointer'}}>✏️ Editar</button>}
               <button onClick={function(){exportarPDF([ata]);}} style={{background:'#FEE2E2',border:'none',borderRadius:8,padding:'6px 12px',fontSize:12,color:'#DC2626',fontWeight:700,cursor:'pointer'}}>📄 PDF</button>
               <button onClick={function(){exportarExcel([ata]);}} style={{background:'#DCFCE7',border:'none',borderRadius:8,padding:'6px 12px',fontSize:12,color:'#0C6B3E',fontWeight:700,cursor:'pointer'}}>📊 Excel</button>
             </div>
@@ -5313,11 +5343,16 @@ function TabPrevisao(props){
               <input type="number" defaultValue={ata.limite||''} onBlur={function(e){setLimite(ata.id,e.target.value);}} placeholder="sem limite" style={{width:120,padding:'6px 10px',border:'1.5px solid #CBD5E1',borderRadius:8,fontSize:13,outline:'none'}}/>
               <span style={{fontSize:11,color:'#94A3B8'}}>unid./período</span>
             </div>
-            {meds.length>0&&<div style={{display:'flex',flexWrap:'wrap',gap:6}}>
-              {meds.map(function(m){return(<span key={m.id} style={{background:'#F1F5F9',borderRadius:16,padding:'4px 10px',fontSize:11,color:'#475569',display:'flex',alignItems:'center',gap:6}}>{m.nome}<button onClick={function(){desvincular(m.id);}} style={{background:'none',border:'none',color:'#94A3B8',cursor:'pointer',fontSize:13,padding:0,lineHeight:1}}>×</button></span>);})}
-            </div>}
+            {(function(){
+              var editando=editAta===ata.id;
+              var chipMeds=editando?((editDraft||[]).map(function(id){return medications.find(function(m){return m.id===id;});}).filter(Boolean)):meds;
+              if(chipMeds.length===0)return editando?<div style={{fontSize:11,color:'#94A3B8',fontStyle:'italic'}}>Nenhum medicamento no rascunho — busque abaixo para adicionar.</div>:null;
+              return(<div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+                {chipMeds.map(function(m){return(<span key={m.id} style={{background:'#F1F5F9',borderRadius:16,padding:'4px 10px',fontSize:11,color:'#475569',display:'flex',alignItems:'center',gap:6}}>{m.nome}<button onClick={function(){if(editando){removeMedDraft(m.id);}else{desvincular(m.id);}}} style={{background:'none',border:'none',color:'#94A3B8',cursor:'pointer',fontSize:13,padding:0,lineHeight:1}}>×</button></span>);})}
+              </div>);
+            })()}
             {editAta===ata.id&&(function(){
-              var linkedIds={};medsDaAta(ata.id).forEach(function(m){linkedIds[m.id]=true;});
+              var linkedIds={};(editDraft||[]).forEach(function(id){linkedIds[id]=true;});
               var sugestoes=editBusca.trim()?_fuzzyMeds(editBusca,medications,8):[];
               return(<div style={{marginTop:10,background:'#F8FAFC',border:'1.5px dashed '+cor,borderRadius:12,padding:'12px'}}>
                 <div style={{fontWeight:700,fontSize:12,color:'#1E293B',marginBottom:6}}>➕ Adicionar medicamento a esta ata</div>
@@ -5326,13 +5361,13 @@ function TabPrevisao(props){
                   {sugestoes.length===0&&<div style={{padding:'10px 12px',fontSize:12,color:'#94A3B8'}}>Nenhum medicamento encontrado.</div>}
                   {sugestoes.map(function(x){
                     var m=x.m;var ja=linkedIds[m.id];
-                    return(<div key={m.id} onClick={function(){if(ja){setMsg('e:"'+m.nome+'" já está nesta ata.');setTimeout(function(){setMsg('');},2500);}else{addMedAta(ata,m);}}} style={{padding:'8px 12px',fontSize:13,cursor:'pointer',borderBottom:'1px solid #F1F5F9',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,opacity:ja?0.55:1}}>
+                    return(<div key={m.id} onClick={function(){if(ja){setMsg('e:"'+m.nome+'" já está nesta ata.');setTimeout(function(){setMsg('');},2500);}else{addMedDraft(m);}}} style={{padding:'8px 12px',fontSize:13,cursor:'pointer',borderBottom:'1px solid #F1F5F9',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,opacity:ja?0.55:1}}>
                       <span style={{color:'#1E293B'}}>{m.nome}</span>
-                      {ja?<span style={{fontSize:11,color:'#0C6B3E',fontWeight:700,whiteSpace:'nowrap'}}>✓ já na ata</span>:<span style={{fontSize:11,color:cor,fontWeight:700,whiteSpace:'nowrap'}}>+ vincular</span>}
+                      {ja?<span style={{fontSize:11,color:'#0C6B3E',fontWeight:700,whiteSpace:'nowrap'}}>✓ já na ata</span>:<span style={{fontSize:11,color:cor,fontWeight:700,whiteSpace:'nowrap'}}>+ adicionar</span>}
                     </div>);
                   })}
                 </div>}
-                <div style={{fontSize:11,color:'#94A3B8',marginTop:6}}>Para remover, use o × nos chips acima. Vínculos são salvos na hora; toque em ✅ Salvar para concluir.</div>
+                <div style={{fontSize:11,color:'#94A3B8',marginTop:6}}>Rascunho: adicione/remova à vontade. Nada é gravado até <strong>✅ Salvar</strong>. <strong>✖ Cancelar</strong> descarta as mudanças.</div>
               </div>);
             })()}
             {ataDetalhe===ata.id&&ata.itens&&ata.itens.length>0&&(function(){
