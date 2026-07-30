@@ -1579,7 +1579,7 @@ return(
   </div>);}
 
 function HistModal(props){
-  var med=props.med;var entries=props.entries;var onClose=props.onClose;var user=props.user;
+  var med=props.med;var entries=props.entries;var onClose=props.onClose;var user=props.user;var stock=props.stock||{};
   var _aba=useState('lotes');var aba=_aba[0];var setAba=_aba[1];
   var _editLote=useState(null);var editLote=_editLote[0];var setEditLote=_editLote[1];
   var _showAtribuir=useState(false);var showAtribuir=_showAtribuir[0];var setShowAtribuir=_showAtribuir[1];
@@ -1598,10 +1598,14 @@ function HistModal(props){
   entries.filter(function(e){return e.medicamentoId===med.id&&e.tipo==='entrada'&&e.lote;}).forEach(function(e){var lk=e.lote;if(!loteMap[lk])loteMap[lk]={lote:e.lote,validade:e.validade||'',entrada:0,saida:0};loteMap[lk].entrada+=(e.quantidade||0);});
   entries.filter(function(e){return e.medicamentoId===med.id&&e.tipo==='saida'&&e.lote;}).forEach(function(e){var lk=e.lote;if(loteMap[lk])loteMap[lk].saida+=(e.quantidade||0);});
   var lotes=Object.keys(loteMap).map(function(k){var l=loteMap[k];var qty=Math.max(0,l.entrada-l.saida);var hoje=new Date();var dias=null;if(l.validade){var p=l.validade.split('/');if(p.length===2){var d=new Date(parseInt(p[1]),parseInt(p[0])-1,1);dias=Math.ceil((d-hoje)/86400000);}}return Object.assign({},l,{qty:qty,dias:dias});}).filter(function(l){return l.qty>0;}).sort(function(a,b){return a.dias!==null&&b.dias!==null?a.dias-b.dias:0;});
-  // Calcular estoque sem lote
-  var entSemLote=entries.filter(function(e){return e.medicamentoId===med.id&&e.tipo==='entrada'&&!e.lote;}).reduce(function(s,e){return s+(e.quantidade||0);},0);
-  var saiSemLote=entries.filter(function(e){return e.medicamentoId===med.id&&e.tipo==='saida'&&!e.lote;}).reduce(function(s,e){return s+(e.quantidade||0);},0);
-  var qtdSemLote=Math.max(0,entSemLote-saiSemLote);
+  // Saldo autoritativo = o MESMO número da lista principal (calcStock). Nunca é alterado aqui.
+  var saldoReal=(stock&&stock[med.id]!=null)?stock[med.id]:(calcStock(entries)[med.id]||0);
+  // Soma dos lotes com saldo positivo (os baldes "confiáveis").
+  var somaLotes=lotes.reduce(function(s,l){return s+(l.qty||0);},0);
+  // "Sem lote" vira o RESÍDUO que fecha a conta com o saldo real (Opção A resiliente):
+  // saídas órfãs / super-dispensadas / lotes trocados caem aqui em vez de sumir ou travar em zero.
+  // Garantia: somaLotes + qtdSemLote === saldoReal para QUALQUER dado.
+  var qtdSemLote=saldoReal-somaLotes;
 
   function atribuirLote(){
     if(!atribLote.trim()||!atribVal.trim()||!atribQty)return;
@@ -1641,7 +1645,7 @@ function HistModal(props){
     <div style={{display:'flex',gap:8,marginBottom:16}}>
       <div style={{flex:1,background:'#F0FDF4',borderRadius:10,padding:'10px 14px',textAlign:'center'}}><div style={{fontSize:20,fontWeight:800,color:'#059669'}}>{totE}</div><div style={{fontSize:11,color:'#64748B'}}>Entradas</div></div>
       <div style={{flex:1,background:'#FEF2F2',borderRadius:10,padding:'10px 14px',textAlign:'center'}}><div style={{fontSize:20,fontWeight:800,color:'#DC2626'}}>{totS}</div><div style={{fontSize:11,color:'#64748B'}}>Saídas</div></div>
-      <div style={{flex:1,background:'#EFF6FF',borderRadius:10,padding:'10px 14px',textAlign:'center'}}><div style={{fontSize:20,fontWeight:800,color:'#1351B4'}}>{totE-totS}</div><div style={{fontSize:11,color:'#64748B'}}>Saldo</div></div>
+      <div style={{flex:1,background:'#EFF6FF',borderRadius:10,padding:'10px 14px',textAlign:'center'}}><div style={{fontSize:20,fontWeight:800,color:'#1351B4'}}>{saldoReal}</div><div style={{fontSize:11,color:'#64748B'}}>Saldo</div></div>
     </div>
     <div style={{display:'flex',background:'#F1F5F9',borderRadius:10,padding:4,gap:4,marginBottom:14}}>
       <button onClick={function(){setAba('lotes');}} style={{flex:1,padding:'8px',borderRadius:7,border:'none',background:aba==='lotes'?'#fff':'transparent',fontWeight:aba==='lotes'?700:500,fontSize:12,color:aba==='lotes'?'#1351B4':'#64748B',cursor:'pointer'}}>📦 Por Lote</button>
@@ -1675,6 +1679,10 @@ function HistModal(props){
             <button onClick={function(){setShowAtribuir(true);}} style={{background:'#1351B4',border:'none',borderRadius:8,padding:'7px 12px',color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>🏷️ Atribuir lote</button>
           </div>
         }
+      </div>}
+      {qtdSemLote<0&&<div style={{background:'#FFFBEB',borderRadius:12,padding:'12px 14px',marginBottom:8,border:'1.5px solid #FCD34D'}}>
+        <div style={{fontWeight:700,fontSize:13,color:'#92400E',marginBottom:2}}>⚠️ Divergência de lote</div>
+        <div style={{fontSize:12,color:'#92400E'}}>{Math.abs(qtdSemLote)} un. de saída não correspondem a nenhum lote (lote órfão, código trocado ou super-dispensado). O saldo total ({saldoReal}) está correto — revise os lançamentos por lote.</div>
       </div>}
       {lotes.length===0&&qtdSemLote===0
         ?<div style={{textAlign:'center',padding:32,color:'#94A3B8'}}>Nenhum lote com estoque disponível</div>
@@ -1852,7 +1860,7 @@ function darBaixaVencido(){
     });
   }
   return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
-{hist&&can(user.role,'historico')&&<HistModal med={hist} entries={entries} user={user} onClose={function(){setHist(null);}}/>}
+{hist&&can(user.role,'historico')&&<HistModal med={hist} entries={entries} stock={stock} user={user} onClose={function(){setHist(null);}}/>}
 {showAdd&&(<Modal onClose={function(){setShowAdd(false);}} title="Novo Medicamento"><Lbl c="Nome"/><input value={newNome} onChange={function(e){setNewNome(e.target.value);}} placeholder="Ex: Paracetamol 750mg" className="inp" autoFocus/><Lbl c="Tipo"/><div style={{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap'}}>{Object.keys(TIPOS).map(function(k){return <TipoBtn key={k} k={k} sel={newTipo} onClick={setNewTipo}/>;})}</div>{isManager&&(<div><Lbl c="Estoque minimo"/><input value={newMin} onChange={function(e){setNewMin(e.target.value.replace(/[^0-9]/g,''));}} className="inp" placeholder="Ex: 50"/></div>)}<button onClick={saveNew} disabled={saving} className="bp" style={{opacity:saving?0.7:1}}>Salvar</button></Modal>)}
 {editId&&(<Modal onClose={function(){setEditId(null);}} title="Editar Medicamento"><Lbl c="Nome"/><input value={editNome} onChange={function(e){setEditNome(e.target.value);}} className="inp" autoFocus/><Lbl c="Tipo"/><div style={{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap'}}>{Object.keys(TIPOS).map(function(k){return <TipoBtn key={k} k={k} sel={editTipo} onClick={setEditTipo}/>;})}</div>{isManager&&(<div><Lbl c="Estoque minimo"/><input value={editMin} onChange={function(e){setEditMin(e.target.value.replace(/[^0-9]/g,''));}} placeholder="Ex: 50" className="inp"/></div>)}<div style={{display:'flex',gap:10}}><button onClick={function(){setEditId(null);}} className="bs" style={{flex:1}}>Cancelar</button><button onClick={saveEdit} disabled={saving} className="bp" style={{flex:2,opacity:saving?0.7:1}}>Salvar</button></div></Modal>)}
 {editLote&&(<Modal onClose={function(){setEditLote(null);}} title="Editar Lote e Validade"><div className="inf" style={{marginBottom:12}}>Medicamento: <strong>{editLote.nome}</strong></div><Lbl c="Lote"/><input value={editLoteVal} onChange={function(e){setEditLoteVal(e.target.value);}} placeholder="Ex: ABC1234" className="inp" autoFocus/><Lbl c="Validade (MM/AAAA)"/><input value={editLoteData} onChange={function(e){setEditLoteData(e.target.value);}} placeholder="Ex: 03/2027" className="inp"/><div style={{display:'flex',gap:10}}><button onClick={function(){setEditLote(null);}} className="bs" style={{flex:1}}>Cancelar</button><button onClick={salvarEditLote} disabled={saving} className="bp" style={{flex:2,opacity:saving?0.7:1}}>{saving?'Salvando...':'Salvar'}</button></div></Modal>)}
