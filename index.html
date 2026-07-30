@@ -288,6 +288,30 @@ function computeVencimentos(medications,entries,stock){
 }
 // Normaliza texto (minúsculas, sem acentos) — usado na detecção de saídas não-reais
 function _norm(s){return (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');}
+// Pontuação fuzzy de um alvo contra uma busca (0 = sem relação; maior = melhor).
+// Tolera ordem de palavras (tokens) e erros de digitação (subsequência de caracteres).
+// Ex.: "ringer" casa "Soro Ringer", "Soro Fisiológico Ringer"; "rnger" ainda casa por subsequência.
+function _fuzzyScore(q,target){
+  q=_norm(q).trim();target=_norm(target);
+  if(!q)return 0;
+  var pos=target.indexOf(q);
+  if(pos>=0)return 100-Math.min(pos,40);                 // substring direta (quanto mais no início, melhor)
+  var toks=q.split(/\s+/).filter(Boolean);
+  var casados=toks.filter(function(t){return target.indexOf(t)>=0;}).length;
+  if(casados===toks.length)return 60;                    // todos os termos presentes (ordem livre)
+  if(casados>0)return 30+casados*5;                      // alguns termos presentes
+  var ti=0,ok=0;                                         // subsequência de caracteres (tolerância a erro)
+  for(var i=0;i<q.length;i++){var idx=target.indexOf(q[i],ti);if(idx>=0){ti=idx+1;ok++;}}
+  if(ok===q.length)return 15;
+  return 0;
+}
+// Retorna os melhores medicamentos para uma busca fuzzy (lista ordenada por relevância).
+function _fuzzyMeds(query,meds,limite){
+  return meds.map(function(m){return {m:m,score:_fuzzyScore(query,m.nome||'')};})
+    .filter(function(x){return x.score>0;})
+    .sort(function(a,b){return b.score-a.score||(a.m.nome||'').localeCompare(b.m.nome||'');})
+    .slice(0,limite||8);
+}
 // Identifica saídas que NÃO são consumo real (dispensação). Fonte única usada pelo ranking, pela conferência e pela previsão.
 function _ehSaidaNaoReal(e){
   if(e.ficticioDiv)return true;
@@ -4492,6 +4516,8 @@ function TabPrevisao(props){
   var _ataDetalhe=useState(null);var ataDetalhe=_ataDetalhe[0];var setAtaDetalhe=_ataDetalhe[1];
   var _pastasAbertas=useState({});var pastasAbertas=_pastasAbertas[0];var setPastasAbertas=_pastasAbertas[1];
   var _buscaItemMed=useState({});var buscaItemMed=_buscaItemMed[0];var setBuscaItemMed=_buscaItemMed[1];
+  var _editAta=useState(null);var editAta=_editAta[0];var setEditAta=_editAta[1];// ata em edição (busca fuzzy)
+  var _editBusca=useState('');var editBusca=_editBusca[0];var setEditBusca=_editBusca[1];
 
   var COR={medicamento:'#1351B4',controlado:'#DC2626',injetavel:'#7C3AED',leite:'#D97706',penso:'#0C6B3E'};
   var ICO={medicamento:'💊',controlado:'🔒',injetavel:'💉',leite:'🍼',penso:'🩹'};
@@ -4770,26 +4796,41 @@ function TabPrevisao(props){
   function setLimite(ataId,val){
     db.collection('atas').doc(ataId).update({limite:parseInt(val)||0}).catch(function(){});
   }
+  // Vincula um medicamento a uma ata via busca fuzzy. Bloqueia duplicata e salva no Firestore.
+  function addMedAta(ata,med){
+    var jaTem=medsDaAta(ata.id).some(function(x){return x.id===med.id;});
+    if(jaTem){setMsg('e:"'+med.nome+'" já está nesta ata.');setTimeout(function(){setMsg('');},2500);return;}
+    db.collection('medicamentos').doc(med.id).update({ataId:ata.id}).then(function(){
+      setEditBusca('');
+      setMsg('ok:"'+med.nome+'" vinculado a '+ata.nome);setTimeout(function(){setMsg('');},2500);
+    }).catch(function(){setMsg('e:Erro ao vincular. Tente de novo.');});
+  }
 
   // ── EXPORTAÇÃO ───────────────────────────────────────────────
-  function exportarExcel(){
+  // atasFiltro (opcional): array de ATAs para exportar SÓ elas (pedido unitário por ata).
+  // Sem filtro = consolidado (todas as atas + medicamentos sem ata). Mesmo formato/colunas.
+  function exportarExcel(atasFiltro){
+    var filtrando=Array.isArray(atasFiltro);
+    var listaAtas=filtrando?atasFiltro:atas;
     var wb=XLSX.utils.book_new();
     var dadosGeral=[['ATA','Categoria','Medicamento','Estoque Atual','Estoque Mín.','Sugestão Pedido','Método','Limite Ata']];
-    atas.forEach(function(ata){
+    listaAtas.forEach(function(ata){
       var meds=medsDaAta(ata.id);
       meds.forEach(function(m){
         var p=calcularPrevisao(m);
         dadosGeral.push([ata.nome,LBL[ata.categoria]||ata.categoria,m.nome,stock[m.id]||0,m.minEstoque||0,valorPedido(m),p.metodo,ata.limite||'sem limite']);
       });
     });
-    medsSemAta.forEach(function(m){
+    if(!filtrando)medsSemAta.forEach(function(m){
       var p=calcularPrevisao(m);
       dadosGeral.push(['(sem ata)','—',m.nome,stock[m.id]||0,m.minEstoque||0,valorPedido(m),p.metodo,'—']);
     });
+    if(dadosGeral.length===1){setMsg('e:Nenhum medicamento vinculado'+(filtrando?' a esta ata.':'.'));return;}
     var ws=XLSX.utils.aoa_to_sheet(dadosGeral);
     XLSX.utils.book_append_sheet(wb,ws,'Previsao Mensal');
     var hoje=new Date().toLocaleDateString('pt-BR').replace(/\//g,'-');
-    XLSX.writeFile(wb,'Previsao_Pedido_'+hoje+'.xlsx');
+    var slug=filtrando?(listaAtas[0].nome||'ata').replace(/[^a-zA-Z0-9]+/g,'_').slice(0,40)+'_':'';
+    XLSX.writeFile(wb,'Previsao_Pedido_'+slug+hoje+'.xlsx');
     setMsg('ok:Excel exportado!');setTimeout(function(){setMsg('');},2500);
   }
 
@@ -4844,7 +4885,10 @@ function TabPrevisao(props){
     if(w){w.document.write(html);w.document.close();setTimeout(function(){w.print();},500);}
   }
 
-  function exportarPDF(){
+  // atasFiltro (opcional): array de ATAs para gerar o pedido SÓ delas (pedido unitário por ata),
+  // no MESMO formato oficial do consolidado. Sem filtro = todas as atas.
+  function exportarPDF(atasFiltro){
+    var listaAtas=Array.isArray(atasFiltro)?atasFiltro:atas;
     var hoje=new Date();
     var dataHoje=hoje.toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'}).replace(' de ',' DE ').toUpperCase();
     var numPedidoDoc=numPedido.trim()||('N/'+new Date().getFullYear());
@@ -4852,7 +4896,7 @@ function TabPrevisao(props){
     // Construir seções por categoria
     var secoes=[];
     // Atas com itens vinculados
-    atas.forEach(function(ata){
+    listaAtas.forEach(function(ata){
       var itensPedido=[];
       // Itens da ata que têm medicamento vinculado
       if(ata.itens&&ata.itens.length>0){
@@ -5259,6 +5303,11 @@ function TabPrevisao(props){
               </div>
               {ata.itens&&ata.itens.length>0&&<button onClick={function(){setAtaDetalhe(ataDetalhe===ata.id?null:ata.id);}} style={{background:'#EFF6FF',border:'none',borderRadius:8,padding:'6px 12px',fontSize:12,color:'#1351B4',fontWeight:600,cursor:'pointer',marginRight:6}}>{ataDetalhe===ata.id?'▲ Fechar':'📋 Itens'}</button>}<button onClick={function(){excluirAta(ata);}} style={{background:'#FEE2E2',border:'none',borderRadius:8,padding:'6px 10px',fontSize:12,color:'#DC2626',fontWeight:600,cursor:'pointer'}}>🗑️</button>
             </div>
+            <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:10}}>
+              <button onClick={function(){if(editAta===ata.id){setEditAta(null);setEditBusca('');setMsg('ok:Ata atualizada!');setTimeout(function(){setMsg('');},2000);}else{setEditAta(ata.id);setEditBusca('');}}} style={{background:editAta===ata.id?cor:cor+'18',border:'none',borderRadius:8,padding:'6px 12px',fontSize:12,color:editAta===ata.id?'#fff':cor,fontWeight:700,cursor:'pointer'}}>{editAta===ata.id?'✅ Salvar':'✏️ Editar'}</button>
+              <button onClick={function(){exportarPDF([ata]);}} style={{background:'#FEE2E2',border:'none',borderRadius:8,padding:'6px 12px',fontSize:12,color:'#DC2626',fontWeight:700,cursor:'pointer'}}>📄 PDF</button>
+              <button onClick={function(){exportarExcel([ata]);}} style={{background:'#DCFCE7',border:'none',borderRadius:8,padding:'6px 12px',fontSize:12,color:'#0C6B3E',fontWeight:700,cursor:'pointer'}}>📊 Excel</button>
+            </div>
             <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
               <span style={{fontSize:12,color:'#64748B',fontWeight:600}}>Limite da ata:</span>
               <input type="number" defaultValue={ata.limite||''} onBlur={function(e){setLimite(ata.id,e.target.value);}} placeholder="sem limite" style={{width:120,padding:'6px 10px',border:'1.5px solid #CBD5E1',borderRadius:8,fontSize:13,outline:'none'}}/>
@@ -5267,6 +5316,25 @@ function TabPrevisao(props){
             {meds.length>0&&<div style={{display:'flex',flexWrap:'wrap',gap:6}}>
               {meds.map(function(m){return(<span key={m.id} style={{background:'#F1F5F9',borderRadius:16,padding:'4px 10px',fontSize:11,color:'#475569',display:'flex',alignItems:'center',gap:6}}>{m.nome}<button onClick={function(){desvincular(m.id);}} style={{background:'none',border:'none',color:'#94A3B8',cursor:'pointer',fontSize:13,padding:0,lineHeight:1}}>×</button></span>);})}
             </div>}
+            {editAta===ata.id&&(function(){
+              var linkedIds={};medsDaAta(ata.id).forEach(function(m){linkedIds[m.id]=true;});
+              var sugestoes=editBusca.trim()?_fuzzyMeds(editBusca,medications,8):[];
+              return(<div style={{marginTop:10,background:'#F8FAFC',border:'1.5px dashed '+cor,borderRadius:12,padding:'12px'}}>
+                <div style={{fontWeight:700,fontSize:12,color:'#1E293B',marginBottom:6}}>➕ Adicionar medicamento a esta ata</div>
+                <input value={editBusca} onChange={function(e){setEditBusca(e.target.value);}} placeholder="🔍 Digite o nome (ex: Ringer)..." className="inp" style={{marginBottom:6,fontSize:13}} autoFocus/>
+                {editBusca.trim()&&<div style={{maxHeight:200,overflowY:'auto',background:'#fff',border:'1px solid #E2E8F0',borderRadius:8}}>
+                  {sugestoes.length===0&&<div style={{padding:'10px 12px',fontSize:12,color:'#94A3B8'}}>Nenhum medicamento encontrado.</div>}
+                  {sugestoes.map(function(x){
+                    var m=x.m;var ja=linkedIds[m.id];
+                    return(<div key={m.id} onClick={function(){if(ja){setMsg('e:"'+m.nome+'" já está nesta ata.');setTimeout(function(){setMsg('');},2500);}else{addMedAta(ata,m);}}} style={{padding:'8px 12px',fontSize:13,cursor:'pointer',borderBottom:'1px solid #F1F5F9',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,opacity:ja?0.55:1}}>
+                      <span style={{color:'#1E293B'}}>{m.nome}</span>
+                      {ja?<span style={{fontSize:11,color:'#0C6B3E',fontWeight:700,whiteSpace:'nowrap'}}>✓ já na ata</span>:<span style={{fontSize:11,color:cor,fontWeight:700,whiteSpace:'nowrap'}}>+ vincular</span>}
+                    </div>);
+                  })}
+                </div>}
+                <div style={{fontSize:11,color:'#94A3B8',marginTop:6}}>Para remover, use o × nos chips acima. Vínculos são salvos na hora; toque em ✅ Salvar para concluir.</div>
+              </div>);
+            })()}
             {ataDetalhe===ata.id&&ata.itens&&ata.itens.length>0&&(function(){
               var vTot=ata.itens.reduce(function(a,it){return a+(it.vUnit*(it.qtdTeto||0));},0);
               var vGasto=ata.itens.reduce(function(a,it){return a+(it.vUnit*(it.pedidoAcumulado||0));},0);
