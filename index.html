@@ -5173,8 +5173,8 @@ function TabPrevisao(props){
                   var saldoTotalAta=grupo.meds.reduce(function(s,x){return s+(x.item.qtdTeto-(x.item.pedidoAcumulado||0));},0);
                   var corAta=cor+'CC';
                   return(<div key={ata.id} style={{marginBottom:8,borderRadius:12,overflow:'hidden',border:'1.5px solid '+cor+'40'}}>
-                    {/* Cabeçalho da ATA */}
-                    <button onClick={function(){setPastasAbertas(function(p){var n=Object.assign({},p);n[aKey]=!ataAberta;return n;});}} style={{width:'100%',background:cor+'22',border:'none',padding:'10px 14px',cursor:'pointer',display:'flex',alignItems:'center',gap:8,textAlign:'left'}}>
+                    {/* Cabeçalho da ATA — div clicável (não <button>) para permitir o botão PDF aninhado (HTML válido) */}
+                    <div role="button" onClick={function(){setPastasAbertas(function(p){var n=Object.assign({},p);n[aKey]=!ataAberta;return n;});}} style={{width:'100%',background:cor+'22',border:'none',padding:'10px 14px',cursor:'pointer',display:'flex',alignItems:'center',gap:8,textAlign:'left',boxSizing:'border-box'}}>
                       <div style={{flex:1}}>
                         <div style={{fontWeight:700,fontSize:13,color:cor}}>📋 {ata.nome}</div>
                         <div style={{fontSize:11,color:'#64748B'}}>{grupo.meds.length} item(ns) · Saldo total ATA: {saldoTotalAta} un.</div>
@@ -5186,7 +5186,7 @@ function TabPrevisao(props){
                       {/* Botão PDF desta ATA */}
                       <button onClick={function(e){e.stopPropagation();gerarPDFAta(ata,grupo.meds,catKey);}} style={{background:cor,border:'none',borderRadius:8,padding:'7px 12px',color:'#fff',fontWeight:700,fontSize:11,cursor:'pointer',flexShrink:0,marginLeft:4}}>📄 PDF</button>
                       <span style={{fontSize:14,color:cor,marginLeft:4}}>{ataAberta?'▲':'▼'}</span>
-                    </button>
+                    </div>
                     {ataAberta&&<div style={{padding:'8px 10px 10px',background:'#fff'}}>
                       {grupo.meds.map(function(x){return renderMedCard(x.med,x.item,cor);})}
                     </div>}
