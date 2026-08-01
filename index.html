@@ -312,6 +312,25 @@ function _fuzzyMeds(query,meds,limite){
     .sort(function(a,b){return b.score-a.score||(a.m.nome||'').localeCompare(b.m.nome||'');})
     .slice(0,limite||8);
 }
+// Siglas/abreviações comuns em prescrição → forma canônica (usadas no matching item-da-ata × estoque).
+var _SIGLAS={ev:'intravenoso',endovenoso:'intravenoso',endovenosa:'intravenoso',iv:'intravenoso',vo:'oral',im:'intramuscular',sc:'subcutaneo',sol:'solucao',inj:'injetavel',cpr:'comprimido',cp:'comprimido',comp:'comprimido',cprs:'comprimido',caps:'capsula',cap:'capsula',amp:'ampola',fr:'frasco',fa:'frasco',susp:'suspensao',xpe:'xarope',sus:'suspensao'};
+function _expandeSiglas(s){return _norm(s).split(/[^a-z0-9%]+/).filter(Boolean).map(function(t){return _SIGLAS[t]||t;}).join(' ');}
+// Extrai concentrações (ex.: "500mg","5ml","1g") de um texto, normalizadas.
+function _concentracao(s){var out=[],t=_norm(s),re=/(\d+(?:[.,]\d+)?)\s*(mg|mcg|g|ml|ui|%)\b/g,m;while((m=re.exec(t))){out.push(m[1].replace(',','.').replace(/\.0+$/,'')+m[2]);}return out;}
+// Pontua um medicamento do estoque contra a descrição de um item da ata (nome fuzzy + concentração + siglas).
+function _scoreItemMed(itemDesc,medNome){
+  var base=_fuzzyScore(_expandeSiglas(itemDesc),_expandeSiglas(medNome));
+  var ca=_concentracao(itemDesc),cb=_concentracao(medNome);
+  if(ca.length&&cb.length){var hit=ca.some(function(c){return cb.indexOf(c)>=0;});base+=hit?35:-30;} // dose igual reforça; diferente penaliza
+  return base;
+}
+// Candidatos do estoque para um item da ata, ordenados por relevância (só acima do limiar).
+function _matchItemMeds(itemDesc,meds,limite){
+  return meds.map(function(m){return {m:m,score:_scoreItemMed(itemDesc,m.nome||'')};})
+    .filter(function(x){return x.score>=45;})
+    .sort(function(a,b){return b.score-a.score||(a.m.nome||'').localeCompare(b.m.nome||'');})
+    .slice(0,limite||6);
+}
 // Identifica saídas que NÃO são consumo real (dispensação). Fonte única usada pelo ranking, pela conferência e pela previsão.
 function _ehSaidaNaoReal(e){
   if(e.ficticioDiv)return true;
@@ -4519,6 +4538,15 @@ function TabPrevisao(props){
   var _editAta=useState(null);var editAta=_editAta[0];var setEditAta=_editAta[1];// ata em edição (busca fuzzy)
   var _editBusca=useState('');var editBusca=_editBusca[0];var setEditBusca=_editBusca[1];
   var _editDraft=useState(null);var editDraft=_editDraft[0];var setEditDraft=_editDraft[1];// rascunho: IDs dos medicamentos da ata em edição (não gravado até Salvar)
+  var _editItens=useState(null);var editItens=_editItens[0];var setEditItens=_editItens[1];// rascunho dos itens da ata (medicamentoId por item), p/ atas importadas
+  // Sugestões automáticas de vínculo: para a ata em edição, casa cada item (nome+mg+siglas) com o estoque.
+  // Calculado uma vez por (ata em edição, estoque) — não recomputa a cada tecla.
+  var autoMatches=useMemo(function(){
+    if(!editAta)return null;
+    var ataEd=atas.find(function(a){return a.id===editAta;});
+    if(!ataEd||!ataEd.itens||!ataEd.itens.length)return null;
+    return ataEd.itens.map(function(it){return {cands:_matchItemMeds(it.descricao||'',medications,6)};});
+  },[editAta,medications,atas]);
 
   var COR={medicamento:'#1351B4',controlado:'#DC2626',injetavel:'#7C3AED',leite:'#D97706',penso:'#0C6B3E'};
   var ICO={medicamento:'💊',controlado:'🔒',injetavel:'💉',leite:'🍼',penso:'🩹'};
@@ -4802,27 +4830,57 @@ function TabPrevisao(props){
   function abrirEditAta(ata){
     setEditAta(ata.id);
     setEditDraft(medsDaAta(ata.id).map(function(m){return m.id;}));
+    setEditItens(ata.itens&&ata.itens.length?ata.itens.map(function(it){return Object.assign({},it);}):null);
     setEditBusca('');
   }
   // Fecha o editor DESCARTANDO o rascunho (não grava nada).
-  function fecharEditAta(){setEditAta(null);setEditDraft(null);setEditBusca('');}
+  function fecharEditAta(){setEditAta(null);setEditDraft(null);setEditItens(null);setEditBusca('');}
   // Adiciona um medicamento ao rascunho (só estado local). Bloqueia duplicata.
   function addMedDraft(med){
     if((editDraft||[]).indexOf(med.id)>=0){setMsg('e:"'+med.nome+'" já está nesta ata.');setTimeout(function(){setMsg('');},2500);return;}
     setEditDraft(function(prev){return (prev||[]).concat([med.id]);});
     setEditBusca('');
   }
-  // Remove um medicamento do rascunho (só estado local).
+  // Remove um medicamento do rascunho (só estado local). Também limpa vínculos de itens que apontam pra ele.
   function removeMedDraft(medId){
     setEditDraft(function(prev){return (prev||[]).filter(function(id){return id!==medId;});});
+    setEditItens(function(prev){return prev?prev.map(function(it){return it.medicamentoId===medId?Object.assign({},it,{medicamentoId:''}):it;}):prev;});
   }
-  // Grava o rascunho inteiro no Firestore de uma vez: reconcilia adições e remoções via ataId.
+  // Vincula um item da ata (índice) a um medicamento — no rascunho (editItens + editDraft).
+  function confirmarItem(idx,medId){
+    setEditItens(function(prev){if(!prev)return prev;var arr=prev.map(function(it){return Object.assign({},it);});if(arr[idx])arr[idx].medicamentoId=medId;return arr;});
+    setEditDraft(function(prev){var s=(prev||[]).slice();if(s.indexOf(medId)<0)s.push(medId);return s;});
+  }
+  // Desvincula um item da ata (rascunho).
+  function desvincularItem(idx){
+    var medId=editItens&&editItens[idx]?editItens[idx].medicamentoId:'';
+    setEditItens(function(prev){if(!prev)return prev;var arr=prev.map(function(it){return Object.assign({},it);});if(arr[idx])arr[idx].medicamentoId='';return arr;});
+    if(medId)setEditDraft(function(prev){return (prev||[]).filter(function(id){return id!==medId;});});
+  }
+  // Confirma de uma vez TODOS os itens com match único ainda não vinculados (rascunho).
+  function confirmarTodosItens(){
+    if(!autoMatches||!editItens){setMsg('e:Nada a confirmar.');setTimeout(function(){setMsg('');},2000);return;}
+    var arr=editItens.map(function(it){return Object.assign({},it);});
+    var novos=[];
+    autoMatches.forEach(function(am,idx){
+      if(arr[idx]&&!arr[idx].medicamentoId&&am.cands.length===1){
+        arr[idx].medicamentoId=am.cands[0].m.id;
+        if(novos.indexOf(am.cands[0].m.id)<0)novos.push(am.cands[0].m.id);
+      }
+    });
+    if(!novos.length){setMsg('e:Nenhum match único pendente.');setTimeout(function(){setMsg('');},2500);return;}
+    setEditItens(arr);
+    setEditDraft(function(prev){var s=(prev||[]).slice();novos.forEach(function(id){if(s.indexOf(id)<0)s.push(id);});return s;});
+    setMsg('ok:'+novos.length+' item(ns) vinculado(s) no rascunho. Toque em ✅ Salvar para gravar.');setTimeout(function(){setMsg('');},3000);
+  }
+  // Grava o rascunho inteiro no Firestore de uma vez: itens (medicamentoId) + reconcilia ataId dos medicamentos.
   function salvarEditAta(ata){
     var original=medsDaAta(ata.id).map(function(m){return m.id;});
     var draft=editDraft||[];
     var adicionar=draft.filter(function(id){return original.indexOf(id)<0;});
     var remover=original.filter(function(id){return draft.indexOf(id)<0;});
     var ops=[];
+    if(editItens){ops.push(db.collection('atas').doc(ata.id).update({itens:editItens}));}
     adicionar.forEach(function(id){ops.push(db.collection('medicamentos').doc(id).update({ataId:ata.id}));});
     remover.forEach(function(id){ops.push(db.collection('medicamentos').doc(id).update({ataId:''}));});
     Promise.all(ops).then(function(){
@@ -4859,6 +4917,23 @@ function TabPrevisao(props){
     setMsg('ok:Excel exportado!');setTimeout(function(){setMsg('');},2500);
   }
 
+  // Cabeçalho oficial do pedido (com estilos inline, auto-contido) — usado no consolidado E no PDF por ATA,
+  // garantindo que ambos tenham EXATAMENTE o mesmo cabeçalho.
+  function montarCabecalhoPedido(){
+    var h=new Date();
+    var dataHoje=h.toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'}).replace(' de ',' DE ').toUpperCase();
+    var s='';
+    s+='<div style="border-bottom:3px solid #1351B4;padding-bottom:8px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:flex-start">';
+    s+='<div><div style="font-size:14px;font-weight:700;color:#1351B4">SECRETARIA DE SAÚDE E DEPARTAMENTO DE COMPRAS</div><div style="font-size:11px;color:#444;margin-top:2px">Fundo Municipal de Saúde — CAF-Unidade Hospitalar</div></div>';
+    s+='<div style="font-size:16px;font-weight:900;color:#1351B4;text-align:right">PEDIDO Nº '+numPedido+'/'+h.getFullYear()+'</div>';
+    s+='</div>';
+    s+='<div style="text-align:right;font-size:11px;margin-bottom:14px">Vicência/PE, '+dataHoje+'.</div>';
+    s+='<div style="font-size:11px;font-weight:700;margin-bottom:10px">PARA: CENTRAL DE COMPRAS DO MUNICÍPIO</div>';
+    s+='<div style="border:1.5px solid #222;padding:10px 14px;margin:12px 0;font-size:11px;line-height:1.7"><b>À EMPRESA: '+(empresa.trim()||'_______________________________________________')+'</b><br>CNPJ: '+(cnpjEmpresa.trim()||'___________________________________')+'<br>NÚMERO P/ CONTATO: ______________________</div>';
+    s+='<div style="font-size:11px;font-weight:700;margin:14px 0 8px;text-transform:uppercase">ASSUNTO: PEDIDO DE FORNECIMENTO DE INSUMOS COM O OBJETIVO DE ATENDEREM AS DEMANDAS DE ACORDO COM AS NECESSIDADES CLÍNICAS DOS PACIENTES NO ÂMBITO HOSPITALAR.</div>';
+    s+='<div style="font-size:11px;margin-bottom:12px;line-height:1.6">Caro Sr.(a):<br><br>Venho por meio deste, solicitar o fornecimento do(s) seguinte(s) insumo(s) e sua respectiva quantidade para atender as necessidades do Município.</div>';
+    return s;
+  }
   function gerarPDFAta(ata,grupoMeds,catKey){
     var hoje=new Date().toLocaleDateString('pt-BR');
     var nomeAta=ata.nome||'ATA';
@@ -4887,13 +4962,8 @@ function TabPrevisao(props){
       '.total{background:#F8FAFC;font-weight:700}'+
       '.info{display:flex;gap:24px;margin-bottom:12px;font-size:11px;color:#475569}'+
       '.info b{color:#1E293B}</style></head><body>'+
-      '<h2>📋 PEDIDO — '+nomeAta.toUpperCase()+'</h2>'+
-      '<h3>Secretaria Municipal de Saúde — Vicência/PE · '+hoje+'</h3>'+
-      '<div class="info">'+
-      (numPedido?'<div>Pedido Nº: <b>'+numPedido+'</b></div>':'')+
-      (empresa?'<div>Empresa: <b>'+empresa+'</b></div>':'')+
-      (cnpjEmpresa?'<div>CNPJ: <b>'+cnpjEmpresa+'</b></div>':'')+
-      '</div>'+
+      montarCabecalhoPedido()+
+      '<div style="text-align:center;font-size:13px;font-weight:900;padding:8px;border:1px solid #222;background:#f0f0f0;margin-top:16px;margin-bottom:8px;letter-spacing:.05em">'+nomeAta.toUpperCase()+'</div>'+
       '<table><thead><tr>'+
       '<th style="width:50px">Item</th><th>Descrição</th><th style="width:60px">Unid.</th>'+
       '<th style="width:70px">Qtd. Pedir</th><th style="width:70px">Saldo ATA</th>'+
@@ -4971,18 +5041,8 @@ function TabPrevisao(props){
       '</style>';
 
     var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Pedido</title>'+css+'</head><body>';
-    // Cabeçalho
-    html+='<div class="header">';
-    html+='<div class="title-block"><div class="main">SECRETARIA DE SAÚDE E DEPARTAMENTO DE COMPRAS</div><div class="sub">Fundo Municipal de Saúde — CAF-Unidade Hospitalar</div></div>';
-    html+='<div class="pedido-num">PEDIDO Nº '+numPedido+'/'+new Date().getFullYear()+'</div>';
-    html+='</div>';
-    // Data e destinatário
-    var cidade='Vicência/PE, '+dataHoje+'.';
-    html+='<div style="text-align:right;font-size:11px;margin-bottom:14px">'+cidade+'</div>';
-    html+='<div style="font-size:11px;font-weight:700;margin-bottom:10px">PARA: CENTRAL DE COMPRAS DO MUNICÍPIO</div>';
-    html+='<div class="class="info-box"><b>À EMPRESA: '+(empresa.trim()||'_______________________________________________')+'</b><br>CNPJ: '+(cnpjEmpresa.trim()||'___________________________________')+'<br>NÚMERO P/ CONTATO: ______________________</div>';
-    html+='<div class="assunto">ASSUNTO: PEDIDO DE FORNECIMENTO DE INSUMOS COM O OBJETIVO DE ATENDEREM AS DEMANDAS DE ACORDO COM AS NECESSIDADES CLÍNICAS DOS PACIENTES NO ÂMBITO HOSPITALAR.</div>';
-    html+='<div class="intro">Caro Sr.(a):<br><br>Venho por meio deste, solicitar o fornecimento do(s) seguinte(s) insumo(s) e sua respectiva quantidade para atender as necessidades do Município.</div>';
+    // Cabeçalho oficial (compartilhado com o PDF por ATA)
+    html+=montarCabecalhoPedido();
 
     // Tabelas por seção
     secoes.forEach(function(sec){
@@ -5349,6 +5409,41 @@ function TabPrevisao(props){
               if(chipMeds.length===0)return editando?<div style={{fontSize:11,color:'#94A3B8',fontStyle:'italic'}}>Nenhum medicamento no rascunho — busque abaixo para adicionar.</div>:null;
               return(<div style={{display:'flex',flexWrap:'wrap',gap:6}}>
                 {chipMeds.map(function(m){return(<span key={m.id} style={{background:'#F1F5F9',borderRadius:16,padding:'4px 10px',fontSize:11,color:'#475569',display:'flex',alignItems:'center',gap:6}}>{m.nome}<button onClick={function(){if(editando){removeMedDraft(m.id);}else{desvincular(m.id);}}} style={{background:'none',border:'none',color:'#94A3B8',cursor:'pointer',fontSize:13,padding:0,lineHeight:1}}>×</button></span>);})}
+              </div>);
+            })()}
+            {editAta===ata.id&&editItens&&editItens.length>0&&(function(){
+              var pendentesUnicos=(autoMatches||[]).filter(function(am,idx){return editItens[idx]&&!editItens[idx].medicamentoId&&am.cands.length===1;}).length;
+              return(<div style={{marginTop:10,background:'#EFF6FF',border:'1.5px solid #BFDBFE',borderRadius:12,padding:'12px'}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8,gap:8,flexWrap:'wrap'}}>
+                  <div style={{fontWeight:700,fontSize:12,color:'#1E40AF'}}>🔎 Sugestões automáticas ({editItens.length} item(ns) da ata)</div>
+                  <button onClick={confirmarTodosItens} disabled={pendentesUnicos===0} style={{background:pendentesUnicos?'#1351B4':'#CBD5E1',border:'none',borderRadius:8,padding:'6px 12px',fontSize:12,color:'#fff',fontWeight:700,cursor:pendentesUnicos?'pointer':'default'}}>✅ Confirmar todos ({pendentesUnicos})</button>
+                </div>
+                {editItens.map(function(it,idx){
+                  var am=(autoMatches&&autoMatches[idx])||{cands:[]};
+                  var linkedMed=it.medicamentoId?medications.find(function(m){return m.id===it.medicamentoId;}):null;
+                  return(<div key={idx} style={{background:'#fff',border:'1px solid #E2E8F0',borderRadius:8,padding:'8px 10px',marginBottom:6}}>
+                    <div style={{fontSize:12,fontWeight:700,color:'#1E293B',marginBottom:4}}>#{it.num||idx+1} {it.descricao}</div>
+                    {linkedMed
+                      ?<div style={{display:'flex',alignItems:'center',gap:8,fontSize:12}}>
+                        <span style={{color:'#0C6B3E',fontWeight:600}}>✓ {linkedMed.nome}</span>
+                        <button onClick={function(){desvincularItem(idx);}} style={{background:'none',border:'none',color:'#94A3B8',cursor:'pointer',fontSize:11}}>× desvincular</button>
+                      </div>
+                      :am.cands.length===1
+                        ?<div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,flexWrap:'wrap'}}>
+                          <span style={{fontSize:12,color:'#1E293B'}}>✅ → {am.cands[0].m.nome}</span>
+                          <button onClick={function(){confirmarItem(idx,am.cands[0].m.id);}} style={{background:'#0C6B3E',border:'none',borderRadius:7,padding:'5px 10px',fontSize:11,color:'#fff',fontWeight:700,cursor:'pointer'}}>Confirmar</button>
+                        </div>
+                        :am.cands.length>1
+                          ?<div>
+                            <div style={{fontSize:11,color:'#64748B',marginBottom:4}}>❓ Vários possíveis — escolha:</div>
+                            <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+                              {am.cands.slice(0,4).map(function(c){return(<button key={c.m.id} onClick={function(){confirmarItem(idx,c.m.id);}} style={{background:'#EFF6FF',border:'1px solid #BFDBFE',borderRadius:7,padding:'5px 10px',fontSize:11,color:'#1351B4',fontWeight:600,cursor:'pointer'}}>{c.m.nome}</button>);})}
+                            </div>
+                          </div>
+                          :<div style={{fontSize:11,color:'#B45309'}}>❌ Sem correspondência automática — use a busca manual abaixo.</div>
+                    }
+                  </div>);
+                })}
               </div>);
             })()}
             {editAta===ata.id&&(function(){
