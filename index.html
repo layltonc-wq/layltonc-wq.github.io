@@ -1828,13 +1828,37 @@ function TabEstoque(props){var user=props.user;var medications=props.medications
   var _salvandoBaixa=useState(false);var salvandoBaixa=_salvandoBaixa[0];var setSalvandoBaixa=_salvandoBaixa[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];var _importStatus=useState('');var importStatus=_importStatus[0];var setImportStatus=_importStatus[1];var _importing=useState(false);var importing=_importing[0];var setImporting=_importing[1];var _filtCat=useState('todos');var filtCat=_filtCat[0];var setFiltCat=_filtCat[1];var _ajusteId=useState(null);var ajusteId=_ajusteId[0];var setAjusteId=_ajusteId[1];var _ajusteQty=useState('');var ajusteQty=_ajusteQty[0];var setAjusteQty=_ajusteQty[1];var _ajusteMotivo=useState('');var ajusteMotivo=_ajusteMotivo[0];var setAjusteMotivo=_ajusteMotivo[1];var _ajusteMed=useState(null);var ajusteMed=_ajusteMed[0];var setAjusteMed=_ajusteMed[1];var _loteSel=useState(null);var loteSel=_loteSel[0];var setLoteSel=_loteSel[1];var _editLote=useState(null);var editLote=_editLote[0];var setEditLote=_editLote[1];var _editLoteVal=useState('');var editLoteVal=_editLoteVal[0];var setEditLoteVal=_editLoteVal[1];var _editLoteData=useState('');var editLoteData=_editLoteData[0];var setEditLoteData=_editLoteData[1];
 var isManager=(user.role==='gestor'||user.role==='tecnico');var hoje=new Date();
 function getDiasVal(val){var d=_dataValidade(val);if(!d)return null;return Math.ceil((d-hoje)/86400000);}
-var medList=medications.map(function(m){var me=entries.filter(function(e){return e.medicamentoId===m.id&&e.tipo==='entrada'&&e.lote;});var loteMap={};me.forEach(function(e){if(!e.lote)return;var lk=e.lote;if(!loteMap[lk])loteMap[lk]={lote:e.lote,validade:e.validade||'',entrada:0,saida:0};loteMap[lk].entrada+=(e.quantidade||0);if(e.validade&&!loteMap[lk].validade)loteMap[lk].validade=e.validade;});
-  var saidas=entries.filter(function(e){return e.medicamentoId===m.id&&e.tipo==='saida'&&e.lote;});
-  saidas.forEach(function(e){var lk=e.lote;if(loteMap[lk])loteMap[lk].saida+=(e.quantidade||0);});
-  var lotes=Object.keys(loteMap).map(function(k){var l=loteMap[k];return Object.assign({},l,{qty:Math.max(0,l.entrada-l.saida)});}).filter(function(l){return l.qty>0;});var ul=me.slice().sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});var info=ul.length>0?{lote:ul[0].lote||'',validade:ul[0].validade||''}:{lote:'',validade:''};if(m.loteAtual)info.lote=m.loteAtual;if(m.validadeAtual)info.validade=m.validadeAtual;return {id:m.id,nome:m.nome,ean:m.ean,est:stock[m.id]||0,info:info,minEstoque:m.minEstoque||0,cat:m.categoria||'medicamento',lotes:lotes};});
+// PERF: índice de lotes por medicamento em UMA passada (2 varreduras de entries), memoizado.
+// Antes: medications.map fazia entries.filter 2x POR medicamento -> O(meds×entries) a CADA render (travava
+// ao digitar na busca). Agora O(entries) uma vez, só recalcula quando entries/medications/stock mudam.
+// Réplica EXATA da lógica antiga: entradas definem as chaves de lote, a validade e o lote mais recente (ult);
+// saídas só ajustam chaves que já existem (saída órfã é descartada, igual antes).
+var medListBase=useMemo(function(){
+  var idx={};
+  entries.forEach(function(e){
+    if(e.tipo!=='entrada'||!e.medicamentoId||!e.lote)return;
+    var mi=idx[e.medicamentoId]||(idx[e.medicamentoId]={loteMap:{},ult:null});
+    var lm=mi.loteMap[e.lote]||(mi.loteMap[e.lote]={lote:e.lote,validade:e.validade||'',entrada:0,saida:0});
+    lm.entrada+=(e.quantidade||0);
+    if(e.validade&&!lm.validade)lm.validade=e.validade;
+    if(!mi.ult||((e.criadoEm||'')>(mi.ult.criadoEm||'')))mi.ult={lote:e.lote||'',validade:e.validade||'',criadoEm:e.criadoEm||''};
+  });
+  entries.forEach(function(e){
+    if(e.tipo!=='saida'||!e.medicamentoId||!e.lote)return;
+    var mi=idx[e.medicamentoId];if(!mi)return;var lm=mi.loteMap[e.lote];if(lm)lm.saida+=(e.quantidade||0);
+  });
+  return medications.map(function(m){
+    var mi=idx[m.id]||{loteMap:{},ult:null};
+    var lotes=Object.keys(mi.loteMap).map(function(k){var l=mi.loteMap[k];return Object.assign({},l,{qty:Math.max(0,l.entrada-l.saida)});}).filter(function(l){return l.qty>0;});
+    var info=mi.ult?{lote:mi.ult.lote||'',validade:mi.ult.validade||''}:{lote:'',validade:''};
+    if(m.loteAtual)info.lote=m.loteAtual;if(m.validadeAtual)info.validade=m.validadeAtual;
+    return {id:m.id,nome:m.nome,ean:m.ean,est:stock[m.id]||0,info:info,minEstoque:m.minEstoque||0,cat:m.categoria||'medicamento',lotes:lotes};
+  });
+},[entries,medications,stock]);
+var medList=medListBase;
 if(search.trim())medList=medList.filter(function(m){return m.nome.toLowerCase().indexOf(search.toLowerCase())>=0;});
 if(filtCat&&filtCat!=='todos')medList=medList.filter(function(m){return m.cat===filtCat;});
-medList.sort(function(a,b){return a.est-b.est;});
+medList=medList.slice().sort(function(a,b){return a.est-b.est;});
 var venc30=[],venc60=[],venc90=[],vencidos=[];medList.forEach(function(m){
   var est=stock[m.id]||0;if(est<=0)return;
   var temLoteValidade=false;
