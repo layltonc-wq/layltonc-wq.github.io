@@ -1148,67 +1148,54 @@ function save(){if(!sel){setErr('Selecione um medicamento.');return;}var q=parse
     var obs=valeObs.trim();
     var items=carrinhoVale.slice();
     var hoje=new Date().toISOString();
-
-    // PASSO 1: testar permissão na coleção 'vales' ANTES de mexer no estoque.
-    // Isso evita dar entrada no estoque sem conseguir registrar o vale como pendente.
-    db.collection('vales').add({
-      teste:true,registradoPor:user.name,registradoEm:hoje
-    }).then(function(testRef){
-      // Permissão OK — apaga o documento de teste e segue com o fluxo real
-      return testRef.delete().then(function(){return true;});
-    }).catch(function(e){
-      setSalvandoVale(false);
-      var msgErro=(e&&e.code)||(e&&e.message)||'erro desconhecido';
-      alert2('Não foi possível registrar o vale: '+msgErro+'. Nada foi alterado no estoque ainda. Peça para adicionar a coleção "vales" nas regras do Firebase e tente novamente.');
-      return false;
-    }).then(function(podeContinuar){
-      if(!podeContinuar)return;
-
-      // PASSO 2: permissão confirmada, agora processa cada item (entrada + vale juntos)
-      var total=items.length;
-      var concluidos=0;
-      var temErro=false;
-      var ultimoErroVale=null;
-      function finalizarSeCompleto(){
-        if(concluidos<total)return;
-        if(temErro){
-          setSalvandoVale(false);
-          var msgErro=ultimoErroVale?(ultimoErroVale.code||ultimoErroVale.message||'erro desconhecido'):'erro desconhecido';
-          alert2('Parte do vale não foi registrada: '+msgErro+'. Os itens que falharam continuam no carrinho — tente confirmar novamente.');
-          return;
-        }
-        setCarrinhoVale([]);setValeForn('');setValeObs('');
+    if(items.length===0){setSalvandoVale(false);return;}
+    // Registra cada item: entrada no estoque + vale pendente (ambos são create, permitido pela regra).
+    // A antiga sonda de permissão (criava e apagava um doc de teste em 'vales') foi REMOVIDA: dependia de
+    // delete — que a regra endurecida não permite — e só gerava documentos órfãos. Se o create real falhar,
+    // o próprio erro já informa o motivo (permissão ou outro) e o item permanece no carrinho para retentar.
+    var total=items.length;
+    var concluidos=0;
+    var temErro=false;
+    var ultimoErroVale=null;
+    function finalizarSeCompleto(){
+      if(concluidos<total)return;
+      if(temErro){
         setSalvandoVale(false);
-        alert2('Vale registrado! O estoque foi atualizado. Lembre-se de vincular a Nota Fiscal quando ela chegar (aba 🧾 Vale → Pendentes).');
+        var msgErro=ultimoErroVale?(ultimoErroVale.code||ultimoErroVale.message||'erro desconhecido'):'erro desconhecido';
+        alert2('Não foi possível registrar o vale: '+msgErro+'. Os itens que falharam continuam no carrinho — tente novamente.');
+        return;
       }
-      items.forEach(function(item2){
-        var entryObj={
+      setCarrinhoVale([]);setValeForn('');setValeObs('');
+      setSalvandoVale(false);
+      alert2('Vale registrado! O estoque foi atualizado. Lembre-se de vincular a Nota Fiscal quando ela chegar (aba 🧾 Vale → Pendentes).');
+    }
+    items.forEach(function(item2){
+      var entryObj={
+        medicamentoId:item2.medId,medicamentoNome:item2.medNome,
+        tipo:'entrada',quantidade:Number(item2.qty)||0,
+        lote:item2.lote,validade:item2.validade,
+        observacao:'VALE'+(forn?' - '+forn:'')+(obs?' - '+obs:''),
+        categoriaMed:item2.categoriaMed,
+        viaVale:true
+      };
+      onSave(entryObj).then(function(){
+        return db.collection('vales').add({
           medicamentoId:item2.medId,medicamentoNome:item2.medNome,
-          tipo:'entrada',quantidade:Number(item2.qty)||0,
-          lote:item2.lote,validade:item2.validade,
-          observacao:'VALE'+(forn?' - '+forn:'')+(obs?' - '+obs:''),
-          categoriaMed:item2.categoriaMed,
-          viaVale:true
-        };
-        onSave(entryObj).then(function(){
-          return db.collection('vales').add({
-            medicamentoId:item2.medId,medicamentoNome:item2.medNome,
-            quantidade:Number(item2.qty)||0,lote:item2.lote,validade:item2.validade,
-            fornecedor:forn,obs:obs,
-            status:'pendente',
-            nfNumero:'',nfFornecedor:'',nfData:'',
-            registradoPor:user.name,registradoEm:hoje,date:todayStr()
-          });
-        }).then(function(){
-          // Remove este item do carrinho local (já está salvo com sucesso)
-          setCarrinhoVale(function(prev){return prev.filter(function(x){return x!==item2;});});
-          concluidos++;
-          finalizarSeCompleto();
-        }).catch(function(e){
-          console.error('Erro vale item:',e);
-          temErro=true;ultimoErroVale=e;concluidos++;
-          finalizarSeCompleto();
+          quantidade:Number(item2.qty)||0,lote:item2.lote,validade:item2.validade,
+          fornecedor:forn,obs:obs,
+          status:'pendente',
+          nfNumero:'',nfFornecedor:'',nfData:'',
+          registradoPor:user.name,registradoEm:hoje,date:todayStr()
         });
+      }).then(function(){
+        // Remove este item do carrinho local (já está salvo com sucesso)
+        setCarrinhoVale(function(prev){return prev.filter(function(x){return x!==item2;});});
+        concluidos++;
+        finalizarSeCompleto();
+      }).catch(function(e){
+        console.error('Erro vale item:',e);
+        temErro=true;ultimoErroVale=e;concluidos++;
+        finalizarSeCompleto();
       });
     });
   }
