@@ -2774,15 +2774,16 @@ function TabLeites(props){
   // form
   var _fNome=useState('');var fNome=_fNome[0];var setFNome=_fNome[1];
   var _fResp=useState('');var fResp=_fResp[0];var setFResp=_fResp[1];
-  var _fLeite=useState('');var fLeite=_fLeite[0];var setFLeite=_fLeite[1];
+  // fLeites: lista de leites PRINCIPAIS (todos obrigatórios / entregues). [{leiteId, qtd}]
+  var _fLeites=useState([{leiteId:'',qtd:''}]);var fLeites=_fLeites[0];var setFLeites=_fLeites[1];
+  // fLeiteAlt: leite OPCIONAL (substituto). NÃO é entregue por padrão — só substitui um principal em falta.
   var _fLeiteAlt=useState('');var fLeiteAlt=_fLeiteAlt[0];var setFLeiteAlt=_fLeiteAlt[1];
-  var _fQtd=useState('');var fQtd=_fQtd[0];var setFQtd=_fQtd[1];
   var _fMats=useState([]);var fMats=_fMats[0];var setFMats=_fMats[1];
   var _fObs=useState('');var fObs=_fObs[0];var setFObs=_fObs[1];
   var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];
   // baixa
-  var _bLeiteUsado=useState('principal');var bLeiteUsado=_bLeiteUsado[0];var setBLeiteUsado=_bLeiteUsado[1];
-  var _bQtdLeite=useState('');var bQtdLeite=_bQtdLeite[0];var setBQtdLeite=_bQtdLeite[1];
+  // bLeites: linhas de entrega. Cada linha vira UMA saída. avulsa:true = leite extra pontual (não altera cadastro).
+  var _bLeites=useState([]);var bLeites=_bLeites[0];var setBLeites=_bLeites[1];
   var _bMats=useState([]);var bMats=_bMats[0];var setBMats=_bMats[1];
   var _bData=useState(todayStr());var bData=_bData[0];var setBData=_bData[1];
   var _bSaving=useState(false);var bSaving=_bSaving[0];var setBSaving=_bSaving[1];
@@ -2804,13 +2805,26 @@ function TabLeites(props){
   var leitesCadastrados=medications.filter(function(m){return m.categoria==='leite'||m.cat==='leite';});
   var materiaisCadastrados=medications.filter(function(m){return m.categoria==='penso'||m.cat==='penso'||m.categoria==='material'||m.cat==='material';});
 
-  function resetForm(){setFNome('');setFResp('');setFLeite('');setFLeiteAlt('');setFQtd('');setFMats([]);setFObs('');setEditing(null);}
+  // Compat: retorna SOMENTE os leites PRINCIPAIS (entregues). Nunca inclui o opcional/alternativo.
+  // Pacientes novos usam p.leites[]; pacientes antigos caem no leite único p.leiteId/qtdMensal.
+  function pacienteLeites(p){
+    if(p&&p.leites&&p.leites.length){
+      return p.leites.map(function(l){return{leiteId:l.leiteId||'',nome:l.nome||'',qtd:l.qtd||0};});
+    }
+    var out=[];
+    if(p&&(p.leiteId||p.leiteNome))out.push({leiteId:p.leiteId||'',nome:p.leiteNome||'',qtd:p.qtdMensal||0});
+    return out;
+  }
+
+  function resetForm(){setFNome('');setFResp('');setFLeites([{leiteId:'',qtd:''}]);setFLeiteAlt('');setFMats([]);setFObs('');setEditing(null);}
 
   function abrirNovo(){resetForm();setShowForm(true);}
   function abrirEditar(p){
     setEditing(p);
     setFNome(p.nome||'');setFResp(p.responsavel||'');
-    setFLeite(p.leiteId||'');setFLeiteAlt(p.leiteAltId||'');setFQtd(String(p.qtdMensal||''));
+    var pl=pacienteLeites(p).map(function(l){return{leiteId:l.leiteId||'',qtd:String(l.qtd||'')};});
+    setFLeites(pl.length?pl:[{leiteId:'',qtd:''}]);
+    setFLeiteAlt(p.leiteAltId||'');
     setFMats((p.materiais||[]).map(function(m){return Object.assign({},m);}));
     setFObs(p.observacao||'');
     setShowForm(true);
@@ -2818,18 +2832,21 @@ function TabLeites(props){
 
   function salvarPaciente(){
     if(!fNome.trim()){alert2('Informe o nome do paciente.');return;}
-    if(!fLeite){alert2('Selecione o leite.');return;}
-    if(!fQtd||parseInt(fQtd)<=0){alert2('Informe a quantidade mensal.');return;}
-    var leiteMed=leitesCadastrados.find(function(m){return m.id===fLeite;});
+    var leitesLimpos=fLeites.filter(function(l){return l.leiteId&&parseInt(l.qtd)>0;}).map(function(l){var m=leitesCadastrados.find(function(x){return x.id===l.leiteId;});return{leiteId:l.leiteId,nome:m?m.nome:'',qtd:parseInt(l.qtd)};});
+    if(leitesLimpos.length===0){alert2('Adicione pelo menos um leite principal com quantidade.');return;}
     var leiteAltMed=fLeiteAlt?leitesCadastrados.find(function(m){return m.id===fLeiteAlt;}):null;
+    var primeiro=leitesLimpos[0];
     var obj={
       nome:fNome.trim(),
       responsavel:fResp.trim(),
-      leiteId:fLeite,
-      leiteNome:leiteMed?leiteMed.nome:'',
+      leites:leitesLimpos,
+      // Campos legados (1º leite) para compatibilidade com dados/telas antigas:
+      leiteId:primeiro.leiteId,
+      leiteNome:primeiro.nome,
+      qtdMensal:primeiro.qtd,
+      // Opcional (substituto) — NÃO é entregue automaticamente:
       leiteAltId:fLeiteAlt||'',
       leiteAltNome:leiteAltMed?leiteAltMed.nome:'',
-      qtdMensal:parseInt(fQtd),
       materiais:fMats.filter(function(m){return m.medId&&m.qtd>0;}).map(function(m){return{medId:m.medId,nome:m.nome,qtd:parseInt(m.qtd)||0};}),
       observacao:fObs.trim(),
       atualizadoEm:new Date().toISOString(),
@@ -2851,7 +2868,14 @@ function TabLeites(props){
 
   function excluirPaciente(p){
     confirm2('Excluir paciente','Excluir '+p.nome+' do cadastro? O histórico de retiradas será mantido.',function(){
-      db.collection('pacientes_leite').doc(p.id).delete().catch(function(){});
+      db.collection('pacientes_leite').doc(p.id).delete().then(function(){
+        alert2('Paciente excluído.');
+      }).catch(function(e){
+        var msg=e&&e.code==='permission-denied'
+          ?'Não foi possível excluir: você não tem permissão para excluir pacientes (permission-denied). Peça a um administrador.'
+          :'Não foi possível excluir: '+(e&&e.message?e.message:'verifique a conexão')+(e&&e.code?' ('+e.code+')':'');
+        alert2(msg);
+      });
     },'perigo','Excluir');
   }
 
@@ -2861,31 +2885,46 @@ function TabLeites(props){
 
   function abrirBaixa(p){
     setShowBaixa(p);
-    setBLeiteUsado('principal');
-    setBQtdLeite(String(p.qtdMensal||''));
+    // Uma linha por leite PRINCIPAL. Cada linha pode: entregar o principal, ou substituir pelo opcional (usarAlt).
+    var linhas=pacienteLeites(p).map(function(l){return{leiteId:l.leiteId,nome:l.nome,qtdPrescrita:l.qtd,qtdEntregue:String(l.qtd||''),usarAlt:false,avulsa:false};});
+    setBLeites(linhas);
     setBMats((p.materiais||[]).map(function(m){return{medId:m.medId,nome:m.nome,qtdPrescrita:m.qtd,qtdEntregue:String(m.qtd)};}));
     setBData(todayStr());
   }
 
   function confirmarBaixa(){
     if(!showBaixa)return;
-    var qLeite=parseInt(bQtdLeite)||0;
-    if(qLeite<=0){alert2('Informe a quantidade de leite entregue (maior que zero).');return;}
-    var usouAlt=bLeiteUsado==='alternativo'&&showBaixa.leiteAltId;
-    var leiteIdUsado=usouAlt?showBaixa.leiteAltId:showBaixa.leiteId;
-    var leiteNomeUsado=usouAlt?showBaixa.leiteAltNome:showBaixa.leiteNome;
+    var altId=showBaixa.leiteAltId||'';
+    var altNome=showBaixa.leiteAltNome||'';
+    // Resolve o leite efetivo de cada linha (substituto se usarAlt).
+    var linhas=bLeites.map(function(l){
+      var usaAlt=l.usarAlt&&altId&&!l.avulsa;
+      return{
+        leiteId:usaAlt?altId:l.leiteId,
+        nome:usaAlt?altNome:l.nome,
+        qtdPrescrita:l.avulsa?0:(parseInt(l.qtdPrescrita)||0),
+        qtdEntregue:parseInt(l.qtdEntregue)||0,
+        substituto:!!usaAlt,
+        avulsa:!!l.avulsa
+      };
+    });
+    var entregas=linhas.filter(function(l){return l.leiteId&&l.qtdEntregue>0;});
+    if(entregas.length===0){alert2('Informe ao menos um leite com quantidade entregue (maior que zero).');return;}
     var matsBaixa=bMats.map(function(m){return{medId:m.medId,nome:m.nome,qtdPrescrita:m.qtdPrescrita,qtdEntregue:parseInt(m.qtdEntregue)||0};});
     setBSaving(true);
+    // Compat: primeiro leite (para telas antigas que leem leiteNome/qtdLeiteEntregue).
+    var principal=entregas[0];
     // 1. cria registro de retirada
     var retObj={
       pacienteId:showBaixa.id,
       pacienteNome:showBaixa.nome,
       responsavelPaciente:showBaixa.responsavel||'',
-      leiteId:leiteIdUsado,
-      leiteNome:leiteNomeUsado,
-      leiteAlternativo:usouAlt,
-      qtdLeitePrescrita:showBaixa.qtdMensal,
-      qtdLeiteEntregue:qLeite,
+      leites:entregas.map(function(l){return{leiteId:l.leiteId,nome:l.nome,qtdPrescrita:l.qtdPrescrita,qtdEntregue:l.qtdEntregue,substituto:l.substituto,avulsa:l.avulsa};}),
+      leiteId:principal.leiteId,
+      leiteNome:principal.nome,
+      leiteAlternativo:principal.substituto,
+      qtdLeitePrescrita:principal.qtdPrescrita,
+      qtdLeiteEntregue:principal.qtdEntregue,
       materiais:matsBaixa,
       data:bData,
       liberadoPor:user.name||user.email,
@@ -2893,18 +2932,21 @@ function TabLeites(props){
       criadoEm:new Date().toISOString()
     };
     db.collection('retiradas_leite').add(retObj).then(function(){
-      // 2. cria entries de saida (leite + materiais >0)
+      // 2. cria entries de saida (um por leite entregue + materiais >0)
       var promises=[];
-      var obs='Entrega paciente: '+showBaixa.nome+(showBaixa.responsavel?' (resp: '+showBaixa.responsavel+')':'')+(usouAlt?' [leite alternativo]':'');
-      promises.push(onSave({medicamentoId:leiteIdUsado,medicamentoNome:leiteNomeUsado,tipo:'saida',quantidade:qLeite,observacao:obs+' — leite ('+qLeite+'/'+showBaixa.qtdMensal+')',viaLeitePac:true,pacienteLeiteId:showBaixa.id}));
+      var obsBase='Entrega paciente: '+showBaixa.nome+(showBaixa.responsavel?' (resp: '+showBaixa.responsavel+')':'');
+      entregas.forEach(function(l){
+        var extra=l.avulsa?' — leite AVULSO ('+l.qtdEntregue+')':(l.substituto?' — leite substituto ('+l.qtdEntregue+'/'+l.qtdPrescrita+')':' — leite ('+l.qtdEntregue+'/'+l.qtdPrescrita+')');
+        promises.push(onSave({medicamentoId:l.leiteId,medicamentoNome:l.nome,tipo:'saida',quantidade:l.qtdEntregue,observacao:obsBase+extra,viaLeitePac:true,pacienteLeiteId:showBaixa.id,leiteAvulso:l.avulsa}));
+      });
       matsBaixa.forEach(function(m){
         if(m.qtdEntregue>0){
-          promises.push(onSave({medicamentoId:m.medId,medicamentoNome:m.nome,tipo:'saida',quantidade:m.qtdEntregue,observacao:obs+' — material ('+m.qtdEntregue+'/'+m.qtdPrescrita+')',viaLeitePac:true,pacienteLeiteId:showBaixa.id}));
+          promises.push(onSave({medicamentoId:m.medId,medicamentoNome:m.nome,tipo:'saida',quantidade:m.qtdEntregue,observacao:obsBase+' — material ('+m.qtdEntregue+'/'+m.qtdPrescrita+')',viaLeitePac:true,pacienteLeiteId:showBaixa.id}));
         }
       });
       return Promise.all(promises);
     }).then(function(){
-      // 3. paciente volta pra "falta"
+      // 3. paciente volta pra "falta" (NÃO altera o cadastro de leites)
       return db.collection('pacientes_leite').doc(showBaixa.id).update({status:'falta',ultimaRetirada:bData,atualizadoEm:new Date().toISOString(),atualizadoPor:user.name||user.email});
     }).then(function(){
       setBSaving(false);setShowBaixa(null);alert2('Baixa registrada! Paciente voltou para "Falta Separar".');
@@ -2915,7 +2957,18 @@ function TabLeites(props){
   function updMatForm(i,campo,valor){var novo=fMats.slice();novo[i]=Object.assign({},novo[i]);if(campo==='medId'){var m=materiaisCadastrados.find(function(x){return x.id===valor;});novo[i].medId=valor;novo[i].nome=m?m.nome:'';}else{novo[i][campo]=valor;}setFMats(novo);}
   function delMatForm(i){setFMats(fMats.filter(function(_,j){return j!==i;}));}
 
+  // Leites principais no cadastro (lista):
+  function addLeiteForm(){setFLeites(fLeites.concat([{leiteId:'',qtd:''}]));}
+  function updLeiteForm(i,campo,valor){var novo=fLeites.slice();novo[i]=Object.assign({},novo[i]);novo[i][campo]=valor;setFLeites(novo);}
+  function delLeiteForm(i){setFLeites(fLeites.length<=1?[{leiteId:'',qtd:''}]:fLeites.filter(function(_,j){return j!==i;}));}
+
   function updMatBaixa(i,valor){var novo=bMats.slice();novo[i]=Object.assign({},novo[i],{qtdEntregue:valor});setBMats(novo);}
+
+  // Linhas de leite na baixa (principais + avulsas):
+  function updLeiteBaixa(i,campo,valor){var novo=bLeites.slice();novo[i]=Object.assign({},novo[i]);if(campo==='leiteId'){var m=leitesCadastrados.find(function(x){return x.id===valor;});novo[i].leiteId=valor;novo[i].nome=m?m.nome:'';}else{novo[i][campo]=valor;}setBLeites(novo);}
+  function toggleAltBaixa(i){var novo=bLeites.slice();novo[i]=Object.assign({},novo[i],{usarAlt:!novo[i].usarAlt});setBLeites(novo);}
+  function addAvulsaBaixa(){setBLeites(bLeites.concat([{leiteId:'',nome:'',qtdPrescrita:0,qtdEntregue:'',usarAlt:false,avulsa:true}]));}
+  function delLeiteBaixa(i){setBLeites(bLeites.filter(function(_,j){return j!==i;}));}
 
   var q=search.toLowerCase().trim();
   var filtrarPor=function(status){
@@ -2945,9 +2998,10 @@ function TabLeites(props){
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontWeight:800,fontSize:15,color:'#1E293B',wordBreak:'break-word'}}>{p.nome}</div>
           {p.responsavel&&<div style={{fontSize:12,color:'#64748B',marginTop:2}}>👤 Resp: {p.responsavel}</div>}
-          <div style={{fontSize:13,color:'#1351B4',fontWeight:600,marginTop:6}}>🍼 {p.leiteNome||'—'}<span style={{color:'#64748B',fontWeight:500}}> · {p.qtdMensal||0} un./mês</span></div>
-          {p.leiteAltNome&&<div style={{fontSize:12,color:'#7C3AED',fontWeight:500,marginTop:2}}>🔄 Alternativa: {p.leiteAltNome}</div>}
+          {pacienteLeites(p).map(function(l,li){return(<div key={li} style={{fontSize:13,color:'#1351B4',fontWeight:600,marginTop:li===0?6:2}}>🍼 {l.nome||'—'}<span style={{color:'#64748B',fontWeight:500}}> · {l.qtd||0} un./mês</span></div>);})}
+          {p.leiteAltNome&&<div style={{fontSize:12,color:'#7C3AED',fontWeight:500,marginTop:2}}>🔄 Opcional: {p.leiteAltNome}</div>}
           {p.materiais&&p.materiais.length>0&&<div style={{fontSize:12,color:'#64748B',marginTop:4}}>📦 Materiais: {p.materiais.map(function(m){return m.nome+' ('+m.qtd+')';}).join(', ')}</div>}
+          {p.observacao&&<div style={{fontSize:12,color:'#B45309',marginTop:4,background:'#FFFBEB',borderRadius:6,padding:'4px 8px'}}>📝 {p.observacao}</div>}
           {ultima&&<div style={{fontSize:11,color:'#94A3B8',marginTop:6}}>Última retirada: {ultima.data} · {ultima.qtdLeiteEntregue}/{ultima.qtdLeitePrescrita} un.</div>}
         </div>
       </div>
@@ -2996,23 +3050,26 @@ function TabLeites(props){
           <input value={fResp} onChange={function(e){setFResp(e.target.value);}} className="inp" placeholder="Ex: Maria da Silva"/>
         </div>
         <div style={{marginBottom:10}}>
-          <div style={{fontWeight:700,fontSize:12,color:'#1E293B',marginBottom:4}}>Leite prescrito *</div>
-          <select value={fLeite} onChange={function(e){setFLeite(e.target.value);}} className="inp">
-            <option value="">Selecione...</option>
-            {leitesCadastrados.map(function(m){return(<option key={m.id} value={m.id}>{m.nome}</option>);})}
-          </select>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
+            <div style={{fontWeight:700,fontSize:12,color:'#1E293B'}}>Leites prescritos * <span style={{fontWeight:400,color:'#94A3B8'}}>(todos são entregues)</span></div>
+            <button onClick={addLeiteForm} style={{background:'#EFF6FF',border:'none',borderRadius:8,padding:'6px 12px',fontSize:11,fontWeight:700,color:'#1351B4',cursor:'pointer'}}>+ Adicionar leite</button>
+          </div>
+          {fLeites.map(function(l,i){return(<div key={i} style={{display:'flex',gap:6,marginBottom:6}}>
+            <select value={l.leiteId} onChange={function(e){updLeiteForm(i,'leiteId',e.target.value);}} className="inp" style={{marginBottom:0,flex:2}}>
+              <option value="">Selecione o leite...</option>
+              {leitesCadastrados.map(function(m){return(<option key={m.id} value={m.id}>{m.nome}</option>);})}
+            </select>
+            <input value={l.qtd} onChange={function(e){updLeiteForm(i,'qtd',e.target.value.replace(/[^0-9]/g,''));}} className="inp" style={{marginBottom:0,width:90,textAlign:'center'}} placeholder="Qtd/mês" inputMode="numeric"/>
+            {fLeites.length>1&&<button onClick={function(){delLeiteForm(i);}} style={{background:'#FEE2E2',border:'none',borderRadius:8,width:36,cursor:'pointer',fontSize:14}}>🗑</button>}
+          </div>);})}
         </div>
         <div style={{marginBottom:10}}>
-          <div style={{fontWeight:700,fontSize:12,color:'#1E293B',marginBottom:4}}>Leite alternativo (opcional)</div>
+          <div style={{fontWeight:700,fontSize:12,color:'#1E293B',marginBottom:4}}>Leite opcional (substituto)</div>
           <select value={fLeiteAlt} onChange={function(e){setFLeiteAlt(e.target.value);}} className="inp">
             <option value="">Nenhum</option>
-            {leitesCadastrados.filter(function(m){return m.id!==fLeite;}).map(function(m){return(<option key={m.id} value={m.id}>{m.nome}</option>);})}
+            {leitesCadastrados.filter(function(m){return !fLeites.some(function(l){return l.leiteId===m.id;});}).map(function(m){return(<option key={m.id} value={m.id}>{m.nome}</option>);})}
           </select>
-          <div style={{fontSize:11,color:'#94A3B8',marginTop:4}}>ℹ️ Use quando o paciente pode receber outro leite caso o principal falte.</div>
-        </div>
-        <div style={{marginBottom:10}}>
-          <div style={{fontWeight:700,fontSize:12,color:'#1E293B',marginBottom:4}}>Quantidade mensal prescrita *</div>
-          <input value={fQtd} onChange={function(e){setFQtd(e.target.value.replace(/[^0-9]/g,''));}} className="inp" placeholder="Ex: 10" inputMode="numeric"/>
+          <div style={{fontSize:11,color:'#94A3B8',marginTop:4}}>ℹ️ NÃO é entregue automaticamente. Serve para substituir um leite principal caso ele falte, na hora da baixa.</div>
         </div>
         <div style={{marginBottom:10}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
@@ -3044,22 +3101,39 @@ function TabLeites(props){
       <div style={{background:'#fff',borderRadius:20,padding:20,maxWidth:520,width:'100%',maxHeight:'92vh',overflowY:'auto'}}>
         <div style={{fontWeight:800,fontSize:17,color:'#0C6B3E',marginBottom:4}}>♻️ Dar Baixa — Entrega ao paciente</div>
         <div style={{fontSize:14,color:'#1E293B',fontWeight:700,marginBottom:2}}>{showBaixa.nome}</div>
-        {showBaixa.responsavel&&<div style={{fontSize:12,color:'#64748B',marginBottom:14}}>Responsável: {showBaixa.responsavel}</div>}
-        {showBaixa.leiteAltId&&showBaixa.leiteAltNome&&<div style={{marginBottom:10}}>
-          <div style={{fontWeight:700,fontSize:12,color:'#1E293B',marginBottom:6}}>Qual leite está sendo entregue?</div>
-          <div style={{display:'flex',gap:6}}>
-            <button onClick={function(){setBLeiteUsado('principal');}} style={{flex:1,padding:'10px 8px',borderRadius:10,border:'1.5px solid '+(bLeiteUsado==='principal'?'#0C6B3E':'#E2E8F0'),background:bLeiteUsado==='principal'?'#F0FDF4':'#fff',fontSize:12,fontWeight:bLeiteUsado==='principal'?700:500,cursor:'pointer',color:bLeiteUsado==='principal'?'#0C6B3E':'#1E293B'}}>🍼 Principal<br/><span style={{fontSize:11,fontWeight:400}}>{showBaixa.leiteNome}</span></button>
-            <button onClick={function(){setBLeiteUsado('alternativo');}} style={{flex:1,padding:'10px 8px',borderRadius:10,border:'1.5px solid '+(bLeiteUsado==='alternativo'?'#7C3AED':'#E2E8F0'),background:bLeiteUsado==='alternativo'?'#F5F3FF':'#fff',fontSize:12,fontWeight:bLeiteUsado==='alternativo'?700:500,cursor:'pointer',color:bLeiteUsado==='alternativo'?'#7C3AED':'#1E293B'}}>🔄 Alternativo<br/><span style={{fontSize:11,fontWeight:400}}>{showBaixa.leiteAltNome}</span></button>
+        {showBaixa.responsavel&&<div style={{fontSize:12,color:'#64748B',marginBottom:showBaixa.observacao?6:14}}>Responsável: {showBaixa.responsavel}</div>}
+        {showBaixa.observacao&&<div style={{fontSize:12,color:'#B45309',marginBottom:14,background:'#FFFBEB',border:'1px solid #FCD34D',borderRadius:8,padding:'8px 12px'}}>📝 {showBaixa.observacao}</div>}
+        <div style={{marginBottom:12}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+            <div style={{fontWeight:700,fontSize:12,color:'#1E293B'}}>🍼 Leites a entregar</div>
+            <button onClick={addAvulsaBaixa} style={{background:'#EDE9FE',border:'none',borderRadius:8,padding:'6px 12px',fontSize:11,fontWeight:700,color:'#7C3AED',cursor:'pointer'}}>+ Retirada avulsa</button>
           </div>
-        </div>}
-        <div style={{background:'#F0FDF4',border:'1px solid #86EFAC',borderRadius:10,padding:'10px 14px',marginBottom:12}}>
-          <div style={{fontWeight:700,fontSize:13,color:'#0C6B3E',marginBottom:4}}>🍼 {bLeiteUsado==='alternativo'?showBaixa.leiteAltNome:showBaixa.leiteNome}{bLeiteUsado==='alternativo'&&<span style={{color:'#7C3AED',fontSize:11,marginLeft:6}}>(alternativo)</span>}</div>
-          <div style={{fontSize:11,color:'#64748B'}}>Prescrito: {showBaixa.qtdMensal} un./mês</div>
-          <div style={{marginTop:8,display:'flex',gap:8,alignItems:'center'}}>
-            <span style={{fontSize:12,color:'#1E293B',fontWeight:700}}>Entregue:</span>
-            <input value={bQtdLeite} onChange={function(e){setBQtdLeite(e.target.value.replace(/[^0-9]/g,''));}} className="inp" style={{marginBottom:0,fontSize:18,fontWeight:800,textAlign:'center',color:'#0C6B3E',width:100}} inputMode="numeric"/>
-            <span style={{fontSize:11,color:'#64748B'}}>un.</span>
-          </div>
+          {bLeites.map(function(l,i){
+            var temAlt=showBaixa.leiteAltId&&showBaixa.leiteAltNome&&!l.avulsa;
+            var nomeMostrado=l.avulsa?l.nome:(l.usarAlt&&temAlt?showBaixa.leiteAltNome:l.nome);
+            return(<div key={i} style={{background:l.avulsa?'#F5F3FF':'#F0FDF4',border:'1px solid '+(l.avulsa?'#DDD6FE':'#86EFAC'),borderRadius:10,padding:'10px 12px',marginBottom:6}}>
+              <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+                <div style={{flex:1,minWidth:140}}>
+                  {l.avulsa
+                    ?<select value={l.leiteId} onChange={function(e){updLeiteBaixa(i,'leiteId',e.target.value);}} className="inp" style={{marginBottom:0}}>
+                        <option value="">Selecione o leite avulso...</option>
+                        {leitesCadastrados.map(function(m){return(<option key={m.id} value={m.id}>{m.nome}</option>);})}
+                      </select>
+                    :<div style={{fontWeight:700,fontSize:13,color:l.usarAlt&&temAlt?'#7C3AED':'#0C6B3E'}}>{nomeMostrado||'—'}{l.usarAlt&&temAlt&&<span style={{fontSize:11,marginLeft:6}}>(opcional)</span>}<div style={{fontSize:11,color:'#64748B',fontWeight:400}}>Prescrito: {l.qtdPrescrita} un./mês</div></div>}
+                </div>
+                <div style={{display:'flex',gap:6,alignItems:'center'}}>
+                  <span style={{fontSize:11,color:'#64748B'}}>{l.avulsa?'Qtd:':'Entregue:'}</span>
+                  <input value={l.qtdEntregue} onChange={function(e){updLeiteBaixa(i,'qtdEntregue',e.target.value.replace(/[^0-9]/g,''));}} className="inp" style={{marginBottom:0,fontSize:16,fontWeight:800,textAlign:'center',color:l.avulsa?'#7C3AED':'#0C6B3E',width:80}} inputMode="numeric"/>
+                  {l.avulsa&&<button onClick={function(){delLeiteBaixa(i);}} title="Remover" style={{background:'#FEE2E2',border:'none',borderRadius:8,width:34,height:34,cursor:'pointer',fontSize:13}}>🗑</button>}
+                </div>
+              </div>
+              {temAlt&&<label style={{display:'flex',gap:6,alignItems:'center',marginTop:8,fontSize:11,color:'#7C3AED',cursor:'pointer'}}>
+                <input type="checkbox" checked={!!l.usarAlt} onChange={function(){toggleAltBaixa(i);}}/>
+                Entregar o opcional ({showBaixa.leiteAltNome}) no lugar deste
+              </label>}
+            </div>);
+          })}
+          {bLeites.length===0&&<div style={{fontSize:12,color:'#94A3B8',padding:'8px 0'}}>Nenhum leite. Use "+ Retirada avulsa" para adicionar.</div>}
         </div>
         {bMats.length>0&&<div style={{marginBottom:12}}>
           <div style={{fontWeight:700,fontSize:12,color:'#1E293B',marginBottom:6}}>📦 Materiais:</div>
@@ -3099,7 +3173,9 @@ function TabLeites(props){
               <div style={{fontWeight:800,fontSize:13,color:'#0C6B3E'}}>📅 {r.data}</div>
               <div style={{fontSize:11,color:'#64748B'}}>por {r.liberadoPor}</div>
             </div>
-            <div style={{fontSize:12,color:'#1E293B'}}>🍼 <strong>{r.leiteNome}</strong>{r.leiteAlternativo&&<span style={{color:'#7C3AED',fontSize:11,marginLeft:6}}>(alternativo)</span>}: {r.qtdLeiteEntregue}/{r.qtdLeitePrescrita} un.{r.qtdLeiteEntregue<r.qtdLeitePrescrita&&<span style={{color:'#B45309'}}> ⚠️ parcial</span>}</div>
+            {(r.leites&&r.leites.length?r.leites:[{leiteId:r.leiteId,nome:r.leiteNome,qtdPrescrita:r.qtdLeitePrescrita,qtdEntregue:r.qtdLeiteEntregue,substituto:r.leiteAlternativo,avulsa:false}]).map(function(l,i){return(
+              <div key={i} style={{fontSize:12,color:'#1E293B'}}>🍼 <strong>{l.nome}</strong>{l.avulsa&&<span style={{color:'#7C3AED',fontSize:11,marginLeft:6}}>(avulso)</span>}{!l.avulsa&&l.substituto&&<span style={{color:'#7C3AED',fontSize:11,marginLeft:6}}>(opcional)</span>}: {l.qtdEntregue}{!l.avulsa&&l.qtdPrescrita?'/'+l.qtdPrescrita:''} un.{!l.avulsa&&l.qtdPrescrita&&l.qtdEntregue<l.qtdPrescrita&&<span style={{color:'#B45309'}}> ⚠️ parcial</span>}</div>
+            );})}
             {r.materiais&&r.materiais.length>0&&<div style={{marginTop:6,paddingTop:6,borderTop:'1px dashed #E2E8F0'}}>
               {r.materiais.map(function(m,i){return(<div key={i} style={{fontSize:11,color:'#64748B'}}>📦 {m.nome}: {m.qtdEntregue}/{m.qtdPrescrita}</div>);})}
             </div>}
