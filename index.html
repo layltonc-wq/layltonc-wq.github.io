@@ -2205,13 +2205,20 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
     });
     var lista=Object.values(agrupado).sort(function(a,b){return a.nome.localeCompare(b.nome);});
     var totalGeral=lista.reduce(function(acc,it){return acc+it.total;},0);
+    // Horário de emissão de cada saída (HH:MM local) + horário da última saída (referência p/ o próximo relatório).
+    lista.forEach(function(it){it.horarios=it.saidas.map(function(e){return fmtT(e.criadoEm);}).sort();});
+    var todosH=saidasDia.map(function(e){return fmtT(e.criadoEm);}).filter(function(h){return h&&h!=='--:--';}).sort();
+    var ultimaSaida=todosH.length?todosH[todosH.length-1]:'';
     if(lista.length===0)return(<div style={{textAlign:'center',padding:'40px 0',color:'#94A3B8'}}><div style={{fontSize:40,marginBottom:8}}>📋</div><div style={{fontWeight:600}}>Nenhuma saída registrada neste dia</div></div>);
     var COR_CAT={medicamento:'#1351B4',controlado:'#DC2626',injetavel:'#7C3AED',leite:'#D97706',penso:'#0C6B3E'};
     var ICO_CAT={medicamento:'💊',controlado:'🔒',injetavel:'💉',leite:'🍼',penso:'🩹'};
     return(<div>
-      <div style={{background:'#EFF6FF',borderRadius:12,padding:'12px 16px',marginBottom:14,display:'flex',justifyContent:'space-between'}}>
-        <span style={{fontWeight:700,color:'#1351B4'}}>{lista.length} medicamento(s) com saída</span>
-        <span style={{fontWeight:700,color:'#1351B4'}}>{totalGeral} unidades no total</span>
+      <div style={{background:'#EFF6FF',borderRadius:12,padding:'12px 16px',marginBottom:14}}>
+        <div style={{display:'flex',justifyContent:'space-between'}}>
+          <span style={{fontWeight:700,color:'#1351B4'}}>{lista.length} medicamento(s) com saída</span>
+          <span style={{fontWeight:700,color:'#1351B4'}}>{totalGeral} unidades no total</span>
+        </div>
+        {ultimaSaida&&<div style={{fontSize:12,color:'#1E40AF',marginTop:8,borderTop:'1px solid #BFDBFE',paddingTop:8}}>🕐 Última saída às <strong>{ultimaSaida}</strong> — para o próximo relatório, use "A partir de" {ultimaSaida}.</div>}
       </div>
       <div style={{background:'#fff',borderRadius:14,border:'1px solid #E2E8F0',overflow:'hidden',marginBottom:14}}>
         <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
@@ -2229,6 +2236,7 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
                 <td style={{padding:'10px 14px'}}>
                   <div style={{fontWeight:600,color:'#1E293B'}}>{it.nome}</div>
                   <span style={{background:cor+'18',color:cor,padding:'1px 8px',borderRadius:10,fontSize:11,fontWeight:600}}>{ico} {it.cat}</span>
+                  <div style={{fontSize:11,color:'#94A3B8',marginTop:3}}>🕐 {it.horarios.join(' · ')}</div>
                 </td>
                 <td style={{padding:'10px 14px',textAlign:'center',fontWeight:800,fontSize:18,color:'#DC2626'}}>-{it.total}</td>
               </tr>);
@@ -2245,10 +2253,10 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
       <button onClick={function(){
         var hoje=new Date(dF+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'});
         var html='<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;padding:24px;font-size:12px}h2{font-size:16px;margin-bottom:4px}table{width:100%;border-collapse:collapse;margin-top:16px}th{background:#f0f0f0;padding:8px;text-align:left;border:1px solid #ccc;font-size:11px}td{padding:8px;border:1px solid #ddd}.total{font-weight:700;background:#f8f8f8}@media print{button{display:none}}</style></head><body>';
-        html+='<h2>📋 Relatório de Saídas</h2><div style="color:#555;margin-bottom:8px">Data: <b>'+hoje+'</b> · Total: <b>'+totalGeral+' unidades</b></div>';
-        html+='<table><tr><th>Medicamento</th><th>Categoria</th><th style="text-align:center">Quantidade</th></tr>';
-        lista.forEach(function(it){html+='<tr><td>'+it.nome+'</td><td>'+it.cat+'</td><td style="text-align:center;font-weight:700">'+it.total+'</td></tr>';});
-        html+='<tr class="total"><td colspan="2">TOTAL</td><td style="text-align:center">'+totalGeral+'</td></tr>';
+        html+='<h2>📋 Relatório de Saídas</h2><div style="color:#555;margin-bottom:8px">Data: <b>'+hoje+'</b> · Total: <b>'+totalGeral+' unidades</b>'+(ultimaSaida?' · Última saída: <b>'+ultimaSaida+'</b>':'')+'</div>';
+        html+='<table><tr><th>Medicamento</th><th>Categoria</th><th>Horários</th><th style="text-align:center">Quantidade</th></tr>';
+        lista.forEach(function(it){html+='<tr><td>'+it.nome+'</td><td>'+it.cat+'</td><td>'+it.horarios.join(', ')+'</td><td style="text-align:center;font-weight:700">'+it.total+'</td></tr>';});
+        html+='<tr class="total"><td colspan="3">TOTAL</td><td style="text-align:center">'+totalGeral+'</td></tr>';
         html+='</table></body></html>';
         var w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(function(){w.print();},400);}
       }} className="bp">🖨️ Imprimir / Salvar PDF</button>
