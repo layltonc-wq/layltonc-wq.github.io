@@ -3933,6 +3933,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
   var _fi=sl('ativos');var filtro=_fi[0];var setFiltro=_fi[1];
   var _bu=sl('');var busca=_bu[0];var setBusca=_bu[1];
   var _qd=sl(2);var qtdDose=_qd[0];var setQtdDose=_qd[1];
+  var _dd=sl('');var dataDose=_dd[0];var setDataDose=_dd[1];
   var _qe=sl(2);var qtdEsp=_qe[0];var setQtdEsp=_qe[1];
   var _od=sl('');var obsDesist=_od[0];var setObsDesist=_od[1];
   var _sv=sl(false);var saving=_sv[0];var setSaving=_sv[1];
@@ -4025,15 +4026,18 @@ function TabAntibiotico({user,medications,stock,allUsers}){
   async function iniciarEspera(t){setEditNome(t.pacienteNome);setEditDias(String(t.diasTratamento||''));setEditIni(new Date().toISOString().split('T')[0]);setEditObs(t.obs||'');setEditMed(t.nomeMedico||'');setEditCrm(t.crmMedico||'');setShowEdit(Object.assign({},t,{_esp:true}));setShowDet(null);}
   async function ataqueBtn(t){if(!window.confirm('Marcar como Dose de Ataque? O estoque ja foi baixado no cadastro.'))return;var hj=new Date().toISOString().split('T')[0];var hr=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});await db.collection('tratamentos_atb').doc(t.id).update({status:'dose_ataque',doseAtaqueEm:new Date().toISOString(),doseAtaqueData:hj,doseAtaqueHora:hr,doseAtaqueRegistradoPor:user.name,doseAtaqueCor:user.color||'#8B5CF6'});setShowDet(null);}
   async function regDose(t){
-    var hj=new Date().toISOString().split('T')[0];
+    var hoje=new Date().toISOString().split('T')[0];
+    var dData=dataDose||hoje;
+    if(dData>hoje)return alert('Não é possível registrar dose em data futura.');
     var hr=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+    var retro=dData<hoje;
     if(!t.medicamentoId)return alert('Medicamento não vinculado.');
     if((stock[t.medicamentoId]||0)<qtdDose)return alert('Estoque insuficiente! Disponivel: '+(stock[t.medicamentoId]||0));
-    await db.collection('entries').add({tipo:'saida',medicamentoId:t.medicamentoId,medicamentoNome:t.medicamentoNome||'',quantidade:qtdDose,autorNome:user.name,autorCor:user.color||B,autorId:user.uid,lote:'',validade:'',obs:'ATB - '+t.pacienteNome,criadoEm:new Date().toISOString(),date:hj});
-    var nd=[...(t.doses||[]),{data:hj,hora:hr,responsavel:user.name,responsavelCor:user.color||B,qtd:qtdDose}];
+    await db.collection('entries').add({tipo:'saida',medicamentoId:t.medicamentoId,medicamentoNome:t.medicamentoNome||'',quantidade:qtdDose,autorNome:user.name,autorCor:user.color||B,autorId:user.uid,lote:'',validade:'',obs:'ATB - '+t.pacienteNome+(retro?' (dose de '+fD(dData)+')':''),criadoEm:new Date().toISOString(),date:dData});
+    var nd=[...(t.doses||[]),{data:dData,hora:hr,responsavel:user.name,responsavelCor:user.color||B,qtd:qtdDose,registradaEm:hoje}];
     var ns=nd.filter(function(d){return!d.retroativo;}).length>=parseInt(t.diasTratamento)?'concluido':'ativo';
     await db.collection('tratamentos_atb').doc(t.id).update({doses:nd,status:ns});
-    setShowDose(null);setQtdDose(2);
+    setShowDose(null);setQtdDose(2);setDataDose('');
   }
   async function finalizar(t){if(!window.confirm('Finalizar tratamento de '+t.pacienteNome+'?'))return;await db.collection('tratamentos_atb').doc(t.id).update({status:'finalizado',finalizadoEm:new Date().toISOString(),finalizadoPor:user.name});setShowDet(null);}
   async function reabrir(t){if(!window.confirm('Reabrir tratamento de '+t.pacienteNome+'?'))return;await db.collection('tratamentos_atb').doc(t.id).update({status:'ativo',reabertoPor:user.name,reabertoEm:new Date().toISOString()});setShowDet(null);}
@@ -4148,7 +4152,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
                 <button onClick={function(e){e.stopPropagation();iniciarEspera(t);}} style={{padding:'9px',background:'#F0FDF4',border:'1.5px solid #BBF7D0',borderRadius:10,color:'#059669',fontWeight:700,fontSize:12,cursor:'pointer'}}>💉 Iniciar</button>
                 <button onClick={function(e){e.stopPropagation();ataqueBtn(t);}} style={{padding:'9px',background:'#F5F3FF',border:'1.5px solid #DDD6FE',borderRadius:10,color:'#7C3AED',fontWeight:700,fontSize:12,cursor:'pointer'}}>⚡ Dose Ataque</button>
               </div>}
-              {pHj(t)&&<button onClick={function(e){e.stopPropagation();setShowDose(t);}} style={{width:'100%',padding:'10px',background:B,border:'none',borderRadius:10,color:'#fff',fontWeight:700,fontSize:14,cursor:'pointer',marginTop:6}}>💉 Registrar Dose de Hoje</button>}
+              {pHj(t)&&<button onClick={function(e){e.stopPropagation();setDataDose(new Date().toISOString().split('T')[0]);setShowDose(t);}} style={{width:'100%',padding:'10px',background:B,border:'none',borderRadius:10,color:'#fff',fontWeight:700,fontSize:14,cursor:'pointer',marginTop:6}}>💉 Registrar Dose de Hoje</button>}
             </div>
           );
         })}
@@ -4250,7 +4254,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
         </div>
       </div>}
 
-      {showDose&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',padding:20}} onClick={function(){setShowDose(null);setQtdDose(2);}}>
+      {showDose&&(function(){var hojeStr=new Date().toISOString().split('T')[0];var retroSel=dataDose&&dataDose<hojeStr;return(<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',padding:20}} onClick={function(){setShowDose(null);setQtdDose(2);setDataDose('');}}>
         <div style={{background:'#fff',borderRadius:20,padding:28,width:'100%',maxWidth:360,textAlign:'center'}} onClick={function(e){e.stopPropagation();}}>
           <div style={{fontSize:44,marginBottom:8}}>💉</div>
           <div style={{fontWeight:800,fontSize:18,color:'#1E293B',marginBottom:4}}>Registrar Dose</div>
@@ -4263,13 +4267,18 @@ function TabAntibiotico({user,medications,stock,allUsers}){
             </div>
             <div style={{fontSize:12,color:'#94A3B8',marginTop:8}}>{qtdDose} ampola{qtdDose>1?'s':''} serao baixadas</div>
           </div>
-          <div style={{background:'#F0FDF4',borderRadius:10,padding:10,marginBottom:14,fontSize:13,color:'#059669',fontWeight:600}}>👤 {user.name} · {new Date().toLocaleDateString('pt-BR')}</div>
+          <div style={{background:'#F8FAFC',borderRadius:14,padding:14,marginBottom:14,textAlign:'left'}}>
+            <div style={{fontSize:13,fontWeight:700,color:'#475569',marginBottom:8}}>📅 Data da administração</div>
+            <input type="date" value={dataDose} max={hojeStr} onChange={function(e){var v=e.target.value;if(v&&v>hojeStr)v=hojeStr;setDataDose(v);}} style={{width:'100%',padding:'10px 12px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:14,boxSizing:'border-box'}}/>
+            <div style={{fontSize:11,color:retroSel?'#B45309':'#94A3B8',marginTop:6}}>{retroSel?'⚠️ Baixa retroativa: será registrada na data acima (ex.: dose tomada de madrugada).':'Padrão: hoje. Você pode selecionar um dia anterior — datas futuras não são permitidas.'}</div>
+          </div>
+          <div style={{background:'#F0FDF4',borderRadius:10,padding:10,marginBottom:14,fontSize:13,color:'#059669',fontWeight:600}}>👤 {user.name} · {dataDose?fD(dataDose):new Date().toLocaleDateString('pt-BR')}</div>
           <div style={{display:'flex',gap:10}}>
-            <button onClick={function(){setShowDose(null);setQtdDose(2);}} style={{flex:1,padding:'12px',background:'#F1F5F9',border:'none',borderRadius:12,fontWeight:700,cursor:'pointer',color:'#64748B'}}>Cancelar</button>
+            <button onClick={function(){setShowDose(null);setQtdDose(2);setDataDose('');}} style={{flex:1,padding:'12px',background:'#F1F5F9',border:'none',borderRadius:12,fontWeight:700,cursor:'pointer',color:'#64748B'}}>Cancelar</button>
             <button onClick={function(){regDose(showDose);}} style={{flex:2,padding:'12px',background:'#10B981',border:'none',borderRadius:12,color:'#fff',fontWeight:700,fontSize:14,cursor:'pointer'}}>✅ Confirmar e Baixar</button>
           </div>
         </div>
-      </div>}
+      </div>);})()}
 
       {showDet&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:1000,display:'flex',alignItems:'flex-end',justifyContent:'center'}} onClick={function(){setShowDet(null);setObsDesist('');}}>
         <div style={{background:'#fff',borderRadius:'24px 24px 0 0',padding:'24px 20px 40px',width:'100%',maxWidth:480,maxHeight:'90vh',overflowY:'auto'}} onClick={function(e){e.stopPropagation();}}>
@@ -5719,7 +5728,14 @@ function TabConferencia(props){
   var _erro=useState('');var erro=_erro[0];var setErro=_erro[1];
   var _participantes=useState({});var participantes=_participantes[0];var setParticipantes=_participantes[1];
   var _showTrocar=useState(false);var showTrocar=_showTrocar[0];var setShowTrocar=_showTrocar[1];
+  var _showCad=useState(false);var showCad=_showCad[0];var setShowCad=_showCad[1];
+  var _cadNome=useState('');var cadNome=_cadNome[0];var setCadNome=_cadNome[1];
+  var _cadCat=useState('medicamento');var cadCat=_cadCat[0];var setCadCat=_cadCat[1];
+  var _cadMin=useState('');var cadMin=_cadMin[0];var setCadMin=_cadMin[1];
+  var _cadSaving=useState(false);var cadSaving=_cadSaving[0];var setCadSaving=_cadSaving[1];
+  var _delMedId=useState(null);var delMedId=_delMedId[0];var setDelMedId=_delMedId[1];
   var pendingRef=useRef({});var timersRef=useRef({});var remoteRef=useRef({});
+  var podeGerir=user.role==='gestor'||user.role==='tecnico';
   var minhaCatRef=useRef(null);var entrouRef=useRef(null);
 
   useEffect(function(){
@@ -5818,6 +5834,29 @@ function TabConferencia(props){
     docRef().update({novosLotes:firebase.firestore.FieldValue.arrayRemove(obj)}).then(function(){setErro('');}).catch(function(e){erroEscrita(e);});
   }
   function toggleCega(){var nv=!cega;setCega(nv);localStorage.setItem('fc_conf_cega',nv?'1':'0');}
+
+  // ===== AJUSTE 2: cadastrar / excluir medicamento sem sair da conferência =====
+  function abrirCadastro(){setCadNome('');setCadCat('medicamento');setCadMin('');setShowCad(true);}
+  function cadastrarMed(){
+    var nome=cadNome.trim();
+    if(!nome){alert('Informe o nome do medicamento.');return;}
+    setCadSaving(true);
+    db.collection('medicamentos').add({nome:nome.toUpperCase(),categoria:cadCat,tipo:cadCat,minEstoque:parseInt(cadMin)||0,ean:'',criadoEm:new Date().toISOString(),criadoPor:user.name})
+      .then(function(){
+        setCadSaving(false);setShowCad(false);setErro('');
+        // abre a categoria para o novo item aparecer na lista de contagem
+        setCatAberta(function(p){var n=Object.assign({},p);n[cadCat]=true;return n;});
+      })
+      .catch(function(e){setCadSaving(false);erroEscrita(e);});
+  }
+  function excluirMed(m){
+    if(!podeGerir){alert('Apenas gestor ou técnico pode excluir medicamentos do cadastro.');return;}
+    // confirmação em dois cliques (o próprio botão vira "Confirmar!")
+    if(delMedId!==m.id){setDelMedId(m.id);return;}
+    db.collection('medicamentos').doc(m.id).delete()
+      .then(function(){setDelMedId(null);setErro('');})
+      .catch(function(e){setDelMedId(null);erroEscrita(e);});
+  }
 
   // Computa lotes por medicamento (mesma lógica da aba Estoque)
   var medList=useMemo(function(){
@@ -6015,7 +6054,10 @@ function TabConferencia(props){
       <button onClick={function(){setShowResumo(true);}} disabled={resumo.total===0} style={{marginTop:12,width:'100%',padding:'11px',background:resumo.total===0?'#E2E8F0':'#0C6B3E',border:'none',borderRadius:10,color:resumo.total===0?'#94A3B8':'#fff',fontWeight:700,fontSize:13,cursor:resumo.total===0?'default':'pointer'}}>✅ Finalizar e ver divergências{resumo.divergiram>0?' ('+resumo.divergiram+')':''}</button>
     </div>
 
-    <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="🔍 Buscar medicamento..." className="inp" style={{marginBottom:14}}/>
+    <div style={{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap'}}>
+      <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="🔍 Buscar medicamento..." className="inp" style={{marginBottom:0,flex:1,minWidth:180}}/>
+      <button onClick={abrirCadastro} style={{whiteSpace:'nowrap',padding:'0 14px',background:'#0C6B3E',border:'none',borderRadius:10,color:'#fff',fontWeight:700,fontSize:13,cursor:'pointer'}}>+ Cadastrar medicamento</button>
+    </div>
 
     {grupos.length===0&&<div style={{textAlign:'center',padding:32,color:'#94A3B8',fontSize:13}}>Nenhum medicamento encontrado.</div>}
 
@@ -6039,14 +6081,21 @@ function TabConferencia(props){
             var conf=medConferido(m);var exp=abertos[m.id];
             var nlDoMed=novosLotes.filter(function(x){return x.medId===m.id;});
             return(<div key={m.id} style={{marginBottom:6,background:'#fff',borderRadius:10,border:'1.5px solid '+(conf?'#BBF7D0':'#E2E8F0'),overflow:'hidden'}}>
-              <button onClick={function(){setAbertos(function(p){var n=Object.assign({},p);n[m.id]=!exp;return n;});}} style={{width:'100%',display:'flex',alignItems:'center',gap:10,background:'none',border:'none',padding:'11px 12px',cursor:'pointer',textAlign:'left'}}>
-                <span style={{fontSize:16}}>{conf?'✅':'⬜'}</span>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontWeight:600,fontSize:13,color:'#1E293B',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{m.nome}</div>
-                  <div style={{fontSize:10,color:'#94A3B8'}}>{m.lotes.length+(m.semLote>0?1:0)} lote(s){!cega&&' · sistema: '+m.est+' un.'}</div>
-                </div>
-                <span style={{fontSize:13,color:'#94A3B8'}}>{exp?'▲':'▼'}</span>
-              </button>
+              <div style={{display:'flex',alignItems:'stretch'}}>
+                <button onClick={function(){setAbertos(function(p){var n=Object.assign({},p);n[m.id]=!exp;return n;});}} style={{flex:1,minWidth:0,display:'flex',alignItems:'center',gap:10,background:'none',border:'none',padding:'11px 12px',cursor:'pointer',textAlign:'left'}}>
+                  <span style={{fontSize:16}}>{conf?'✅':'⬜'}</span>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontWeight:600,fontSize:13,color:'#1E293B',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{m.nome}</div>
+                    <div style={{fontSize:10,color:'#94A3B8'}}>{m.lotes.length+(m.semLote>0?1:0)} lote(s){!cega&&' · sistema: '+m.est+' un.'}</div>
+                  </div>
+                  <span style={{fontSize:13,color:'#94A3B8'}}>{exp?'▲':'▼'}</span>
+                </button>
+                {podeGerir&&<button onClick={function(){excluirMed(m);}} title="Excluir do cadastro" style={{flexShrink:0,alignSelf:'center',marginRight:8,background:delMedId===m.id?'#DC2626':'#FEE2E2',color:delMedId===m.id?'#fff':'#DC2626',border:'none',borderRadius:8,padding:'6px 10px',fontSize:11,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap'}}>{delMedId===m.id?'Confirmar?':'🗑'}</button>}
+              </div>
+              {podeGerir&&delMedId===m.id&&<div style={{display:'flex',alignItems:'center',gap:8,background:'#FEF2F2',borderTop:'1px solid #FECACA',padding:'8px 12px'}}>
+                <div style={{flex:1,fontSize:11,color:'#991B1B',fontWeight:600}}>Tem certeza? Isso remove <strong>{m.nome}</strong> do sistema. Clique em "Confirmar?" para excluir.</div>
+                <button onClick={function(){setDelMedId(null);}} style={{flexShrink:0,background:'#F1F5F9',border:'none',borderRadius:7,padding:'5px 10px',fontSize:11,fontWeight:700,color:'#64748B',cursor:'pointer'}}>Cancelar</button>
+              </div>}
               {exp&&<div style={{padding:'0 12px 12px'}}>
                 {m.lotes.length===0&&m.semLote===0&&<div style={{fontSize:12,color:'#94A3B8',padding:'6px 0'}}>Sem estoque registrado no sistema.</div>}
                 {m.lotes.map(function(l,li){return loteRow({key:confKey(m.id,l.lote,l.validade),titulo:'Lote '+(l.lote||'—'),sub:(l.validade?'Val '+l.validade:'sem validade'),sistema:l.qty,med:m,lote:l.lote,validade:l.validade,topBorder:li>0});})}
@@ -6106,6 +6155,34 @@ function TabConferencia(props){
           </button>);
         })}
         <div style={{fontSize:10,color:'#94A3B8',marginTop:4}}>A distribuição automática evita repetir categoria. Você ainda pode escolher uma ocupada para contar junto.</div>
+      </div>
+    </div>}
+
+    {showCad&&<div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.7)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:18,backdropFilter:'blur(4px)'}} onClick={function(){if(!cadSaving)setShowCad(false);}}>
+      <div onClick={function(e){e.stopPropagation();}} style={{background:'#fff',borderRadius:18,width:'100%',maxWidth:420,maxHeight:'85vh',overflowY:'auto',boxShadow:'0 20px 60px rgba(0,0,0,0.3)',padding:18}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+          <div style={{fontWeight:800,fontSize:16,color:'#1E293B'}}>➕ Cadastrar medicamento</div>
+          <button onClick={function(){setShowCad(false);}} style={{background:'#F1F5F9',border:'none',borderRadius:99,width:28,height:28,fontSize:14,cursor:'pointer',color:'#64748B'}}>✕</button>
+        </div>
+        <div style={{marginBottom:10}}>
+          <div style={{fontSize:11,fontWeight:700,color:'#475569',marginBottom:4}}>NOME *</div>
+          <input value={cadNome} onChange={function(e){setCadNome(e.target.value);}} placeholder="Ex: DIPIRONA 500MG" style={{width:'100%',padding:'10px 12px',borderRadius:10,border:'1.5px solid #CBD5E1',fontSize:14,boxSizing:'border-box'}}/>
+        </div>
+        <div style={{marginBottom:10}}>
+          <div style={{fontSize:11,fontWeight:700,color:'#475569',marginBottom:6}}>CATEGORIA *</div>
+          <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+            {Object.keys(TIPOS).map(function(k){var t=TIPOS[k];var sel=cadCat===k;return(<button key={k} onClick={function(){setCadCat(k);}} style={{padding:'7px 11px',borderRadius:20,border:'1.5px solid '+(sel?t.cor:'#E2E8F0'),background:sel?t.cor:'#fff',color:sel?'#fff':'#64748B',cursor:'pointer',fontWeight:sel?700:500,fontSize:12}}>{t.icon} {t.label}</button>);})}
+          </div>
+        </div>
+        <div style={{marginBottom:14}}>
+          <div style={{fontSize:11,fontWeight:700,color:'#475569',marginBottom:4}}>ESTOQUE MÍNIMO</div>
+          <input value={cadMin} onChange={function(e){setCadMin(e.target.value.replace(/[^0-9]/g,''));}} inputMode="numeric" placeholder="0" style={{width:'100%',padding:'10px 12px',borderRadius:10,border:'1.5px solid #CBD5E1',fontSize:14,boxSizing:'border-box'}}/>
+        </div>
+        <div style={{fontSize:11,color:'#64748B',marginBottom:12,background:'#F8FAFC',padding:'8px 12px',borderRadius:8}}>ℹ️ O medicamento entra com estoque zero e aparece na lista da conferência para ser contado.</div>
+        <div style={{display:'flex',gap:8}}>
+          <button onClick={function(){setShowCad(false);}} style={{flex:1,padding:'11px',background:'#F1F5F9',border:'none',borderRadius:10,fontWeight:700,cursor:'pointer',color:'#64748B'}}>Cancelar</button>
+          <button onClick={cadastrarMed} disabled={cadSaving||!cadNome.trim()} style={{flex:2,padding:'11px',background:(cadSaving||!cadNome.trim())?'#94A3B8':'#0C6B3E',border:'none',borderRadius:10,color:'#fff',fontWeight:700,fontSize:14,cursor:(cadSaving||!cadNome.trim())?'default':'pointer'}}>{cadSaving?'Salvando...':'✅ Cadastrar'}</button>
+        </div>
       </div>
     </div>}
 
