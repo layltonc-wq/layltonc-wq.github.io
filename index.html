@@ -195,6 +195,15 @@ var PERMS={gestor:['saida','entrada','estoque','relatorio','gestao','perfil','ed
 var PALETTE=['#1351B4','#0C7B4A','#D32F2F','#7B1FA2','#E65100','#00838F','#558B2F','#AD1457','#1565C0','#2E7D32','#6A1B9A','#0277BD'];
 var TIPOS={medicamento:{label:'Farm. Básica',icon:'💊',cor:'#1351B4'},controlado:{label:'Controlado',icon:'🔵',cor:'#DC2626'},injetavel:{label:'Injetável',icon:'💉',cor:'#7C3AED'},leite:{label:'Leite',icon:'🍼',cor:'#D97706'},penso:{label:'Penso/Material',icon:'🩹',cor:'#0891B2'}};
 function can(role,a){return (PERMS[role]||[]).indexOf(a)>=0;}
+// ===== Tutoriais guiados (tours). Definidos no código; o gestor só ativa/desativa. =====
+// Cada tour: {id, titulo, passos:[{seletor CSS, texto, posicao: 'acima'|'abaixo'|'esquerda'|'direita'}]}
+var TOURS=[
+  {id:'tour_boas_vindas',titulo:'Boas-vindas ao FarmaControl',passos:[
+    {seletor:'[data-tour="nav-menu"]',texto:'Use o menu para navegar entre as abas do sistema.',posicao:'acima'},
+    {seletor:'[data-tour="nav-saida"]',texto:'Registre saídas de medicamentos aqui.',posicao:'acima'},
+    {seletor:'[data-tour="nav-estoque"]',texto:'Consulte o estoque atualizado em tempo real.',posicao:'acima'}
+  ]}
+];
 function todayStr(){return new Date().toISOString().slice(0,10);}
 function fmtT(iso){return iso?new Date(iso).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'--:--';}
 function fmtD(iso){return iso?new Date(iso).toLocaleDateString('pt-BR'):'--/--';}
@@ -2570,6 +2579,9 @@ function TabDivergenciasPainel(props){
 
 
 function TabGestao(props){var currentUser=props.currentUser;var _users=useState([]);var users=_users[0];var setUsers=_users[1];var _alertas=useState([]);var alertas=_alertas[0];var setAlertas=_alertas[1];var _solicitList=useState([]);var solicitList=_solicitList[0];var setSolicitList=_solicitList[1];var _sub=useState('pending');var sub=_sub[0];var setSub=_sub[1];
+var _toursAtivos=useState({});var toursAtivos=_toursAtivos[0];var setToursAtivos=_toursAtivos[1];
+useEffect(function(){var ut=db.collection('config').doc('tours').onSnapshot(function(s){var d=s.exists?s.data():{};setToursAtivos(d.ativos||{});},function(){});return ut;},[]);
+function toggleTour(id,val){var novo=Object.assign({},toursAtivos);novo[id]=val;setToursAtivos(novo);db.collection('config').doc('tours').set({ativos:novo,atualizadoEm:new Date().toISOString(),atualizadoPor:currentUser.name},{merge:true}).catch(function(e){alert('Não foi possível salvar: '+(e&&e.message?e.message:'verifique as permissões do Firestore.'));});}
 useEffect(function(){var u1=db.collection('users').onSnapshot(function(s){setUsers(s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;}));});var u2=db.collection('alertas').where('tipo','==','saida_excessiva').limit(50).onSnapshot(function(s){var list=s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;});list.sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});setAlertas(list);});var u3=db.collection('solicitacoes').where('status','==','pendente').onSnapshot(function(s){var list=s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;});list.sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});setSolicitList(list);});return function(){u1();u2();u3();};},[]);
 var pending=users.filter(function(u){return u.status==='pending';});var approved=users.filter(function(u){return u.status==='approved';});var inactive=users.filter(function(u){return u.status==='inativo';});var unread=alertas.filter(function(a){return !a.lido;}).length;
 function approve(uid){db.collection('users').doc(uid).update({status:'approved'}).then(function(){var u=users.find(function(x){return x.id===uid;});if(u)db.collection('logs_contas').add({uid:uid,nome:u.name,cargo:u.role,acao:'aprovado',por:currentUser.name,criadoEm:new Date().toISOString()}).catch(function(){});});}
@@ -2579,13 +2591,39 @@ function deactivate(uid,nome){if(!confirm('Desativar '+nome+'?'))return;var u=us
 function reactivate(u){if(!confirm('Reativar '+u.name+'?'))return;db.collection('users').doc(u.id).update({status:'approved'}).then(function(){db.collection('logs_contas').add({uid:u.id,nome:u.name,cargo:u.role,acao:'reativado',por:currentUser.name,criadoEm:new Date().toISOString()}).catch(function(){});});}
 function approveSolicit(s){db.collection('entries').add({medicamentoId:s.medicamentoId,medicamentoNome:s.medicamentoNome,ean:s.ean||'',tipo:s.tipo,quantidade:s.quantidade,observacao:s.observação||'',lote:'',validade:'',criadoEm:new Date().toISOString(),date:todayStr(),autorId:s.solicitanteId,autorNome:s.solicitanteNome,autorCargo:s.solicitanteCargo,autorColor:s.solicitanteColor}).then(function(){db.collection('solicitacoes').doc(s.id).update({status:'aprovado',aprovadoPor:currentUser.name});playSound('success');});}
 function rejectSolicit(id){db.collection('solicitacoes').doc(id).update({status:'recusado',recusadoPor:currentUser.name});}
-var tabs=[['pending','Pendentes ('+pending.length+')'],['team','Equipe'],['solicit','Solicit.'+(solicitList.length>0?' ('+solicitList.length+')':'')],['alerts','Alertas'+(unread>0?' ('+unread+')':'')],['inativo','Inativos'],['reset','Reset']];
+var tabs=[['pending','Pendentes ('+pending.length+')'],['team','Equipe'],['solicit','Solicit.'+(solicitList.length>0?' ('+solicitList.length+')':'')],['alerts','Alertas'+(unread>0?' ('+unread+')':'')],['tutoriais','📚 Tutoriais'],['inativo','Inativos'],['reset','Reset']];
+var totalUsuarios=approved.length;
 return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
 <div className="tab-sw" style={{flexWrap:'wrap'}}>{tabs.map(function(t){return <button key={t[0]} onClick={function(){setSub(t[0]);}} className={sub===t[0]?'on':''}>{t[1]}</button>;})}</div>
 {sub==='pending'&&(pending.length===0?<div className="card" style={{padding:48,textAlign:'center',color:'#94A3B8'}}>Nenhuma conta pendente de aprovação.</div>:(<div style={{display:'flex',flexDirection:'column',gap:10}}>{pending.map(function(u){return(<div key={u.id} className="card" style={{padding:'16px',border:'1.5px solid #FCD34D'}}><div style={{display:'flex',alignItems:'center',gap:12,marginBottom:14}}><UserAvatar user={u} size={46}/><div style={{flex:1}}><div style={{fontWeight:700,fontSize:15,color:'#1E293B'}}>{u.name}</div><div style={{fontSize:12,color:'#64748B',marginTop:2}}>{ROLE_ICON[u.role]} {ROLES[u.role]||u.role} · {u.email}</div>{u.role==='farmaceutico'&&u.crf&&<div style={{fontSize:12,color:'#64748B'}}>CRF: {u.crf}</div>}</div></div><div style={{display:'flex',gap:10}}><button onClick={function(){approve(u.id);}} className="bg" style={{flex:1}}>Aprovar</button><button onClick={function(){reject(u.id);}} className="br" style={{flex:1}}>Recusar</button></div></div>);})}</div>))}
 {sub==='team'&&(<div style={{display:'flex',flexDirection:'column',gap:10}}>{approved.map(function(u){return(<div key={u.id} className="card" style={{padding:'14px 16px',display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}><UserAvatar user={u} size={42}/><div style={{flex:1}}><div style={{fontWeight:700,color:u.color||B,fontSize:14}}>{u.name}</div><div style={{fontSize:12,color:'#64748B',marginTop:2}}>{ROLE_ICON[u.role]} {ROLES[u.role]}{u.role==='farmaceutico'&&u.crf?' · CRF: '+u.crf:''}</div></div>{u.id!==currentUser.uid?(<div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}><select value={u.role} onChange={function(e){changeRole(u.id,e.target.value);}} className="inp" style={{width:'auto',marginBottom:0,fontSize:12,padding:'6px 10px'}}>{Object.keys(ROLES).map(function(k){return <option key={k} value={k}>{ROLES[k]}</option>;})}</select>{currentUser.role==='tecnico'&&<button onClick={function(){deactivate(u.id,u.name);}} style={{background:'#FEE2E2',border:'1px solid #FCA5A5',borderRadius:8,padding:'6px 12px',color:'#B91C1C',cursor:'pointer',fontSize:11,fontWeight:600,whiteSpace:'nowrap'}}>Desativar</button>}</div>):<span className="badge badge-blue">{ROLES[u.role]} (voce)</span>}</div>);})}</div>)}
 {sub==='solicit'&&(solicitList.length===0?<div className="card" style={{padding:40,textAlign:'center',color:'#94A3B8'}}>Nenhuma solicitação pendente.</div>:(<div style={{display:'flex',flexDirection:'column',gap:10}}>{solicitList.map(function(s){return(<div key={s.id} className="card" style={{padding:'14px 16px',border:'1.5px solid #BFDBFE'}}><div style={{display:'flex',justifyContent:'space-between',marginBottom:10,alignItems:'center'}}><div style={{display:'flex',alignItems:'center',gap:8}}><div className="av" style={{width:34,height:34,background:s.solicitanteColor||B,fontSize:13}}>{s.solicitanteNome?s.solicitanteNome.charAt(0):'?'}</div><div><div style={{fontWeight:600,fontSize:13,color:B}}>{s.solicitanteNome}</div><div style={{fontSize:11,color:'#64748B'}}>{ROLES[s.solicitanteCargo]||s.solicitanteCargo} · {fmtT(s.criadoEm)}</div></div></div><span className={s.tipo==='saida'?'tag-s':'tag-e'}>{s.tipo}</span></div><div style={{fontWeight:700,color:'#1E293B',fontSize:14,marginBottom:4}}>{s.medicamentoNome}</div><div style={{fontSize:13,color:'#64748B',marginBottom:s.observação?8:14}}>Qtd: <strong>{s.quantidade}</strong></div>{s.observação&&<div style={{fontSize:12,color:'#64748B',fontStyle:'italic',marginBottom:14,background:'#F8FAFC',padding:'8px 12px',borderRadius:8}}>"{s.observação}"</div>}<div style={{display:'flex',gap:8}}><button onClick={function(){rejectSolicit(s.id);}} className="br" style={{flex:1}}>Recusar</button><button onClick={function(){approveSolicit(s);}} className="bg" style={{flex:2}}>Aprovar</button></div></div>);})}</div>))}
 {sub==='alerts'&&(alertas.length===0?<div className="card" style={{padding:40,textAlign:'center',color:'#94A3B8'}}>Nenhum alerta registrado.</div>:(<div style={{display:'flex',flexDirection:'column',gap:10}}>{alertas.map(function(a){return(<div key={a.id} className="card" style={{padding:'14px 16px',opacity:a.lido?0.5:1}}><div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}><span className="badge badge-amber">Saida excessiva</span><span style={{fontSize:11,color:'#94A3B8'}}>{fmtD(a.criadoEm)}</span></div><div style={{fontWeight:600,color:'#1E293B',marginBottom:4,fontSize:14}}>{a.medicamentoNome}</div><div style={{fontSize:12,color:'#64748B',marginBottom:a.lido?0:12}}>Por: {a.autorNome} · {a.quantidade} un.</div>{!a.lido&&<button onClick={function(){db.collection('alertas').doc(a.id).update({lido:true});}} className="bs" style={{width:'auto',padding:'6px 16px',fontSize:12}}>Marcar como lido</button>}</div>);})}</div>))}
+{sub==='tutoriais'&&(<div style={{display:'flex',flexDirection:'column',gap:12}}>
+  <div className="card" style={{padding:'14px 16px',background:'#EFF6FF',border:'1.5px solid #BFDBFE'}}>
+    <div style={{fontSize:13,fontWeight:700,color:'#1351B4',marginBottom:4}}>📚 Tutoriais guiados</div>
+    <div style={{fontSize:12,color:'#475569',lineHeight:1.5}}>Ative um tutorial para que ele apareça automaticamente aos usuários que ainda não o viram. Quando o usuário conclui (ou pula), ele não vê mais aquele tutorial.</div>
+  </div>
+  {TOURS.map(function(t){
+    var ativo=!!toursAtivos[t.id];
+    var vistoPor=approved.filter(function(u){return (u.tutoriaisVistos||[]).indexOf(t.id)>=0;}).length;
+    return(<div key={t.id} className="card" style={{padding:'14px 16px'}}>
+      <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
+        <div style={{flex:1,minWidth:160}}>
+          <div style={{fontWeight:700,fontSize:14,color:'#1E293B'}}>{t.titulo}</div>
+          <div style={{fontSize:11,color:'#94A3B8',marginTop:2}}>{t.passos.length} passo(s) · ID: {t.id}</div>
+          <div style={{fontSize:12,color:'#64748B',marginTop:4}}>👁️ Visto por <strong>{vistoPor}</strong> de <strong>{totalUsuarios}</strong> usuário(s)</div>
+        </div>
+        <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:6}}>
+          <span style={{fontSize:11,fontWeight:700,color:ativo?'#0C6B3E':'#94A3B8',background:ativo?'#DCFCE7':'#F1F5F9',borderRadius:20,padding:'3px 10px'}}>{ativo?'● Ativo':'○ Desativado'}</span>
+          <button onClick={function(){toggleTour(t.id,!ativo);}} aria-label="Ativar/desativar" style={{width:52,height:28,borderRadius:99,border:'none',background:ativo?'#0C6B3E':'#CBD5E1',position:'relative',cursor:'pointer',transition:'background .2s',padding:0}}>
+            <span style={{position:'absolute',top:3,left:ativo?27:3,width:22,height:22,borderRadius:'50%',background:'#fff',transition:'left .2s',boxShadow:'0 1px 3px rgba(0,0,0,0.3)'}}/>
+          </button>
+        </div>
+      </div>
+    </div>);
+  })}
+</div>)}
 {sub==='inativo'&&(inactive.length===0?<div className="card" style={{padding:40,textAlign:'center',color:'#94A3B8'}}>Nenhuma conta inativa.</div>:(<div style={{display:'flex',flexDirection:'column',gap:10}}>{inactive.map(function(u){return(<div key={u.id} className="card" style={{padding:'14px 16px',display:'flex',alignItems:'center',gap:12,flexWrap:'wrap',opacity:0.65}}><UserAvatar user={u} size={38}/><div style={{flex:1}}><div style={{fontWeight:600,color:'#64748B'}}>{u.name}</div><div style={{fontSize:12,color:'#94A3B8'}}>{ROLES[u.role]||u.role}</div></div><button onClick={function(){reactivate(u);}} style={{fontSize:12,background:'#DCFCE7',border:'1px solid #86EFAC',borderRadius:20,padding:'5px 14px',color:'#0C6B3E',cursor:'pointer',fontWeight:600}}>Reativar</button>{currentUser.role==='tecnico'&&<button onClick={function(){if(!confirm('EXCLUIR PERMANENTEMENTE '+u.name+'? Isso não pode ser desfeito!'))return;auth.currentUser&&db.collection('users').doc(u.id).delete().then(function(){db.collection('logs_contas').add({uid:u.id,nome:u.name,cargo:u.role,acao:'excluido permanentemente',por:currentUser.name,criadoEm:new Date().toISOString()}).catch(function(){});alert(u.name+' excluido permanentemente.');}).catch(function(e){alert('Erro: '+e.message);});}} style={{fontSize:12,background:'#FEE2E2',border:'1px solid #FCA5A5',borderRadius:20,padding:'5px 14px',color:'#DC2626',cursor:'pointer',fontWeight:600}}>Excluir</button>}</div>);})}</div>))}
 {sub==='reset'&&(<div><div className="wn" style={{marginBottom:16}}>Atenção: estas acoes sao permanentes e irreversiveis.</div><div className="card" style={{padding:'20px',marginBottom:12}}><div style={{fontWeight:700,color:'#1E293B',fontSize:14,marginBottom:6}}>Apagar movimentacoes</div><div style={{fontSize:13,color:'#64748B',marginBottom:14}}>Remove todos os registros de entrada e saida. Medicamentos mantidos.</div><button onClick={function(){if(!confirm('Apagar TODAS as movimentacoes?'))return;if(!confirm('CONFIRMACAO FINAL: isso não pode ser desfeito!'))return;db.collection('entries').get().then(function(s){var b=db.batch();s.docs.forEach(function(d){b.delete(d.ref);});return b.commit();}).then(function(){_bumpEntriesVersion();alert('Movimentacoes apagadas!');}).catch(function(e){alert(e.message);});}} className="br">Apagar movimentacoes</button></div><div className="card" style={{padding:'20px',marginBottom:12}}><div style={{fontWeight:700,color:'#1E293B',fontSize:14,marginBottom:6}}>Apagar medicamentos</div><div style={{fontSize:13,color:'#64748B',marginBottom:14}}>Remove todos os medicamentos cadastrados.</div><button onClick={function(){if(!confirm('Apagar TODOS os medicamentos?'))return;if(!confirm('CONFIRMACAO FINAL?'))return;db.collection('medicamentos').get().then(function(s){var b=db.batch();s.docs.forEach(function(d){b.delete(d.ref);});return b.commit();}).then(function(){alert('Medicamentos apagados!');}).catch(function(e){alert(e.message);});}} className="br">Apagar medicamentos</button></div><div className="card" style={{padding:'20px'}}><div style={{fontWeight:700,color:'#1E293B',fontSize:14,marginBottom:6}}>Reset completo</div><div style={{fontSize:13,color:'#64748B',marginBottom:14}}>Apaga todos os medicamentos e movimentacoes.</div><button onClick={function(){if(!confirm('RESET COMPLETO do sistema?'))return;if(!confirm('ULTIMA CONFIRMACAO — sem volta!'))return;Promise.all([db.collection('entries').get().then(function(s){var b=db.batch();s.docs.forEach(function(d){b.delete(d.ref);});return b.commit();}),db.collection('medicamentos').get().then(function(s){var b=db.batch();s.docs.forEach(function(d){b.delete(d.ref);});return b.commit();})]).then(function(){_bumpEntriesVersion();alert('Reset realizado!');}).catch(function(e){alert(e.message);});}} style={{background:'#7B1FA2',border:'none',borderRadius:10,padding:'12px',color:'#fff',fontSize:14,fontWeight:600,cursor:'pointer',width:'100%',boxShadow:'0 2px 8px rgba(123,31,162,.3)'}}>Reset completo</button></div></div>)}
 </div>);}
@@ -6246,6 +6284,103 @@ function TabConferencia(props){
   </div>);
 }
 
+// ===== Motor de tours guiados (tooltip/balão com destaque + overlay escurecido) =====
+function TourEngine(props){
+  var user=props.user;
+  var _vistos=useState(null);var vistos=_vistos[0];var setVistos=_vistos[1]; // null = carregando
+  var _ativos=useState(null);var ativos=_ativos[0];var setAtivos=_ativos[1]; // null = carregando
+  var _local=useState([]);var localVistos=_local[0];var setLocalVistos=_local[1]; // marca instantânea (evita re-exibir no meio)
+  var _tid=useState(null);var tourAtivoId=_tid[0];var setTourAtivoId=_tid[1];
+  var _step=useState(0);var step=_step[0];var setStep=_step[1];
+  var _rect=useState(null);var rect=_rect[0];var setRect=_rect[1];
+
+  // Assina o doc do próprio usuário (tutoriaisVistos) e o config/tours (ativos)
+  useEffect(function(){
+    if(!user||!user.uid)return;
+    var u1=db.collection('users').doc(user.uid).onSnapshot(function(s){var d=s.exists?s.data():{};setVistos(d.tutoriaisVistos||[]);},function(){setVistos([]);});
+    var u2=db.collection('config').doc('tours').onSnapshot(function(s){var d=s.exists?s.data():{};setAtivos(d.ativos||{});},function(){setAtivos({});});
+    return function(){try{u1();}catch(e){}try{u2();}catch(e){}};
+  },[user&&user.uid]);
+
+  var vistosAll=(vistos||[]).concat(localVistos);
+  var pronto=vistos!==null&&ativos!==null;
+  var pendentes=pronto?TOURS.filter(function(t){return ativos[t.id]&&vistosAll.indexOf(t.id)<0;}):[];
+  var pendentesKey=pendentes.map(function(t){return t.id;}).join(',');
+
+  // Trava um tour por vez: mantém o atual até concluir/pular; depois puxa o próximo pendente
+  useEffect(function(){
+    if(tourAtivoId){
+      if(!pendentes.some(function(t){return t.id===tourAtivoId;})){setTourAtivoId(null);setStep(0);}
+      return;
+    }
+    if(pendentes.length>0){setTourAtivoId(pendentes[0].id);setStep(0);}
+  },[pendentesKey,tourAtivoId]);
+
+  var tour=tourAtivoId?TOURS.find(function(t){return t.id===tourAtivoId;}):null;
+
+  // Mede o elemento-alvo do passo atual (acompanha resize/scroll/animações)
+  useEffect(function(){
+    if(!tour){setRect(null);return;}
+    function medir(){
+      var passo=tour.passos[step];if(!passo){setRect(null);return;}
+      var el=null;try{el=document.querySelector(passo.seletor);}catch(e){el=null;}
+      if(el&&el.getBoundingClientRect){var r=el.getBoundingClientRect();if((r.width>0||r.height>0)&&r.bottom>0&&r.top<window.innerHeight){setRect({top:r.top,left:r.left,width:r.width,height:r.height});return;}}
+      setRect(null); // ausente/oculto -> balão centralizado, sem recorte
+    }
+    medir();
+    window.addEventListener('resize',medir);window.addEventListener('scroll',medir,true);
+    var iv=setInterval(medir,400);
+    return function(){window.removeEventListener('resize',medir);window.removeEventListener('scroll',medir,true);clearInterval(iv);};
+  },[tour&&tour.id,step]);
+
+  if(!tour)return null;
+  var passo=tour.passos[step];if(!passo)return null;
+  var total=tour.passos.length;var ultimo=step>=total-1;
+
+  function marcarVisto(){
+    var id=tour.id;
+    setLocalVistos(function(p){return p.indexOf(id)<0?p.concat([id]):p;});
+    db.collection('users').doc(user.uid).set({tutoriaisVistos:firebase.firestore.FieldValue.arrayUnion(id)},{merge:true}).catch(function(){});
+  }
+  function proximo(){if(ultimo)marcarVisto();else setStep(step+1);}
+
+  var vw=window.innerWidth,vh=window.innerHeight;
+  var balloonW=Math.min(300,vw-32);var gap=14,padE=12;
+  var bStyle;
+  if(rect){
+    var pos=passo.posicao||'abaixo';
+    if(pos==='acima'&&rect.top<170)pos='abaixo';
+    if(pos==='abaixo'&&rect.top+rect.height+180>vh)pos='acima';
+    var cx=rect.left+rect.width/2;
+    var clampX=Math.max(padE,Math.min(cx-balloonW/2,vw-balloonW-padE));
+    if(pos==='acima')bStyle={left:clampX,bottom:(vh-rect.top+gap)};
+    else if(pos==='abaixo')bStyle={left:clampX,top:(rect.top+rect.height+gap)};
+    else if(pos==='esquerda')bStyle={right:(vw-rect.left+gap),top:Math.max(padE,Math.min(rect.top,vh-180))};
+    else bStyle={left:(rect.left+rect.width+gap),top:Math.max(padE,Math.min(rect.top,vh-180))};
+  }else{
+    bStyle={left:'50%',top:'50%',transform:'translate(-50%,-50%)'};
+  }
+  var balloon=Object.assign({position:'fixed',width:balloonW,background:'#fff',borderRadius:16,padding:16,boxShadow:'0 12px 40px rgba(0,0,0,0.35)',zIndex:20002,transition:'top .25s ease,left .25s ease,bottom .25s ease,right .25s ease'},bStyle);
+
+  return(<div>
+    {/* Camada que bloqueia interação com o app durante o tour. Quando não há recorte, escurece tudo. */}
+    <div style={{position:'fixed',inset:0,zIndex:20000,background:rect?'transparent':'rgba(15,23,42,0.72)'}}/>
+    {/* Recorte (spotlight): box-shadow gigante escurece o resto e deixa o elemento visível */}
+    {rect&&<div style={{position:'fixed',top:rect.top-6,left:rect.left-6,width:rect.width+12,height:rect.height+12,borderRadius:12,boxShadow:'0 0 0 9999px rgba(15,23,42,0.72)',border:'2px solid #3B82F6',zIndex:20001,pointerEvents:'none',transition:'all .3s cubic-bezier(.4,0,.2,1)'}}/>}
+    <div style={balloon}>
+      <div style={{fontSize:11,fontWeight:800,color:'#1351B4',marginBottom:6,textTransform:'uppercase',letterSpacing:'.02em'}}>{tour.titulo}</div>
+      <div style={{fontSize:14,color:'#1E293B',lineHeight:1.5,marginBottom:14}}>{passo.texto}</div>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:10}}>
+        <span style={{fontSize:11,color:'#94A3B8',fontWeight:700}}>Passo {step+1} de {total}</span>
+        <div style={{display:'flex',alignItems:'center',gap:12}}>
+          <button onClick={marcarVisto} style={{background:'none',border:'none',color:'#94A3B8',fontSize:12,fontWeight:600,cursor:'pointer',padding:0}}>Pular tutorial</button>
+          <button onClick={proximo} style={{background:'#1351B4',border:'none',borderRadius:10,padding:'9px 18px',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer'}}>{ultimo?'Entendi':'Próximo'}</button>
+        </div>
+      </div>
+    </div>
+  </div>);
+}
+
 function App(){
 var {confirm2,alert2,ModalRender,modal}=useModal();
 var _ready=useState(false);var ready=_ready[0];var setReady=_ready[1];var _user=useState(null);var user=_user[0];var setUser=_user[1];var _histEntries=useState([]);var histEntries=_histEntries[0];var setHistEntries=_histEntries[1];var _recentEntries=useState([]);var recentEntries=_recentEntries[0];var setRecentEntries=_recentEntries[1];var _fcWinStart=useRef(null);if(!_fcWinStart.current){var _w0=new Date();_w0.setDate(_w0.getDate()-3);_fcWinStart.current=_w0.toISOString();}var _meds=useState([]);var meds=_meds[0];var setMeds=_meds[1];var _loading=useState(true);var loading=_loading[0];var setLoading=_loading[1];var _tab=useState('dashboard');var tab=_tab[0];var setTab=_tab[1];var _menuAberto=useState(false);var menuAberto=_menuAberto[0];var setMenuAberto=_menuAberto[1];var _showSairModal=useState(false);var showSairModal=_showSairModal[0];var setShowSairModal=_showSairModal[1];var _pending=useState(0);var pending=_pending[0];var setPending=_pending[1];var _alertCount=useState(0);var alertCount=_alertCount[0];var setAlertCount=_alertCount[1];
@@ -6622,6 +6757,7 @@ return(
   </div>
   <SeletorAmbiente user={user}/>
   <ModalRender/>
+  {user&&!loading&&<TourEngine user={user}/>}
   {showSairModal&&<div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.7)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:20,backdropFilter:'blur(6px)'}}>
     <div style={{background:'#fff',borderRadius:24,padding:28,maxWidth:320,width:'100%',boxShadow:'0 24px 64px rgba(0,0,0,0.3)',textAlign:'center'}}>
       <div style={{width:64,height:64,borderRadius:20,background:'#FEE2E2',display:'flex',alignItems:'center',justifyContent:'center',fontSize:32,margin:'0 auto 16px'}}>🚪</div>
@@ -6663,7 +6799,7 @@ return(
               {id:'histcontas',icon:'📋',label:'Hist. de Contas',show:can(user.role,'log')},
               {id:'admin',icon:'🔧',label:'Painel Admin',show:user.role==='tecnico'},
             ].filter(function(t){return t.show;}).map(function(t){return(
-              <button key={t.id} onClick={function(){setTab(t.id);setMenuAberto(false);}} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'13px 20px',border:'none',background:tab===t.id?'#EFF6FF':'transparent',cursor:'pointer',position:'relative',borderLeft:tab===t.id?'3px solid #1351B4':'3px solid transparent',transition:'background .15s'}}>
+              <button key={t.id} data-tour={'nav-'+t.id} onClick={function(){setTab(t.id);setMenuAberto(false);}} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'13px 20px',border:'none',background:tab===t.id?'#EFF6FF':'transparent',cursor:'pointer',position:'relative',borderLeft:tab===t.id?'3px solid #1351B4':'3px solid transparent',transition:'background .15s'}}>
                 <span style={{fontSize:20,width:26,textAlign:'center'}}>{t.icon}</span>
                 <span style={{fontSize:14,fontWeight:tab===t.id?700:500,color:tab===t.id?'#1351B4':'#1E293B',flex:1,textAlign:'left'}}>{t.label}</span>
                 {t.badge>0&&<span style={{background:'#DC2626',color:'#fff',borderRadius:99,minWidth:18,height:18,fontSize:10,fontWeight:800,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 5px'}}>{t.badge}</span>}
@@ -6679,13 +6815,13 @@ return(
         </div>
         <div style={{display:'flex',justifyContent:'space-around',alignItems:'center',padding:'8px 8px 0'}}>
           {[{id:'dashboard',icon:'🏠',label:'Início'},{id:'saida',icon:'💊',label:'Saída'},{id:'entrada',icon:'📥',label:'Entrada'},{id:'antibiotico',icon:'🧬',label:'ATB'}].map(function(t){return(
-            <button key={t.id} className={'nb'+(tab===t.id?' on':'')} onClick={function(){setTab(t.id);setMenuAberto(false);}}>
+            <button key={t.id} data-tour={'nav-'+t.id} className={'nb'+(tab===t.id?' on':'')} onClick={function(){setTab(t.id);setMenuAberto(false);}}>
               <span className="ni">{t.icon}</span>
               <span className="nl">{t.label}</span>
             </button>
           );})}
           <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4}}>
-            <button onClick={function(){setMenuAberto(!menuAberto);}} style={{width:52,height:52,borderRadius:16,background:'linear-gradient(135deg,#1351B4,#1A6FD4)',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 4px 16px rgba(19,81,180,0.35)',marginTop:-14,fontSize:22,transition:'all .2s',color:'#fff'}}>
+            <button data-tour="nav-menu" onClick={function(){setMenuAberto(!menuAberto);}} style={{width:52,height:52,borderRadius:16,background:'linear-gradient(135deg,#1351B4,#1A6FD4)',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 4px 16px rgba(19,81,180,0.35)',marginTop:-14,fontSize:22,transition:'all .2s',color:'#fff'}}>
               {menuAberto?'✕':'☰'}
             </button>
             <span style={{fontSize:10,fontWeight:600,color:'#1351B4'}}>Menu</span>
@@ -6701,7 +6837,7 @@ return(
           </div>
           <div style={{flex:1,overflowY:'auto',padding:'8px 0'}}>
             {[{id:'estoque',icon:'📦',label:'Estoque'},{id:'conferencia',icon:'🧾',label:'Conferência'},{id:'leites',icon:'🍼',label:'Leites'},{id:'relatorio',icon:'📊',label:'Relatório'}].map(function(t){return(
-              <button key={t.id} onClick={function(){setTab(t.id);setMenuAberto(false);}} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'13px 20px',border:'none',background:tab===t.id?'#EFF6FF':'transparent',cursor:'pointer',borderLeft:tab===t.id?'3px solid #1351B4':'3px solid transparent'}}>
+              <button key={t.id} data-tour={'nav-'+t.id} onClick={function(){setTab(t.id);setMenuAberto(false);}} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'13px 20px',border:'none',background:tab===t.id?'#EFF6FF':'transparent',cursor:'pointer',borderLeft:tab===t.id?'3px solid #1351B4':'3px solid transparent'}}>
                 <span style={{fontSize:20}}>{t.icon}</span>
                 <span style={{fontSize:14,fontWeight:tab===t.id?700:500,color:tab===t.id?'#1351B4':'#1E293B'}}>{t.label}</span>
               </button>
@@ -6716,13 +6852,13 @@ return(
         </div>
         <div style={{display:'flex',justifyContent:'space-around',alignItems:'center',padding:'8px 8px 0'}}>
           {[{id:'dashboard',icon:'🏠',label:'Início'},{id:'saida',icon:'💊',label:'Saída'},{id:'entrada',icon:'📥',label:'Entrada'},{id:'antibiotico',icon:'🧬',label:'ATB'}].map(function(t){return(
-            <button key={t.id} className={'nb'+(tab===t.id?' on':'')} onClick={function(){setTab(t.id);setMenuAberto(false);}}>
+            <button key={t.id} data-tour={'nav-'+t.id} className={'nb'+(tab===t.id?' on':'')} onClick={function(){setTab(t.id);setMenuAberto(false);}}>
               <span className="ni">{t.icon}</span>
               <span className="nl">{t.label}</span>
             </button>
           );})}
           <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4}}>
-            <button onClick={function(){setMenuAberto(!menuAberto);}} style={{width:52,height:52,borderRadius:16,background:'linear-gradient(135deg,#1351B4,#1A6FD4)',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 4px 16px rgba(19,81,180,0.35)',marginTop:-14,fontSize:22,color:'#fff'}}>
+            <button data-tour="nav-menu" onClick={function(){setMenuAberto(!menuAberto);}} style={{width:52,height:52,borderRadius:16,background:'linear-gradient(135deg,#1351B4,#1A6FD4)',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 4px 16px rgba(19,81,180,0.35)',marginTop:-14,fontSize:22,color:'#fff'}}>
               {menuAberto?'✕':'☰'}
             </button>
             <span style={{fontSize:10,fontWeight:600,color:'#1351B4'}}>Menu</span>
