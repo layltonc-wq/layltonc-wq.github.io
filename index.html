@@ -196,12 +196,18 @@ var PALETTE=['#1351B4','#0C7B4A','#D32F2F','#7B1FA2','#E65100','#00838F','#558B2
 var TIPOS={medicamento:{label:'Farm. Básica',icon:'💊',cor:'#1351B4'},controlado:{label:'Controlado',icon:'🔵',cor:'#DC2626'},injetavel:{label:'Injetável',icon:'💉',cor:'#7C3AED'},leite:{label:'Leite',icon:'🍼',cor:'#D97706'},penso:{label:'Penso/Material',icon:'🩹',cor:'#0891B2'}};
 function can(role,a){return (PERMS[role]||[]).indexOf(a)>=0;}
 // ===== Tutoriais guiados (tours). Definidos no código; o gestor só ativa/desativa. =====
-// Cada tour: {id, titulo, passos:[{seletor CSS, texto, posicao: 'acima'|'abaixo'|'esquerda'|'direita'}]}
+// Cada tour: {id, titulo, passos:[{seletor CSS, texto, posicao, acao}]}
+//   posicao: 'acima'|'abaixo'|'esquerda'|'direita' (do balão em relação ao elemento)
+//   acao (opcional): executada ANTES de destacar o elemento. Pode ser um objeto ou um array de objetos:
+//     {tipo:'menu'}                 -> abre o menu lateral (se estiver fechado)
+//     {tipo:'aba', aba:'estoque'}   -> navega para a aba (clica no item de navegação correspondente)
+//     {tipo:'clicar', seletor:'…'}  -> clica em um elemento qualquer antes de destacar
+//   Fluxo do passo: executa a acao -> espera ~500ms a tela renderizar -> destaca o elemento e mostra o balão.
 var TOURS=[
   {id:'tour_boas_vindas',titulo:'Boas-vindas ao FarmaControl',passos:[
-    {seletor:'[data-tour="nav-menu"]',texto:'Use o menu para navegar entre as abas do sistema.',posicao:'acima'},
-    {seletor:'[data-tour="nav-saida"]',texto:'Registre saídas de medicamentos aqui.',posicao:'acima'},
-    {seletor:'[data-tour="nav-estoque"]',texto:'Consulte o estoque atualizado em tempo real.',posicao:'acima'}
+    {acao:{tipo:'menu'},seletor:'[data-tour="menu-panel"]',texto:'Use o menu para navegar entre as abas do sistema.',posicao:'esquerda'},
+    {acao:{tipo:'aba',aba:'saida'},seletor:'[data-tour="nav-saida"]',texto:'Registre saídas de medicamentos aqui.',posicao:'acima'},
+    {acao:{tipo:'aba',aba:'estoque'},seletor:'[data-tour="tab-content"]',texto:'Consulte o estoque atualizado em tempo real.',posicao:'abaixo'}
   ]}
 ];
 function todayStr(){return new Date().toISOString().slice(0,10);}
@@ -6293,6 +6299,20 @@ function TourEngine(props){
   var _tid=useState(null);var tourAtivoId=_tid[0];var setTourAtivoId=_tid[1];
   var _step=useState(0);var step=_step[0];var setStep=_step[1];
   var _rect=useState(null);var rect=_rect[0];var setRect=_rect[1];
+  var _pronto=useState(-1);var pronto=_pronto[0];var setPronto=_pronto[1]; // índice do passo já preparado (ação concluída) e pronto p/ exibir
+
+  // Executa cliques reais nos elementos de navegação (que já têm data-tour) para preparar a tela do passo
+  function tourClicar(sel){var el=null;try{el=document.querySelector(sel);}catch(e){el=null;}if(el&&el.click)el.click();}
+  function menuPanelAberto(){var p=document.querySelector('[data-tour="menu-panel"]');if(!p||!p.getBoundingClientRect)return false;var r=p.getBoundingClientRect();return r.left<window.innerWidth-20;}
+  function executarAcao(acao){
+    var lista=Array.isArray(acao)?acao:[acao];
+    lista.forEach(function(a){
+      if(!a||!a.tipo)return;
+      if(a.tipo==='menu'){if(!menuPanelAberto())tourClicar('[data-tour="nav-menu"]');}
+      else if(a.tipo==='aba'){tourClicar('[data-tour="nav-'+a.aba+'"]');}
+      else if(a.tipo==='clicar'){tourClicar(a.seletor);}
+    });
+  }
 
   // Assina o doc do próprio usuário (tutoriaisVistos) e o config/tours (ativos)
   useEffect(function(){
@@ -6303,8 +6323,8 @@ function TourEngine(props){
   },[user&&user.uid]);
 
   var vistosAll=(vistos||[]).concat(localVistos);
-  var pronto=vistos!==null&&ativos!==null;
-  var pendentes=pronto?TOURS.filter(function(t){return ativos[t.id]&&vistosAll.indexOf(t.id)<0;}):[];
+  var carregado=vistos!==null&&ativos!==null;
+  var pendentes=carregado?TOURS.filter(function(t){return ativos[t.id]&&vistosAll.indexOf(t.id)<0;}):[];
   var pendentesKey=pendentes.map(function(t){return t.id;}).join(',');
 
   // Trava um tour por vez: mantém o atual até concluir/pular; depois puxa o próximo pendente
@@ -6318,19 +6338,34 @@ function TourEngine(props){
 
   var tour=tourAtivoId?TOURS.find(function(t){return t.id===tourAtivoId;}):null;
 
-  // Mede o elemento-alvo do passo atual (acompanha resize/scroll/animações)
+  // Prepara o passo: (1) executa a ação, (2) espera ~500ms a tela renderizar, (3) mede o elemento e mostra o balão.
+  // Depois segue medindo (resize/scroll/animações). Passos sem ação começam a medir imediatamente.
   useEffect(function(){
-    if(!tour){setRect(null);return;}
+    if(!tour){setRect(null);setPronto(-1);return;}
+    var passo=tour.passos[step];
+    if(!passo){setRect(null);setPronto(-1);return;}
+    var cancelado=false,iv=null,timer=null;
+    setRect(null);setPronto(-1); // esconde o balão enquanto prepara
     function medir(){
-      var passo=tour.passos[step];if(!passo){setRect(null);return;}
+      if(cancelado)return;
       var el=null;try{el=document.querySelector(passo.seletor);}catch(e){el=null;}
       if(el&&el.getBoundingClientRect){var r=el.getBoundingClientRect();if((r.width>0||r.height>0)&&r.bottom>0&&r.top<window.innerHeight){setRect({top:r.top,left:r.left,width:r.width,height:r.height});return;}}
-      setRect(null); // ausente/oculto -> balão centralizado, sem recorte
+      setRect(null); // ausente/oculto -> balão centralizado, sem recorte (fallback)
     }
-    medir();
-    window.addEventListener('resize',medir);window.addEventListener('scroll',medir,true);
-    var iv=setInterval(medir,400);
-    return function(){window.removeEventListener('resize',medir);window.removeEventListener('scroll',medir,true);clearInterval(iv);};
+    function iniciarMedicao(){
+      if(cancelado)return;
+      setPronto(step);
+      medir();
+      window.addEventListener('resize',medir);window.addEventListener('scroll',medir,true);
+      iv=setInterval(medir,400);
+    }
+    if(passo.acao){
+      try{executarAcao(passo.acao);}catch(e){}
+      timer=setTimeout(iniciarMedicao,500); // aguarda a tela renderizar após a ação
+    }else{
+      iniciarMedicao();
+    }
+    return function(){cancelado=true;if(iv)clearInterval(iv);if(timer)clearTimeout(timer);window.removeEventListener('resize',medir);window.removeEventListener('scroll',medir,true);};
   },[tour&&tour.id,step]);
 
   if(!tour)return null;
@@ -6362,22 +6397,26 @@ function TourEngine(props){
   }
   var balloon=Object.assign({position:'fixed',width:balloonW,background:'#fff',borderRadius:16,padding:16,boxShadow:'0 12px 40px rgba(0,0,0,0.35)',zIndex:20002,transition:'top .25s ease,left .25s ease,bottom .25s ease,right .25s ease'},bStyle);
 
+  var preparando=pronto!==step; // ação em andamento / aguardando a tela renderizar
   return(<div>
     {/* Camada que bloqueia interação com o app durante o tour. Quando não há recorte, escurece tudo. */}
-    <div style={{position:'fixed',inset:0,zIndex:20000,background:rect?'transparent':'rgba(15,23,42,0.72)'}}/>
-    {/* Recorte (spotlight): box-shadow gigante escurece o resto e deixa o elemento visível */}
-    {rect&&<div style={{position:'fixed',top:rect.top-6,left:rect.left-6,width:rect.width+12,height:rect.height+12,borderRadius:12,boxShadow:'0 0 0 9999px rgba(15,23,42,0.72)',border:'2px solid #3B82F6',zIndex:20001,pointerEvents:'none',transition:'all .3s cubic-bezier(.4,0,.2,1)'}}/>}
-    <div style={balloon}>
-      <div style={{fontSize:11,fontWeight:800,color:'#1351B4',marginBottom:6,textTransform:'uppercase',letterSpacing:'.02em'}}>{tour.titulo}</div>
-      <div style={{fontSize:14,color:'#1E293B',lineHeight:1.5,marginBottom:14}}>{passo.texto}</div>
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:10}}>
-        <span style={{fontSize:11,color:'#94A3B8',fontWeight:700}}>Passo {step+1} de {total}</span>
-        <div style={{display:'flex',alignItems:'center',gap:12}}>
-          <button onClick={marcarVisto} style={{background:'none',border:'none',color:'#94A3B8',fontSize:12,fontWeight:600,cursor:'pointer',padding:0}}>Pular tutorial</button>
-          <button onClick={proximo} style={{background:'#1351B4',border:'none',borderRadius:10,padding:'9px 18px',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer'}}>{ultimo?'Entendi':'Próximo'}</button>
+    <div style={{position:'fixed',inset:0,zIndex:20000,background:(rect&&!preparando)?'transparent':'rgba(15,23,42,0.72)'}}/>
+    {/* Enquanto prepara (executa a ação e aguarda a tela), mostra só o overlay — o balão aparece depois. */}
+    {!preparando&&<div>
+      {/* Recorte (spotlight): box-shadow gigante escurece o resto e deixa o elemento visível */}
+      {rect&&<div style={{position:'fixed',top:rect.top-6,left:rect.left-6,width:rect.width+12,height:rect.height+12,borderRadius:12,boxShadow:'0 0 0 9999px rgba(15,23,42,0.72)',border:'2px solid #3B82F6',zIndex:20001,pointerEvents:'none',transition:'all .3s cubic-bezier(.4,0,.2,1)'}}/>}
+      <div style={balloon}>
+        <div style={{fontSize:11,fontWeight:800,color:'#1351B4',marginBottom:6,textTransform:'uppercase',letterSpacing:'.02em'}}>{tour.titulo}</div>
+        <div style={{fontSize:14,color:'#1E293B',lineHeight:1.5,marginBottom:14}}>{passo.texto}</div>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:10}}>
+          <span style={{fontSize:11,color:'#94A3B8',fontWeight:700}}>Passo {step+1} de {total}</span>
+          <div style={{display:'flex',alignItems:'center',gap:12}}>
+            <button onClick={marcarVisto} style={{background:'none',border:'none',color:'#94A3B8',fontSize:12,fontWeight:600,cursor:'pointer',padding:0}}>Pular tutorial</button>
+            <button onClick={proximo} style={{background:'#1351B4',border:'none',borderRadius:10,padding:'9px 18px',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer'}}>{ultimo?'Entendi':'Próximo'}</button>
+          </div>
         </div>
       </div>
-    </div>
+    </div>}
   </div>);
 }
 
@@ -6726,7 +6765,7 @@ return(
   </div>}
   {!online&&<div style={{background:'#475569',color:'#fff',textAlign:'center',padding:'7px',fontSize:12,fontWeight:600}}>Sem conexao com a internet</div>}
 
-  <div className="fadeUp">
+  <div className="fadeUp" data-tour="tab-content">
     {loading?(
       <div style={{minHeight:'60vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:40}}>
         <div style={{width:64,height:64,borderRadius:16,background:'linear-gradient(135deg,#0D1B4B,#1351B4)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,color:'#fff',fontWeight:900,marginBottom:16,boxShadow:'0 8px 24px rgba(19,81,180,.3)'}}>
@@ -6774,7 +6813,7 @@ return(
     {(user.role==='gestor'||user.role==='tecnico')
       ?<div style={{width:'100%'}}>
         {menuAberto&&<div onClick={function(){setMenuAberto(false);}} style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.6)',zIndex:149,backdropFilter:'blur(6px)'}}/>}
-        <div style={{position:'fixed',top:0,right:0,bottom:0,width:280,background:'#fff',zIndex:150,transform:menuAberto?'translateX(0)':'translateX(110%)',transition:'transform .3s cubic-bezier(.4,0,.2,1)',boxShadow:menuAberto?'-8px 0 40px rgba(0,0,0,0.2)':'none',display:'flex',flexDirection:'column',willChange:'transform'}}>
+        <div data-tour="menu-panel" style={{position:'fixed',top:0,right:0,bottom:0,width:280,background:'#fff',zIndex:150,transform:menuAberto?'translateX(0)':'translateX(110%)',transition:'transform .3s cubic-bezier(.4,0,.2,1)',boxShadow:menuAberto?'-8px 0 40px rgba(0,0,0,0.2)':'none',display:'flex',flexDirection:'column',willChange:'transform'}}>
           <div style={{background:'linear-gradient(135deg,#0D1B4B,#1351B4)',padding:'52px 20px 20px',flexShrink:0}}>
             <div style={{display:'flex',alignItems:'center',gap:12}}>
               <div style={{width:42,height:42,borderRadius:12,background:'rgba(255,255,255,0.15)',border:'1.5px solid rgba(255,255,255,0.25)',display:'flex',alignItems:'center',justifyContent:'center'}}>
@@ -6830,7 +6869,7 @@ return(
       </div>
       :<div style={{width:'100%'}}>
         {menuAberto&&<div onClick={function(){setMenuAberto(false);}} style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.5)',zIndex:149,backdropFilter:'blur(4px)'}}/>}
-        <div style={{position:'fixed',top:0,right:0,bottom:0,width:260,background:'#fff',zIndex:150,transform:menuAberto?'translateX(0)':'translateX(110%)',transition:'transform .3s cubic-bezier(.4,0,.2,1)',boxShadow:menuAberto?'-8px 0 40px rgba(0,0,0,0.15)':'none',display:'flex',flexDirection:'column'}}>
+        <div data-tour="menu-panel" style={{position:'fixed',top:0,right:0,bottom:0,width:260,background:'#fff',zIndex:150,transform:menuAberto?'translateX(0)':'translateX(110%)',transition:'transform .3s cubic-bezier(.4,0,.2,1)',boxShadow:menuAberto?'-8px 0 40px rgba(0,0,0,0.15)':'none',display:'flex',flexDirection:'column'}}>
           <div style={{background:'linear-gradient(135deg,#0D1B4B,#1351B4)',padding:'52px 20px 20px',flexShrink:0}}>
             <div style={{fontWeight:800,fontSize:15,color:'#fff'}}>{user.name}</div>
             <div style={{fontSize:11,color:'rgba(255,255,255,0.5)',marginTop:2}}>{ROLES[user.role]||user.role}</div>
