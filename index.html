@@ -208,6 +208,11 @@ var TOURS=[
     {acao:{tipo:'menu'},seletor:'[data-tour="menu-panel"]',texto:'Use o menu para navegar entre as abas do sistema.',posicao:'esquerda'},
     {acao:{tipo:'aba',aba:'saida'},seletor:'[data-tour="nav-saida"]',texto:'Registre saídas de medicamentos aqui.',posicao:'acima'},
     {acao:{tipo:'aba',aba:'estoque'},seletor:'[data-tour="tab-content"]',texto:'Consulte o estoque atualizado em tempo real.',posicao:'abaixo'}
+  ]},
+  {id:'tour_atb_retroativa',titulo:'Novidade: Baixa retroativa no ATB',passos:[
+    {acao:{tipo:'aba',aba:'antibiotico'},seletor:'[data-tour="nav-antibiotico"]',texto:'A aba ATB recebeu uma atualização importante!',posicao:'acima'},
+    {acao:{tipo:'aba',aba:'antibiotico'},seletor:'[data-tour="atb-registrar-dose"]',texto:'Agora você pode registrar doses de dias anteriores.',posicao:'acima'},
+    {acao:{tipo:'clicar',seletor:'[data-tour="atb-registrar-dose"]'},seletor:'[data-tour="atb-data-dose"]',texto:'Selecione a data real da administração — útil quando o paciente toma a medicação fora do expediente.',posicao:'abaixo'}
   ]}
 ];
 function todayStr(){return new Date().toISOString().slice(0,10);}
@@ -2588,6 +2593,14 @@ function TabGestao(props){var currentUser=props.currentUser;var _users=useState(
 var _toursAtivos=useState({});var toursAtivos=_toursAtivos[0];var setToursAtivos=_toursAtivos[1];
 useEffect(function(){var ut=db.collection('config').doc('tours').onSnapshot(function(s){var d=s.exists?s.data():{};setToursAtivos(d.ativos||{});},function(){});return ut;},[]);
 function toggleTour(id,val){var novo=Object.assign({},toursAtivos);novo[id]=val;setToursAtivos(novo);db.collection('config').doc('tours').set({ativos:novo,atualizadoEm:new Date().toISOString(),atualizadoPor:currentUser.name},{merge:true}).catch(function(e){alert('Não foi possível salvar: '+(e&&e.message?e.message:'verifique as permissões do Firestore.'));});}
+function resetarTour(id,titulo){
+  if(!confirm('Resetar visualizações de "'+titulo+'"?\n\nTodos os usuários que já viram voltarão a ver este tutorial (se ele estiver ativo).'))return;
+  var alvo=users.filter(function(u){return (u.tutoriaisVistos||[]).indexOf(id)>=0;});
+  if(alvo.length===0){alert('Ninguém tinha visto este tutorial ainda — nada a resetar.');return;}
+  var batch=db.batch();
+  alvo.forEach(function(u){batch.update(db.collection('users').doc(u.id),{tutoriaisVistos:firebase.firestore.FieldValue.arrayRemove(id)});});
+  batch.commit().then(function(){alert('Visualizações resetadas! '+alvo.length+' usuário(s) verão o tutorial de novo.');}).catch(function(e){alert('Não foi possível resetar: '+(e&&e.message?e.message:'verifique as permissões do Firestore (o gestor precisa poder editar tutoriaisVistos dos usuários).'));});
+}
 useEffect(function(){var u1=db.collection('users').onSnapshot(function(s){setUsers(s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;}));});var u2=db.collection('alertas').where('tipo','==','saida_excessiva').limit(50).onSnapshot(function(s){var list=s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;});list.sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});setAlertas(list);});var u3=db.collection('solicitacoes').where('status','==','pendente').onSnapshot(function(s){var list=s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;});list.sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});setSolicitList(list);});return function(){u1();u2();u3();};},[]);
 var pending=users.filter(function(u){return u.status==='pending';});var approved=users.filter(function(u){return u.status==='approved';});var inactive=users.filter(function(u){return u.status==='inativo';});var unread=alertas.filter(function(a){return !a.lido;}).length;
 function approve(uid){db.collection('users').doc(uid).update({status:'approved'}).then(function(){var u=users.find(function(x){return x.id===uid;});if(u)db.collection('logs_contas').add({uid:uid,nome:u.name,cargo:u.role,acao:'aprovado',por:currentUser.name,criadoEm:new Date().toISOString()}).catch(function(){});});}
@@ -2626,6 +2639,9 @@ return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
             <span style={{position:'absolute',top:3,left:ativo?27:3,width:22,height:22,borderRadius:'50%',background:'#fff',transition:'left .2s',boxShadow:'0 1px 3px rgba(0,0,0,0.3)'}}/>
           </button>
         </div>
+      </div>
+      <div style={{marginTop:10,paddingTop:10,borderTop:'1px solid #F1F5F9',display:'flex',justifyContent:'flex-end'}}>
+        <button onClick={function(){resetarTour(t.id,t.titulo);}} disabled={vistoPor===0} style={{background:vistoPor===0?'#F1F5F9':'#FEF3C7',border:'none',borderRadius:8,padding:'7px 12px',fontSize:12,fontWeight:700,color:vistoPor===0?'#94A3B8':'#92400E',cursor:vistoPor===0?'default':'pointer'}}>🔄 Resetar visualizações</button>
       </div>
     </div>);
   })}
@@ -4196,7 +4212,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
                 <button onClick={function(e){e.stopPropagation();iniciarEspera(t);}} style={{padding:'9px',background:'#F0FDF4',border:'1.5px solid #BBF7D0',borderRadius:10,color:'#059669',fontWeight:700,fontSize:12,cursor:'pointer'}}>💉 Iniciar</button>
                 <button onClick={function(e){e.stopPropagation();ataqueBtn(t);}} style={{padding:'9px',background:'#F5F3FF',border:'1.5px solid #DDD6FE',borderRadius:10,color:'#7C3AED',fontWeight:700,fontSize:12,cursor:'pointer'}}>⚡ Dose Ataque</button>
               </div>}
-              {pHj(t)&&<button onClick={function(e){e.stopPropagation();setDataDose(new Date().toISOString().split('T')[0]);setShowDose(t);}} style={{width:'100%',padding:'10px',background:B,border:'none',borderRadius:10,color:'#fff',fontWeight:700,fontSize:14,cursor:'pointer',marginTop:6}}>💉 Registrar Dose de Hoje</button>}
+              {pHj(t)&&<button data-tour="atb-registrar-dose" onClick={function(e){e.stopPropagation();setDataDose(new Date().toISOString().split('T')[0]);setShowDose(t);}} style={{width:'100%',padding:'10px',background:B,border:'none',borderRadius:10,color:'#fff',fontWeight:700,fontSize:14,cursor:'pointer',marginTop:6}}>💉 Registrar Dose de Hoje</button>}
             </div>
           );
         })}
@@ -4313,7 +4329,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
           </div>
           <div style={{background:'#F8FAFC',borderRadius:14,padding:14,marginBottom:14,textAlign:'left'}}>
             <div style={{fontSize:13,fontWeight:700,color:'#475569',marginBottom:8}}>📅 Data da administração</div>
-            <input type="date" value={dataDose} max={hojeStr} onChange={function(e){var v=e.target.value;if(v&&v>hojeStr)v=hojeStr;setDataDose(v);}} style={{width:'100%',padding:'10px 12px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:14,boxSizing:'border-box'}}/>
+            <input data-tour="atb-data-dose" type="date" value={dataDose} max={hojeStr} onChange={function(e){var v=e.target.value;if(v&&v>hojeStr)v=hojeStr;setDataDose(v);}} style={{width:'100%',padding:'10px 12px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:14,boxSizing:'border-box'}}/>
             <div style={{fontSize:11,color:retroSel?'#B45309':'#94A3B8',marginTop:6}}>{retroSel?'⚠️ Baixa retroativa: será registrada na data acima (ex.: dose tomada de madrugada).':'Padrão: hoje. Você pode selecionar um dia anterior — datas futuras não são permitidas.'}</div>
           </div>
           <div style={{background:'#F0FDF4',borderRadius:10,padding:10,marginBottom:14,fontSize:13,color:'#059669',fontWeight:600}}>👤 {user.name} · {dataDose?fD(dataDose):new Date().toLocaleDateString('pt-BR')}</div>
