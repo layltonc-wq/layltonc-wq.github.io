@@ -2179,13 +2179,13 @@ function TabRelatorio(props){
   var db=props.db;var user=props.user||{};
   function nomeC(n){if(!n)return '?';var p=n.trim().split(' ');return p.length>=2?p[0]+' '+p[1]:p[0];}var entries=props.entries;var medications=props.medications;var _dF=useState(todayStr());var dF=_dF[0];var setDF=_dF[1];var _dT=useState(todayStr());var dT=_dT[0];var setDT=_dT[1];var _tipo=useState('todos');var tipo=_tipo[0];var setTipo=_tipo[1];var _sub=useState('mov');var sub=_sub[0];var setSub=_sub[1];var _filtCatRel=useState('todos');var filtCatRel=_filtCatRel[0];var setFiltCatRel=_filtCatRel[1];var _filtMeds=useState([]);var filtMeds=_filtMeds[0];var setFiltMeds=_filtMeds[1];var _filtBusca=useState('');var filtBusca=_filtBusca[0];var setFiltBusca=_filtBusca[1];var _filtBuscaCat=useState('todos');var filtBuscaCat=_filtBuscaCat[0];var setFiltBuscaCat=_filtBuscaCat[1];var _rankDF=useState((function(){var d=new Date();d.setDate(d.getDate()-30);return d.toISOString().slice(0,10);})());var rankDF=_rankDF[0];var setRankDF=_rankDF[1];var _rankDT=useState(todayStr());var rankDT=_rankDT[0];var setRankDT=_rankDT[1];var _rankDiag=useState(null);var rankDiag=_rankDiag[0];var setRankDiag=_rankDiag[1];var _rankCat=useState('todos');var rankCat=_rankCat[0];var setRankCat=_rankCat[1];
 var _diaHora=useState('');var diaHora=_diaHora[0];var setDiaHora=_diaHora[1];var _diaCats=useState([]);var diaCats=_diaCats[0];var setDiaCats=_diaCats[1];var _filtResp=useState('');var filtResp=_filtResp[0];var setFiltResp=_filtResp[1];
-var filtered=entries.filter(function(e){if(e.ficticioDiv)return false;if(e.divergenciaTipo==='real')return false;var dt=(e.criadoEm||'').slice(0,10);if(dt<dF||dt>dT)return false;if(tipo!=='todos'&&e.tipo!==tipo)return false;if(filtResp&&(e.autorNome||'?')!==filtResp)return false;if(filtMeds&&filtMeds.length>0&&filtMeds.indexOf(e.medicamentoNome)===-1)return false;if(filtCatRel&&filtCatRel!=='todos'){var meds=medications.filter(function(m){return m.nome===e.medicamentoNome&&((m.categoria||'medicamento'))===filtCatRel;});if(meds.length===0)return false;}return true;}).sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});
+var filtered=entries.filter(function(e){if(e.ficticioDiv)return false;if(e.divergenciaTipo==='real')return false;if(_ehSaidaNaoReal(e))return false;/* ajustes de conferência/balanço/descarte fora dos relatórios */var dt=(e.criadoEm||'').slice(0,10);if(dt<dF||dt>dT)return false;if(tipo!=='todos'&&e.tipo!==tipo)return false;if(filtResp&&(e.autorNome||'?')!==filtResp)return false;if(filtMeds&&filtMeds.length>0&&filtMeds.indexOf(e.medicamentoNome)===-1)return false;if(filtCatRel&&filtCatRel!=='todos'){var meds=medications.filter(function(m){return m.nome===e.medicamentoNome&&((m.categoria||'medicamento'))===filtCatRel;});if(meds.length===0)return false;}return true;}).sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});
 var totE=0,totS=0;filtered.forEach(function(e){if(e.tipo==='entrada')totE+=(e.quantidade||0);if(e.tipo==='saida')totS+=(e.quantidade||0);});
 // _norm e _ehSaidaNaoReal agora são globais (fonte única, reaproveitada por ranking, conferência e previsão)
 var _catPorNome={};(medications||[]).forEach(function(m){if(m.nome)_catPorNome[m.nome]=(m.categoria||'medicamento');});
 var rankMap={};entries.forEach(function(e){if(e.tipo!=='saida')return;if(_ehSaidaNaoReal(e))return;var dr=(e.date||(e.criadoEm||'').slice(0,10));if(dr<rankDF||dr>rankDT)return;var cat=_catPorNome[e.medicamentoNome]||'medicamento';if(rankCat!=='todos'&&cat!==rankCat)return;var k=e.medicamentoNome||'?';if(!rankMap[k])rankMap[k]={nome:k,total:0,count:0,cat:cat};rankMap[k].total+=(e.quantidade||0);rankMap[k].count++;});var ranking=Object.keys(rankMap).map(function(k){return rankMap[k];}).sort(function(a,b){return b.total-a.total;}).slice(0,rankCat==='todos'?10:50);
 function exportRankXL(){var rows=[['#','Medicamento','Categoria','Qtd Total','Nº Saídas']];ranking.forEach(function(r,i){rows.push([i+1,r.nome,(TIPOS[r.cat]?TIPOS[r.cat].label:r.cat),r.total,r.count]);});var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'Ranking');var catNome=rankCat==='todos'?'geral':rankCat;XLSX.writeFile(wb,'ranking_'+catNome+'_'+rankDF+'_'+rankDT+'.xlsx');}
-var respMap={};entries.forEach(function(e){var k=e.autorNome||'?';if(!respMap[k])respMap[k]={nome:k,color:e.autorColor,qtdS:0,qtdE:0,cntS:0,cntE:0};if(e.tipo==='saida'){respMap[k].qtdS+=(e.quantidade||0);respMap[k].cntS++;}else{respMap[k].qtdE+=(e.quantidade||0);respMap[k].cntE++;}});var porResp=Object.keys(respMap).map(function(k){return respMap[k];}).sort(function(a,b){return (b.qtdS+b.qtdE)-(a.qtdS+a.qtdE);});
+var respMap={};entries.forEach(function(e){if(_ehSaidaNaoReal(e))return;/* ajustes de conferência não contam por responsável */var k=e.autorNome||'?';if(!respMap[k])respMap[k]={nome:k,color:e.autorColor,qtdS:0,qtdE:0,cntS:0,cntE:0};if(e.tipo==='saida'){respMap[k].qtdS+=(e.quantidade||0);respMap[k].cntS++;}else{respMap[k].qtdE+=(e.quantidade||0);respMap[k].cntE++;}});var porResp=Object.keys(respMap).map(function(k){return respMap[k];}).sort(function(a,b){return (b.qtdS+b.qtdE)-(a.qtdS+a.qtdE);});
 function doXL(){var rows=[['Data','Hora','Responsavel','Medicamento','Tipo','Qtd','Lote']];filtered.forEach(function(e){rows.push([fmtD(e.criadoEm),fmtT(e.criadoEm),e.autorNome||'',e.medicamentoNome||'',e.tipo==='entrada'?'Entrada':'Saida',e.quantidade||0,e.lote||'']);});var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'Relatorio');XLSX.writeFile(wb,'relatorio_'+dF+'_'+dT+'.xlsx');}
 return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
 <div className="tab-sw">{[['mov','Movimentações'],['dia','Saídas do Dia'],['div','⚠️ Divergências'],['resp','Por Responsável'],['rank','Ranking']].map(function(t){return <button key={t[0]} onClick={function(){setSub(t[0]);}} className={sub===t[0]?'on':''}>{t[1]}</button>;})}</div>
@@ -2208,6 +2208,7 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
   {(function(){
     var saidasDia=entries.filter(function(e){
       if(e.tipo!=='saida'||e.ficticioDiv)return false;
+      if(_ehSaidaNaoReal(e))return false;/* ajustes de conferência/balanço não são saídas reais do dia */
       if((e.date||'')!==(dF||todayStr()))return false;
       if(diaHora){var d=new Date(e.criadoEm);var hhmm=('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);if(hhmm<diaHora)return false;} // hora local >= horário escolhido
       if(diaCats.length>0){var med=medications.find(function(m){return m.id===e.medicamentoId;});var cat=(med&&med.categoria)||'medicamento';if(diaCats.indexOf(cat)===-1)return false;}
@@ -5847,6 +5848,8 @@ function TabConferencia(props){
   var _cadMin=useState('');var cadMin=_cadMin[0];var setCadMin=_cadMin[1];
   var _cadSaving=useState(false);var cadSaving=_cadSaving[0];var setCadSaving=_cadSaving[1];
   var _delMedId=useState(null);var delMedId=_delMedId[0];var setDelMedId=_delMedId[1];
+  var _catAtiva=useState(null);var catAtiva=_catAtiva[0];var setCatAtiva=_catAtiva[1];// categoria escolhida nesta sessão (null = tela de seleção)
+  var _finalizadas=useState({});var finalizadas=_finalizadas[0];var setFinalizadas=_finalizadas[1];// {cat:{em,por,ajustes}} — categorias já finalizadas hoje
   var pendingRef=useRef({});var timersRef=useRef({});var remoteRef=useRef({});
   var podeGerir=user.role==='gestor'||user.role==='tecnico';
   var minhaCatRef=useRef(null);var entrouRef=useRef(null);
@@ -5865,6 +5868,7 @@ function TabConferencia(props){
       setContadoPor(data.contadoPor||{});
       setNovosLotes(data.novosLotes||[]);
       setRecontagens(data.recontagens||[]);
+      setFinalizadas(data.finalizadas||{});
       var parts=data.participantes||{};setParticipantes(parts);
       // mantém a categoria própria sincronizada p/ o heartbeat
       var meu=parts[user.uid];minhaCatRef.current=meu?(meu.cat||null):minhaCatRef.current;
@@ -6049,8 +6053,52 @@ function TabConferencia(props){
     }).catch(function(e){setAplicando(false);erroEscrita(e);alert('Erro ao aplicar ajustes: '+e.message+'\n\nNenhuma alteração foi confirmada. Verifique as permissões do Firestore.');});
   }
 
+  // Finaliza APENAS a categoria ativa: aplica os ajustes dela, marca como finalizada e limpa só as contagens dessa categoria.
+  function aplicarAjustesCategoria(){
+    var cat=catAtiva;if(!cat)return;
+    var lista=resumo.ajustes.filter(function(it){return it.cat===cat;});
+    setAplicando(true);
+    var now=new Date().toISOString();
+    var catLabel=TIPOS[cat]?TIPOS[cat].label:cat;
+    var batch=db.batch();
+    lista.forEach(function(it){
+      var ref=db.collection('entries').doc();
+      var obs='Balanço (conferência '+todayStr()+' · '+catLabel+'): '+(it.novo?'lote novo encontrado — ':'')+'(era '+it.sistema+', passou a '+it.contado+')'+(it.recontagem>0?' — inclui '+it.recontagem+' un. encontrada(s) em recontagem':'');
+      batch.set(ref,{
+        medicamentoId:it.medId,medicamentoNome:it.medNome,
+        tipo:it.diff>0?'entrada':'saida',quantidade:Math.abs(it.diff),
+        lote:it.lote||'',validade:it.validade||'',
+        observacao:obs,isAjuste:true,conferencia:todayStr(),conferenciaCat:cat,
+        criadoEm:now,date:todayStr(),
+        autorId:user.uid||'',autorNome:user.name,autorCargo:user.role||'',autorColor:user.color||B
+      });
+    });
+    // Limpa só o que é desta categoria (contagens/contadoPor/novosLotes/recontagens) e grava finalizadas[cat]
+    var catMedIds={};medList.forEach(function(m){if(m.cat===cat)catMedIds[m.id]=1;});
+    var del=firebase.firestore.FieldValue.delete();var upd={};
+    Object.keys(contagens).forEach(function(k){if(catMedIds[k.split('~')[0]]){upd['contagens.'+k]=del;upd['contadoPor.'+k]=del;}});
+    var nlRem=novosLotes.filter(function(nl){return catMedIds[nl.medId];});
+    var rcRem=recontagens.filter(function(rc){return catMedIds[(rc.key||'').split('~')[0]];});
+    if(nlRem.length)upd['novosLotes']=firebase.firestore.FieldValue.arrayRemove.apply(null,nlRem);
+    if(rcRem.length)upd['recontagens']=firebase.firestore.FieldValue.arrayRemove.apply(null,rcRem);
+    upd['finalizadas.'+cat]={em:now,por:user.name,ajustes:lista.length};
+    upd['atualizadoEm']=now;upd['atualizadoPor']=user.name;
+    batch.update(docRef(),upd);
+    batch.commit().then(function(){
+      setContagens(function(p){var n=Object.assign({},p);Object.keys(n).forEach(function(k){if(catMedIds[k.split('~')[0]])delete n[k];});return n;});
+      setContadoPor(function(p){var n=Object.assign({},p);Object.keys(n).forEach(function(k){if(catMedIds[k.split('~')[0]])delete n[k];});return n;});
+      setNovosLotes(function(p){return p.filter(function(nl){return !catMedIds[nl.medId];});});
+      setRecontagens(function(p){return p.filter(function(rc){return !catMedIds[(rc.key||'').split('~')[0]];});});
+      setFinalizadas(function(p){var n=Object.assign({},p);n[cat]={em:now,por:user.name,ajustes:lista.length};return n;});
+      setAplicando(false);setShowResumo(false);setErro('');setCatAtiva(null);
+      alert('✅ Categoria "'+catLabel+'" finalizada. '+lista.length+' ajuste(s) de estoque aplicado(s).');
+    }).catch(function(e){setAplicando(false);erroEscrita(e);alert('Erro ao finalizar a categoria: '+e.message+'\n\nNenhuma alteração foi confirmada. Verifique as permissões do Firestore.');});
+  }
+
   var buscaLc=busca.trim().toLowerCase();
-  var filtrada=buscaLc?medList.filter(function(m){return m.nome.toLowerCase().indexOf(buscaLc)>=0;}):medList;
+  // Na conferência por categoria, só entram os medicamentos da categoria ativa (vazio na tela de seleção).
+  var medListVis=catAtiva?medList.filter(function(m){return (m.cat||'medicamento')===catAtiva;}):[];
+  var filtrada=buscaLc?medListVis.filter(function(m){return m.nome.toLowerCase().indexOf(buscaLc)>=0;}):medListVis;
   var totalItens=filtrada.length;
   var conferidos=filtrada.filter(medConferido).length;
   var pct=totalItens>0?Math.round((conferidos/totalItens)*100):0;
@@ -6061,6 +6109,16 @@ function TabConferencia(props){
   // Progresso por categoria (sobre todos os medicamentos, não filtrado pela busca)
   var catStats={};cats.forEach(function(c){catStats[c]={total:0,conf:0};});
   medList.forEach(function(m){var c=m.cat||'medicamento';if(!catStats[c])catStats[c]={total:0,conf:0};catStats[c].total++;if(medConferido(m))catStats[c].conf++;});
+  // Resumo restrito à categoria ativa (para o modal e o botão "Finalizar categoria")
+  var resumoCat=(function(){
+    if(!catAtiva)return resumo;
+    var itens=resumo.itens.filter(function(it){return it.cat===catAtiva;});
+    var ajustes=itens.filter(function(i){return i.diff!==0;});
+    return {itens:itens,total:itens.length,bateram:itens.length-ajustes.length,divergiram:ajustes.length,ajustes:ajustes};
+  })();
+  // Status de cada categoria para a tela de seleção
+  function catStatus(cat){if(finalizadas[cat])return'finalizada';var st=catStats[cat]||{conf:0,total:0};return st.conf>0?'andamento':'nova';}
+  var catsDisponiveis=cats.filter(function(c){return (catStats[c]&&catStats[c].total>0);});
   // Participantes online (heartbeat < 45s) e quem está em cada categoria
   var agoraMs=Date.now();
   var online=Object.keys(participantes).map(function(uid){return Object.assign({uid:uid},participantes[uid]);}).filter(function(p){return p.em&&(agoraMs-new Date(p.em).getTime())<45000;}).sort(function(a,b){return (a.entrou||'').localeCompare(b.entrou||'');});
@@ -6132,12 +6190,9 @@ function TabConferencia(props){
     <div style={{background:'#fff',borderRadius:14,padding:'12px 14px',marginBottom:14,border:'1.5px solid #E2E8F0'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
         <span style={{fontSize:13,fontWeight:800,color:'#1E293B'}}>👥 Equipe na conferência ({online.length})</span>
-        {minhaCat
-          ?<div style={{display:'flex',gap:6}}>
-            <button onClick={function(){setShowTrocar(true);}} style={{background:'#EFF6FF',border:'1px solid #BFDBFE',borderRadius:8,padding:'5px 10px',fontSize:11,fontWeight:700,color:'#1351B4',cursor:'pointer'}}>Trocar</button>
-            <button onClick={sairDaContagem} style={{background:'#F1F5F9',border:'none',borderRadius:8,padding:'5px 10px',fontSize:11,fontWeight:700,color:'#64748B',cursor:'pointer'}}>Sair</button>
-          </div>
-          :<button onClick={pegarCategoria} style={{background:'#0C6B3E',border:'none',borderRadius:8,padding:'6px 12px',fontSize:11,fontWeight:700,color:'#fff',cursor:'pointer'}}>🙋 Pegar uma categoria</button>
+        {catAtiva
+          ?<button onClick={function(){setCatAtiva(null);}} style={{background:'#EFF6FF',border:'1px solid #BFDBFE',borderRadius:8,padding:'5px 10px',fontSize:11,fontWeight:700,color:'#1351B4',cursor:'pointer'}}>← Trocar categoria</button>
+          :<span style={{fontSize:11,color:'#94A3B8'}}>Escolha uma categoria abaixo</span>
         }
       </div>
       {online.length===0&&<div style={{fontSize:11,color:'#94A3B8'}}>Ninguém online no momento.</div>}
@@ -6155,7 +6210,36 @@ function TabConferencia(props){
       <div style={{fontSize:10,color:'#94A3B8',marginTop:8,lineHeight:1.5,borderTop:'1px solid #F1F5F9',paddingTop:8}}>💡 Cada contagem é salva por item, em tempo real. Se duas pessoas contarem o mesmo item, vale a última — o app registra quem contou.</div>
     </div>
 
+    {/* ===== TELA DE SELEÇÃO DE CATEGORIA (mini-conferências independentes) ===== */}
+    {!catAtiva&&<div style={{marginBottom:14}}>
+      <div style={{fontWeight:800,fontSize:15,color:'#1E293B',marginBottom:4}}>Escolha uma categoria para conferir</div>
+      <div style={{fontSize:12,color:'#94A3B8',marginBottom:12}}>Cada categoria é uma conferência independente. Você confere e finaliza uma de cada vez.</div>
+      {catsDisponiveis.length===0&&<div style={{textAlign:'center',padding:28,color:'#94A3B8',fontSize:13}}>Nenhum medicamento cadastrado para conferir.</div>}
+      {catsDisponiveis.map(function(c){
+        var t=TIPOS[c]||TIPOS.medicamento;var cor=CCOR[c]||'#1351B4';var st=catStats[c]||{conf:0,total:0};
+        var status=catStatus(c);var fin=finalizadas[c];
+        return(<button key={c} onClick={function(){setCatAtiva(c);definirMinhaCat(c);}} style={{width:'100%',display:'flex',alignItems:'center',gap:12,textAlign:'left',background:'#fff',border:'1.5px solid '+(status==='finalizada'?'#BBF7D0':status==='andamento'?'#FDE68A':'#E2E8F0'),borderLeft:'5px solid '+cor,borderRadius:12,padding:'12px 14px',marginBottom:8,cursor:'pointer'}}>
+          <span style={{fontSize:24}}>{t.icon}</span>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontWeight:800,fontSize:14,color:'#1E293B'}}>{t.label}</div>
+            <div style={{fontSize:11,color:'#64748B',marginTop:2}}>{st.total} medicamento(s){status!=='nova'?' · '+st.conf+' conferido(s)':''}{fin&&fin.por?' · por '+fin.por:''}</div>
+          </div>
+          <span style={{fontSize:11,fontWeight:800,padding:'4px 10px',borderRadius:20,whiteSpace:'nowrap',color:status==='finalizada'?'#0C6B3E':status==='andamento'?'#B45309':'#64748B',background:status==='finalizada'?'#DCFCE7':status==='andamento'?'#FEF3C7':'#F1F5F9'}}>{status==='finalizada'?'✓ Finalizada':status==='andamento'?'Em andamento':'Iniciar'}</span>
+        </button>);
+      })}
+    </div>}
+
+    {catAtiva&&<div style={{background:CCOR[catAtiva]+'12',border:'1.5px solid '+CCOR[catAtiva]+'40',borderRadius:12,padding:'10px 14px',marginBottom:12,display:'flex',alignItems:'center',gap:10}}>
+      <span style={{fontSize:20}}>{(TIPOS[catAtiva]||TIPOS.medicamento).icon}</span>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:13,fontWeight:800,color:'#1E293B'}}>Conferindo: {(TIPOS[catAtiva]||TIPOS.medicamento).label}</div>
+        {finalizadas[catAtiva]&&<div style={{fontSize:11,color:'#0C6B3E',fontWeight:600}}>✓ Já finalizada hoje{finalizadas[catAtiva].por?' por '+finalizadas[catAtiva].por:''} — recontar gera nova finalização.</div>}
+      </div>
+      <button onClick={function(){setCatAtiva(null);}} style={{flexShrink:0,background:'#fff',border:'1.5px solid '+CCOR[catAtiva]+'55',borderRadius:8,padding:'7px 12px',fontSize:12,fontWeight:700,color:CCOR[catAtiva],cursor:'pointer'}}>← Trocar</button>
+    </div>}
+
     {/* Barra de progresso */}
+    {catAtiva&&<React.Fragment>
     <div style={{background:'#fff',borderRadius:14,padding:'14px 16px',marginBottom:14,border:'1.5px solid #E2E8F0'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:8}}>
         <span style={{fontSize:13,fontWeight:700,color:'#1E293B'}}>{conferidos} de {totalItens} itens conferidos</span>
@@ -6164,7 +6248,7 @@ function TabConferencia(props){
       <div style={{height:10,background:'#F1F5F9',borderRadius:99,overflow:'hidden'}}>
         <div style={{height:'100%',width:pct+'%',background:pct===100&&totalItens>0?'linear-gradient(90deg,#0C6B3E,#22C55E)':'linear-gradient(90deg,#1351B4,#3B82F6)',borderRadius:99,transition:'width .3s ease'}}/>
       </div>
-      <button onClick={function(){setShowResumo(true);}} disabled={resumo.total===0} style={{marginTop:12,width:'100%',padding:'11px',background:resumo.total===0?'#E2E8F0':'#0C6B3E',border:'none',borderRadius:10,color:resumo.total===0?'#94A3B8':'#fff',fontWeight:700,fontSize:13,cursor:resumo.total===0?'default':'pointer'}}>✅ Finalizar e ver divergências{resumo.divergiram>0?' ('+resumo.divergiram+')':''}</button>
+      <button onClick={function(){setShowResumo(true);}} disabled={resumoCat.total===0} style={{marginTop:12,width:'100%',padding:'11px',background:resumoCat.total===0?'#E2E8F0':'#0C6B3E',border:'none',borderRadius:10,color:resumoCat.total===0?'#94A3B8':'#fff',fontWeight:700,fontSize:13,cursor:resumoCat.total===0?'default':'pointer'}}>✅ Finalizar categoria{resumoCat.divergiram>0?' — '+resumoCat.divergiram+' diverg.':''}</button>
     </div>
 
     <div style={{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap'}}>
@@ -6247,29 +6331,7 @@ function TabConferencia(props){
       </div>);
     })}
     <div style={{textAlign:'center',fontSize:10,color:'#CBD5E1',marginTop:8}}>Progresso salvo automaticamente · colaborativo em tempo real</div>
-
-    {showTrocar&&<div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.7)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:18,backdropFilter:'blur(4px)'}} onClick={function(){setShowTrocar(false);}}>
-      <div onClick={function(e){e.stopPropagation();}} style={{background:'#fff',borderRadius:18,width:'100%',maxWidth:420,maxHeight:'80vh',overflowY:'auto',boxShadow:'0 20px 60px rgba(0,0,0,0.3)',padding:18}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
-          <div style={{fontWeight:800,fontSize:16,color:'#1E293B'}}>Escolher categoria</div>
-          <button onClick={function(){setShowTrocar(false);}} style={{background:'#F1F5F9',border:'none',borderRadius:99,width:28,height:28,fontSize:14,cursor:'pointer',color:'#64748B'}}>✕</button>
-        </div>
-        {catsComMeds.length===0&&<div style={{fontSize:12,color:'#94A3B8'}}>Nenhuma categoria com itens.</div>}
-        {catsComMeds.map(function(c){
-          var t=TIPOS[c]||TIPOS.medicamento;var st=catStats[c]||{conf:0,total:0};var donos=(donoCat[c]||[]).filter(function(p){return p.uid!==user.uid;});
-          var eu=c===minhaCat;var done=st.total>0&&st.conf>=st.total;
-          return(<button key={c} onClick={function(){escolherCategoria(c);}} style={{width:'100%',display:'flex',alignItems:'center',gap:10,textAlign:'left',background:eu?'#EFF6FF':'#F8FAFC',border:'1.5px solid '+(eu?'#1351B4':'#E2E8F0'),borderRadius:12,padding:'11px 12px',marginBottom:8,cursor:'pointer'}}>
-            <span style={{fontSize:20}}>{t.icon}</span>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{fontSize:13,fontWeight:700,color:'#1E293B'}}>{t.label}{eu?' (você)':''}</div>
-              <div style={{fontSize:10,color:done?'#0C6B3E':'#64748B'}}>{st.conf} de {st.total} conferidos{done?' ✓':''}{donos.length>0?' · 👤 '+donos.map(function(p){return p.nome;}).join(', '):''}</div>
-            </div>
-            {donos.length>0&&<span style={{fontSize:9,fontWeight:700,color:'#B45309',background:'#FEF3C7',borderRadius:6,padding:'2px 6px'}}>ocupada</span>}
-          </button>);
-        })}
-        <div style={{fontSize:10,color:'#94A3B8',marginTop:4}}>A distribuição automática evita repetir categoria. Você ainda pode escolher uma ocupada para contar junto.</div>
-      </div>
-    </div>}
+    </React.Fragment>}
 
     {showCad&&<div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.7)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:18,backdropFilter:'blur(4px)'}} onClick={function(){if(!cadSaving)setShowCad(false);}}>
       <div onClick={function(e){e.stopPropagation();}} style={{background:'#fff',borderRadius:18,width:'100%',maxWidth:420,maxHeight:'85vh',overflowY:'auto',boxShadow:'0 20px 60px rgba(0,0,0,0.3)',padding:18}}>
@@ -6303,27 +6365,27 @@ function TabConferencia(props){
       <div onClick={function(e){e.stopPropagation();}} style={{background:'#F8FAFC',borderRadius:'22px 22px 0 0',width:'100%',maxWidth:700,maxHeight:'88vh',display:'flex',flexDirection:'column',boxShadow:'0 -12px 48px rgba(0,0,0,0.3)'}}>
         <div style={{padding:'18px 18px 12px',borderBottom:'1px solid #E2E8F0'}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
-            <div style={{fontWeight:800,fontSize:17,color:'#1E293B'}}>Resumo da Conferência</div>
+            <div style={{fontWeight:800,fontSize:17,color:'#1E293B'}}>Finalizar {catAtiva?(TIPOS[catAtiva]?TIPOS[catAtiva].label:catAtiva):'Conferência'}</div>
             <button onClick={function(){if(!aplicando)setShowResumo(false);}} style={{background:'#F1F5F9',border:'none',borderRadius:99,width:30,height:30,fontSize:15,cursor:'pointer',color:'#64748B'}}>✕</button>
           </div>
           <div style={{display:'flex',gap:8}}>
             <div style={{flex:1,background:'#DCFCE7',borderRadius:10,padding:'8px 10px',textAlign:'center'}}>
-              <div style={{fontSize:19,fontWeight:800,color:'#0C6B3E'}}>{resumo.bateram}</div>
+              <div style={{fontSize:19,fontWeight:800,color:'#0C6B3E'}}>{resumoCat.bateram}</div>
               <div style={{fontSize:10,color:'#166534',fontWeight:600}}>✓ Bateram</div>
             </div>
-            <div style={{flex:1,background:resumo.divergiram>0?'#FEE2E2':'#F1F5F9',borderRadius:10,padding:'8px 10px',textAlign:'center'}}>
-              <div style={{fontSize:19,fontWeight:800,color:resumo.divergiram>0?'#DC2626':'#94A3B8'}}>{resumo.divergiram}</div>
-              <div style={{fontSize:10,color:resumo.divergiram>0?'#991B1B':'#94A3B8',fontWeight:600}}>⚠ Divergiram</div>
+            <div style={{flex:1,background:resumoCat.divergiram>0?'#FEE2E2':'#F1F5F9',borderRadius:10,padding:'8px 10px',textAlign:'center'}}>
+              <div style={{fontSize:19,fontWeight:800,color:resumoCat.divergiram>0?'#DC2626':'#94A3B8'}}>{resumoCat.divergiram}</div>
+              <div style={{fontSize:10,color:resumoCat.divergiram>0?'#991B1B':'#94A3B8',fontWeight:600}}>⚠ Divergiram</div>
             </div>
             <div style={{flex:1,background:'#EFF6FF',borderRadius:10,padding:'8px 10px',textAlign:'center'}}>
-              <div style={{fontSize:19,fontWeight:800,color:'#1351B4'}}>{resumo.total}</div>
+              <div style={{fontSize:19,fontWeight:800,color:'#1351B4'}}>{resumoCat.total}</div>
               <div style={{fontSize:10,color:'#1E40AF',fontWeight:600}}>Conferidos</div>
             </div>
           </div>
         </div>
         <div style={{flex:1,overflowY:'auto',padding:'12px 14px'}}>
-          {resumo.total===0&&<div style={{textAlign:'center',padding:32,color:'#94A3B8',fontSize:13}}>Nenhum lote contado ainda.</div>}
-          {resumo.itens.map(function(it,i){
+          {resumoCat.total===0&&<div style={{textAlign:'center',padding:32,color:'#94A3B8',fontSize:13}}>Nenhum lote contado ainda.</div>}
+          {resumoCat.itens.map(function(it,i){
             var ok=it.diff===0;
             var bg=it.novo?'#EFF6FF':ok?'#F0FDF4':'#FEF2F2';
             var bd=it.novo?'#93C5FD':ok?'#BBF7D0':'#FECACA';
@@ -6345,13 +6407,13 @@ function TabConferencia(props){
           })}
         </div>
         <div style={{padding:'12px 16px 18px',borderTop:'1px solid #E2E8F0',background:'#fff'}}>
-          {resumo.divergiram===0
-            ?<div style={{textAlign:'center',fontSize:13,color:'#0C6B3E',fontWeight:700,padding:'6px 0'}}>🎉 Tudo bateu! Nenhum ajuste necessário.</div>
-            :<div style={{fontSize:11,color:'#64748B',textAlign:'center',marginBottom:10}}>Os ajustes corrigem o estoque e ficam fora do ranking de saídas.</div>
+          {resumoCat.divergiram===0
+            ?<div style={{textAlign:'center',fontSize:13,color:'#0C6B3E',fontWeight:700,padding:'6px 0'}}>🎉 Tudo bateu! Finalize a categoria para concluir.</div>
+            :<div style={{fontSize:11,color:'#64748B',textAlign:'center',marginBottom:10}}>Os ajustes corrigem o estoque e ficam fora do ranking e dos relatórios de saída/entrada.</div>
           }
           <div style={{display:'flex',gap:10}}>
-            <button onClick={function(){if(!aplicando)setShowResumo(false);}} disabled={aplicando} style={{flex:1,padding:'13px',background:'#F1F5F9',border:'none',borderRadius:12,fontWeight:700,fontSize:14,color:'#64748B',cursor:'pointer'}}>{resumo.divergiram===0?'Fechar':'Cancelar'}</button>
-            {resumo.divergiram>0&&<button onClick={aplicarAjustes} disabled={aplicando} style={{flex:2,padding:'13px',background:aplicando?'#94A3B8':'#0C6B3E',border:'none',borderRadius:12,fontWeight:700,fontSize:14,color:'#fff',cursor:aplicando?'default':'pointer'}}>{aplicando?'Aplicando...':'Confirmar e aplicar '+resumo.divergiram+' ajuste(s)'}</button>}
+            <button onClick={function(){if(!aplicando)setShowResumo(false);}} disabled={aplicando} style={{flex:1,padding:'13px',background:'#F1F5F9',border:'none',borderRadius:12,fontWeight:700,fontSize:14,color:'#64748B',cursor:'pointer'}}>Cancelar</button>
+            <button onClick={aplicarAjustesCategoria} disabled={aplicando||resumoCat.total===0} style={{flex:2,padding:'13px',background:(aplicando||resumoCat.total===0)?'#94A3B8':'#0C6B3E',border:'none',borderRadius:12,fontWeight:700,fontSize:14,color:'#fff',cursor:(aplicando||resumoCat.total===0)?'default':'pointer'}}>{aplicando?'Finalizando...':resumoCat.divergiram>0?'✅ Finalizar e aplicar '+resumoCat.divergiram+' ajuste(s)':'✅ Finalizar categoria'}</button>
           </div>
         </div>
       </div>
