@@ -5850,7 +5850,12 @@ function TabConferencia(props){
   var _delMedId=useState(null);var delMedId=_delMedId[0];var setDelMedId=_delMedId[1];
   var _catAtiva=useState(null);var catAtiva=_catAtiva[0];var setCatAtiva=_catAtiva[1];// categoria escolhida nesta sessão (null = tela de seleção)
   var _finalizadas=useState({});var finalizadas=_finalizadas[0];var setFinalizadas=_finalizadas[1];// {cat:{em,por,ajustes}} — categorias já finalizadas hoje
+  // Parte 2: renomear medicamento / definir lote-validade no cadastro / aviso de tempo real
+  var _renId=useState(null);var renId=_renId[0];var setRenId=_renId[1];var _renNome=useState('');var renNome=_renNome[0];var setRenNome=_renNome[1];var _renSaving=useState(false);var renSaving=_renSaving[0];var setRenSaving=_renSaving[1];
+  var _lcId=useState(null);var lcId=_lcId[0];var setLcId=_lcId[1];var _lcLote=useState('');var lcLote=_lcLote[0];var setLcLote=_lcLote[1];var _lcVal=useState('');var lcVal=_lcVal[0];var setLcVal=_lcVal[1];var _lcSaving=useState(false);var lcSaving=_lcSaving[0];var setLcSaving=_lcSaving[1];
+  var _movAviso=useState(false);var movAviso=_movAviso[0];var setMovAviso=_movAviso[1];var movBaseRef=useRef(null);
   var pendingRef=useRef({});var timersRef=useRef({});var remoteRef=useRef({});
+  var medById={};medications.forEach(function(m){medById[m.id]=m;});
   var podeGerir=user.role==='gestor'||user.role==='tecnico';
   var minhaCatRef=useRef(null);var entrouRef=useRef(null);
 
@@ -5890,6 +5895,17 @@ function TabConferencia(props){
     var sair=function(){var u={};u['participantes.'+user.uid]=firebase.firestore.FieldValue.delete();docRef().update(u).catch(function(){});};
     window.addEventListener('beforeunload',sair);
     return function(){clearInterval(iv);window.removeEventListener('beforeunload',sair);sair();};
+  },[]);
+  // ===== Parte 2 (#7): listener em tempo real das movimentações de hoje. Se alguém dá saída/entrada
+  // em outra tela enquanto a conferência está aberta, os valores do sistema (props entries/stock)
+  // já se atualizam sozinhos; aqui apenas avisamos que houve mudança.
+  useEffect(function(){
+    var unsub=db.collection('entries').where('date','==',todayStr()).onSnapshot(function(snap){
+      var n=snap.size;
+      if(movBaseRef.current===null){movBaseRef.current=n;return;}
+      if(n>movBaseRef.current){movBaseRef.current=n;setMovAviso(true);}
+    },function(){});
+    return unsub;
   },[]);
   function definirMinhaCat(cat){
     minhaCatRef.current=cat;
@@ -5973,6 +5989,25 @@ function TabConferencia(props){
     db.collection('medicamentos').doc(m.id).delete()
       .then(function(){setDelMedId(null);setErro('');})
       .catch(function(e){setDelMedId(null);erroEscrita(e);});
+  }
+  // Parte 2 (#8): renomear medicamento — salva de vez no cadastro
+  function abrirRename(m){setRenId(m.id);setRenNome(m.nome||'');setDelMedId(null);}
+  function salvarRename(m){
+    var nome=(renNome||'').trim();if(!nome){alert('Informe o novo nome.');return;}
+    setRenSaving(true);
+    db.collection('medicamentos').doc(m.id).update({nome:nome.toUpperCase()})
+      .then(function(){setRenSaving(false);setRenId(null);setRenNome('');setErro('');})
+      .catch(function(e){setRenSaving(false);erroEscrita(e);});
+  }
+  // Parte 2 (#6): definir lote/validade no cadastro do medicamento (não só nesta conferência)
+  function abrirLoteCad(m){var raw=medById[m.id]||{};setLcId(m.id);setLcLote(raw.loteAtual||'');setLcVal(raw.validadeAtual||'');}
+  function salvarLoteCad(m){
+    var lote=(lcLote||'').trim();var val=_normValidade((lcVal||'').trim());
+    if(!lote&&!val){alert('Informe o lote e/ou a validade.');return;}
+    setLcSaving(true);
+    db.collection('medicamentos').doc(m.id).update({loteAtual:lote,validadeAtual:val})
+      .then(function(){setLcSaving(false);setLcId(null);setLcLote('');setLcVal('');setErro('');})
+      .catch(function(e){setLcSaving(false);erroEscrita(e);});
   }
 
   // Computa lotes por medicamento (mesma lógica da aba Estoque)
@@ -6186,6 +6221,12 @@ function TabConferencia(props){
       <button onClick={function(){setErro('');}} style={{background:'none',border:'none',color:'#991B1B',cursor:'pointer',fontSize:15,lineHeight:1,padding:0}}>✕</button>
     </div>}
 
+    {movAviso&&<div style={{background:'#EFF6FF',border:'1.5px solid #BFDBFE',borderRadius:12,padding:'10px 14px',marginBottom:12,display:'flex',alignItems:'center',gap:8}}>
+      <span style={{fontSize:15}}>🔄</span>
+      <div style={{flex:1,fontSize:12,color:'#1E40AF',lineHeight:1.4}}>Houve novas movimentações no estoque agora. Os valores do <strong>sistema</strong> já foram atualizados automaticamente — confira se alguma contagem mudou.</div>
+      <button onClick={function(){setMovAviso(false);}} style={{background:'none',border:'none',color:'#1E40AF',cursor:'pointer',fontSize:15,lineHeight:1,padding:0}}>✕</button>
+    </div>}
+
     {/* Painel de colaboração — equipe na conferência e distribuição de categorias */}
     <div style={{background:'#fff',borderRadius:14,padding:'12px 14px',marginBottom:14,border:'1.5px solid #E2E8F0'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
@@ -6287,8 +6328,17 @@ function TabConferencia(props){
                   </div>
                   <span style={{fontSize:13,color:'#94A3B8'}}>{exp?'▲':'▼'}</span>
                 </button>
-                {podeGerir&&<button onClick={function(){excluirMed(m);}} title="Excluir do cadastro" style={{flexShrink:0,alignSelf:'center',marginRight:8,background:delMedId===m.id?'#DC2626':'#FEE2E2',color:delMedId===m.id?'#fff':'#DC2626',border:'none',borderRadius:8,padding:'6px 10px',fontSize:11,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap'}}>{delMedId===m.id?'Confirmar?':'🗑'}</button>}
+                {podeGerir&&<button onClick={function(){abrirRename(m);}} title="Renomear medicamento" style={{flexShrink:0,alignSelf:'center',background:'#EFF6FF',color:'#1351B4',border:'none',borderRadius:8,padding:'6px 9px',fontSize:12,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap'}}>✏️</button>}
+                {podeGerir&&<button onClick={function(){excluirMed(m);}} title="Excluir do cadastro" style={{flexShrink:0,alignSelf:'center',marginLeft:6,marginRight:8,background:delMedId===m.id?'#DC2626':'#FEE2E2',color:delMedId===m.id?'#fff':'#DC2626',border:'none',borderRadius:8,padding:'6px 10px',fontSize:11,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap'}}>{delMedId===m.id?'Confirmar?':'🗑'}</button>}
               </div>
+              {podeGerir&&renId===m.id&&<div style={{background:'#EFF6FF',borderTop:'1px solid #BFDBFE',padding:'10px 12px'}}>
+                <div style={{fontSize:11,fontWeight:700,color:'#1351B4',marginBottom:6}}>✏️ Renomear no cadastro</div>
+                <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                  <input value={renNome} onChange={function(e){setRenNome(e.target.value);}} placeholder="Novo nome" style={{flex:1,minWidth:0,padding:'8px 10px',borderRadius:8,border:'1.5px solid #BFDBFE',fontSize:13,boxSizing:'border-box'}}/>
+                  <button onClick={function(){setRenId(null);}} style={{flexShrink:0,background:'#F1F5F9',border:'none',borderRadius:7,padding:'8px 10px',fontSize:12,fontWeight:600,cursor:'pointer',color:'#64748B'}}>✕</button>
+                  <button onClick={function(){salvarRename(m);}} disabled={renSaving||!renNome.trim()} style={{flexShrink:0,background:(renSaving||!renNome.trim())?'#94A3B8':'#1351B4',border:'none',borderRadius:7,padding:'8px 12px',color:'#fff',fontSize:12,fontWeight:700,cursor:'pointer'}}>{renSaving?'...':'Salvar'}</button>
+                </div>
+              </div>}
               {podeGerir&&delMedId===m.id&&<div style={{display:'flex',alignItems:'center',gap:8,background:'#FEF2F2',borderTop:'1px solid #FECACA',padding:'8px 12px'}}>
                 <div style={{flex:1,fontSize:11,color:'#991B1B',fontWeight:600}}>Tem certeza? Isso remove <strong>{m.nome}</strong> do sistema. Clique em "Confirmar?" para excluir.</div>
                 <button onClick={function(){setDelMedId(null);}} style={{flexShrink:0,background:'#F1F5F9',border:'none',borderRadius:7,padding:'5px 10px',fontSize:11,fontWeight:700,color:'#64748B',cursor:'pointer'}}>Cancelar</button>
@@ -6297,6 +6347,22 @@ function TabConferencia(props){
                 {m.lotes.length===0&&m.semLote===0&&<div style={{fontSize:12,color:'#94A3B8',padding:'6px 0'}}>Sem estoque registrado no sistema.</div>}
                 {m.lotes.map(function(l,li){return loteRow({key:confKey(m.id,l.lote,l.validade),titulo:'Lote '+(l.lote||'—'),sub:(l.validade?'Val '+l.validade:'sem validade'),sistema:l.qty,med:m,lote:l.lote,validade:l.validade,topBorder:li>0});})}
                 {m.semLote>0&&loteRow({key:confKey(m.id,'__SEMLOTE__',''),titulo:'Sem lote',sub:'unidades sem lote/validade',sistema:m.semLote,med:m,lote:'',validade:'',topBorder:m.lotes.length>0})}
+                {(function(){
+                  // Parte 2 (#6): lote/validade no cadastro do medicamento
+                  var raw=medById[m.id]||{};var temCad=raw.loteAtual||raw.validadeAtual;
+                  if(lcId===m.id)return(<div style={{marginTop:8,background:'#FFFBEB',borderRadius:10,padding:'10px 12px',border:'1.5px solid #FDE68A'}}>
+                    <div style={{fontSize:12,fontWeight:700,color:'#92400E',marginBottom:8}}>🏷️ Lote/validade no cadastro (salva de vez)</div>
+                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+                      <div><div style={{fontSize:10,color:'#64748B',fontWeight:600,marginBottom:2}}>LOTE</div><input value={lcLote} onChange={function(e){setLcLote(e.target.value);}} placeholder="Ex: ABC123" style={{width:'100%',padding:'8px',borderRadius:7,border:'1.5px solid #FDE68A',fontSize:13,boxSizing:'border-box'}}/></div>
+                      <div><div style={{fontSize:10,color:'#64748B',fontWeight:600,marginBottom:2}}>VALIDADE</div><input value={lcVal} onChange={function(e){setLcVal(e.target.value);}} placeholder="MM/AAAA" style={{width:'100%',padding:'8px',borderRadius:7,border:'1.5px solid #FDE68A',fontSize:13,boxSizing:'border-box'}}/></div>
+                    </div>
+                    <div style={{display:'flex',gap:8}}>
+                      <button onClick={function(){setLcId(null);}} style={{flex:1,padding:'8px',background:'#F1F5F9',border:'none',borderRadius:8,fontWeight:600,fontSize:12,cursor:'pointer',color:'#64748B'}}>Cancelar</button>
+                      <button onClick={function(){salvarLoteCad(m);}} disabled={lcSaving} style={{flex:2,padding:'8px',background:lcSaving?'#94A3B8':'#D97706',border:'none',borderRadius:8,color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>{lcSaving?'Salvando...':'✅ Salvar no cadastro'}</button>
+                    </div>
+                  </div>);
+                  return(<button onClick={function(){abrirLoteCad(m);}} style={{marginTop:8,width:'100%',padding:'9px',background:temCad?'#FFFBEB':'#FEF3C7',border:'1.5px dashed #FCD34D',borderRadius:8,color:'#92400E',fontWeight:700,fontSize:12,cursor:'pointer',textAlign:'left'}}>{temCad?('🏷️ Cadastro: lote '+(raw.loteAtual||'—')+(raw.validadeAtual?' · val '+raw.validadeAtual:'')+' · editar'):'🏷️ Sem lote/validade no cadastro — definir'}</button>);
+                })()}
                 {nlDoMed.map(function(nl){return(
                   <div key={nl.id} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 10px',marginTop:6,background:'#EFF6FF',borderRadius:8,border:'1px dashed #93C5FD'}}>
                     <div style={{flex:1,minWidth:0}}>
