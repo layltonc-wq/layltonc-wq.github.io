@@ -3994,6 +3994,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
   var _bu=sl('');var busca=_bu[0];var setBusca=_bu[1];
   var _qd=sl(2);var qtdDose=_qd[0];var setQtdDose=_qd[1];
   var _dd=sl('');var dataDose=_dd[0];var setDataDose=_dd[1];
+  var _dnd=sl(1);var doseQtdDia=_dnd[0];var setDoseQtdDia=_dnd[1];// quantas doses do dia serão registradas de uma vez
   var _qe=sl(2);var qtdEsp=_qe[0];var setQtdEsp=_qe[1];
   var _od=sl('');var obsDesist=_od[0];var setObsDesist=_od[1];
   var _sv=sl(false);var saving=_sv[0];var setSaving=_sv[1];
@@ -4100,7 +4101,8 @@ function TabAntibiotico({user,medications,stock,allUsers}){
   }
 
   // Abre o modal de dose já apontando para um dia específico (usado pela agenda e pelo botão "dose de hoje")
-  function abrirDoseDia(t,dia){setDataDose(dia||hojeStrF());setQtdDose(Math.max(1,parseInt(t&&t.qtdPorDose)||2));setShowDose(t);}
+  // Abre o registro de dose para um dia. doseQtdDia = quantas doses daquele dia ainda faltam (baixa o dia inteiro de uma vez).
+  function abrirDoseDia(t,dia){var d=dia||hojeStrF();var pend=Math.max(1,dpd(t)-dosesNoDia(t,d));setDataDose(d);setQtdDose(Math.max(1,parseInt(t&&t.qtdPorDose)||2));setDoseQtdDia(pend);setShowDose(t);}
 
   async function iniciarEspera(t){setEditNome(t.pacienteNome);setEditDias(String(t.diasTratamento||''));setEditIni(new Date().toISOString().split('T')[0]);setEditObs(t.obs||'');setEditMed(t.nomeMedico||'');setEditCrm(t.crmMedico||'');setShowEdit(Object.assign({},t,{_esp:true}));setShowDet(null);}
   async function ataqueBtn(t){if(!window.confirm('Marcar como Dose de Ataque? O estoque ja foi baixado no cadastro.'))return;var hj=new Date().toISOString().split('T')[0];var hr=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});await db.collection('tratamentos_atb').doc(t.id).update({status:'dose_ataque',doseAtaqueEm:new Date().toISOString(),doseAtaqueData:hj,doseAtaqueHora:hr,doseAtaqueRegistradoPor:user.name,doseAtaqueCor:user.color||'#8B5CF6'});setShowDet(null);}
@@ -4111,12 +4113,19 @@ function TabAntibiotico({user,medications,stock,allUsers}){
     var hr=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
     var retro=dData<hoje;
     if(!t.medicamentoId)return alert('Medicamento não vinculado.');
-    if((stock[t.medicamentoId]||0)<qtdDose)return alert('Estoque insuficiente! Disponivel: '+(stock[t.medicamentoId]||0));
-    await db.collection('entries').add({tipo:'saida',medicamentoId:t.medicamentoId,medicamentoNome:t.medicamentoNome||'',quantidade:qtdDose,autorNome:user.name,autorCor:user.color||B,autorId:user.uid,lote:'',validade:'',obs:'ATB - '+t.pacienteNome+(retro?' (dose de '+fD(dData)+')':''),criadoEm:new Date().toISOString(),date:dData});
-    var nd=[...(t.doses||[]),{data:dData,hora:hr,responsavel:user.name,responsavelCor:user.color||B,qtd:qtdDose,registradaEm:hoje}];
-    var ns=nd.filter(function(d){return!d.retroativo;}).length>=parseInt(t.diasTratamento)?'concluido':'ativo';
+    var nDoses=Math.max(1,parseInt(doseQtdDia)||1); // registra TODAS as doses do dia de uma vez
+    var qAmp=Math.max(1,parseInt(qtdDose)||1);      // ampolas por dose
+    var totalAmp=qAmp*nDoses;                        // total baixado do dia
+    if((stock[t.medicamentoId]||0)<totalAmp)return alert('Estoque insuficiente! Disponivel: '+(stock[t.medicamentoId]||0)+' · necessário para o dia: '+totalAmp);
+    var obs='ATB - '+t.pacienteNome+(retro?' — '+fD(dData):'')+(nDoses>1?' ('+nDoses+' doses)':'');
+    // Uma saída única no estoque com o total do dia (não altera a lógica de estoque: soma igual).
+    await db.collection('entries').add({tipo:'saida',medicamentoId:t.medicamentoId,medicamentoNome:t.medicamentoNome||'',quantidade:totalAmp,autorNome:user.name,autorCor:user.color||B,autorId:user.uid,lote:'',validade:'',obs:obs,criadoEm:new Date().toISOString(),date:dData});
+    // Um registro por dose no histórico do tratamento.
+    var novas=[];for(var i=0;i<nDoses;i++){novas.push({data:dData,hora:hr,responsavel:user.name,responsavelCor:user.color||B,qtd:qAmp,registradaEm:hoje});}
+    var nd=(t.doses||[]).concat(novas);
+    var ns=nd.filter(function(d){return!d.retroativo;}).length>=totalDosesT(t)&&totalDosesT(t)>0?'concluido':'ativo';
     await db.collection('tratamentos_atb').doc(t.id).update({doses:nd,status:ns});
-    setShowDose(null);setQtdDose(2);setDataDose('');
+    setShowDose(null);setQtdDose(2);setDataDose('');setDoseQtdDia(1);
   }
   async function finalizar(t){if(!window.confirm('Finalizar tratamento de '+t.pacienteNome+'?'))return;await db.collection('tratamentos_atb').doc(t.id).update({status:'finalizado',finalizadoEm:new Date().toISOString(),finalizadoPor:user.name});setShowDet(null);}
   async function reabrir(t){if(!window.confirm('Reabrir tratamento de '+t.pacienteNome+'?'))return;await db.collection('tratamentos_atb').doc(t.id).update({status:'ativo',reabertoPor:user.name,reabertoEm:new Date().toISOString()});setShowDet(null);}
@@ -4336,18 +4345,19 @@ function TabAntibiotico({user,medications,stock,allUsers}){
         </div>
       </div>}
 
-      {showDose&&(function(){var hojeStr=new Date().toISOString().split('T')[0];var retroSel=dataDose&&dataDose<hojeStr;return(<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:1100,display:'flex',alignItems:'center',justifyContent:'center',padding:20}} onClick={function(){setShowDose(null);setQtdDose(2);setDataDose('');}}>
+      {showDose&&(function(){var hojeStr=new Date().toISOString().split('T')[0];var retroSel=dataDose&&dataDose<hojeStr;return(<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:1100,display:'flex',alignItems:'center',justifyContent:'center',padding:20}} onClick={function(){setShowDose(null);setQtdDose(2);setDataDose('');setDoseQtdDia(1);}}>
         <div style={{background:'#fff',borderRadius:20,padding:28,width:'100%',maxWidth:360,textAlign:'center'}} onClick={function(e){e.stopPropagation();}}>
           <div style={{fontSize:44,marginBottom:8}}>💉</div>
-          <div style={{fontWeight:800,fontSize:18,color:'#1E293B',marginBottom:4}}>Registrar Dose</div>
+          <div style={{fontWeight:800,fontSize:18,color:'#1E293B',marginBottom:4}}>{doseQtdDia>1?'Dar baixa do dia':'Registrar Dose'}</div>
           <div style={{fontSize:14,color:'#64748B',marginBottom:2}}>Paciente: <strong>{showDose.pacienteNome}</strong></div>
           {showDose.nomeMedico&&<div style={{fontSize:12,color:'#94A3B8',marginBottom:8}}>👨‍⚕️ {showDose.nomeMedico}{showDose.crmMedico?' · CRM '+showDose.crmMedico:''}</div>}
+          {doseQtdDia>1&&<div style={{fontSize:12,color:'#1E40AF',background:'#EFF6FF',border:'1px solid #BFDBFE',borderRadius:8,padding:'6px 10px',marginBottom:10,fontWeight:600}}>Serão registradas as {doseQtdDia} doses deste dia de uma vez.</div>}
           <div style={{background:'#F8FAFC',borderRadius:14,padding:14,marginBottom:14}}>
-            <div style={{fontSize:13,fontWeight:700,color:'#475569',marginBottom:10}}>Qtd de Ampolas</div>
+            <div style={{fontSize:13,fontWeight:700,color:'#475569',marginBottom:10}}>Ampolas por dose</div>
             <div style={{display:'flex',gap:10,justifyContent:'center'}}>
               {[1,2,3,4].map(function(n){return <button key={n} onClick={function(){setQtdDose(n);}} style={{width:54,height:54,borderRadius:12,border:qtdDose===n?'2px solid '+B:'2px solid #E2E8F0',background:qtdDose===n?'#EFF6FF':'#fff',color:qtdDose===n?B:'#64748B',fontWeight:800,fontSize:20,cursor:'pointer'}}>{n}</button>;})}
             </div>
-            <div style={{fontSize:12,color:'#94A3B8',marginTop:8}}>{qtdDose} ampola{qtdDose>1?'s':''} serao baixadas</div>
+            <div style={{fontSize:12,color:'#94A3B8',marginTop:8}}>{doseQtdDia>1?doseQtdDia+' doses × '+qtdDose+' = '+(qtdDose*doseQtdDia)+' ampolas serão baixadas':qtdDose+' ampola'+(qtdDose>1?'s':'')+' serão baixadas'}</div>
           </div>
           <div style={{background:'#F8FAFC',borderRadius:14,padding:14,marginBottom:14,textAlign:'left'}}>
             <div style={{fontSize:13,fontWeight:700,color:'#475569',marginBottom:8}}>📅 Data da administração</div>
@@ -4356,7 +4366,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
           </div>
           <div style={{background:'#F0FDF4',borderRadius:10,padding:10,marginBottom:14,fontSize:13,color:'#059669',fontWeight:600}}>👤 {user.name} · {dataDose?fD(dataDose):new Date().toLocaleDateString('pt-BR')}</div>
           <div style={{display:'flex',gap:10}}>
-            <button onClick={function(){setShowDose(null);setQtdDose(2);setDataDose('');}} style={{flex:1,padding:'12px',background:'#F1F5F9',border:'none',borderRadius:12,fontWeight:700,cursor:'pointer',color:'#64748B'}}>Cancelar</button>
+            <button onClick={function(){setShowDose(null);setQtdDose(2);setDataDose('');setDoseQtdDia(1);}} style={{flex:1,padding:'12px',background:'#F1F5F9',border:'none',borderRadius:12,fontWeight:700,cursor:'pointer',color:'#64748B'}}>Cancelar</button>
             <button onClick={function(){regDose(showDose);}} style={{flex:2,padding:'12px',background:'#10B981',border:'none',borderRadius:12,color:'#fff',fontWeight:700,fontSize:14,cursor:'pointer'}}>✅ Confirmar e Baixar</button>
           </div>
         </div>
@@ -4400,7 +4410,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
             var ag=agenda(detT);if(!ag.length)return null;
             return(<div style={{marginBottom:16}}>
               <div style={{fontWeight:700,fontSize:14,color:'#1E293B',marginBottom:4}}>🗓️ Agenda de doses</div>
-              <div style={{fontSize:11,color:'#94A3B8',marginBottom:10}}>Dê baixa em cada dose. As de dias anteriores são registradas com a data correta.</div>
+              <div style={{fontSize:11,color:'#94A3B8',marginBottom:10}}>Um clique dá baixa em todas as doses do dia de uma vez. Os dias anteriores são registrados com a data correta.</div>
               <div style={{display:'flex',flexDirection:'column',gap:8}}>
                 {ag.map(function(day){
                   var completo=day.pendentes===0;var atras=day.atrasado&&day.pendentes>0;
@@ -4409,10 +4419,8 @@ function TabAntibiotico({user,medications,stock,allUsers}){
                       <div style={{fontWeight:700,fontSize:13,color:completo?'#065F46':atras?'#92400E':'#1E40AF'}}>{fD(day.data)}{day.ehHoje?' · hoje':''}{atras?' · atrasado':''}</div>
                       <div style={{fontSize:12,fontWeight:700,color:completo?'#059669':atras?'#B45309':'#2563EB'}}>{completo?'✓ '+day.total+' dose'+(day.total>1?'s':'')+' concluída'+(day.total>1?'s':''):day.feitas+' de '+day.total+' · '+day.pendentes+' pendente'+(day.pendentes>1?'s':'')}</div>
                     </div>
-                    {day.pendentes>0&&<div style={{display:'flex',gap:6,flexWrap:'wrap',marginTop:8}}>
-                      {Array.apply(null,{length:day.pendentes}).map(function(_,k){
-                        return <button key={k} data-tour={day.ehHoje&&k===0?'atb-registrar-dose':undefined} onClick={function(){abrirDoseDia(detT,day.data);}} style={{padding:'7px 12px',background:atras?'#F59E0B':B,border:'none',borderRadius:8,color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>💉 Dar baixa</button>;
-                      })}
+                    {day.pendentes>0&&<div style={{marginTop:8}}>
+                      <button data-tour={day.ehHoje?'atb-registrar-dose':undefined} onClick={function(){abrirDoseDia(detT,day.data);}} style={{width:'100%',padding:'9px 12px',background:atras?'#F59E0B':B,border:'none',borderRadius:8,color:'#fff',fontWeight:700,fontSize:13,cursor:'pointer'}}>💉 Dar baixa do dia{day.pendentes>1?' ('+day.pendentes+' doses)':''}</button>
                     </div>}
                   </div>);
                 })}
