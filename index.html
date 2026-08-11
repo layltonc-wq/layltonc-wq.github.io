@@ -6091,54 +6091,57 @@ function TabConferencia(props){
   // Finaliza APENAS a categoria ativa: aplica os ajustes dela, marca como finalizada e limpa só as contagens dessa categoria.
   function aplicarAjustesCategoria(){
     var cat=catAtiva;if(!cat)return;
-    var lista=resumo.ajustes.filter(function(it){return it.cat===cat;});
     setAplicando(true);
-    var now=new Date().toISOString();
-    var catLabel=TIPOS[cat]?TIPOS[cat].label:cat;
-    var batch=db.batch();
-    lista.forEach(function(it){
-      var ref=db.collection('entries').doc();
-      var obs='Balanço (conferência '+todayStr()+' · '+catLabel+'): '+(it.novo?'lote novo encontrado — ':'')+'(era '+it.sistema+', passou a '+it.contado+')'+(it.recontagem>0?' — inclui '+it.recontagem+' un. encontrada(s) em recontagem':'');
-      batch.set(ref,{
-        medicamentoId:it.medId,medicamentoNome:it.medNome,
-        tipo:it.diff>0?'entrada':'saida',quantidade:Math.abs(it.diff),
-        lote:it.lote||'',validade:it.validade||'',
-        observacao:obs,isAjuste:true,conferencia:todayStr(),conferenciaCat:cat,
-        criadoEm:now,date:todayStr(),
-        autorId:user.uid||'',autorNome:user.name,autorCargo:user.role||'',autorColor:user.color||B
+    // Qualquer falha (síncrona ou na gravação) precisa DESTRAVAR o botão (senão fica "Finalizando..." pra sempre).
+    var falhou=function(e){setAplicando(false);erroEscrita(e);try{alert('Erro ao finalizar a categoria: '+((e&&e.message)?e.message:e)+'\n\nVerifique as permissões do Firestore e tente de novo.');}catch(_){}};
+    try{
+      var lista=resumo.ajustes.filter(function(it){return it.cat===cat;});
+      var now=new Date().toISOString();
+      var catLabel=TIPOS[cat]?TIPOS[cat].label:cat;
+      var catMedIds={};medList.forEach(function(m){if(m.cat===cat)catMedIds[m.id]=1;});
+      // Medicamentos cujo saldo final ficou 0 -> apagar lote/validade do cadastro (best-effort, fora do batch).
+      var zerar=[];
+      medList.filter(function(m){return m.cat===cat;}).forEach(function(m){
+        if(!medConferido(m))return;
+        var resultante=0;
+        m.lotes.forEach(function(l){var k=confKey(m.id,l.lote,l.validade);var raw=contagens[k];resultante+=(raw!==undefined&&raw!=='')?(parseInt(raw)||0):l.qty;});
+        if(m.semLote>0){var ks=confKey(m.id,'__SEMLOTE__','');var rawS=contagens[ks];resultante+=(rawS!==undefined&&rawS!=='')?(parseInt(rawS)||0):m.semLote;}
+        novosLotes.forEach(function(nl){if(nl.medId===m.id)resultante+=(parseInt(nl.qty)||0);});
+        var rawm=medById[m.id]||{};
+        if(resultante===0&&(rawm.loteAtual||rawm.validadeAtual))zerar.push(m.id);
       });
-    });
-    // Se a contagem de um medicamento zerou (estoque final = 0), apaga o lote e a validade dele no cadastro.
-    var zerados=0;
-    medList.filter(function(m){return m.cat===cat;}).forEach(function(m){
-      if(!medConferido(m))return;// só considera o que foi conferido
-      var resultante=0;
-      m.lotes.forEach(function(l){var k=confKey(m.id,l.lote,l.validade);var raw=contagens[k];resultante+=(raw!==undefined&&raw!=='')?(parseInt(raw)||0):l.qty;});
-      if(m.semLote>0){var ks=confKey(m.id,'__SEMLOTE__','');var rawS=contagens[ks];resultante+=(rawS!==undefined&&rawS!=='')?(parseInt(rawS)||0):m.semLote;}
-      novosLotes.forEach(function(nl){if(nl.medId===m.id)resultante+=(parseInt(nl.qty)||0);});
-      var raw=medById[m.id]||{};
-      if(resultante===0&&(raw.loteAtual||raw.validadeAtual)){batch.update(db.collection('medicamentos').doc(m.id),{loteAtual:'',validadeAtual:''});zerados++;}
-    });
-    // Limpa só o que é desta categoria (contagens/contadoPor/novosLotes/recontagens) e grava finalizadas[cat]
-    var catMedIds={};medList.forEach(function(m){if(m.cat===cat)catMedIds[m.id]=1;});
-    var del=firebase.firestore.FieldValue.delete();var upd={};
-    Object.keys(contagens).forEach(function(k){if(catMedIds[k.split('~')[0]]){upd['contagens.'+k]=del;upd['contadoPor.'+k]=del;}});
-    var nlRem=novosLotes.filter(function(nl){return catMedIds[nl.medId];});
-    var rcRem=recontagens.filter(function(rc){return catMedIds[(rc.key||'').split('~')[0]];});
-    if(nlRem.length)upd['novosLotes']=firebase.firestore.FieldValue.arrayRemove.apply(null,nlRem);
-    if(rcRem.length)upd['recontagens']=firebase.firestore.FieldValue.arrayRemove.apply(null,rcRem);
-    upd['finalizadas.'+cat]={em:now,por:user.name,ajustes:lista.length};
-    upd['atualizadoEm']=now;upd['atualizadoPor']=user.name;
-    batch.update(docRef(),upd);
-    batch.commit().then(function(){
-      setContagens(function(p){var n=Object.assign({},p);Object.keys(n).forEach(function(k){if(catMedIds[k.split('~')[0]])delete n[k];});return n;});
-      setContadoPor(function(p){var n=Object.assign({},p);Object.keys(n).forEach(function(k){if(catMedIds[k.split('~')[0]])delete n[k];});return n;});
-      setNovosLotes(function(p){return p.filter(function(nl){return !catMedIds[nl.medId];});});
-      setRecontagens(function(p){return p.filter(function(rc){return !catMedIds[(rc.key||'').split('~')[0]];});});
-      setFinalizadas(function(p){var n=Object.assign({},p);n[cat]={em:now,por:user.name,ajustes:lista.length};return n;});
-      setAplicando(false);setShowResumo(false);setErro('');setCatAtiva(null);
-      alert('✅ Categoria "'+catLabel+'" finalizada. '+lista.length+' ajuste(s) de estoque aplicado(s).'+(zerados>0?'\n🏷️ '+zerados+' medicamento(s) zerado(s): lote e validade apagados do cadastro.':''));
-    }).catch(function(e){setAplicando(false);erroEscrita(e);alert('Erro ao finalizar a categoria: '+e.message+'\n\nNenhuma alteração foi confirmada. Verifique as permissões do Firestore.');});
+      // 1) Ajustes de estoque (entries novos) — sempre funcionam (são criações).
+      var batch=db.batch();
+      lista.forEach(function(it){
+        var ref=db.collection('entries').doc();
+        var obs='Balanço (conferência '+todayStr()+' · '+catLabel+'): '+(it.novo?'lote novo encontrado — ':'')+'(era '+it.sistema+', passou a '+it.contado+')'+(it.recontagem>0?' — inclui '+it.recontagem+' un. encontrada(s) em recontagem':'');
+        batch.set(ref,{medicamentoId:it.medId,medicamentoNome:it.medNome,tipo:it.diff>0?'entrada':'saida',quantidade:Math.abs(it.diff),lote:it.lote||'',validade:it.validade||'',observacao:obs,isAjuste:true,conferencia:todayStr(),conferenciaCat:cat,criadoEm:now,date:todayStr(),autorId:user.uid||'',autorNome:user.name,autorCargo:user.role||'',autorColor:user.color||B});
+      });
+      batch.commit().then(function(){
+        // 2) Marca a categoria como finalizada (set+merge cria o doc se preciso e mescla finalizadas de outras categorias).
+        var finMap={};finMap[cat]={em:now,por:user.name,ajustes:lista.length};
+        return docRef().set({finalizadas:finMap,atualizadoEm:now,atualizadoPor:user.name},{merge:true});
+      }).then(function(){
+        // 3) Limpa só as contagens/lotes/recontagens desta categoria (doc já existe -> update seguro).
+        var del=firebase.firestore.FieldValue.delete();var upd={};
+        Object.keys(contagens).forEach(function(k){if(catMedIds[k.split('~')[0]]){upd['contagens.'+k]=del;upd['contadoPor.'+k]=del;}});
+        var nlKeep=novosLotes.filter(function(nl){return !catMedIds[nl.medId];});
+        var rcKeep=recontagens.filter(function(rc){return !catMedIds[(rc.key||'').split('~')[0]];});
+        if(nlKeep.length!==novosLotes.length)upd['novosLotes']=nlKeep;
+        if(rcKeep.length!==recontagens.length)upd['recontagens']=rcKeep;
+        if(Object.keys(upd).length){upd['atualizadoEm']=now;upd['atualizadoPor']=user.name;return docRef().update(upd);}
+      }).then(function(){
+        // 4) Best-effort: apaga lote/validade do cadastro dos medicamentos zerados (não trava a finalização se falhar).
+        zerar.forEach(function(mid){db.collection('medicamentos').doc(mid).update({loteAtual:'',validadeAtual:''}).catch(function(){});});
+        setContagens(function(p){var n=Object.assign({},p);Object.keys(n).forEach(function(k){if(catMedIds[k.split('~')[0]])delete n[k];});return n;});
+        setContadoPor(function(p){var n=Object.assign({},p);Object.keys(n).forEach(function(k){if(catMedIds[k.split('~')[0]])delete n[k];});return n;});
+        setNovosLotes(function(p){return p.filter(function(nl){return !catMedIds[nl.medId];});});
+        setRecontagens(function(p){return p.filter(function(rc){return !catMedIds[(rc.key||'').split('~')[0]];});});
+        setFinalizadas(function(p){var n=Object.assign({},p);n[cat]={em:now,por:user.name,ajustes:lista.length};return n;});
+        setAplicando(false);setShowResumo(false);setErro('');setCatAtiva(null);
+        alert('✅ Categoria "'+catLabel+'" finalizada. '+lista.length+' ajuste(s) de estoque aplicado(s).'+(zerar.length>0?'\n🏷️ '+zerar.length+' medicamento(s) zerado(s): lote e validade apagados do cadastro.':''));
+      }).catch(falhou);
+    }catch(e){falhou(e);}
   }
 
   var buscaLc=busca.trim().toLowerCase();
