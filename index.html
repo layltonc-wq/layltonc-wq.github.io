@@ -4001,6 +4001,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
   var _dt=sl('');var diasTrat=_dt[0];var setDiasTrat=_dt[1];
   var _di=sl(new Date().toISOString().split('T')[0]);var dataIni=_di[0];var setDataIni=_di[1];
   var _da=sl('1');var diaAt=_da[0];var setDiaAt=_da[1];var _diasAntes=sl('0');var diasAntes=_diasAntes[0];var setDiasAntes=_diasAntes[1];
+  var _dpd=sl('1');var dosesDia=_dpd[0];var setDosesDia=_dpd[1];
   var _ob=sl('');var obsForm=_ob[0];var setObsForm=_ob[1];
   var _ms=sl('');var medSel=_ms[0];var setMedSel=_ms[1];
   var _nm=sl('');var nomeMed=_nm[0];var setNomeMed=_nm[1];
@@ -4026,17 +4027,37 @@ function TabAntibiotico({user,medications,stock,allUsers}){
   },[]);
 
   function fD(d){if(!d)return'';var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}
+  function hojeStrF(){return new Date().toISOString().split('T')[0];}
+  function dpd(t){return Math.max(1,parseInt(t&&t.dosesPorDia)||1);} // doses por dia (posologia). Padrão 1 (compat. com tratamentos antigos)
+  function totalDosesT(t){return (parseInt(t.diasTratamento)||0)*dpd(t);}
+  function dosesReais(t){return (t.doses||[]).filter(function(d){return!d.retroativo;}).length;}
+  function dosesNoDia(t,dia){return (t.doses||[]).filter(function(d){return d.data===dia;}).length;} // conta reais + "já tomava"
+  // Agenda: uma linha por dia do tratamento, do início até hoje (limitado à duração). pendentes = doses/dia ainda não registradas.
+  function agenda(t){
+    if(!t||!t.dataInicio)return[];
+    var D=dpd(t);var N=parseInt(t.diasTratamento)||0;if(N<=0)return[];
+    var hoje=hojeStrF();var out=[];
+    var cur=new Date(t.dataInicio+'T12:00:00');var lim=new Date(hoje+'T12:00:00');var count=0;
+    while(cur<=lim&&count<N){
+      var ds=cur.toISOString().split('T')[0];
+      var reg=Math.min(dosesNoDia(t,ds),D);
+      out.push({data:ds,total:D,feitas:reg,pendentes:Math.max(0,D-reg),ehHoje:ds===hoje,atrasado:ds<hoje});
+      cur.setDate(cur.getDate()+1);count++;
+    }
+    return out;
+  }
+  function dosesAtrasadas(t){return agenda(t).reduce(function(s,d){return s+(d.atrasado?d.pendentes:0);},0);} // pendentes de dias anteriores a hoje
   function cSt(t){
     if(t.status==='dose_ataque')return'dose_ataque';
     if(t.status==='espera')return'espera';
     if(t.status==='desistiu')return'desistiu';
     if(t.status==='finalizado')return'finalizado';
-    if((t.doses||[]).filter(function(d){return!d.retroativo;}).length>=parseInt(t.diasTratamento||1))return'concluido';
+    if(dosesReais(t)>=totalDosesT(t)&&totalDosesT(t)>0)return'concluido';
     return'ativo';
   }
   function dEsp(t){if(!t.criadoEm)return 0;return Math.floor((new Date()-new Date(t.criadoEm))/(86400000));}
-  function dRest(t){return Math.max(0,parseInt(t.diasTratamento||0)-(t.doses||[]).filter(function(d){return!d.retroativo;}).length);}
-  function dHj(t){var hj=new Date().toISOString().split('T')[0];return(t.doses||[]).some(function(d){return d.data===hj&&!d.retroativo;});}
+  function dRest(t){return Math.max(0,totalDosesT(t)-dosesReais(t));}
+  function dHj(t){var hj=hojeStrF();return dosesNoDia(t,hj)>=dpd(t);} // hoje totalmente concluído?
   function pHj(t){return cSt(t)==='ativo'&&!dHj(t);}
   function diasFaltou(t){
     if(cSt(t)!=='ativo')return 0;
@@ -4053,35 +4074,33 @@ function TabAntibiotico({user,medications,stock,allUsers}){
   function cCor(s){if(s==='ativo')return'#10B981';if(s==='espera')return'#F59E0B';if(s==='dose_ataque')return'#8B5CF6';if(s==='concluido'||s==='finalizado')return'#3B82F6';if(s==='desistiu')return'#EF4444';return'#64748B';}
   function cLbl(s){if(s==='ativo')return'Em Tratamento';if(s==='espera')return'Aguardando';if(s==='dose_ataque')return'Dose de Ataque';if(s==='concluido')return'Concluido';if(s==='finalizado')return'Finalizado';if(s==='desistiu')return'Desistiu';return s;}
   function cIco(s){if(s==='ativo')return'💉';if(s==='espera')return'⏳';if(s==='dose_ataque')return'⚡';if(s==='concluido'||s==='finalizado')return'✅';if(s==='desistiu')return'❌';return'';}
-  function rForm(){setNomePac('');setDiasTrat('');setDataIni(new Date().toISOString().split('T')[0]);setDiaAt('1');setDiasAntes('0');setObsForm('');setMedSel('');setNomeMed('');setCrmMed('');setStatusIni('ativo');setQtdEsp(2);}
+  function rForm(){setNomePac('');setDiasTrat('');setDataIni(new Date().toISOString().split('T')[0]);setDiaAt('1');setDiasAntes('0');setDosesDia('1');setObsForm('');setMedSel('');setNomeMed('');setCrmMed('');setStatusIni('ativo');setQtdEsp(2);}
 
   async function salvar(){
     if(!nomePac.trim()||!medSel)return alert('Preencha nome do paciente e medicamento!');
     if(statusIni==='ativo'&&(!diasTrat||!dataIni))return alert('Informe duracao e data de inicio!');
     if(statusIni==='espera'&&(stock[medSel]||0)<qtdEsp)return alert('Estoque insuficiente! Disponivel: '+(stock[medSel]||0));
+    var hj=new Date().toISOString().split('T')[0];
+    if(statusIni==='ativo'&&dataIni>hj)return alert('A data de início não pode ser futura.');
     setSaving(true);
     var mO=todosMeds.find(function(m){return m.id===medSel;})||{};
-    var hj=new Date().toISOString().split('T')[0];
     var hr=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
     var doses=[];
-    if(statusIni==='ativo'){
-      var nAntes=Math.max(0,Math.min(parseInt(diasAntes)||0,(parseInt(diasTrat)||1)-1));
-      var qDose=parseInt(qtdEsp)||2;
-      // Doses retroativas: contadas para tras a partir de HOJE (nAntes dias atras ate ontem). NAO baixam estoque.
-      for(var i=nAntes;i>=1;i--){var d=new Date(hj);d.setDate(d.getDate()-i);doses.push({data:d.toISOString().split('T')[0],hora:'--:--',responsavel:'Já tomava',responsavelCor:'#94A3B8',qtd:qDose,retroativo:true});}
-      // Dose de hoje (1ª que registramos) - baixa estoque
-      doses.push({data:hj,hora:hr,responsavel:user.name,responsavelCor:user.color||B,qtd:qDose,primeiraDose:true});
-      await db.collection('entries').add({tipo:'saida',medicamentoId:medSel,medicamentoNome:mO.nome||'',quantidade:qDose,autorNome:user.name,autorCor:user.color||B,autorId:user.uid,lote:'',validade:'',obs:'ATB 1ª dose - '+nomePac.trim(),criadoEm:new Date().toISOString(),date:hj});
-    }
+    var qDose=parseInt(qtdEsp)||2;
+    var dPorDia=Math.max(1,parseInt(dosesDia)||1);
+    var dataInicioCalc=dataIni||hj;
+    // "ativo": NÃO baixa estoque no cadastro. Todas as doses (inclusive as dos dias anteriores e as de hoje)
+    // ficam PENDENTES na agenda, para dar baixa manual uma a uma na tela de acompanhamento.
     if(statusIni==='espera'){
       doses=[{data:hj,hora:hr,responsavel:user.name,responsavelCor:user.color||B,qtd:qtdEsp,doseEspera:true}];
       await db.collection('entries').add({tipo:'saida',medicamentoId:medSel,medicamentoNome:mO.nome||'',quantidade:qtdEsp,autorNome:user.name,autorCor:user.color||B,autorId:user.uid,lote:'',validade:'',obs:'Espera ATB - '+nomePac.trim(),criadoEm:new Date().toISOString(),date:hj});
     }
-    var dataInicioCalc=dataIni||hj;
-    if(statusIni==='ativo'){var nA=Math.max(0,Math.min(parseInt(diasAntes)||0,(parseInt(diasTrat)||1)-1));var di=new Date(hj);di.setDate(di.getDate()-nA);dataInicioCalc=di.toISOString().split('T')[0];}
-    await db.collection('tratamentos_atb').add({pacienteNome:nomePac.trim(),diasTratamento:parseInt(diasTrat)||0,dataInicio:dataInicioCalc,diasAntesInicio:(parseInt(diasAntes)||0),medicamentoId:medSel,medicamentoNome:mO.nome||'',nomeMedico:nomeMed.trim(),crmMedico:crmMed.trim(),obs:obsForm.trim(),doses:doses,status:statusIni,criadoPor:user.name,criadoEm:new Date().toISOString()});
+    await db.collection('tratamentos_atb').add({pacienteNome:nomePac.trim(),diasTratamento:parseInt(diasTrat)||0,dataInicio:dataInicioCalc,dosesPorDia:dPorDia,qtdPorDose:qDose,medicamentoId:medSel,medicamentoNome:mO.nome||'',nomeMedico:nomeMed.trim(),crmMedico:crmMed.trim(),obs:obsForm.trim(),doses:doses,status:statusIni,criadoPor:user.name,criadoEm:new Date().toISOString()});
     setSaving(false);setShowForm(false);rForm();
   }
+
+  // Abre o modal de dose já apontando para um dia específico (usado pela agenda e pelo botão "dose de hoje")
+  function abrirDoseDia(t,dia){setDataDose(dia||hojeStrF());setQtdDose(Math.max(1,parseInt(t&&t.qtdPorDose)||2));setShowDose(t);}
 
   async function iniciarEspera(t){setEditNome(t.pacienteNome);setEditDias(String(t.diasTratamento||''));setEditIni(new Date().toISOString().split('T')[0]);setEditObs(t.obs||'');setEditMed(t.nomeMedico||'');setEditCrm(t.crmMedico||'');setShowEdit(Object.assign({},t,{_esp:true}));setShowDet(null);}
   async function ataqueBtn(t){if(!window.confirm('Marcar como Dose de Ataque? O estoque ja foi baixado no cadastro.'))return;var hj=new Date().toISOString().split('T')[0];var hr=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});await db.collection('tratamentos_atb').doc(t.id).update({status:'dose_ataque',doseAtaqueEm:new Date().toISOString(),doseAtaqueData:hj,doseAtaqueHora:hr,doseAtaqueRegistradoPor:user.name,doseAtaqueCor:user.color||'#8B5CF6'});setShowDet(null);}
@@ -4171,9 +4190,11 @@ function TabAntibiotico({user,medications,stock,allUsers}){
         {!loading&&lista.length===0&&<div style={{textAlign:'center',padding:40,color:'#94A3B8'}}>Nenhum registro encontrado</div>}
         {lista.map(function(t){
           var s=cSt(t);
-          var feitas=(t.doses||[]).filter(function(d){return!d.retroativo;}).length;
-          var total=parseInt(t.diasTratamento)||0;
+          var feitas=dosesReais(t);
+          var totalDias=parseInt(t.diasTratamento)||0;
+          var total=totalDosesT(t);
           var pct=total>0?Math.min(100,Math.round((feitas/total)*100)):0;
+          var atrasadas=dosesAtrasadas(t);
           var de=dEsp(t);
           var interr=isInterrompido(t);var faltou=diasFaltou(t);
           var bord=interr?'2px solid #EF4444':s==='dose_ataque'?'1.5px solid #DDD6FE':s==='espera'?(de>=3?'2px solid #EF4444':de>=2?'2px solid #F59E0B':'2px solid #FCD34D'):dHj(t)?'2px solid #10B981':'1.5px solid #F1F5F9';
@@ -4192,16 +4213,17 @@ function TabAntibiotico({user,medications,stock,allUsers}){
                   })()}
                   {s==='espera'&&<div style={{fontSize:11,fontWeight:600,marginTop:2,color:de>=3?'#DC2626':de>=2?'#D97706':'#D97706'}}>{de>=3?'🚨 '+de+' dias - PRAZO VENCIDO!':'⏳ Dia '+de+' de 3 em espera'}</div>}
                   {s==='dose_ataque'&&<div style={{fontSize:11,fontWeight:600,marginTop:2,color:'#7C3AED'}}>⚡ {t.doseAtaqueRegistradoPor||'—'} · {t.doseAtaqueData?fD(t.doseAtaqueData):''}{t.doseAtaqueHora?' as '+t.doseAtaqueHora:''}</div>}
-                  {s!=='espera'&&s!=='dose_ataque'&&total>0&&<div style={{fontSize:11,color:'#94A3B8',marginTop:2}}>Inicio: {fD(t.dataInicio)} · {total} dias</div>}
+                  {s!=='espera'&&s!=='dose_ataque'&&totalDias>0&&<div style={{fontSize:11,color:'#94A3B8',marginTop:2}}>Inicio: {fD(t.dataInicio)} · {totalDias} dias{dpd(t)>1?' · '+dpd(t)+' doses/dia':''}</div>}
                 </div>
                 <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:4}}>
                   <span style={{background:cCor(s)+'18',color:cCor(s),fontSize:11,fontWeight:700,padding:'3px 10px',borderRadius:20,border:'1px solid '+cCor(s)+'40'}}>{cIco(s)} {cLbl(s)}</span>
                   {interr&&<span style={{background:'#FEE2E2',color:'#DC2626',fontWeight:800,fontSize:10,padding:'3px 8px',borderRadius:20,border:'1px solid #FECACA'}}>⚠️ {faltou} dia{faltou>1?'s':''} sem dose</span>}
+                  {atrasadas>0&&<span style={{background:'#FEF3C7',color:'#B45309',fontWeight:800,fontSize:10,padding:'3px 8px',borderRadius:20,border:'1px solid #FDE68A'}}>🗓️ {atrasadas} dose{atrasadas>1?'s':''} atrasada{atrasadas>1?'s':''}</span>}
                 </div>
               </div>
               {s!=='espera'&&s!=='dose_ataque'&&total>0&&<div style={{marginBottom:8}}>
                 <div style={{display:'flex',justifyContent:'space-between',fontSize:11,color:'#94A3B8',marginBottom:3}}>
-                  <span>Dia {feitas} de {total}</span>
+                  <span>{feitas} de {total} doses</span>
                   <span>{pct}%</span>
                 </div>
                 <div style={{background:'#F1F5F9',borderRadius:99,height:7,overflow:'hidden'}}>
@@ -4212,7 +4234,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
                 <button onClick={function(e){e.stopPropagation();iniciarEspera(t);}} style={{padding:'9px',background:'#F0FDF4',border:'1.5px solid #BBF7D0',borderRadius:10,color:'#059669',fontWeight:700,fontSize:12,cursor:'pointer'}}>💉 Iniciar</button>
                 <button onClick={function(e){e.stopPropagation();ataqueBtn(t);}} style={{padding:'9px',background:'#F5F3FF',border:'1.5px solid #DDD6FE',borderRadius:10,color:'#7C3AED',fontWeight:700,fontSize:12,cursor:'pointer'}}>⚡ Dose Ataque</button>
               </div>}
-              {pHj(t)&&<button data-tour="atb-registrar-dose" onClick={function(e){e.stopPropagation();setDataDose(new Date().toISOString().split('T')[0]);setShowDose(t);}} style={{width:'100%',padding:'10px',background:B,border:'none',borderRadius:10,color:'#fff',fontWeight:700,fontSize:14,cursor:'pointer',marginTop:6}}>💉 Registrar Dose de Hoje</button>}
+              {pHj(t)&&<button data-tour="atb-registrar-dose" onClick={function(e){e.stopPropagation();abrirDoseDia(t,hojeStrF());}} style={{width:'100%',padding:'10px',background:B,border:'none',borderRadius:10,color:'#fff',fontWeight:700,fontSize:14,cursor:'pointer',marginTop:6}}>💉 Registrar Dose de Hoje{atrasadas>0?' / atrasadas ('+atrasadas+')':''}</button>}
             </div>
           );
         })}
@@ -4275,36 +4297,36 @@ function TabAntibiotico({user,medications,stock,allUsers}){
                   <input type="number" value={diasTrat} onChange={function(e){setDiasTrat(e.target.value);}} placeholder="Ex: 7" min="1" max="30" style={{width:'100%',padding:'12px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:14,boxSizing:'border-box'}}/>
                 </div>
                 <div>
-                  <label style={{fontSize:12,fontWeight:700,color:'#475569',display:'block',marginBottom:5}}>Qtd por dose</label>
+                  <label style={{fontSize:12,fontWeight:700,color:'#475569',display:'block',marginBottom:5}}>Qtd por dose (ampolas)</label>
                   <input type="number" value={qtdEsp} onChange={function(e){setQtdEsp(parseInt(e.target.value)||2);}} min="1" style={{width:'100%',padding:'12px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:14,boxSizing:'border-box'}}/>
                 </div>
               </div>
-              <div style={{background:'#EFF6FF',borderRadius:12,padding:12,border:'1.5px solid #BFDBFE'}}>
-                <div style={{fontSize:13,fontWeight:700,color:B,marginBottom:4}}>📅 O paciente já vinha tomando antes de hoje?</div>
-                <div style={{fontSize:12,color:'#64748B',marginBottom:8}}>Informe quantos dias ele <strong>já tomou antes de hoje</strong>. Deixe 0 se hoje é o primeiro dia.</div>
-                <div style={{display:'flex',alignItems:'center',gap:10}}>
-                  <input type="number" value={diasAntes} onChange={function(e){setDiasAntes(e.target.value);}} min="0" max={diasTrat?(parseInt(diasTrat)-1):29} style={{width:70,padding:'10px',borderRadius:10,border:'1.5px solid #BFDBFE',fontSize:16,fontWeight:700,textAlign:'center',boxSizing:'border-box'}}/>
-                  <span style={{fontSize:13,color:'#64748B'}}>dia(s) já tomado(s) antes de hoje</span>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
+                <div>
+                  <label style={{fontSize:12,fontWeight:700,color:'#475569',display:'block',marginBottom:5}}>📅 Início do tratamento *</label>
+                  <input data-tour="atb-inicio-tratamento" type="date" value={dataIni} max={hojeStrF()} onChange={function(e){var v=e.target.value;var hj=hojeStrF();if(v&&v>hj)v=hj;setDataIni(v);}} style={{width:'100%',padding:'11px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:14,boxSizing:'border-box'}}/>
                 </div>
+                <div>
+                  <label style={{fontSize:12,fontWeight:700,color:'#475569',display:'block',marginBottom:5}}>Doses por dia</label>
+                  <input type="number" value={dosesDia} onChange={function(e){setDosesDia(e.target.value.replace(/[^0-9]/g,''));}} min="1" max="12" placeholder="Ex: 3 (8/8h)" style={{width:'100%',padding:'11px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:14,boxSizing:'border-box'}}/>
+                </div>
+              </div>
+              <div style={{background:'#EFF6FF',borderRadius:12,padding:12,border:'1.5px solid #BFDBFE'}}>
                 {(function(){
-                  var nA=Math.max(0,Math.min(parseInt(diasAntes)||0,(parseInt(diasTrat)||1)-1));
-                  var total=parseInt(diasTrat)||0;
-                  if(!total)return null;
-                  var hojeDia=nA+1;
-                  return(<div style={{marginTop:10,paddingTop:10,borderTop:'1px solid #BFDBFE'}}>
-                    {nA>0
-                      ?<div style={{fontSize:12,color:'#2563EB',fontWeight:600}}>✓ {nA} dose(s) anterior(es) marcada(s) como "já tomava" (sem baixar estoque)</div>
-                      :<div style={{fontSize:12,color:'#64748B'}}>Hoje é o primeiro dia do tratamento.</div>
-                    }
-                    <div style={{fontSize:13,color:'#1E293B',fontWeight:700,marginTop:6}}>Hoje = dia {hojeDia} de {total} · restam {Math.max(0,total-hojeDia)} dia(s) após hoje</div>
-                    <div style={{fontSize:11,color:'#94A3B8',marginTop:2}}>A dose de hoje será registrada agora (baixa o estoque). As próximas você dá baixa dia a dia.</div>
+                  var hj=hojeStrF();var D=Math.max(1,parseInt(dosesDia)||1);var N=parseInt(diasTrat)||0;
+                  if(!N)return <div style={{fontSize:12,color:'#64748B'}}>Informe a duração e a data de início.</div>;
+                  if(!dataIni||dataIni>=hj)return <div style={{fontSize:12,color:'#64748B'}}>Início hoje — as {D} dose(s) de hoje ficam pendentes para dar baixa quando o paciente chegar.</div>;
+                  var ini=new Date(dataIni+'T12:00:00');var h=new Date(hj+'T12:00:00');
+                  var diasAntes=Math.min(N,Math.round((h-ini)/86400000)); // dias inteiros antes de hoje (limitado à duração)
+                  var retro=diasAntes*D;
+                  return(<div>
+                    <div style={{fontSize:13,fontWeight:700,color:B,marginBottom:2}}>🗓️ Liberação retroativa</div>
+                    <div style={{fontSize:12,color:'#1E293B'}}>Início em <strong>{fD(dataIni)}</strong>: <strong>{diasAntes}</strong> dia(s) anterior(es) × <strong>{D}</strong> dose(s) = <strong>{retro}</strong> dose(s) retroativa(s) ficarão <strong>pendentes</strong> para dar baixa uma a uma.</div>
+                    <div style={{fontSize:11,color:'#94A3B8',marginTop:4}}>Nada é baixado do estoque agora. Você registra cada dose na tela de acompanhamento, com a data correta.</div>
                   </div>);
                 })()}
               </div>
             </div>}
-            <div style={{display:'none'}}>
-              <input type="date" value={dataIni} onChange={function(e){setDataIni(e.target.value);}}/>
-            </div>
             <div>
               <label style={{fontSize:12,fontWeight:700,color:'#475569',display:'block',marginBottom:5}}>Observacoes</label>
               <textarea value={obsForm} onChange={function(e){setObsForm(e.target.value);}} placeholder="Observacoes..." rows={2} style={{width:'100%',padding:'12px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:14,resize:'none',boxSizing:'border-box'}}/>
@@ -4314,7 +4336,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
         </div>
       </div>}
 
-      {showDose&&(function(){var hojeStr=new Date().toISOString().split('T')[0];var retroSel=dataDose&&dataDose<hojeStr;return(<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',padding:20}} onClick={function(){setShowDose(null);setQtdDose(2);setDataDose('');}}>
+      {showDose&&(function(){var hojeStr=new Date().toISOString().split('T')[0];var retroSel=dataDose&&dataDose<hojeStr;return(<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:1100,display:'flex',alignItems:'center',justifyContent:'center',padding:20}} onClick={function(){setShowDose(null);setQtdDose(2);setDataDose('');}}>
         <div style={{background:'#fff',borderRadius:20,padding:28,width:'100%',maxWidth:360,textAlign:'center'}} onClick={function(e){e.stopPropagation();}}>
           <div style={{fontSize:44,marginBottom:8}}>💉</div>
           <div style={{fontWeight:800,fontSize:18,color:'#1E293B',marginBottom:4}}>Registrar Dose</div>
@@ -4340,71 +4362,94 @@ function TabAntibiotico({user,medications,stock,allUsers}){
         </div>
       </div>);})()}
 
-      {showDet&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:1000,display:'flex',alignItems:'flex-end',justifyContent:'center'}} onClick={function(){setShowDet(null);setObsDesist('');}}>
+      {showDet&&(function(){var detT=tratamentos.find(function(x){return x.id===showDet.id;})||showDet;return(<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:1000,display:'flex',alignItems:'flex-end',justifyContent:'center'}} onClick={function(){setShowDet(null);setObsDesist('');}}>
         <div style={{background:'#fff',borderRadius:'24px 24px 0 0',padding:'24px 20px 40px',width:'100%',maxWidth:480,maxHeight:'90vh',overflowY:'auto'}} onClick={function(e){e.stopPropagation();}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
             <div>
-              <div style={{fontWeight:800,fontSize:17,color:'#1E293B'}}>{showDet.pacienteNome}</div>
-              {(showDet.nomeMedico||showDet.crmMedico)&&<div style={{fontSize:12,color:'#64748B',marginTop:2}}>👨‍⚕️ {showDet.nomeMedico}{showDet.crmMedico?' · CRM: '+showDet.crmMedico:''}</div>}
+              <div style={{fontWeight:800,fontSize:17,color:'#1E293B'}}>{detT.pacienteNome}</div>
+              {(detT.nomeMedico||detT.crmMedico)&&<div style={{fontSize:12,color:'#64748B',marginTop:2}}>👨‍⚕️ {detT.nomeMedico}{detT.crmMedico?' · CRM: '+detT.crmMedico:''}</div>}
             </div>
             <div style={{display:'flex',gap:8}}>
-              <button onClick={function(){setEditNome(showDet.pacienteNome);setEditDias(String(showDet.diasTratamento||''));setEditIni(showDet.dataInicio||'');setEditObs(showDet.obs||'');setEditMed(showDet.nomeMedico||'');setEditCrm(showDet.crmMedico||'');setShowEdit(showDet);setShowDet(null);}} style={{background:'#EFF6FF',border:'none',borderRadius:10,width:36,height:36,cursor:'pointer',fontSize:16}}>✏️</button>
+              <button onClick={function(){setEditNome(detT.pacienteNome);setEditDias(String(detT.diasTratamento||''));setEditIni(detT.dataInicio||'');setEditObs(detT.obs||'');setEditMed(detT.nomeMedico||'');setEditCrm(detT.crmMedico||'');setShowEdit(detT);setShowDet(null);}} style={{background:'#EFF6FF',border:'none',borderRadius:10,width:36,height:36,cursor:'pointer',fontSize:16}}>✏️</button>
               <button onClick={function(){setShowDet(null);setObsDesist('');}} style={{background:'#F1F5F9',border:'none',borderRadius:10,width:36,height:36,cursor:'pointer',fontSize:18}}>✕</button>
             </div>
           </div>
           <div style={{background:'#F8FAFC',borderRadius:12,padding:14,marginBottom:16,display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
             <div>
               <div style={{fontSize:11,color:'#94A3B8',marginBottom:2}}>INÍCIO</div>
-              <div style={{fontWeight:600,fontSize:13}}>{fD(showDet.dataInicio)||'—'}</div>
+              <div style={{fontWeight:600,fontSize:13}}>{fD(detT.dataInicio)||'—'}</div>
             </div>
             <div>
               <div style={{fontSize:11,color:'#94A3B8',marginBottom:2}}>STATUS</div>
-              <div style={{fontWeight:700,fontSize:13,color:cCor(cSt(showDet))}}>{cIco(cSt(showDet))} {cLbl(cSt(showDet))}</div>
+              <div style={{fontWeight:700,fontSize:13,color:cCor(cSt(detT))}}>{cIco(cSt(detT))} {cLbl(cSt(detT))}</div>
             </div>
             <div>
               <div style={{fontSize:11,color:'#94A3B8',marginBottom:2}}>DURACAO</div>
-              <div style={{fontWeight:600,fontSize:13}}>{showDet.diasTratamento||'—'} dias</div>
+              <div style={{fontWeight:600,fontSize:13}}>{detT.diasTratamento||'—'} dias{dpd(detT)>1?' · '+dpd(detT)+'/dia':''}</div>
             </div>
             <div>
               <div style={{fontSize:11,color:'#94A3B8',marginBottom:2}}>DOSES</div>
-              <div style={{fontWeight:600,fontSize:13}}>{(showDet.doses||[]).filter(function(d){return!d.retroativo;}).length}{showDet.diasTratamento>0?' de '+showDet.diasTratamento:''}</div>
+              <div style={{fontWeight:600,fontSize:13}}>{dosesReais(detT)}{totalDosesT(detT)>0?' de '+totalDosesT(detT):''}</div>
             </div>
-            {showDet.medicamentoNome&&<div style={{gridColumn:'1/-1'}}>
+            {detT.medicamentoNome&&<div style={{gridColumn:'1/-1'}}>
               <div style={{fontSize:11,color:'#94A3B8',marginBottom:2}}>MEDICAMENTO</div>
-              <div style={{fontSize:12,fontWeight:600}}>{showDet.medicamentoNome}</div>
+              <div style={{fontSize:12,fontWeight:600}}>{detT.medicamentoNome}</div>
             </div>}
           </div>
-          {cSt(showDet)==='espera'&&<div style={{background:'#FFFBEB',borderRadius:14,padding:16,marginBottom:16,border:'1.5px solid #FCD34D'}}>
-            <div style={{fontSize:13,fontWeight:700,color:'#92400E',marginBottom:4}}>⏳ Em Espera — Dia {dEsp(showDet)} de 3</div>
+          {cSt(detT)==='ativo'&&detT.dataInicio&&(parseInt(detT.diasTratamento)||0)>0&&(function(){
+            var ag=agenda(detT);if(!ag.length)return null;
+            return(<div style={{marginBottom:16}}>
+              <div style={{fontWeight:700,fontSize:14,color:'#1E293B',marginBottom:4}}>🗓️ Agenda de doses</div>
+              <div style={{fontSize:11,color:'#94A3B8',marginBottom:10}}>Dê baixa em cada dose. As de dias anteriores são registradas com a data correta.</div>
+              <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                {ag.map(function(day){
+                  var completo=day.pendentes===0;var atras=day.atrasado&&day.pendentes>0;
+                  return(<div key={day.data} style={{background:completo?'#F0FDF4':atras?'#FFFBEB':'#EFF6FF',borderRadius:10,padding:'10px 12px',border:'1px solid '+(completo?'#D1FAE5':atras?'#FDE68A':'#BFDBFE')}}>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+                      <div style={{fontWeight:700,fontSize:13,color:completo?'#065F46':atras?'#92400E':'#1E40AF'}}>{fD(day.data)}{day.ehHoje?' · hoje':''}{atras?' · atrasado':''}</div>
+                      <div style={{fontSize:12,fontWeight:700,color:completo?'#059669':atras?'#B45309':'#2563EB'}}>{completo?'✓ '+day.total+' dose'+(day.total>1?'s':'')+' concluída'+(day.total>1?'s':''):day.feitas+' de '+day.total+' · '+day.pendentes+' pendente'+(day.pendentes>1?'s':'')}</div>
+                    </div>
+                    {day.pendentes>0&&<div style={{display:'flex',gap:6,flexWrap:'wrap',marginTop:8}}>
+                      {Array.apply(null,{length:day.pendentes}).map(function(_,k){
+                        return <button key={k} data-tour={day.ehHoje&&k===0?'atb-registrar-dose':undefined} onClick={function(){abrirDoseDia(detT,day.data);}} style={{padding:'7px 12px',background:atras?'#F59E0B':B,border:'none',borderRadius:8,color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>💉 Dar baixa</button>;
+                      })}
+                    </div>}
+                  </div>);
+                })}
+              </div>
+            </div>);
+          })()}
+          {cSt(detT)==='espera'&&<div style={{background:'#FFFBEB',borderRadius:14,padding:16,marginBottom:16,border:'1.5px solid #FCD34D'}}>
+            <div style={{fontSize:13,fontWeight:700,color:'#92400E',marginBottom:4}}>⏳ Em Espera — Dia {dEsp(detT)} de 3</div>
             <div style={{background:'#F1F5F9',borderRadius:99,height:7,marginBottom:12,overflow:'hidden'}}>
-              <div style={{width:Math.min(100,(dEsp(showDet)/3)*100)+'%',height:'100%',background:dEsp(showDet)>=3?'#EF4444':'#F59E0B',borderRadius:99}}/>
+              <div style={{width:Math.min(100,(dEsp(detT)/3)*100)+'%',height:'100%',background:dEsp(detT)>=3?'#EF4444':'#F59E0B',borderRadius:99}}/>
             </div>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-              <button onClick={function(){iniciarEspera(showDet);}} style={{padding:'12px',background:'#F0FDF4',border:'1.5px solid #BBF7D0',borderRadius:12,color:'#059669',fontWeight:700,fontSize:13,cursor:'pointer'}}>💉 Iniciar</button>
-              <button onClick={function(){ataqueBtn(showDet);}} style={{padding:'12px',background:'#F5F3FF',border:'1.5px solid #DDD6FE',borderRadius:12,color:'#7C3AED',fontWeight:700,fontSize:13,cursor:'pointer'}}>⚡ Dose Ataque</button>
+              <button onClick={function(){iniciarEspera(detT);}} style={{padding:'12px',background:'#F0FDF4',border:'1.5px solid #BBF7D0',borderRadius:12,color:'#059669',fontWeight:700,fontSize:13,cursor:'pointer'}}>💉 Iniciar</button>
+              <button onClick={function(){ataqueBtn(detT);}} style={{padding:'12px',background:'#F5F3FF',border:'1.5px solid #DDD6FE',borderRadius:12,color:'#7C3AED',fontWeight:700,fontSize:13,cursor:'pointer'}}>⚡ Dose Ataque</button>
             </div>
           </div>}
-          {cSt(showDet)==='dose_ataque'&&<div style={{background:'#F5F3FF',borderRadius:14,padding:16,marginBottom:16,border:'1.5px solid #DDD6FE'}}>
+          {cSt(detT)==='dose_ataque'&&<div style={{background:'#F5F3FF',borderRadius:14,padding:16,marginBottom:16,border:'1.5px solid #DDD6FE'}}>
             <div style={{fontSize:13,fontWeight:700,color:'#6D28D9',marginBottom:10}}>⚡ Dose de Ataque Registrada</div>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
               <div style={{background:'#fff',borderRadius:10,padding:'10px 12px',border:'1px solid #EDE9FE'}}>
                 <div style={{fontSize:10,color:'#94A3B8',marginBottom:3,textTransform:'uppercase',letterSpacing:.5}}>Funcionario</div>
                 <div style={{display:'flex',alignItems:'center',gap:6}}>
-                  <div style={{width:8,height:8,borderRadius:'50%',background:showDet.doseAtaqueCor||'#8B5CF6',flexShrink:0}}/>
-                  <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>{showDet.doseAtaqueRegistradoPor||'—'}</div>
+                  <div style={{width:8,height:8,borderRadius:'50%',background:detT.doseAtaqueCor||'#8B5CF6',flexShrink:0}}/>
+                  <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>{detT.doseAtaqueRegistradoPor||'—'}</div>
                 </div>
               </div>
               <div style={{background:'#fff',borderRadius:10,padding:'10px 12px',border:'1px solid #EDE9FE'}}>
                 <div style={{fontSize:10,color:'#94A3B8',marginBottom:3,textTransform:'uppercase',letterSpacing:.5}}>Data e Hora</div>
-                <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>{showDet.doseAtaqueData?fD(showDet.doseAtaqueData):'—'}</div>
-                <div style={{fontSize:11,color:'#7C3AED',fontWeight:600}}>{showDet.doseAtaqueHora||''}</div>
+                <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>{detT.doseAtaqueData?fD(detT.doseAtaqueData):'—'}</div>
+                <div style={{fontSize:11,color:'#7C3AED',fontWeight:600}}>{detT.doseAtaqueHora||''}</div>
               </div>
             </div>
           </div>}
-          {(showDet.doses||[]).length>0&&<div style={{marginBottom:16}}>
+          {(detT.doses||[]).length>0&&<div style={{marginBottom:16}}>
             <div style={{fontWeight:700,fontSize:14,color:'#1E293B',marginBottom:10}}>📋 Histórico</div>
             <div style={{display:'flex',flexDirection:'column',gap:8}}>
-              {(showDet.doses||[]).slice().reverse().map(function(d,i){
+              {(detT.doses||[]).slice().reverse().map(function(d,i){
                 return (
                   <div key={i} style={{display:'flex',alignItems:'center',gap:10,background:d.retroativo?'#F8FAFC':d.doseEspera?'#FFFBEB':'#F0FDF4',borderRadius:10,padding:'10px 12px',border:'1px solid '+(d.retroativo?'#E2E8F0':d.doseEspera?'#FDE68A':'#D1FAE5')}}>
                     <div style={{width:10,height:10,borderRadius:'50%',background:d.responsavelCor||'#10B981',flexShrink:0}}/>
@@ -4418,17 +4463,17 @@ function TabAntibiotico({user,medications,stock,allUsers}){
             </div>
           </div>}
           <div style={{borderTop:'1px solid #F1F5F9',paddingTop:16,display:'flex',flexDirection:'column',gap:10}}>
-            {cSt(showDet)==='ativo'&&<button onClick={function(){finalizar(showDet);}} style={{width:'100%',padding:'12px',background:'#EFF6FF',border:'1.5px solid #BFDBFE',borderRadius:12,color:B,fontWeight:700,fontSize:14,cursor:'pointer'}}>✅ Finalizar Tratamento</button>}
-            {['concluido','finalizado','desistiu','dose_ataque'].includes(cSt(showDet))&&<button onClick={function(){reabrir(showDet);}} style={{width:'100%',padding:'12px',background:'#F0FDF4',border:'1.5px solid #BBF7D0',borderRadius:12,color:'#059669',fontWeight:700,fontSize:14,cursor:'pointer'}}>🔄 Reabrir Tratamento</button>}
-            {cSt(showDet)==='ativo'&&<div>
+            {cSt(detT)==='ativo'&&<button onClick={function(){finalizar(detT);}} style={{width:'100%',padding:'12px',background:'#EFF6FF',border:'1.5px solid #BFDBFE',borderRadius:12,color:B,fontWeight:700,fontSize:14,cursor:'pointer'}}>✅ Finalizar Tratamento</button>}
+            {['concluido','finalizado','desistiu','dose_ataque'].includes(cSt(detT))&&<button onClick={function(){reabrir(detT);}} style={{width:'100%',padding:'12px',background:'#F0FDF4',border:'1.5px solid #BBF7D0',borderRadius:12,color:'#059669',fontWeight:700,fontSize:14,cursor:'pointer'}}>🔄 Reabrir Tratamento</button>}
+            {cSt(detT)==='ativo'&&<div>
               <div style={{fontWeight:700,fontSize:13,color:'#EF4444',marginBottom:8}}>⚠️ Registrar Desistencia</div>
               <textarea value={obsDesist} onChange={function(e){setObsDesist(e.target.value);}} placeholder="Motivo (opcional)..." rows={2} style={{width:'100%',padding:'10px',borderRadius:10,border:'1.5px solid #FECACA',fontSize:13,resize:'none',marginBottom:8,boxSizing:'border-box'}}/>
-              <button onClick={function(){if(window.confirm('Confirmar desistencia?'))desistir(showDet);}} style={{width:'100%',padding:'12px',background:'#FEE2E2',border:'1.5px solid #FECACA',borderRadius:12,color:'#DC2626',fontWeight:700,fontSize:14,cursor:'pointer'}}>Marcar como Desistiu</button>
+              <button onClick={function(){if(window.confirm('Confirmar desistencia?'))desistir(detT);}} style={{width:'100%',padding:'12px',background:'#FEE2E2',border:'1.5px solid #FECACA',borderRadius:12,color:'#DC2626',fontWeight:700,fontSize:14,cursor:'pointer'}}>Marcar como Desistiu</button>
             </div>}
-            {canManage&&<button onClick={function(){excluir(showDet);}} style={{width:'100%',padding:'12px',background:'#fff',border:'1.5px solid #FECACA',borderRadius:12,color:'#DC2626',fontWeight:600,fontSize:13,cursor:'pointer'}}>🗑️ Excluir Permanentemente</button>}
+            {canManage&&<button onClick={function(){excluir(detT);}} style={{width:'100%',padding:'12px',background:'#fff',border:'1.5px solid #FECACA',borderRadius:12,color:'#DC2626',fontWeight:600,fontSize:13,cursor:'pointer'}}>🗑️ Excluir Permanentemente</button>}
           </div>
         </div>
-      </div>}
+      </div>);})()}
 
       {showEdit&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:1000,display:'flex',alignItems:'flex-end',justifyContent:'center'}} onClick={function(){setShowEdit(null);}}>
         <div style={{background:'#fff',borderRadius:'24px 24px 0 0',padding:'24px 20px 40px',width:'100%',maxWidth:480,maxHeight:'90vh',overflowY:'auto'}} onClick={function(e){e.stopPropagation();}}>
