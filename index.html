@@ -213,6 +213,14 @@ var TOURS=[
     {acao:{tipo:'aba',aba:'antibiotico'},seletor:'[data-tour="nav-antibiotico"]',texto:'A aba ATB recebeu uma atualização importante!',posicao:'acima'},
     {acao:{tipo:'aba',aba:'antibiotico'},seletor:'[data-tour="atb-registrar-dose"]',texto:'Agora você pode registrar doses de dias anteriores.',posicao:'acima'},
     {acao:{tipo:'clicar',seletor:'[data-tour="atb-registrar-dose"]'},seletor:'[data-tour="atb-data-dose"]',texto:'Selecione a data real da administração — útil quando o paciente toma a medicação fora do expediente.',posicao:'abaixo'}
+  ]},
+  {id:'tour_conferencia',titulo:'Novidades na Conferência',passos:[
+    {acao:{tipo:'aba',aba:'conferencia'},seletor:'[data-tour="tab-content"]',texto:'A aba de Conferência foi atualizada com várias novidades!',posicao:'abaixo'},
+    {seletor:'[data-tour="conf-categorias"]',texto:'Escolha a categoria que vai conferir — você fica focado só nela.',posicao:'abaixo'},
+    {acao:[{tipo:'clicar',seletor:'[data-tour="conf-primeira-cat"]'},{tipo:'clicar',seletor:'[data-tour="conf-primeiro-med"]'}],seletor:'[data-tour="conf-contagem"]',texto:'Digite a quantidade que você contou fisicamente.',posicao:'esquerda'},
+    {seletor:'[data-tour="conf-confirmar"]',texto:'Clique aqui pra aplicar a contagem no estoque imediatamente — as saídas passam a descontar desse novo valor.',posicao:'acima'},
+    {seletor:'[data-tour="conf-lote"]',texto:'Pode cadastrar lote e validade durante a conferência.',posicao:'acima'},
+    {seletor:'[data-tour="conf-finalizar"]',texto:'Finalize cada categoria separadamente quando terminar.',posicao:'acima'}
   ]}
 ];
 function todayStr(){return new Date().toISOString().slice(0,10);}
@@ -372,6 +380,8 @@ function _ehSaidaNaoReal(e){
   if(e.divergenciaTipo==='real')return true;
   if(e.descarte)return true;
   if(e.isAjuste)return true;
+  if(e.origemConferencia)return true;            // ajuste de conferência (contagem parcial ou finalização)
+  if(e.divergenciaTipo==='conferencia')return true;
   var o=_norm(e.observacao);
   if(o.indexOf('balanc')>=0)return true;        // balanço / balanco
   if(o.indexOf('ajuste')>=0)return true;         // ajuste de inventário
@@ -407,6 +417,8 @@ function Auth(props){
   var _crf=useState('');var crf=_crf[0];var setCrf=_crf[1];
   var _err=useState('');var err=_err[0];var setErr=_err[1];
   var _load=useState(false);var load=_load[0];var setLoad=_load[1];
+  var _logoTaps=useState(0);var logoTaps=_logoTaps[0];var setLogoTaps=_logoTaps[1];// gesto secreto p/ reconfigurar Firebase (5 toques no logo)
+  function tocarLogo(){var n=logoTaps+1;setLogoTaps(n);if(n>=5){if(window.confirm('Reconfigurar o Firebase? (área técnica)')){localStorage.removeItem(CFG_KEY);window.location.reload();}else{setLogoTaps(0);}}}
   var EM={'auth/user-not-found':'Usuario não encontrado.','auth/wrong-password':'Senha incorreta.','auth/invalid-credential':'Email ou senha incorretos.','auth/email-already-in-use':'Email ja cadastrado.','auth/weak-password':'Senha min. 6 caracteres.'};
   function login(){if(!email||!pass){setErr('Preencha email e senha.');return;}setLoad(true);setErr('');auth.signInWithEmailAndPassword(email,pass).then(function(c){return db.collection('users').doc(c.user.uid).get().then(function(s){if(!s.exists){setErr('Usuario não encontrado.');auth.signOut();setLoad(false);return;}var d=s.data();if(d.status==='pending'){setErr('Aguardando aprovação.');auth.signOut();setLoad(false);return;}if(d.status==='rejected'||d.status==='inativo'){setErr('Conta não ativa.');auth.signOut();setLoad(false);return;}var u={uid:c.user.uid,name:d.name,role:d.role,color:d.color,email:d.email,status:d.status,sessionTimeout:d.sessionTimeout||12,photoURL:d.photoURL||'',crf:d.crf||''};localStorage.setItem('fc_user',JSON.stringify(u));db.collection('logs_acesso').add({uid:u.uid,nome:u.name,cargo:u.role,acao:'login',criadoEm:new Date().toISOString()}).catch(function(){});props.onLogin(u);});}).catch(function(e){setErr(EM[e.code]||e.message);setLoad(false);});}
   function register(){if(!name||!email||!pass){setErr('Preencha todos os campos.');return;}if(pass.length<6){setErr('Senha min. 6 caracteres.');return;}setLoad(true);setErr('');skipAuthCheck=true;auth.createUserWithEmailAndPassword(email,pass).then(function(c){var uid=c.user.uid;return c.user.getIdToken(true).then(function(){return db.collection('users').get();}).then(function(snap){var isFirst=snap.empty;var ud={name:name,role:isFirst?'gestor':role,color:color,email:email,status:isFirst?'approved':'pending',criadoEm:new Date().toISOString(),sessionTimeout:12,photoURL:'',crf:role==='farmaceutico'?crf.trim():''};return db.collection('users').doc(uid).set(ud).then(function(){skipAuthCheck=false;if(isFirst){var usr={uid:uid,name:ud.name,role:ud.role,color:ud.color,email:ud.email,status:ud.status,sessionTimeout:12,photoURL:'',crf:''};localStorage.setItem('fc_user',JSON.stringify(usr));props.onLogin(usr);}else{auth.signOut().catch(function(){});setErr('Conta criada com sucesso! Aguarde aprovação do gestor ou técnico.');setMode('login');setLoad(false);}});});}).catch(function(e){skipAuthCheck=false;setErr(EM[e.code]||e.message||'Erro ao criar conta.');setLoad(false);})}
@@ -417,7 +429,7 @@ function Auth(props){
       <div style={{position:'absolute',width:220,height:220,borderRadius:'50%',border:'1px solid rgba(255,255,255,0.05)',top:-60,right:-60}}/>
       <div style={{position:'absolute',width:200,height:200,borderRadius:'50%',border:'1px solid rgba(255,255,255,0.04)',bottom:-80,left:-80}}/>
       <div style={{textAlign:'center',marginBottom:28}}>
-        <div style={{width:84,height:84,borderRadius:22,background:'rgba(255,255,255,0.13)',border:'1.5px solid rgba(255,255,255,0.28)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px',backdropFilter:'blur(12px)',boxShadow:'0 8px 32px rgba(0,0,0,0.25)'}}>
+        <div onClick={tocarLogo} title="FarmaControl" style={{width:84,height:84,borderRadius:22,background:'rgba(255,255,255,0.13)',border:'1.5px solid rgba(255,255,255,0.28)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px',backdropFilter:'blur(12px)',boxShadow:'0 8px 32px rgba(0,0,0,0.25)',cursor:'default'}}>
           <span style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:36,fontWeight:900,color:'#fff',letterSpacing:'-2px',lineHeight:1}}>FC</span>
         </div>
         <div style={{fontSize:28,fontWeight:800,color:'#fff',letterSpacing:'-.02em'}}>FarmaControl</div>
@@ -445,7 +457,6 @@ function Auth(props){
                 var msg=e.code==='auth/user-not-found'?'Email não cadastrado no sistema.':e.code==='auth/invalid-email'?'Email inválido.':e.code==='auth/too-many-requests'?'Muitas tentativas. Aguarde alguns minutos.':'Erro: '+e.message;
                 setErr('❌ '+msg);
               });}} style={{background:'none',border:'none',color:B,fontSize:12,cursor:'pointer',width:'100%',textAlign:'center',padding:'4px'}}>Esqueci minha senha</button>
-        <button onClick={function(){localStorage.removeItem(CFG_KEY);window.location.reload();}} style={{marginTop:4,background:'none',border:'none',color:'#94a3b8',fontSize:11,cursor:'pointer',width:'100%',textAlign:'center'}}>Reconfigurar Firebase</button>
       </div>
       <div style={{marginTop:24,textAlign:'center'}}>
         <span style={{fontSize:11,color:'rgba(255,255,255,0.2)',letterSpacing:'.06em'}}>Desenvolvido por </span>
@@ -5854,6 +5865,7 @@ function TabConferencia(props){
   var _renId=useState(null);var renId=_renId[0];var setRenId=_renId[1];var _renNome=useState('');var renNome=_renNome[0];var setRenNome=_renNome[1];var _renSaving=useState(false);var renSaving=_renSaving[0];var setRenSaving=_renSaving[1];
   var _lcId=useState(null);var lcId=_lcId[0];var setLcId=_lcId[1];var _lcLote=useState('');var lcLote=_lcLote[0];var setLcLote=_lcLote[1];var _lcVal=useState('');var lcVal=_lcVal[0];var setLcVal=_lcVal[1];var _lcSaving=useState(false);var lcSaving=_lcSaving[0];var setLcSaving=_lcSaving[1];
   var _movAviso=useState(false);var movAviso=_movAviso[0];var setMovAviso=_movAviso[1];var movBaseRef=useRef(null);
+  var _confMedId=useState(null);var confMedId=_confMedId[0];var setConfMedId=_confMedId[1];// medicamento aplicando "Confirmar contagem"
   var pendingRef=useRef({});var timersRef=useRef({});var remoteRef=useRef({});
   var medById={};medications.forEach(function(m){medById[m.id]=m;});
   var podeGerir=user.role==='gestor'||user.role==='tecnico';
@@ -6010,6 +6022,52 @@ function TabConferencia(props){
       .catch(function(e){setLcSaving(false);erroEscrita(e);});
   }
 
+  // AJUSTE 1: aplica a contagem de UM medicamento no estoque imediatamente (ajuste de conferência).
+  // A partir daqui, saídas normais já descontam do novo saldo (calcStock inclui o ajuste).
+  function confirmarContagemMed(m){
+    if(!medConferido(m)){alert('Digite a contagem de ao menos um lote deste medicamento antes de confirmar.');return;}
+    setConfMedId(m.id);
+    var falhou=function(e){setConfMedId(null);erroEscrita(e);try{alert('Erro ao confirmar a contagem: '+((e&&e.message)?e.message:e));}catch(_){}};
+    try{
+      var now=new Date().toISOString();
+      var itens=[];
+      m.lotes.forEach(function(l){var k=confKey(m.id,l.lote,l.validade);var raw=contagens[k];if(raw===undefined||raw==='')return;var contado=parseInt(raw)||0;if(contado-l.qty!==0)itens.push({lote:l.lote,validade:l.validade,sistema:l.qty,contado:contado,diff:contado-l.qty,novo:false});});
+      if(m.semLote>0){var ks=confKey(m.id,'__SEMLOTE__','');var rawS=contagens[ks];if(rawS!==undefined&&rawS!==''){var cs=parseInt(rawS)||0;if(cs-m.semLote!==0)itens.push({lote:'',validade:'',sistema:m.semLote,contado:cs,diff:cs-m.semLote,novo:false});}}
+      novosLotes.filter(function(nl){return nl.medId===m.id;}).forEach(function(nl){if((parseInt(nl.qty)||0)>0)itens.push({lote:nl.lote,validade:nl.validade||'',sistema:0,contado:parseInt(nl.qty)||0,diff:parseInt(nl.qty)||0,novo:true});});
+      // saldo final deste medicamento após aplicar a contagem
+      var resultante=0;
+      m.lotes.forEach(function(l){var k=confKey(m.id,l.lote,l.validade);var raw=contagens[k];resultante+=(raw!==undefined&&raw!=='')?(parseInt(raw)||0):l.qty;});
+      if(m.semLote>0){var ks2=confKey(m.id,'__SEMLOTE__','');var rawS2=contagens[ks2];resultante+=(rawS2!==undefined&&rawS2!=='')?(parseInt(rawS2)||0):m.semLote;}
+      novosLotes.forEach(function(nl){if(nl.medId===m.id)resultante+=(parseInt(nl.qty)||0);});
+      var batch=db.batch();
+      itens.forEach(function(it){
+        var ref=db.collection('entries').doc();
+        var obs='Ajuste de conferência ('+todayStr()+'): '+m.nome+(it.novo?' — lote novo':'')+' (era '+it.sistema+', passou a '+it.contado+')';
+        batch.set(ref,{medicamentoId:m.id,medicamentoNome:m.nome,tipo:it.diff>0?'entrada':'saida',quantidade:Math.abs(it.diff),lote:it.lote||'',validade:it.validade||'',observacao:obs,isAjuste:true,origemConferencia:true,divergenciaTipo:'conferencia',conferencia:todayStr(),conferenciaCat:m.cat,criadoEm:now,date:todayStr(),autorId:user.uid||'',autorNome:user.name,autorCargo:user.role||'',autorColor:user.color||B});
+      });
+      batch.commit().then(function(){
+        // limpa a contagem deste medicamento no doc (já aplicada) — não some da lista, só zera os campos
+        var del=firebase.firestore.FieldValue.delete();var upd={};
+        medKeys(m).forEach(function(k){if(contagens[k]!==undefined){upd['contagens.'+k]=del;upd['contadoPor.'+k]=del;}});
+        var nlKeep=novosLotes.filter(function(nl){return nl.medId!==m.id;});
+        var rcKeep=recontagens.filter(function(rc){return (rc.key||'').split('~')[0]!==m.id;});
+        if(nlKeep.length!==novosLotes.length)upd['novosLotes']=nlKeep;
+        if(rcKeep.length!==recontagens.length)upd['recontagens']=rcKeep;
+        if(Object.keys(upd).length){upd['atualizadoEm']=now;upd['atualizadoPor']=user.name;return docRef().update(upd);}
+      }).then(function(){
+        // se o medicamento zerou, apaga lote/validade do cadastro (best-effort)
+        var rawm=medById[m.id]||{};
+        if(resultante===0&&(rawm.loteAtual||rawm.validadeAtual))db.collection('medicamentos').doc(m.id).update({loteAtual:'',validadeAtual:''}).catch(function(){});
+        setContagens(function(p){var n=Object.assign({},p);medKeys(m).forEach(function(k){delete n[k];});return n;});
+        setContadoPor(function(p){var n=Object.assign({},p);medKeys(m).forEach(function(k){delete n[k];});return n;});
+        setNovosLotes(function(p){return p.filter(function(nl){return nl.medId!==m.id;});});
+        setRecontagens(function(p){return p.filter(function(rc){return (rc.key||'').split('~')[0]!==m.id;});});
+        setConfMedId(null);setErro('');
+        alert('✅ Contagem de "'+m.nome+'" aplicada no estoque. As próximas saídas já descontam do novo saldo.');
+      }).catch(falhou);
+    }catch(e){falhou(e);}
+  }
+
   // Computa lotes por medicamento (mesma lógica da aba Estoque)
   var medList=useMemo(function(){
     return medications.map(function(m){
@@ -6115,7 +6173,7 @@ function TabConferencia(props){
       lista.forEach(function(it){
         var ref=db.collection('entries').doc();
         var obs='Balanço (conferência '+todayStr()+' · '+catLabel+'): '+(it.novo?'lote novo encontrado — ':'')+'(era '+it.sistema+', passou a '+it.contado+')'+(it.recontagem>0?' — inclui '+it.recontagem+' un. encontrada(s) em recontagem':'');
-        batch.set(ref,{medicamentoId:it.medId,medicamentoNome:it.medNome,tipo:it.diff>0?'entrada':'saida',quantidade:Math.abs(it.diff),lote:it.lote||'',validade:it.validade||'',observacao:obs,isAjuste:true,conferencia:todayStr(),conferenciaCat:cat,criadoEm:now,date:todayStr(),autorId:user.uid||'',autorNome:user.name,autorCargo:user.role||'',autorColor:user.color||B});
+        batch.set(ref,{medicamentoId:it.medId,medicamentoNome:it.medNome,tipo:it.diff>0?'entrada':'saida',quantidade:Math.abs(it.diff),lote:it.lote||'',validade:it.validade||'',observacao:obs,isAjuste:true,origemConferencia:true,divergenciaTipo:'conferencia',conferencia:todayStr(),conferenciaCat:cat,criadoEm:now,date:todayStr(),autorId:user.uid||'',autorNome:user.name,autorCargo:user.role||'',autorColor:user.color||B});
       });
       batch.commit().then(function(){
         // 2) Marca a categoria como finalizada (set+merge cria o doc se preciso e mescla finalizadas de outras categorias).
@@ -6201,7 +6259,7 @@ function TabConferencia(props){
           <div style={{fontSize:10,color:'#94A3B8'}}>{o.sub}{!cega&&' · sistema: '+o.sistema+' un.'}{!cega&&diff!==null&&diff!==0&&<span style={{color:diff>0?'#0C6B3E':'#DC2626',fontWeight:700}}>{' · '+(diff>0?'+':'')+diff}</span>}</div>
           {jaContado&&por&&por.nome&&<div style={{fontSize:9,color:porOutro?'#B45309':'#94A3B8',fontWeight:porOutro?700:400}}>✍️ {por.nome}{por.em?' · '+fmtT(por.em):''}</div>}
         </div>
-        <input value={cont} onChange={function(e){onCount(key,e.target.value);}} inputMode="numeric" placeholder="0" style={{width:66,padding:'8px 6px',border:'1.5px solid '+(cont!==''?'#1351B4':'#CBD5E1'),borderRadius:8,fontSize:16,fontWeight:700,textAlign:'center',outline:'none'}}/>
+        <input data-tour={o.tourMark?'conf-contagem':undefined} value={cont} onChange={function(e){onCount(key,e.target.value);}} inputMode="numeric" placeholder="0" style={{width:66,padding:'8px 6px',border:'1.5px solid '+(cont!==''?'#1351B4':'#CBD5E1'),borderRadius:8,fontSize:16,fontWeight:700,textAlign:'center',outline:'none'}}/>
       </div>
       {rc&&rc.total>0&&<div style={{marginTop:6,background:'#FFFBEB',border:'1px solid #FDE68A',borderRadius:8,padding:'6px 9px'}}>
         {rc.list.map(function(r,ri){return(<div key={ri} style={{fontSize:10,color:'#92400E'}}>🔎 +{r.qty} un. em recontagem · {r.por}{r.em?' · '+fmtD(r.em)+' '+fmtT(r.em):''}</div>);})}
@@ -6266,14 +6324,14 @@ function TabConferencia(props){
     </div>
 
     {/* ===== TELA DE SELEÇÃO DE CATEGORIA (mini-conferências independentes) ===== */}
-    {!catAtiva&&<div style={{marginBottom:14}}>
+    {!catAtiva&&<div data-tour="conf-categorias" style={{marginBottom:14}}>
       <div style={{fontWeight:800,fontSize:15,color:'#1E293B',marginBottom:4}}>Escolha uma categoria para conferir</div>
       <div style={{fontSize:12,color:'#94A3B8',marginBottom:12}}>Cada categoria é uma conferência independente. Você confere e finaliza uma de cada vez.</div>
       {catsDisponiveis.length===0&&<div style={{textAlign:'center',padding:28,color:'#94A3B8',fontSize:13}}>Nenhum medicamento cadastrado para conferir.</div>}
-      {catsDisponiveis.map(function(c){
+      {catsDisponiveis.map(function(c,ci){
         var t=TIPOS[c]||TIPOS.medicamento;var cor=CCOR[c]||'#1351B4';var st=catStats[c]||{conf:0,total:0};
         var status=catStatus(c);var fin=finalizadas[c];
-        return(<button key={c} onClick={function(){setCatAtiva(c);definirMinhaCat(c);}} style={{width:'100%',display:'flex',alignItems:'center',gap:12,textAlign:'left',background:'#fff',border:'1.5px solid '+(status==='finalizada'?'#BBF7D0':status==='andamento'?'#FDE68A':'#E2E8F0'),borderLeft:'5px solid '+cor,borderRadius:12,padding:'12px 14px',marginBottom:8,cursor:'pointer'}}>
+        return(<button key={c} data-tour={ci===0?'conf-primeira-cat':undefined} onClick={function(){setCatAtiva(c);definirMinhaCat(c);}} style={{width:'100%',display:'flex',alignItems:'center',gap:12,textAlign:'left',background:'#fff',border:'1.5px solid '+(status==='finalizada'?'#BBF7D0':status==='andamento'?'#FDE68A':'#E2E8F0'),borderLeft:'5px solid '+cor,borderRadius:12,padding:'12px 14px',marginBottom:8,cursor:'pointer'}}>
           <span style={{fontSize:24}}>{t.icon}</span>
           <div style={{flex:1,minWidth:0}}>
             <div style={{fontWeight:800,fontSize:14,color:'#1E293B'}}>{t.label}</div>
@@ -6303,7 +6361,7 @@ function TabConferencia(props){
       <div style={{height:10,background:'#F1F5F9',borderRadius:99,overflow:'hidden'}}>
         <div style={{height:'100%',width:pct+'%',background:pct===100&&totalItens>0?'linear-gradient(90deg,#0C6B3E,#22C55E)':'linear-gradient(90deg,#1351B4,#3B82F6)',borderRadius:99,transition:'width .3s ease'}}/>
       </div>
-      <button onClick={function(){setShowResumo(true);}} disabled={resumoCat.total===0} style={{marginTop:12,width:'100%',padding:'11px',background:resumoCat.total===0?'#E2E8F0':'#0C6B3E',border:'none',borderRadius:10,color:resumoCat.total===0?'#94A3B8':'#fff',fontWeight:700,fontSize:13,cursor:resumoCat.total===0?'default':'pointer'}}>✅ Finalizar categoria{resumoCat.divergiram>0?' — '+resumoCat.divergiram+' diverg.':''}</button>
+      <button data-tour="conf-finalizar" onClick={function(){setShowResumo(true);}} disabled={resumoCat.total===0} style={{marginTop:12,width:'100%',padding:'11px',background:resumoCat.total===0?'#E2E8F0':'#0C6B3E',border:'none',borderRadius:10,color:resumoCat.total===0?'#94A3B8':'#fff',fontWeight:700,fontSize:13,cursor:resumoCat.total===0?'default':'pointer'}}>✅ Finalizar categoria{resumoCat.divergiram>0?' — '+resumoCat.divergiram+' diverg.':''}</button>
     </div>
 
     <div style={{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap'}}>
@@ -6329,12 +6387,12 @@ function TabConferencia(props){
           <span style={{fontSize:13,color:'#fff'}}>{open?'▲':'▼'}</span>
         </button>
         {open&&<div style={{border:'1.5px solid '+cor,borderTop:'none',borderRadius:'0 0 12px 12px',padding:'8px',background:'#F8FAFC'}}>
-          {g.meds.map(function(m){
+          {g.meds.map(function(m,mi){
             var conf=medConferido(m);var exp=abertos[m.id];
             var nlDoMed=novosLotes.filter(function(x){return x.medId===m.id;});
             return(<div key={m.id} style={{marginBottom:6,background:'#fff',borderRadius:10,border:'1.5px solid '+(conf?'#BBF7D0':'#E2E8F0'),overflow:'hidden'}}>
               <div style={{display:'flex',alignItems:'stretch'}}>
-                <button onClick={function(){setAbertos(function(p){var n=Object.assign({},p);n[m.id]=!exp;return n;});}} style={{flex:1,minWidth:0,display:'flex',alignItems:'center',gap:10,background:'none',border:'none',padding:'11px 12px',cursor:'pointer',textAlign:'left'}}>
+                <button data-tour={mi===0?'conf-primeiro-med':undefined} onClick={function(){setAbertos(function(p){var n=Object.assign({},p);n[m.id]=!exp;return n;});}} style={{flex:1,minWidth:0,display:'flex',alignItems:'center',gap:10,background:'none',border:'none',padding:'11px 12px',cursor:'pointer',textAlign:'left'}}>
                   <span style={{fontSize:16}}>{conf?'✅':'⬜'}</span>
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontWeight:600,fontSize:13,color:'#1E293B',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{m.nome}</div>
@@ -6359,8 +6417,8 @@ function TabConferencia(props){
               </div>}
               {exp&&<div style={{padding:'0 12px 12px'}}>
                 {m.lotes.length===0&&m.semLote===0&&<div style={{fontSize:12,color:'#94A3B8',padding:'6px 0'}}>Sem estoque registrado no sistema.</div>}
-                {m.lotes.map(function(l,li){return loteRow({key:confKey(m.id,l.lote,l.validade),titulo:'Lote '+(l.lote||'—'),sub:(l.validade?'Val '+l.validade:'sem validade'),sistema:l.qty,med:m,lote:l.lote,validade:l.validade,topBorder:li>0});})}
-                {m.semLote>0&&loteRow({key:confKey(m.id,'__SEMLOTE__',''),titulo:'Sem lote',sub:'unidades sem lote/validade',sistema:m.semLote,med:m,lote:'',validade:'',topBorder:m.lotes.length>0})}
+                {m.lotes.map(function(l,li){return loteRow({key:confKey(m.id,l.lote,l.validade),titulo:'Lote '+(l.lote||'—'),sub:(l.validade?'Val '+l.validade:'sem validade'),sistema:l.qty,med:m,lote:l.lote,validade:l.validade,topBorder:li>0,tourMark:mi===0&&li===0});})}
+                {m.semLote>0&&loteRow({key:confKey(m.id,'__SEMLOTE__',''),titulo:'Sem lote',sub:'unidades sem lote/validade',sistema:m.semLote,med:m,lote:'',validade:'',topBorder:m.lotes.length>0,tourMark:mi===0&&m.lotes.length===0})}
                 {(function(){
                   // Parte 2 (#6): lote/validade no cadastro do medicamento
                   var raw=medById[m.id]||{};var temCad=raw.loteAtual||raw.validadeAtual;
@@ -6402,8 +6460,9 @@ function TabConferencia(props){
                       <button onClick={function(){addNovoLote(m);}} style={{flex:2,padding:'8px',background:'#1351B4',border:'none',borderRadius:8,color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>✅ Adicionar lote</button>
                     </div>
                   </div>
-                  :<button onClick={function(){setNovoForm(m.id);setNlLote('');setNlVal('');setNlQty('');}} style={{marginTop:8,width:'100%',padding:'9px',background:'#EFF6FF',border:'1.5px dashed #93C5FD',borderRadius:8,color:'#1351B4',fontWeight:700,fontSize:12,cursor:'pointer'}}>+ Achei um lote novo</button>
+                  :<button data-tour={mi===0?'conf-lote':undefined} onClick={function(){setNovoForm(m.id);setNlLote('');setNlVal('');setNlQty('');}} style={{marginTop:8,width:'100%',padding:'9px',background:'#EFF6FF',border:'1.5px dashed #93C5FD',borderRadius:8,color:'#1351B4',fontWeight:700,fontSize:12,cursor:'pointer'}}>+ Achei um lote novo</button>
                 }
+                {medConferido(m)&&<button data-tour={mi===0?'conf-confirmar':undefined} onClick={function(){confirmarContagemMed(m);}} disabled={confMedId===m.id} style={{marginTop:8,width:'100%',padding:'11px',background:confMedId===m.id?'#94A3B8':'#0C6B3E',border:'none',borderRadius:8,color:'#fff',fontWeight:800,fontSize:13,cursor:confMedId===m.id?'default':'pointer'}}>{confMedId===m.id?'Aplicando...':'✅ Confirmar contagem (aplica no estoque agora)'}</button>}
               </div>}
             </div>);
           })}
