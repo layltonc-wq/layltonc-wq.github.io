@@ -5829,7 +5829,8 @@ function TabPrevisao(props){
 }
 
 // ===== Conferência de Estoque (contagem física colaborativa) =====
-function confKey(medId,lote,val){return (medId+'~'+(lote||'SEM')+'~'+(val||'SEM')).replace(/[^A-Za-z0-9_~-]/g,'_');}
+// separador '--' (o Firestore não aceita '~' em caminhos de campo, ex.: contagens.<key> no update()).
+function confKey(medId,lote,val){return (medId+'--'+(lote||'SEM')+'--'+(val||'SEM')).replace(/[^A-Za-z0-9_-]/g,'_');}
 function TabConferencia(props){
   var user=props.user;var medications=props.medications||[];var entries=props.entries||[];var stock=props.stock||{};
   var CCOR={medicamento:'#1351B4',controlado:'#DC2626',injetavel:'#7C3AED',leite:'#D97706',penso:'#0891B2'};
@@ -6050,7 +6051,7 @@ function TabConferencia(props){
         var del=firebase.firestore.FieldValue.delete();var upd={};
         medKeys(m).forEach(function(k){if(contagens[k]!==undefined){upd['contagens.'+k]=del;upd['contadoPor.'+k]=del;}});
         var nlKeep=novosLotes.filter(function(nl){return nl.medId!==m.id;});
-        var rcKeep=recontagens.filter(function(rc){return (rc.key||'').split('~')[0]!==m.id;});
+        var rcKeep=recontagens.filter(function(rc){return (rc.key||'').split('--')[0]!==m.id;});
         if(nlKeep.length!==novosLotes.length)upd['novosLotes']=nlKeep;
         if(rcKeep.length!==recontagens.length)upd['recontagens']=rcKeep;
         if(Object.keys(upd).length){upd['atualizadoEm']=now;upd['atualizadoPor']=user.name;return docRef().update(upd);}
@@ -6061,7 +6062,7 @@ function TabConferencia(props){
         setContagens(function(p){var n=Object.assign({},p);medKeys(m).forEach(function(k){delete n[k];});return n;});
         setContadoPor(function(p){var n=Object.assign({},p);medKeys(m).forEach(function(k){delete n[k];});return n;});
         setNovosLotes(function(p){return p.filter(function(nl){return nl.medId!==m.id;});});
-        setRecontagens(function(p){return p.filter(function(rc){return (rc.key||'').split('~')[0]!==m.id;});});
+        setRecontagens(function(p){return p.filter(function(rc){return (rc.key||'').split('--')[0]!==m.id;});});
         setConfMedId(null);setErro('');
         alert('✅ Contagem de "'+m.nome+'" aplicada no estoque. As próximas saídas já descontam do novo saldo.');
       }).catch(falhou);
@@ -6182,19 +6183,19 @@ function TabConferencia(props){
       }).then(function(){
         // 3) Limpa só as contagens/lotes/recontagens desta categoria (doc já existe -> update seguro).
         var del=firebase.firestore.FieldValue.delete();var upd={};
-        Object.keys(contagens).forEach(function(k){if(catMedIds[k.split('~')[0]]){upd['contagens.'+k]=del;upd['contadoPor.'+k]=del;}});
+        Object.keys(contagens).forEach(function(k){if(catMedIds[k.split('--')[0]]){upd['contagens.'+k]=del;upd['contadoPor.'+k]=del;}});
         var nlKeep=novosLotes.filter(function(nl){return !catMedIds[nl.medId];});
-        var rcKeep=recontagens.filter(function(rc){return !catMedIds[(rc.key||'').split('~')[0]];});
+        var rcKeep=recontagens.filter(function(rc){return !catMedIds[(rc.key||'').split('--')[0]];});
         if(nlKeep.length!==novosLotes.length)upd['novosLotes']=nlKeep;
         if(rcKeep.length!==recontagens.length)upd['recontagens']=rcKeep;
         if(Object.keys(upd).length){upd['atualizadoEm']=now;upd['atualizadoPor']=user.name;return docRef().update(upd);}
       }).then(function(){
         // 4) Best-effort: apaga lote/validade do cadastro dos medicamentos zerados (não trava a finalização se falhar).
         zerar.forEach(function(mid){db.collection('medicamentos').doc(mid).update({loteAtual:'',validadeAtual:''}).catch(function(){});});
-        setContagens(function(p){var n=Object.assign({},p);Object.keys(n).forEach(function(k){if(catMedIds[k.split('~')[0]])delete n[k];});return n;});
-        setContadoPor(function(p){var n=Object.assign({},p);Object.keys(n).forEach(function(k){if(catMedIds[k.split('~')[0]])delete n[k];});return n;});
+        setContagens(function(p){var n=Object.assign({},p);Object.keys(n).forEach(function(k){if(catMedIds[k.split('--')[0]])delete n[k];});return n;});
+        setContadoPor(function(p){var n=Object.assign({},p);Object.keys(n).forEach(function(k){if(catMedIds[k.split('--')[0]])delete n[k];});return n;});
         setNovosLotes(function(p){return p.filter(function(nl){return !catMedIds[nl.medId];});});
-        setRecontagens(function(p){return p.filter(function(rc){return !catMedIds[(rc.key||'').split('~')[0]];});});
+        setRecontagens(function(p){return p.filter(function(rc){return !catMedIds[(rc.key||'').split('--')[0]];});});
         setFinalizadas(function(p){var n=Object.assign({},p);n[cat]={em:now,por:user.name,ajustes:lista.length};return n;});
         setAplicando(false);setShowResumo(false);setErro('');setCatAtiva(null);
         alert('✅ Categoria "'+catLabel+'" finalizada. '+lista.length+' ajuste(s) de estoque aplicado(s).'+(zerar.length>0?'\n🏷️ '+zerar.length+' medicamento(s) zerado(s): lote e validade apagados do cadastro.':''));
