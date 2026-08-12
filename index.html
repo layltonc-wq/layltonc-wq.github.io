@@ -5867,6 +5867,9 @@ function TabConferencia(props){
   var _lcId=useState(null);var lcId=_lcId[0];var setLcId=_lcId[1];var _lcLote=useState('');var lcLote=_lcLote[0];var setLcLote=_lcLote[1];var _lcVal=useState('');var lcVal=_lcVal[0];var setLcVal=_lcVal[1];var _lcSaving=useState(false);var lcSaving=_lcSaving[0];var setLcSaving=_lcSaving[1];
   var _movAviso=useState(false);var movAviso=_movAviso[0];var setMovAviso=_movAviso[1];var movBaseRef=useRef(null);
   var _confMedId=useState(null);var confMedId=_confMedId[0];var setConfMedId=_confMedId[1];// medicamento aplicando "Confirmar contagem"
+  var _confirmados=useState({});var confirmados=_confirmados[0];var setConfirmados=_confirmados[1];// {medId:{em,por}} — contagens já aplicadas nesta conferência (mantém o ✅ verde)
+  var _toast=useState('');var toast=_toast[0];var setToast=_toast[1];var toastRef=useRef(null);
+  function mostrarToast(msg){setToast(msg);if(toastRef.current)clearTimeout(toastRef.current);toastRef.current=setTimeout(function(){setToast('');},3000);}
   var pendingRef=useRef({});var timersRef=useRef({});var remoteRef=useRef({});
   var medById={};medications.forEach(function(m){medById[m.id]=m;});
   var podeGerir=user.role==='gestor'||user.role==='tecnico';
@@ -5887,6 +5890,7 @@ function TabConferencia(props){
       setNovosLotes(data.novosLotes||[]);
       setRecontagens(data.recontagens||[]);
       setFinalizadas(data.finalizadas||{});
+      setConfirmados(data.confirmados||{});
       var parts=data.participantes||{};setParticipantes(parts);
       // mantém a categoria própria sincronizada p/ o heartbeat
       var meu=parts[user.uid];minhaCatRef.current=meu?(meu.cat||null):minhaCatRef.current;
@@ -6054,7 +6058,9 @@ function TabConferencia(props){
         var rcKeep=recontagens.filter(function(rc){return (rc.key||'').split('--')[0]!==m.id;});
         if(nlKeep.length!==novosLotes.length)upd['novosLotes']=nlKeep;
         if(rcKeep.length!==recontagens.length)upd['recontagens']=rcKeep;
-        if(Object.keys(upd).length){upd['atualizadoEm']=now;upd['atualizadoPor']=user.name;return docRef().update(upd);}
+        upd['confirmados.'+m.id]={em:now,por:user.name};// marca como aplicado (mantém o ✅ verde)
+        upd['atualizadoEm']=now;upd['atualizadoPor']=user.name;
+        return docRef().update(upd);
       }).then(function(){
         // se o medicamento zerou, apaga lote/validade do cadastro (best-effort)
         var rawm=medById[m.id]||{};
@@ -6063,8 +6069,9 @@ function TabConferencia(props){
         setContadoPor(function(p){var n=Object.assign({},p);medKeys(m).forEach(function(k){delete n[k];});return n;});
         setNovosLotes(function(p){return p.filter(function(nl){return nl.medId!==m.id;});});
         setRecontagens(function(p){return p.filter(function(rc){return (rc.key||'').split('--')[0]!==m.id;});});
+        setConfirmados(function(p){var n=Object.assign({},p);n[m.id]={em:now,por:user.name};return n;});
         setConfMedId(null);setErro('');
-        alert('✅ Contagem de "'+m.nome+'" aplicada no estoque. As próximas saídas já descontam do novo saldo.');
+        mostrarToast('✅ '+m.nome+' — contagem aplicada no estoque');
       }).catch(falhou);
     }catch(e){falhou(e);}
   }
@@ -6091,6 +6098,8 @@ function TabConferencia(props){
     for(var j=0;j<novosLotes.length;j++){if(novosLotes[j].medId===m.id)return true;}
     return false;
   }
+  // "Verde": conferido (contagem em aberto) OU já confirmado/aplicado nesta conferência — mantém o ✅ visual.
+  function medVerde(m){return medConferido(m)||!!confirmados[m.id];}
 
   // Resumo de divergências: compara contado x sistema, lote a lote (só o que foi contado)
   var resumo=useMemo(function(){
@@ -6208,7 +6217,7 @@ function TabConferencia(props){
   var medListVis=catAtiva?medList.filter(function(m){return (m.cat||'medicamento')===catAtiva;}):[];
   var filtrada=buscaLc?medListVis.filter(function(m){return m.nome.toLowerCase().indexOf(buscaLc)>=0;}):medListVis;
   var totalItens=filtrada.length;
-  var conferidos=filtrada.filter(medConferido).length;
+  var conferidos=filtrada.filter(medVerde).length;
   var pct=totalItens>0?Math.round((conferidos/totalItens)*100):0;
 
   var cats=Object.keys(TIPOS);
@@ -6216,7 +6225,7 @@ function TabConferencia(props){
 
   // Progresso por categoria (sobre todos os medicamentos, não filtrado pela busca)
   var catStats={};cats.forEach(function(c){catStats[c]={total:0,conf:0};});
-  medList.forEach(function(m){var c=m.cat||'medicamento';if(!catStats[c])catStats[c]={total:0,conf:0};catStats[c].total++;if(medConferido(m))catStats[c].conf++;});
+  medList.forEach(function(m){var c=m.cat||'medicamento';if(!catStats[c])catStats[c]={total:0,conf:0};catStats[c].total++;if(medVerde(m))catStats[c].conf++;});
   // Resumo restrito à categoria ativa (para o modal e o botão "Finalizar categoria")
   var resumoCat=(function(){
     if(!catAtiva)return resumo;
@@ -6300,6 +6309,8 @@ function TabConferencia(props){
       <button onClick={function(){setMovAviso(false);}} style={{background:'none',border:'none',color:'#1E40AF',cursor:'pointer',fontSize:15,lineHeight:1,padding:0}}>✕</button>
     </div>}
 
+    {toast&&<div style={{position:'fixed',top:14,left:'50%',transform:'translateX(-50%)',zIndex:12000,background:'#0C6B3E',color:'#fff',borderRadius:12,padding:'11px 18px',fontSize:13,fontWeight:700,boxShadow:'0 8px 28px rgba(12,107,62,0.35)',maxWidth:'92vw',textAlign:'center'}}>{toast}</div>}
+
     {/* Painel de colaboração — equipe na conferência e distribuição de categorias */}
     <div style={{background:'#fff',borderRadius:14,padding:'12px 14px',marginBottom:14,border:'1.5px solid #E2E8F0'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
@@ -6374,7 +6385,7 @@ function TabConferencia(props){
 
     {grupos.map(function(g){
       var t=TIPOS[g.cat]||TIPOS.medicamento;var cor=CCOR[g.cat]||'#1351B4';
-      var confCat=g.meds.filter(medConferido).length;
+      var confCat=g.meds.filter(medVerde).length;
       var open=catAberta[g.cat];
       var donos=donoCat[g.cat]||[];var euAqui=g.cat===minhaCat;
       return(<div key={g.cat} style={{marginBottom:12}}>
@@ -6389,15 +6400,18 @@ function TabConferencia(props){
         </button>
         {open&&<div style={{border:'1.5px solid '+cor,borderTop:'none',borderRadius:'0 0 12px 12px',padding:'8px',background:'#F8FAFC'}}>
           {g.meds.map(function(m,mi){
-            var conf=medConferido(m);var exp=abertos[m.id];
+            var conf=medVerde(m);var exp=abertos[m.id];var aplicado=!!confirmados[m.id]&&!medConferido(m);
             var nlDoMed=novosLotes.filter(function(x){return x.medId===m.id;});
-            return(<div key={m.id} style={{marginBottom:6,background:'#fff',borderRadius:10,border:'1.5px solid '+(conf?'#BBF7D0':'#E2E8F0'),overflow:'hidden'}}>
+            return(<div key={m.id} style={{marginBottom:6,background:aplicado?'#F0FDF4':'#fff',borderRadius:10,border:'1.5px solid '+(aplicado?'#86EFAC':conf?'#BBF7D0':'#E2E8F0'),overflow:'hidden'}}>
               <div style={{display:'flex',alignItems:'stretch'}}>
                 <button data-tour={mi===0?'conf-primeiro-med':undefined} onClick={function(){setAbertos(function(p){var n=Object.assign({},p);n[m.id]=!exp;return n;});}} style={{flex:1,minWidth:0,display:'flex',alignItems:'center',gap:10,background:'none',border:'none',padding:'11px 12px',cursor:'pointer',textAlign:'left'}}>
                   <span style={{fontSize:16}}>{conf?'✅':'⬜'}</span>
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontWeight:600,fontSize:13,color:'#1E293B',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{m.nome}</div>
-                    <div style={{fontSize:10,color:'#94A3B8'}}>{m.lotes.length+(m.semLote>0?1:0)} lote(s){!cega&&' · sistema: '+m.est+' un.'}</div>
+                    <div style={{fontWeight:600,fontSize:13,color:aplicado?'#065F46':'#1E293B',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{m.nome}</div>
+                    {aplicado
+                      ?<div style={{fontSize:10,color:'#059669',fontWeight:700}}>✓ contagem aplicada no estoque</div>
+                      :<div style={{fontSize:10,color:'#94A3B8'}}>{m.lotes.length+(m.semLote>0?1:0)} lote(s){!cega&&' · sistema: '+m.est+' un.'}</div>
+                    }
                   </div>
                   <span style={{fontSize:13,color:'#94A3B8'}}>{exp?'▲':'▼'}</span>
                 </button>
