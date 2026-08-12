@@ -594,9 +594,9 @@ var _fotoMural=useState('');var fotoMural=_fotoMural[0];var setFotoMural=_fotoMu
 function handleFotoMural(e){var f=e.target.files[0];if(!f||!f.type.startsWith('image/'))return;compressPhoto(f,function(b64){setFotoMural(b64);});e.target.value='';}
 function post(){if(!aviso.trim()&&!fotoMural)return;setSaving(true);var expAt=new Date();expAt.setHours(expAt.getHours()+48);db.collection('avisos').add({texto:aviso.trim(),foto:fotoMural||'',autorNome:user.name,autorColor:user.color||B,autorFoto:user.photoURL||'',criadoEm:new Date().toISOString(),expiraEm:expAt.toISOString()}).then(function(){setAviso('');setFotoMural('');setSaving(false);});}
 function del(id){db.collection('avisos').doc(id).delete();}
-var today=todayStr();var te=entries.filter(function(e){return (e.criadoEm||'').startsWith(today);});var ts=0;te.forEach(function(e){if(e.tipo==='saida')ts+=(e.quantidade||0);});var tin=0;te.forEach(function(e){if(e.tipo==='entrada')tin+=(e.quantidade||0);});var low=medications.filter(function(m){return m.minEstoque&&(stock[m.id]||0)<=m.minEstoque&&(stock[m.id]||0)>0;});
+var today=todayStr();var te=entries.filter(function(e){return (e.criadoEm||'').startsWith(today)&&!_ehSaidaNaoReal(e);});var ts=0;te.forEach(function(e){if(e.tipo==='saida')ts+=(e.quantidade||0);});var tin=0;te.forEach(function(e){if(e.tipo==='entrada')tin+=(e.quantidade||0);});var low=medications.filter(function(m){return m.minEstoque&&(stock[m.id]||0)<=m.minEstoque&&(stock[m.id]||0)>0;});
 var vencendoIds={};computeVencimentos(medications,entries,stock).venc30.forEach(function(v){vencendoIds[v.id]=true;});var vencendo=Object.keys(vencendoIds).length;
-var week=[];for(var wi=0;wi<7;wi++){var wd=new Date();wd.setDate(wd.getDate()-(6-wi));var wk=fmtISO(wd);var wv=0;entries.forEach(function(e){if(e.tipo==='saida'&&(e.criadoEm||'').startsWith(wk))wv+=(e.quantidade||0);});week.push({l:wd.toLocaleDateString('pt-BR',{weekday:'short'}).slice(0,3),v:wv});}
+var week=[];for(var wi=0;wi<7;wi++){var wd=new Date();wd.setDate(wd.getDate()-(6-wi));var wk=fmtISO(wd);var wv=0;entries.forEach(function(e){if(e.tipo==='saida'&&!_ehSaidaNaoReal(e)&&(e.criadoEm||'').startsWith(wk))wv+=(e.quantidade||0);});week.push({l:wd.toLocaleDateString('pt-BR',{weekday:'short'}).slice(0,3),v:wv});}
 var stats=[
   {icon:'💊',label:'Saídas hoje',val:ts,sub:te.filter(function(e){return e.tipo==='saida';}).length+' registros',color:'#DC2626',bg:'#FEE2E2'},
   {icon:'📥',label:'Entradas hoje',val:tin,sub:te.filter(function(e){return e.tipo==='entrada';}).length+' registros',color:'#0C6B3E',bg:'#DCFCE7'},
@@ -705,7 +705,7 @@ function adicionarCarrinho(){
     next();
   }
   function save(){if(!sel){setErr('Selecione um medicamento.');return;}var q=parseInt(qty);if(!q||q<=0){setErr('Quantidade inválida.');return;}if(q>cur){setErr('Estoque insuficiente! Disponivel: '+cur+' un.');return;}if(q>=500&&!obs.trim()){setErr('⚠️ Saída de '+q+' un. (500 ou mais) exige justificativa. Preencha o campo de observação antes de continuar.');return;}if(q>cur*0.7&&!warn){setWarn('Saida alta: '+q+' de '+cur+' un. disponivel. Confirme clicando novamente.');return;}setSaving(true);setErr('');setWarn('');var lt=lote||(latest[sel.id]?latest[sel.id].lote:'')||'';var vl=val||(latest[sel.id]?latest[sel.id].validade:'')||'';var data={medicamentoId:sel.id,medicamentoNome:sel.nome,ean:sel.ean||'',tipo:'saida',quantidade:q,lote:lt.trim(),validade:vl.trim(),observacao:obs.trim()};if(q>=500)data.saidaGrande=true;var saveFn=(!canMove&&isGuest&&props.onSolicitar)?props.onSolicitar:onSave;saveFn(data).then(function(){if(q>500)db.collection('alertas').add({tipo:'saida_excessiva',medicamentoNome:sel.nome,quantidade:q,estoqueAntes:cur,autorNome:user.name,justificativa:obs.trim(),criadoEm:new Date().toISOString(),lido:false}).catch(function(){});playSound('success');setOk((!canMove&&isGuest)?'Solicitação enviada!':'Saida de '+q+'x '+sel.nome+' registrada!');setQty('');setLote('');setVal('');setObs('');setWarn('');setTimeout(function(){setOk('');},4000);setSaving(false);}).catch(function(e){setErr('Erro: '+(e.message||'tente novamente'));setSaving(false);});}
-var last10=entries.filter(function(e){return e.tipo==='saida';}).slice(-10).reverse();
+var last10=entries.filter(function(e){return e.tipo==='saida'&&!_ehSaidaNaoReal(e);}).slice(-10).reverse();
 return(
 <div style={{maxWidth:600,margin:'0 auto',padding:'16px 14px'}}>
   <div className="card" style={{marginBottom:14}}>
@@ -3303,7 +3303,7 @@ return(
     </div>
     {(function(){
       var minhasEntradas=(entries||[]).filter(function(e){return (e.autorId===user.uid||e.autorNome===user.name)&&e.tipo==='entrada';}).length;
-      var minhasSaidas=(entries||[]).filter(function(e){return (e.autorId===user.uid||e.autorNome===user.name)&&e.tipo==='saida';}).length;
+      var minhasSaidas=(entries||[]).filter(function(e){return (e.autorId===user.uid||e.autorNome===user.name)&&e.tipo==='saida'&&!_ehSaidaNaoReal(e);}).length;
       var total=minhasEntradas+minhasSaidas;
       var criadoEm=user.criadoEm?new Date(user.criadoEm):new Date();
       var diasAtivo=Math.max(1,Math.ceil((new Date()-criadoEm)/86400000));
