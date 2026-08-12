@@ -6016,14 +6016,23 @@ function TabConferencia(props){
       .then(function(){setRenSaving(false);setRenId(null);setRenNome('');setErro('');})
       .catch(function(e){setRenSaving(false);erroEscrita(e);});
   }
-  // Parte 2 (#6): definir lote/validade no cadastro do medicamento (não só nesta conferência)
+  // Parte 2 (#6): definir lote/validade no medicamento. Além do rótulo no cadastro (loteAtual/validadeAtual),
+  // atribui o estoque "sem lote" a esse lote via entries (mesmo formato dos lotes normais), pra aparecer
+  // no detalhe do medicamento (que monta os lotes a partir dos entries) e não só na lista principal.
   function abrirLoteCad(m){var raw=medById[m.id]||{};setLcId(m.id);setLcLote(raw.loteAtual||'');setLcVal(raw.validadeAtual||'');}
   function salvarLoteCad(m){
     var lote=(lcLote||'').trim();var val=_normValidade((lcVal||'').trim());
-    if(!lote&&!val){alert('Informe o lote e/ou a validade.');return;}
+    if(!lote){alert('Informe o número do lote.');return;}
     setLcSaving(true);
-    db.collection('medicamentos').doc(m.id).update({loteAtual:lote,validadeAtual:val})
-      .then(function(){setLcSaving(false);setLcId(null);setLcLote('');setLcVal('');setErro('');})
+    var now=new Date().toISOString();var semLote=parseInt(m.semLote)||0;
+    var ops=[db.collection('medicamentos').doc(m.id).update({loteAtual:lote,validadeAtual:val})];
+    if(semLote>0){
+      // reclassifica o "sem lote" para o novo lote: entrada com lote + saída sem lote (saldo total inalterado).
+      // Flag origemConferencia mantém o par fora dos relatórios; o detalhe do medicamento lê pelo lote normalmente.
+      ops.push(db.collection('entries').add({medicamentoId:m.id,medicamentoNome:m.nome,tipo:'entrada',quantidade:semLote,lote:lote,validade:val,observacao:'Conferência: atribuição de lote',origemConferencia:true,divergenciaTipo:'conferencia',autorNome:user.name,autorId:user.uid||'',autorCor:user.color||B,criadoEm:now,date:todayStr()}));
+      ops.push(db.collection('entries').add({medicamentoId:m.id,medicamentoNome:m.nome,tipo:'saida',quantidade:semLote,lote:'',validade:'',observacao:'Conferência: atribuição de lote (reclassificação)',origemConferencia:true,divergenciaTipo:'conferencia',autorNome:user.name,autorId:user.uid||'',autorCor:user.color||B,criadoEm:now,date:todayStr()}));
+    }
+    Promise.all(ops).then(function(){if(semLote>0)_bumpEntriesVersion();setLcSaving(false);setLcId(null);setLcLote('');setLcVal('');setErro('');})
       .catch(function(e){setLcSaving(false);erroEscrita(e);});
   }
 
