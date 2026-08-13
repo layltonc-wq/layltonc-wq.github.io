@@ -4023,6 +4023,11 @@ function TabAntibiotico({user,medications,stock,allUsers}){
   var _tel=sl('');var telefone=_tel[0];var setTelefone=_tel[1];// WhatsApp p/ lembretes (opcional)
   var _tdo=sl('paciente');var telDono=_tdo[0];var setTelDono=_tdo[1];// 'paciente' | 'responsavel'
   var _rn=sl('');var respNome=_rn[0];var setRespNome=_rn[1];// nome do responsável (quando telDono==='responsavel')
+  var _teId=sl(null);var telEditId=_teId[0];var setTelEditId=_teId[1];// edição inline de telefone no detalhe
+  var _teF=sl('');var telEditFone=_teF[0];var setTelEditFone=_teF[1];
+  var _teD=sl('paciente');var telEditDono=_teD[0];var setTelEditDono=_teD[1];
+  var _teR=sl('');var telEditResp=_teR[0];var setTelEditResp=_teR[1];
+  var _teS=sl(false);var telEditSaving=_teS[0];var setTelEditSaving=_teS[1];
   var _en=sl('');var editNome=_en[0];var setEditNome=_en[1];
   var _ed=sl('');var editDias=_ed[0];var setEditDias=_ed[1];
   var _ei=sl('');var editIni=_ei[0];var setEditIni=_ei[1];
@@ -4105,6 +4110,10 @@ function TabAntibiotico({user,medications,stock,allUsers}){
   function abrirWhats(t,tipo){try{window.open(waLink(t,tipo),'_blank');}catch(_){}}
   // Visibilidade dos botões (por data): início=1º dia, dose=qualquer dia do tratamento, finalizar=último dia.
   function waMostra(t){if(!temTelefone(t)||!t.dataInicio)return{inicio:false,dose:false,fim:false};var hj=hojeStrF();var fim=waFimData(t);return{inicio:t.dataInicio===hj,dose:hj>=t.dataInicio&&hj<=fim,fim:fim===hj};}
+  // Editar telefone de um tratamento já cadastrado (qualquer usuário logado).
+  function abrirTelEdit(t){setTelEditId(t.id);setTelEditFone(t.telefone||'');setTelEditDono(t.telefoneDono||'paciente');setTelEditResp(t.responsavelNome||'');}
+  function cancelarTelEdit(){setTelEditId(null);setTelEditFone('');setTelEditDono('paciente');setTelEditResp('');}
+  async function salvarTelEdit(t){setTelEditSaving(true);try{await db.collection('tratamentos_atb').doc(t.id).update({telefone:telEditFone.trim(),telefoneDono:telEditDono,responsavelNome:telEditDono==='responsavel'?telEditResp.trim():''});cancelarTelEdit();}catch(e){alert('Não foi possível salvar o telefone: '+((e&&e.message)?e.message:e));}setTelEditSaving(false);}
 
   async function salvar(){
     if(!nomePac.trim()||!medSel)return alert('Preencha nome do paciente e medicamento!');
@@ -4422,7 +4431,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
         </div>
       </div>);})()}
 
-      {showDet&&(function(){var detT=tratamentos.find(function(x){return x.id===showDet.id;})||showDet;return(<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:1000,display:'flex',alignItems:'flex-end',justifyContent:'center'}} onClick={function(){setShowDet(null);setObsDesist('');}}>
+      {showDet&&(function(){var detT=tratamentos.find(function(x){return x.id===showDet.id;})||showDet;return(<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:1000,display:'flex',alignItems:'flex-end',justifyContent:'center'}} onClick={function(){setShowDet(null);setObsDesist('');cancelarTelEdit();}}>
         <div style={{background:'#fff',borderRadius:'24px 24px 0 0',padding:'24px 20px 40px',width:'100%',maxWidth:480,maxHeight:'90vh',overflowY:'auto'}} onClick={function(e){e.stopPropagation();}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
             <div>
@@ -4431,7 +4440,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
             </div>
             <div style={{display:'flex',gap:8}}>
               <button onClick={function(){setEditNome(detT.pacienteNome);setEditDias(String(detT.diasTratamento||''));setEditIni(detT.dataInicio||'');setEditObs(detT.obs||'');setEditMed(detT.nomeMedico||'');setEditCrm(detT.crmMedico||'');setShowEdit(detT);setShowDet(null);}} style={{background:'#EFF6FF',border:'none',borderRadius:10,width:36,height:36,cursor:'pointer',fontSize:16}}>✏️</button>
-              <button onClick={function(){setShowDet(null);setObsDesist('');}} style={{background:'#F1F5F9',border:'none',borderRadius:10,width:36,height:36,cursor:'pointer',fontSize:18}}>✕</button>
+              <button onClick={function(){setShowDet(null);setObsDesist('');cancelarTelEdit();}} style={{background:'#F1F5F9',border:'none',borderRadius:10,width:36,height:36,cursor:'pointer',fontSize:18}}>✕</button>
             </div>
           </div>
           <div style={{background:'#F8FAFC',borderRadius:12,padding:14,marginBottom:16,display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
@@ -4456,14 +4465,36 @@ function TabAntibiotico({user,medications,stock,allUsers}){
               <div style={{fontSize:12,fontWeight:600}}>{detT.medicamentoNome}</div>
             </div>}
           </div>
-          {(function(){var w=waMostra(detT);if(!w.inicio&&!w.dose&&!w.fim)return null;var bs={display:'inline-flex',alignItems:'center',gap:5,padding:'8px 12px',background:'#F0FDF4',border:'1.5px solid #BBF7D0',borderRadius:10,color:'#059669',fontWeight:700,fontSize:13,cursor:'pointer'};return(<div style={{background:'#F8FAFC',borderRadius:12,padding:12,marginBottom:16,border:'1px solid #E2E8F0'}}>
-            <div style={{fontSize:12,fontWeight:700,color:'#475569',marginBottom:8}}>📱 Enviar lembrete por WhatsApp {detT.telefoneDono==='responsavel'&&detT.responsavelNome?'— '+detT.responsavelNome+' (responsável)':'— '+detT.pacienteNome}</div>
-            <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
-              {w.inicio&&<button onClick={function(){abrirWhats(detT,'inicio');}} style={bs}>📱 Início</button>}
-              {w.dose&&<button onClick={function(){abrirWhats(detT,'dose');}} style={bs}>📱 Dose</button>}
-              {w.fim&&<button onClick={function(){abrirWhats(detT,'fim');}} style={bs}>📱 Finalizar</button>}
-            </div>
-          </div>);})()}
+          <div style={{background:'#F8FAFC',borderRadius:12,padding:12,marginBottom:16,border:'1px solid #E2E8F0'}}>
+            {telEditId===detT.id?(<div>
+              <div style={{fontSize:12,fontWeight:800,color:'#059669',marginBottom:8}}>📞 Telefone para lembretes</div>
+              <label style={{fontSize:12,fontWeight:700,color:'#475569',display:'block',marginBottom:5}}>Telefone (WhatsApp)</label>
+              <input value={telEditFone} onChange={function(e){setTelEditFone(mascaraTel(e.target.value));}} inputMode="numeric" placeholder="(00) 00000-0000" style={{width:'100%',padding:'12px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:14,boxSizing:'border-box',marginBottom:10}}/>
+              <label style={{fontSize:12,fontWeight:700,color:'#475569',display:'block',marginBottom:6}}>De quem é o número?</label>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+                <button type="button" onClick={function(){setTelEditDono('paciente');}} style={{padding:'10px',borderRadius:10,border:telEditDono==='paciente'?'2px solid #10B981':'1.5px solid #E2E8F0',background:telEditDono==='paciente'?'#DCFCE7':'#fff',color:telEditDono==='paciente'?'#059669':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>Do paciente</button>
+                <button type="button" onClick={function(){setTelEditDono('responsavel');}} style={{padding:'10px',borderRadius:10,border:telEditDono==='responsavel'?'2px solid #10B981':'1.5px solid #E2E8F0',background:telEditDono==='responsavel'?'#DCFCE7':'#fff',color:telEditDono==='responsavel'?'#059669':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>Do responsável</button>
+              </div>
+              {telEditDono==='responsavel'&&<div style={{marginTop:10}}>
+                <label style={{fontSize:12,fontWeight:700,color:'#475569',display:'block',marginBottom:5}}>Nome do responsável</label>
+                <input value={telEditResp} onChange={function(e){setTelEditResp(e.target.value);}} placeholder="Nome de quem recebe as mensagens" style={{width:'100%',padding:'12px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:14,boxSizing:'border-box'}}/>
+              </div>}
+              <div style={{display:'flex',gap:8,marginTop:12}}>
+                <button onClick={function(){salvarTelEdit(detT);}} disabled={telEditSaving} style={{flex:1,padding:'11px',background:'#10B981',border:'none',borderRadius:10,color:'#fff',fontWeight:700,fontSize:13,cursor:'pointer',opacity:telEditSaving?0.7:1}}>{telEditSaving?'Salvando...':'✅ Salvar'}</button>
+                <button onClick={cancelarTelEdit} disabled={telEditSaving} style={{padding:'11px 16px',background:'#F1F5F9',border:'none',borderRadius:10,color:'#64748B',fontWeight:700,fontSize:13,cursor:'pointer'}}>Cancelar</button>
+              </div>
+            </div>):(<div>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+                <div style={{fontSize:12,fontWeight:700,color:'#475569'}}>📱 Lembretes por WhatsApp<div style={{fontSize:11,fontWeight:500,color:temTelefone(detT)?'#059669':'#94A3B8',marginTop:2}}>{temTelefone(detT)?detT.telefone+(detT.telefoneDono==='responsavel'&&detT.responsavelNome?' · '+detT.responsavelNome+' (resp.)':' · paciente'):'Sem telefone cadastrado'}</div></div>
+                <button onClick={function(){abrirTelEdit(detT);}} style={{background:'#EFF6FF',border:'1.5px solid #BFDBFE',borderRadius:10,padding:'8px 12px',color:B,fontWeight:700,fontSize:12,cursor:'pointer',whiteSpace:'nowrap'}}>📞 {temTelefone(detT)?'Editar telefone':'Adicionar telefone'}</button>
+              </div>
+              {(function(){var w=waMostra(detT);var bs={display:'inline-flex',alignItems:'center',gap:5,padding:'8px 12px',background:'#F0FDF4',border:'1.5px solid #BBF7D0',borderRadius:10,color:'#059669',fontWeight:700,fontSize:13,cursor:'pointer'};if(!w.inicio&&!w.dose&&!w.fim)return temTelefone(detT)?<div style={{fontSize:11,color:'#94A3B8',marginTop:8}}>Nenhum lembrete disponível para hoje.</div>:null;return(<div style={{display:'flex',flexWrap:'wrap',gap:8,marginTop:10}}>
+                {w.inicio&&<button onClick={function(){abrirWhats(detT,'inicio');}} style={bs}>📱 Início</button>}
+                {w.dose&&<button onClick={function(){abrirWhats(detT,'dose');}} style={bs}>📱 Dose</button>}
+                {w.fim&&<button onClick={function(){abrirWhats(detT,'fim');}} style={bs}>📱 Finalizar</button>}
+              </div>);})()}
+            </div>)}
+          </div>
           {cSt(detT)==='ativo'&&detT.dataInicio&&(parseInt(detT.diasTratamento)||0)>0&&(function(){
             var ag=agenda(detT);if(!ag.length)return null;
             return(<div style={{marginBottom:16}}>
