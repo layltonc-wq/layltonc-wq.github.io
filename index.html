@@ -793,7 +793,8 @@ function vincularPaciente(nome,cpfDig,cnsDig){
 function adicionarCarrinho(){
     if(!sel){setErr('Selecione um medicamento.');return;}
     var q=parseInt(qty);if(!q||q<=0){setErr('Quantidade inválida.');return;}
-    if(q>cur){setErr('Estoque insuficiente! Disponivel: '+cur+' un.');return;}
+    if(cur<=0){setErr('Estoque zerado! Saída bloqueada — não há unidades disponíveis de '+sel.nome+'.');return;}
+    if(q>cur){setErr('Quantidade ('+q+') maior que o estoque disponível ('+cur+' un.). Máximo permitido: '+cur+' un.');return;}
     var lt=lote||(latest[sel.id]?latest[sel.id].lote:'')||'';
     var vl=val||(latest[sel.id]?latest[sel.id].validade:'')||'';
     setCarrinho(function(prev){
@@ -828,12 +829,13 @@ function adicionarCarrinho(){
       }
       var item=items[idx++];
       var st=stock[item.medId]||0;
-      if(item.qty>st){erros.push(item.medNome+' sem estoque');next();return;}
+      if(st<=0){erros.push(item.medNome+': estoque zerado — saída bloqueada');next();return;}
+      if(item.qty>st){erros.push(item.medNome+': qtd ('+item.qty+') maior que disponível ('+st+')');next();return;}
       onSave({medicamentoId:item.medId,medicamentoNome:item.medNome,tipo:'saida',quantidade:item.qty,lote:item.lote,validade:item.validade,observacao:item.obs||''}).then(next).catch(function(e){erros.push(item.medNome+': erro');next();});
     }
     next();
   }
-  async function save(){if(!sel){setErr('Selecione um medicamento.');return;}var q=parseInt(qty);if(!q||q<=0){setErr('Quantidade inválida.');return;}if(q>cur){setErr('Estoque insuficiente! Disponivel: '+cur+' un.');return;}if(q>=500&&!obs.trim()){setErr('⚠️ Saída de '+q+' un. (500 ou mais) exige justificativa. Preencha o campo de observação antes de continuar.');return;}if(q>cur*0.7&&!warn){setWarn('Saida alta: '+q+' de '+cur+' un. disponivel. Confirme clicando novamente.');return;}setSaving(true);setErr('');setWarn('');var lt=lote||(latest[sel.id]?latest[sel.id].lote:'')||'';var vl=val||(latest[sel.id]?latest[sel.id].validade:'')||'';var data={medicamentoId:sel.id,medicamentoNome:sel.nome,ean:sel.ean||'',tipo:'saida',quantidade:q,lote:lt.trim(),validade:vl.trim(),observacao:obs.trim()};if(q>=500)data.saidaGrande=true;
+  async function save(){if(!sel){setErr('Selecione um medicamento.');return;}var q=parseInt(qty);if(!q||q<=0){setErr('Quantidade inválida.');return;}if(cur<=0){setErr('Estoque zerado! Saída bloqueada — não há unidades disponíveis de '+sel.nome+'.');return;}if(q>cur){setErr('Quantidade ('+q+') maior que o estoque disponível ('+cur+' un.). Máximo permitido: '+cur+' un.');return;}if(q>=500&&!obs.trim()){setErr('⚠️ Saída de '+q+' un. (500 ou mais) exige justificativa. Preencha o campo de observação antes de continuar.');return;}if(q>cur*0.7&&!warn){setWarn('Saida alta: '+q+' de '+cur+' un. disponivel. Confirme clicando novamente.');return;}setSaving(true);setErr('');setWarn('');var lt=lote||(latest[sel.id]?latest[sel.id].lote:'')||'';var vl=val||(latest[sel.id]?latest[sel.id].validade:'')||'';var data={medicamentoId:sel.id,medicamentoNome:sel.nome,ean:sel.ean||'',tipo:'saida',quantidade:q,lote:lt.trim(),validade:vl.trim(),observacao:obs.trim()};if(q>=500)data.saidaGrande=true;
     // Vínculo com paciente: SÓ pra medicamentos Controlados. Pra qualquer outra categoria, os campos de
     // paciente (mesmo preenchidos via foto) são ignorados — não geram pacienteId nem cadastro/histórico.
     if(ehControlado&&pacNome.trim()){
@@ -2820,7 +2822,21 @@ function TabLeites(props){
     });
     var entregas=linhas.filter(function(l){return l.leiteId&&l.qtdEntregue>0;});
     if(entregas.length===0){alert2('Informe ao menos um leite com quantidade entregue (maior que zero).');return;}
+    var bloqueios=[];
+    entregas.forEach(function(l){
+      var disp=stock[l.leiteId]||0;
+      if(disp<=0)bloqueios.push(l.nome+': estoque zerado (0 disponível)');
+      else if(l.qtdEntregue>disp)bloqueios.push(l.nome+': quantidade ('+l.qtdEntregue+') maior que disponível ('+disp+')');
+    });
     var matsBaixa=bMats.map(function(m){return{medId:m.medId,nome:m.nome,qtdPrescrita:m.qtdPrescrita,qtdEntregue:parseInt(m.qtdEntregue)||0};});
+    matsBaixa.forEach(function(m){
+      if(m.qtdEntregue>0){
+        var disp=stock[m.medId]||0;
+        if(disp<=0)bloqueios.push(m.nome+': estoque zerado (0 disponível)');
+        else if(m.qtdEntregue>disp)bloqueios.push(m.nome+': quantidade ('+m.qtdEntregue+') maior que disponível ('+disp+')');
+      }
+    });
+    if(bloqueios.length>0){alert2('Estoque insuficiente:\n'+bloqueios.join('\n')+'\n\nAjuste as quantidades para no máximo o disponível.');return;}
     setBSaving(true);
     // Compat: primeiro leite (para telas antigas que leem leiteNome/qtdLeiteEntregue).
     var principal=entregas[0];
@@ -6722,7 +6738,8 @@ function TourEngine(props){
 var _recSeq=0;var _nfSeq=0;
 
 // ---- Parte 2: comparação automática recebimento × nota fiscal (pura, testável) ----
-// A NOTA FISCAL NUNCA ALTERA O ESTOQUE — esta função só CLASSIFICA divergências.
+// Ao conciliar, o estoque passa a refletir a quantidade da NOTA FISCAL.
+// A diferença (divergência) fica registrada como pendente — só rastreia, não bloqueia.
 function conciliarRecebimentoNota(recebidos,faturados){
   function agg(list){var m={};(list||[]).forEach(function(it){var id=it.medicamentoId;if(!id)return;if(!m[id])m[id]={medicamentoId:id,medicamentoNome:it.medicamentoNome||'',qtd:0,lote:it.lote||''};m[id].qtd+=parseInt(it.quantidade)||0;if(!m[id].lote&&it.lote)m[id].lote=it.lote;});return m;}
   var R=agg(recebidos),F=agg(faturados);var rows=[];
@@ -6958,8 +6975,27 @@ function ConciliacaoFiscal(props){
       var rows=conciliarRecebimentoNota(rec.itens||[],faturados);
       var statusGeral=_concStatusGeral(rows);
       var now=new Date().toISOString();
+      // Ajuste de estoque: para cada divergência, cria entry de ajuste (entrada ou saída) com a diferença
+      // entre nota fiscal e recebimento físico, para que o estoque reflita a nota.
+      var ajusteEntries=[];
+      for(var ri=0;ri<rows.length;ri++){
+        var row=rows[ri];if(row.status==='conciliado')continue;
+        var diff=row.qtdFaturada-row.qtdRecebida;// positivo=nota tem mais (precisa entrada), negativo=recebido demais (precisa saída)
+        if(diff===0)continue;
+        var ajObj={criadoEm:now,date:todayStr(),autorId:user.uid||'',autorNome:user.name||'',autorCargo:user.role||'',autorColor:user.color||B,
+          medicamentoId:row.medicamentoId,medicamentoNome:row.medicamentoNome,
+          tipo:diff>0?'entrada':'saida',quantidade:Math.abs(diff),
+          lote:row.lote||'',validade:'',
+          observacao:'Ajuste conciliação NF '+notaNumero.trim()+' — '+(diff>0?'entrada':'saída')+' de '+Math.abs(diff)+' un. (diferença nota × recebimento)',
+          origemConciliacao:true,conciliacaoRef:'pendente'};
+        var ajRef=await db.collection('entries').add(ajObj);
+        ajusteEntries.push({idx:ri,entryId:ajRef.id,tipo:ajObj.tipo,quantidade:ajObj.quantidade});
+        rows[ri].ajusteEntryId=ajRef.id;rows[ri].ajusteTipo=ajObj.tipo;rows[ri].ajusteQtd=ajObj.quantidade;
+        rows[ri].divergenciaPendente=Math.abs(diff);rows[ri].divergenciaConsumida=0;
+      }
       var concRef=await db.collection('conciliacoes').add({recebimentoId:recSel,notaNumero:notaNumero.trim(),notaSerie:notaSerie.trim(),notaDataEmissao:notaEmissao||'',fornecedor:fornecedor.trim()||rec.fornecedor||'',valorTotal:parseFloat(String(valorTotal).replace(',','.'))||0,anexoURL:anexo.trim(),itens:rows,statusGeral:statusGeral,criadoEm:now,criadoPor:user.name||'',criadoPorId:user.uid||''});
-      // A NOTA NÃO MEXE NO ESTOQUE. Só atualiza o status documental do recebimento.
+      // Atualiza os entries de ajuste com o id da conciliação
+      for(var ai=0;ai<ajusteEntries.length;ai++){await db.collection('entries').doc(ajusteEntries[ai].entryId).update({conciliacaoRef:concRef.id}).catch(function(){});}
       var recStatus=statusGeral==='conciliado'?'conciliado':(statusGeral==='resolvido'?'resolvido':'divergencia');
       var recLabel=statusGeral==='conciliado'?'Conciliado':(statusGeral==='resolvido'?'Resolvido':'Divergência Aberta');
       await db.collection('recebimentos').doc(recSel).update({status:recStatus,statusLabel:recLabel,conciliacaoId:concRef.id,conciliadoEm:now,conciliadoPor:user.name||''});
@@ -7000,7 +7036,7 @@ function ConciliacaoFiscal(props){
     <div>
       <div style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9',marginBottom:16}}>
         <div style={{fontWeight:800,fontSize:15,color:'#1E293B',marginBottom:4}}>Nota fiscal</div>
-        <div style={{fontSize:11,color:'#94A3B8',marginBottom:14}}>A nota é <strong>documental</strong> — nunca altera o estoque. Serve para conciliar e detectar divergências.</div>
+        <div style={{fontSize:11,color:'#94A3B8',marginBottom:14}}>Ao conciliar, o estoque é ajustado para refletir a nota fiscal. Divergências ficam registradas como pendentes.</div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
           <div><label style={lbl}>Número da NF *</label><input value={notaNumero} onChange={function(e){setNotaNumero(e.target.value);}} placeholder="Ex: 12345" style={inp}/></div>
           <div><label style={lbl}>Série</label><input value={notaSerie} onChange={function(e){setNotaSerie(e.target.value);}} placeholder="Ex: 1" style={inp}/></div>
@@ -7335,7 +7371,9 @@ function TabRecebimento(props){
       for(var i=0;i<validos.length;i++){
         var it=validos[i];
         // entrada real: estoque atualiza na hora e vale no calcStock como qualquer entry.
-        var ref=await onSave({tipo:'entrada',medicamentoId:it.medId,medicamentoNome:it.medNome,quantidade:parseInt(it.qtd)||0,lote:(it.lote||'').trim(),validade:_normValidade((it.validade||'').trim()),observacao:'Recebimento — '+fornecedor.trim(),origemRecebimento:true,recebimentoId:recId,date:data});
+        var medCad=medications.find(function(m){return m.id===it.medId;});
+        var catMed=medCad?medCad.categoria:'medicamento';
+        var ref=await onSave({tipo:'entrada',medicamentoId:it.medId,medicamentoNome:it.medNome,quantidade:parseInt(it.qtd)||0,lote:(it.lote||'').trim(),validade:_normValidade((it.validade||'').trim()),observacao:'Recebimento — '+fornecedor.trim(),origemRecebimento:true,recebimentoId:recId,date:data,categoriaMed:catMed});
         itensComEntry.push({medicamentoId:it.medId,medicamentoNome:it.medNome,quantidade:parseInt(it.qtd)||0,lote:(it.lote||'').trim(),validade:_normValidade((it.validade||'').trim()),observacao:(it.obs||'').trim(),entryId:(ref&&ref.id)||''});
       }
       await db.collection('recebimentos').doc(recId).update({itens:itensComEntry});
@@ -7416,7 +7454,7 @@ function TabRecebimento(props){
               </div>
               {it.medId?
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,background:'#EFF6FF',border:'1.5px solid #BFDBFE',borderRadius:10,padding:'9px 12px',marginBottom:8}}>
-                  <div style={{fontWeight:700,fontSize:13,color:B}}>💊 {it.medNome}</div>
+                  <div style={{display:'flex',alignItems:'center',gap:6}}><span style={{fontWeight:700,fontSize:13,color:B}}>💊 {it.medNome}</span>{(function(){var mc=medications.find(function(m){return m.id===it.medId;});var cat=mc?mc.categoria:'medicamento';var ti=TIPOS[cat]||TIPOS.medicamento;return<span style={{fontSize:10,fontWeight:700,padding:'2px 6px',borderRadius:6,background:ti.cor+'18',color:ti.cor}}>{ti.icon} {ti.label}</span>;})()}</div>
                   <button onClick={function(){setItem(it.key,{medId:'',medNome:'',busca:''});setFocoItem(it.key);}} style={{background:'#fff',border:'1px solid #BFDBFE',borderRadius:8,padding:'4px 10px',fontSize:11,color:B,cursor:'pointer',fontWeight:600}}>Trocar</button>
                 </div>
                 :<div style={{position:'relative',marginBottom:8}}>
@@ -7664,17 +7702,15 @@ useEffect(function(){
       }
     }
     // Plantão encerra automaticamente às 20h (gestor/tecnico encerra, outros saem)
-    if(h>=20&&!isGuest&&shiftId){
+    if(h>=20&&shiftId){
       var keyEnc='fc_shift_enc_'+todayStr();
       if(!localStorage.getItem(keyEnc)){
+        localStorage.setItem(keyEnc,'auto');
         if(user.role==='gestor'||user.role==='tecnico'){
-          // Encerrar o plantão para todos
           db.collection('plantoes').doc(shiftId).update({ativo:false,encerradoEm:new Date().toISOString(),encerradoAuto:true}).then(function(){
-            localStorage.setItem(keyEnc,'auto');
             setPlantao(null);setIsGuest(true);setShiftId(null);
           }).catch(function(){});
         } else {
-          // Outros roles apenas saem
           localStorage.setItem('fc_shift_saiu_'+todayStr(),'auto');
           setIsGuest(true);
         }
@@ -7835,6 +7871,15 @@ function addEntry(data){try{var obj={criadoEm:new Date().toISOString(),date:toda
           });
           return Promise.all(espelhos).then(function(){return ref;});
         }).catch(function(){return ref;});
+    });
+  }
+  if(obj.tipo==='saida'&&obj.medicamentoId){
+    promise=promise.then(function(ref){
+      var novoEst=(stock[obj.medicamentoId]||0)-(obj.quantidade||0);
+      if(novoEst<=0){
+        db.collection('medicamentos').doc(obj.medicamentoId).update({loteAtual:'',validadeAtual:''}).catch(function(){});
+      }
+      return ref;
     });
   }
   return promise;
