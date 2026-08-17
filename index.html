@@ -221,6 +221,16 @@ var TOURS=[
     {seletor:'[data-tour="conf-confirmar"]',texto:'Clique aqui pra aplicar a contagem no estoque imediatamente — as saídas passam a descontar desse novo valor.',posicao:'acima'},
     {seletor:'[data-tour="conf-lote"]',texto:'Pode cadastrar lote e validade durante a conferência.',posicao:'acima'},
     {seletor:'[data-tour="conf-finalizar"]',texto:'Finalize cada categoria separadamente quando terminar.',posicao:'acima'}
+  ]},
+  {id:'tour_recebimento',titulo:'Novo módulo: Recebimento e Conciliação Fiscal',passos:[
+    {acao:{tipo:'aba',aba:'recebimento'},seletor:'[data-tour="tab-content"]',texto:'Nova aba! Aqui você registra a mercadoria que chegou e depois concilia com a nota fiscal.',posicao:'abaixo'},
+    {seletor:'[data-tour="receb-subabas"]',texto:'4 seções: Recebimento Físico, Conciliação Fiscal, Divergências e Relatórios.',posicao:'abaixo'},
+    {seletor:'[data-tour="receb-form"]',texto:'Preencha o fornecedor e adicione os medicamentos recebidos — com quantidade, lote e validade.',posicao:'abaixo'},
+    {seletor:'[data-tour="receb-finalizar"]',texto:'Ao finalizar, o estoque já atualiza na hora e o recebimento fica "Pendente de Conciliação Fiscal" — aguardando a nota chegar.',posicao:'acima'},
+    {acao:{tipo:'clicar',seletor:'[data-tour="receb-sub-conciliacao"]'},seletor:'[data-tour="conc-selecionar-receb"]',texto:'Quando a nota fiscal chegar, cadastre os dados dela aqui e escolha o recebimento pendente pra vincular.',posicao:'abaixo'},
+    {seletor:'[data-tour="conc-conciliar"]',texto:'O sistema compara automaticamente cada medicamento recebido × faturado e aponta as divergências. Regra de ouro: a nota NUNCA altera o estoque — ela é só documental.',posicao:'acima'},
+    {acao:{tipo:'clicar',seletor:'[data-tour="receb-sub-divergencias"]'},seletor:'[data-tour="div-painel"]',texto:'Todas as divergências ficam listadas aqui, com filtros — do "Pendente de Conciliação" até "Resolvido".',posicao:'abaixo'},
+    {acao:{tipo:'clicar',seletor:'[data-tour="receb-sub-relatorios"]'},seletor:'[data-tour="rel-painel"]',texto:'E aqui os relatórios prontos (pendências, divergências por fornecedor/produto/período, notas conciliadas...) — exporte em Excel ou PDF quando precisar.',posicao:'abaixo'}
   ]}
 ];
 function todayStr(){return new Date().toISOString().slice(0,10);}
@@ -814,206 +824,8 @@ return(
   )}
 </div>);}
 
-function VaPendenteCard(props){
-  var v=props.v;var selecionado=props.selecionado;var onToggleSelect=props.onToggleSelect;
-  var dias=Math.floor((new Date()-new Date(v.registradoEm))/86400000);
-  var atrasado=dias>=15;
-  return(<div style={{background:atrasado?'#FEF2F2':(selecionado?'#EFF6FF':'#fff'),borderRadius:12,border:'1.5px solid '+(selecionado?'#1351B4':(atrasado?'#FCA5A5':'#E2E8F0')),padding:12,marginBottom:8,display:'flex',gap:10,alignItems:'flex-start'}}>
-    <input type="checkbox" checked={selecionado} onChange={function(){onToggleSelect(v.id);}} style={{width:20,height:20,marginTop:2,flexShrink:0,cursor:'pointer'}}/>
-    <div style={{flex:1}}>
-      <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>{v.medicamentoNome}</div>
-      <div style={{fontSize:11,color:'#64748B'}}>{v.quantidade} un. · Lote {v.lote} · Val {v.validade}{v.fornecedor?' · '+v.fornecedor:''}</div>
-      <div style={{fontSize:11,marginTop:2,color:atrasado?'#DC2626':'#94A3B8',fontWeight:atrasado?700:400}}>
-        {atrasado?'⚠️ ':''}{dias} dia(s) aguardando nota fiscal
-      </div>
-    </div>
-  </div>);
-}
-
-function ValesPendentesPainel(props){
-  var db=props.db;var user=props.user;var entries=props.entries||[];
-  var _vales=useState([]);var vales=_vales[0];var setVales=_vales[1];
-  var _carregando=useState(true);var carregando=_carregando[0];var setCarregando=_carregando[1];
-  var _erroCarregar=useState('');var erroCarregar=_erroCarregar[0];var setErroCarregar=_erroCarregar[1];
-  var _selecionados=useState({});var selecionados=_selecionados[0];var setSelecionados=_selecionados[1];
-  var _showVincular=useState(false);var showVincular=_showVincular[0];var setShowVincular=_showVincular[1];
-  var _modoNota=useState('existente');var modoNota=_modoNota[0];var setModoNota=_modoNota[1];
-  var _notaEscolhida=useState('');var notaEscolhida=_notaEscolhida[0];var setNotaEscolhida=_notaEscolhida[1];
-  var _buscaNotaExist=useState('');var buscaNotaExist=_buscaNotaExist[0];var setBuscaNotaExist=_buscaNotaExist[1];
-  var _nfNumNovo=useState('');var nfNumNovo=_nfNumNovo[0];var setNfNumNovo=_nfNumNovo[1];
-  var _nfFornNovo=useState('');var nfFornNovo=_nfFornNovo[0];var setNfFornNovo=_nfFornNovo[1];
-  var _nfDataNovo=useState('');var nfDataNovo=_nfDataNovo[0];var setNfDataNovo=_nfDataNovo[1];
-  var _salvandoVinc=useState(false);var salvandoVinc=_salvandoVinc[0];var setSalvandoVinc=_salvandoVinc[1];
-
-  useEffect(function(){
-    if(!db)return;
-    return db.collection('vales').where('status','==','pendente').onSnapshot(function(s){
-      var lista=s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;});
-      lista.sort(function(a,b){return new Date(b.registradoEm||0)-new Date(a.registradoEm||0);});
-      setVales(lista);
-      setCarregando(false);
-      setErroCarregar('');
-    },function(e){
-      console.error('Erro ao carregar vales:',e);
-      setCarregando(false);
-      setErroCarregar((e&&e.code)||(e&&e.message)||'erro desconhecido');
-    });
-  },[db]);
-
-  // Notas fiscais já existentes, extraídas das entradas (Histórico de Notas)
-  var notasExistentes=(function(){
-    var entradas=entries.filter(function(e){return e.tipo==='entrada'&&e.nfNumero;});
-    var gmap={};
-    entradas.forEach(function(e){
-      var k=e.nfNumero+'|||'+(e.nfFornecedor||'');
-      if(!gmap[k])gmap[k]={nf:e.nfNumero,forn:e.nfFornecedor||'',data:e.nfData||'',dt:e.criadoEm||'',count:0};
-      gmap[k].count++;
-      if((e.criadoEm||'')>(gmap[k].dt||''))gmap[k].dt=e.criadoEm||'';
-    });
-    return Object.values(gmap).sort(function(a,b){return (b.dt||'').localeCompare(a.dt||'');});
-  })();
-
-  function toggleSelect(id){
-    setSelecionados(function(prev){
-      var n=Object.assign({},prev);
-      if(n[id])delete n[id];else n[id]=true;
-      return n;
-    });
-  }
-
-  function selecionarTodos(){
-    var n={};
-    vales.forEach(function(v){n[v.id]=true;});
-    setSelecionados(n);
-  }
-
-  function limparSelecao(){
-    setSelecionados({});
-  }
-
-  var idsSelecionados=Object.keys(selecionados).filter(function(id){return selecionados[id];});
-  var qtdSelecionados=idsSelecionados.length;
-
-  function confirmarVinculo(){
-    var nfNum,nfForn,nfData;
-    if(modoNota==='existente'){
-      if(!notaEscolhida){alert('Selecione uma nota fiscal da lista.');return;}
-      var partes=notaEscolhida.split('|||');
-      nfNum=partes[0];nfForn=partes[1]||'';
-      var notaObj=notasExistentes.find(function(n){return n.nf===nfNum&&(n.forn||'')===nfForn;});
-      nfData=notaObj?notaObj.data:'';
-    } else {
-      if(!nfNumNovo.trim()){alert('Informe o número da nova nota.');return;}
-      nfNum=nfNumNovo.trim();nfForn=nfFornNovo.trim();nfData=nfDataNovo.trim();
-    }
-    if(qtdSelecionados===0){alert('Selecione ao menos um vale.');return;}
-    setSalvandoVinc(true);
-    var ids=idsSelecionados.slice();
-    var i=0;
-    function nx(){
-      if(i>=ids.length){
-        setSalvandoVinc(false);setShowVincular(false);setSelecionados({});
-        setNotaEscolhida('');setNfNumNovo('');setNfFornNovo('');setNfDataNovo('');
-        return;
-      }
-      var id=ids[i++];
-      db.collection('vales').doc(id).update({
-        status:'concluido',nfNumero:nfNum,nfFornecedor:nfForn,nfData:nfData,
-        vinculadoPor:user.name,vinculadoEm:new Date().toISOString()
-      }).then(nx).catch(function(e){console.error('Erro vincular vale:',e);nx();});
-    }
-    nx();
-  }
-
-  var atrasados=vales.filter(function(v){return Math.floor((new Date()-new Date(v.registradoEm))/86400000)>=15;});
-
-  return(<div className="card" style={{marginBottom:14}}>
-    <div className="ch"><div className="ch-title"><div style={{width:3,height:16,background:'#1351B4',borderRadius:2}}></div>📋 Vales Pendentes ({vales.length})</div></div>
-    {erroCarregar&&<div style={{background:'#FEF2F2',border:'1.5px solid #FCA5A5',borderRadius:10,padding:'10px 12px',marginBottom:10,fontSize:12,color:'#DC2626'}}>
-      ⚠️ Erro ao carregar vales pendentes: {erroCarregar}
-    </div>}
-    {atrasados.length>0&&<div style={{background:'#FEF2F2',border:'1.5px solid #FCA5A5',borderRadius:10,padding:'10px 12px',marginBottom:10,fontSize:12,color:'#DC2626',fontWeight:600}}>
-      ⚠️ {atrasados.length} vale(s) aguardando nota fiscal há mais de 15 dias!
-    </div>}
-    {carregando&&<div style={{textAlign:'center',padding:16,color:'#94A3B8',fontSize:13}}>Carregando...</div>}
-    {!carregando&&!erroCarregar&&vales.length===0&&<div style={{textAlign:'center',padding:'24px 0',color:'#94A3B8',fontSize:13}}>✅ Nenhum vale pendente</div>}
-
-    {vales.length>0&&<div style={{display:'flex',gap:8,marginBottom:10,flexWrap:'wrap',alignItems:'center'}}>
-      <button onClick={selecionarTodos} style={{background:'#F1F5F9',border:'none',borderRadius:8,padding:'6px 12px',fontSize:12,color:'#475569',fontWeight:600,cursor:'pointer'}}>Selecionar todos</button>
-      {qtdSelecionados>0&&<button onClick={limparSelecao} style={{background:'#F1F5F9',border:'none',borderRadius:8,padding:'6px 12px',fontSize:12,color:'#475569',fontWeight:600,cursor:'pointer'}}>Limpar seleção</button>}
-      {qtdSelecionados>0&&<span style={{fontSize:12,color:'#1351B4',fontWeight:700,marginLeft:'auto'}}>{qtdSelecionados} selecionado(s)</span>}
-    </div>}
-
-    {qtdSelecionados>0&&<button onClick={function(){setShowVincular(true);}} style={{width:'100%',padding:'12px',background:'#1351B4',color:'#fff',border:'none',borderRadius:10,fontWeight:700,fontSize:14,cursor:'pointer',marginBottom:12}}>
-      🔗 Vincular Nota Fiscal a {qtdSelecionados} vale(s)
-    </button>}
-
-    {vales.map(function(v){return(<VaPendenteCard key={v.id} v={v} selecionado={!!selecionados[v.id]} onToggleSelect={toggleSelect}/>);})}
-
-    {showVincular&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',zIndex:9500,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
-      <div style={{background:'#fff',borderRadius:20,padding:20,maxWidth:480,width:'100%',maxHeight:'85vh',overflowY:'auto'}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
-          <div style={{fontWeight:800,fontSize:16,color:'#1351B4'}}>🔗 Vincular Nota a {qtdSelecionados} vale(s)</div>
-          <button onClick={function(){setShowVincular(false);}} style={{background:'none',border:'none',fontSize:22,cursor:'pointer',color:'#94A3B8'}}>✕</button>
-        </div>
-        <div style={{display:'flex',gap:8,marginBottom:14}}>
-          <button onClick={function(){setModoNota('existente');}} style={{flex:1,padding:'9px',borderRadius:8,border:'1.5px solid '+(modoNota==='existente'?'#1351B4':'#E2E8F0'),background:modoNota==='existente'?'#1351B4':'#fff',color:modoNota==='existente'?'#fff':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>📋 Nota Existente</button>
-          <button onClick={function(){setModoNota('nova');}} style={{flex:1,padding:'9px',borderRadius:8,border:'1.5px solid '+(modoNota==='nova'?'#1351B4':'#E2E8F0'),background:modoNota==='nova'?'#1351B4':'#fff',color:modoNota==='nova'?'#fff':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>➕ Nota Nova</button>
-        </div>
-
-        {modoNota==='existente'&&<div>
-          {notasExistentes.length===0&&<div style={{textAlign:'center',padding:'20px 0',color:'#94A3B8',fontSize:13}}>Nenhuma nota cadastrada ainda. Use "Nota Nova".</div>}
-          {notasExistentes.length>0&&<div>
-            <input value={buscaNotaExist} onChange={function(e){setBuscaNotaExist(e.target.value);}} placeholder="Buscar por número ou fornecedor..." className="inp" style={{fontSize:13}}/>
-            <div style={{maxHeight:260,overflowY:'auto'}}>
-              {notasExistentes.filter(function(n){
-                if(!buscaNotaExist.trim())return true;
-                var s=buscaNotaExist.toLowerCase();
-                return n.nf.toLowerCase().indexOf(s)>=0||(n.forn||'').toLowerCase().indexOf(s)>=0;
-              }).map(function(n){
-                var key=n.nf+'|||'+n.forn;
-                var sel=notaEscolhida===key;
-                return(<div key={key} onClick={function(){setNotaEscolhida(key);}} style={{padding:'10px 12px',borderRadius:10,border:'1.5px solid '+(sel?'#1351B4':'#E2E8F0'),background:sel?'#EFF6FF':'#fff',marginBottom:6,cursor:'pointer'}}>
-                  <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>NF {n.nf}{n.forn?' · '+n.forn:''}</div>
-                  <div style={{fontSize:11,color:'#94A3B8'}}>{n.count} item(ns) já registrados{n.data?' · '+n.data:''}</div>
-                </div>);
-              })}
-            </div>
-          </div>}
-        </div>}
-
-        {modoNota==='nova'&&<div>
-          <input value={nfNumNovo} onChange={function(e){setNfNumNovo(e.target.value);}} placeholder="Número da NF *" className="inp" style={{fontSize:13}}/>
-          <input value={nfFornNovo} onChange={function(e){setNfFornNovo(e.target.value);}} placeholder="Fornecedor" className="inp" style={{fontSize:13}}/>
-          <input value={nfDataNovo} onChange={function(e){setNfDataNovo(e.target.value);}} placeholder="Data da nota (DD/MM/AAAA)" className="inp" style={{fontSize:13}}/>
-        </div>}
-
-        <button onClick={confirmarVinculo} disabled={salvandoVinc} style={{width:'100%',padding:'13px',background:'#059669',color:'#fff',border:'none',borderRadius:10,fontWeight:700,fontSize:14,cursor:'pointer',opacity:salvandoVinc?0.6:1,marginTop:14}}>
-          {salvandoVinc?'Vinculando...':'✅ Confirmar vínculo de '+qtdSelecionados+' vale(s)'}
-        </button>
-      </div>
-    </div>}
-  </div>);
-}
-
 function TabEntrada(props){var user=props.user;var medications=props.medications;var entries=props.entries||[];var onSave=props.onSave;var isGuest=props.isGuest||false;var canMove=props.canMove!==false;var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};var alert2=props.alert2||function(m){window.alert(m);};var _modo=useState('individual');var modo=_modo[0];var setModo=_modo[1];var _search=useState('');var search=_search[0];var setSearch=_search[1];var _sel=useState(null);var sel=_sel[0];var setSel=_sel[1];var _newNome=useState('');var newNome=_newNome[0];var setNewNome=_newNome[1];var _newEan=useState('');var newEan=_newEan[0];var setNewEan=_newEan[1];var _creating=useState(false);var creating=_creating[0];var setCreating=_creating[1];var _showList=useState(false);var showList=_showList[0];var setShowList=_showList[1];var _qty=useState('');var qty=_qty[0];var setQty=_qty[1];var _lote=useState('');var lote=_lote[0];var setLote=_lote[1];var _val=useState('');var val=_val[0];var setVal=_val[1];var _obs=useState('');var obs=_obs[0];var setObs=_obs[1];var _err=useState('');var err=_err[0];var setErr=_err[1];var _ok=useState('');var ok=_ok[0];var setOk=_ok[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];var _filtEntrada=useState('todos');var filtEntrada=_filtEntrada[0];var setFiltEntrada=_filtEntrada[1];var _loteNota=useState('');var loteNota=_loteNota[0];var setLoteNota=_loteNota[1];var _valNota=useState('');var valNota=_valNota[0];var setValNota=_valNota[1];var _obsNota=useState('');var obsNota=_obsNota[0];var setObsNota=_obsNota[1];var _loteNotaReal=useState('');var loteNotaReal=_loteNotaReal[0];var setLoteNotaReal=_loteNotaReal[1];var _valNotaReal=useState('');var valNotaReal=_valNotaReal[0];var setValNotaReal=_valNotaReal[1];var _qtds=useState({});var qtds=_qtds[0];var setQtds=_qtds[1];var _salvandoNota=useState(false);var salvandoNota=_salvandoNota[0];var setSalvandoNota=_salvandoNota[1];
 var _showDiv=useState(false);var showDiv=_showDiv[0];var setShowDiv=_showDiv[1];
-var _carrinhoVale=useState(function(){try{var s=localStorage.getItem('fc_rascunho_vale');return s?JSON.parse(s):[];}catch(e){return [];}});var carrinhoVale=_carrinhoVale[0];var setCarrinhoVale=_carrinhoVale[1];
-  useEffect(function(){try{if(carrinhoVale.length>0)localStorage.setItem('fc_rascunho_vale',JSON.stringify(carrinhoVale));else localStorage.removeItem('fc_rascunho_vale');}catch(e){}},[carrinhoVale]);
-var _valeForn=useState('');var valeForn=_valeForn[0];var setValeForn=_valeForn[1];
-var _valeObs=useState('');var valeObs=_valeObs[0];var setValeObs=_valeObs[1];
-var _searchVale=useState('');var searchVale=_searchVale[0];var setSearchVale=_searchVale[1];
-var _selVale=useState(null);var selVale=_selVale[0];var setSelVale=_selVale[1];
-var _qtyVale=useState('');var qtyVale=_qtyVale[0];var setQtyVale=_qtyVale[1];
-var _loteVale=useState('');var loteVale=_loteVale[0];var setLoteVale=_loteVale[1];
-var _valValeItem=useState('');var valValeItem=_valValeItem[0];var setValValeItem=_valValeItem[1];
-var _salvandoVale=useState(false);var salvandoVale=_salvandoVale[0];var setSalvandoVale=_salvandoVale[1];
-var _showNovoMedVale=useState(false);var showNovoMedVale=_showNovoMedVale[0];var setShowNovoMedVale=_showNovoMedVale[1];
-var _novoMedNomeVale=useState('');var novoMedNomeVale=_novoMedNomeVale[0];var setNovoMedNomeVale=_novoMedNomeVale[1];
-var _novoMedCatVale=useState('medicamento');var novoMedCatVale=_novoMedCatVale[0];var setNovoMedCatVale=_novoMedCatVale[1];
-var _novoMedQtyVale=useState('');var novoMedQtyVale=_novoMedQtyVale[0];var setNovoMedQtyVale=_novoMedQtyVale[1];
-var _novoMedLoteVale=useState('');var novoMedLoteVale=_novoMedLoteVale[0];var setNovoMedLoteVale=_novoMedLoteVale[1];
-var _novoMedValVale=useState('');var novoMedValVale=_novoMedValVale[0];var setNovoMedValVale=_novoMedValVale[1];
 var _divNotaMed=useState(null);var divNotaMed=_divNotaMed[0];var setDivNotaMed=_divNotaMed[1];
 var _divNotaQty=useState('');var divNotaQty=_divNotaQty[0];var setDivNotaQty=_divNotaQty[1];
 var _divRealMed=useState(null);var divRealMed=_divRealMed[0];var setDivRealMed=_divRealMed[1];
@@ -1122,112 +934,6 @@ function save(){if(!sel){setErr('Selecione um medicamento.');return;}var q=parse
     }).catch(function(e){
       setSalvandoDiv(false);
       alert2('Erro ao registrar: '+(e&&e.message?e.message:'verifique a conexão'));
-    });
-  }
-
-  function cadastrarNovoMedVale(){
-    if(!novoMedNomeVale.trim()){alert2('Informe o nome do medicamento.');return;}
-    if(!novoMedLoteVale.trim()){alert2('Informe o lote.');return;}
-    if(!novoMedValVale.trim()){alert2('Informe a validade.');return;}
-    var q2=parseInt(novoMedQtyVale)||0;
-    if(q2<=0){alert2('Informe a quantidade.');return;}
-    setSalvandoVale(true);
-    db.collection('medicamentos').add({
-      nome:novoMedNomeVale.trim().toUpperCase(),categoria:novoMedCatVale,tipo:novoMedCatVale,
-      ean:'',estoqueMin:5,criadoEm:new Date().toISOString(),criadoPor:user.name
-    }).then(function(ref){
-      setCarrinhoVale(function(prev){
-        return prev.concat([{
-          medId:ref.id,medNome:novoMedNomeVale.trim().toUpperCase(),
-          qty:q2,lote:novoMedLoteVale.trim(),validade:novoMedValVale.trim(),
-          categoriaMed:novoMedCatVale,novo:true
-        }]);
-      });
-      setNovoMedNomeVale('');setNovoMedQtyVale('');setNovoMedLoteVale('');setNovoMedValVale('');
-      setShowNovoMedVale(false);setSalvandoVale(false);
-    }).catch(function(e){setSalvandoVale(false);alert2('Erro: '+e.message);});
-  }
-
-  function adicionarAoCarrinhoVale(){
-    if(!selVale){alert2('Selecione um medicamento.');return;}
-    var q=parseInt(qtyVale);
-    if(!q||q<=0){alert2('Quantidade inválida.');return;}
-    if(!loteVale.trim()){alert2('Informe o lote.');return;}
-    if(!valValeItem.trim()){alert2('Informe a validade.');return;}
-    setCarrinhoVale(function(prev){
-      return prev.concat([{
-        medId:selVale.id,medNome:selVale.nome,
-        qty:q,lote:loteVale.trim(),validade:valValeItem.trim(),
-        categoriaMed:selVale.categoria||'medicamento'
-      }]);
-    });
-    setSelVale(null);setSearchVale('');setQtyVale('');setLoteVale('');setValValeItem('');
-  }
-
-  function removerDoCarrinhoVale(idx){
-    setCarrinhoVale(function(prev){return prev.filter(function(_,i){return i!==idx;});});
-  }
-
-  function salvarVale(){
-    if(!carrinhoVale.length){alert2('Adicione ao menos um medicamento ao vale.');return;}
-    confirm2('Confirmar Vale','Registrar entrada de '+carrinhoVale.length+' medicamento(s) via VALE (sem nota fiscal ainda)?',_execSalvarVale,'success','Confirmar');
-  }
-
-  function _execSalvarVale(){
-    setSalvandoVale(true);
-    var forn=valeForn.trim();
-    var obs=valeObs.trim();
-    var items=carrinhoVale.slice();
-    var hoje=new Date().toISOString();
-    if(items.length===0){setSalvandoVale(false);return;}
-    // Registra cada item: entrada no estoque + vale pendente (ambos são create, permitido pela regra).
-    // A antiga sonda de permissão (criava e apagava um doc de teste em 'vales') foi REMOVIDA: dependia de
-    // delete — que a regra endurecida não permite — e só gerava documentos órfãos. Se o create real falhar,
-    // o próprio erro já informa o motivo (permissão ou outro) e o item permanece no carrinho para retentar.
-    var total=items.length;
-    var concluidos=0;
-    var temErro=false;
-    var ultimoErroVale=null;
-    function finalizarSeCompleto(){
-      if(concluidos<total)return;
-      if(temErro){
-        setSalvandoVale(false);
-        var msgErro=ultimoErroVale?(ultimoErroVale.code||ultimoErroVale.message||'erro desconhecido'):'erro desconhecido';
-        alert2('Não foi possível registrar o vale: '+msgErro+'. Os itens que falharam continuam no carrinho — tente novamente.');
-        return;
-      }
-      setCarrinhoVale([]);setValeForn('');setValeObs('');
-      setSalvandoVale(false);
-      alert2('Vale registrado! O estoque foi atualizado. Lembre-se de vincular a Nota Fiscal quando ela chegar (aba 🧾 Vale → Pendentes).');
-    }
-    items.forEach(function(item2){
-      var entryObj={
-        medicamentoId:item2.medId,medicamentoNome:item2.medNome,
-        tipo:'entrada',quantidade:Number(item2.qty)||0,
-        lote:item2.lote,validade:item2.validade,
-        observacao:'VALE'+(forn?' - '+forn:'')+(obs?' - '+obs:''),
-        categoriaMed:item2.categoriaMed,
-        viaVale:true
-      };
-      onSave(entryObj).then(function(){
-        return db.collection('vales').add({
-          medicamentoId:item2.medId,medicamentoNome:item2.medNome,
-          quantidade:Number(item2.qty)||0,lote:item2.lote,validade:item2.validade,
-          fornecedor:forn,obs:obs,
-          status:'pendente',
-          nfNumero:'',nfFornecedor:'',nfData:'',
-          registradoPor:user.name,registradoEm:hoje,date:todayStr()
-        });
-      }).then(function(){
-        // Remove este item do carrinho local (já está salvo com sucesso)
-        setCarrinhoVale(function(prev){return prev.filter(function(x){return x!==item2;});});
-        concluidos++;
-        finalizarSeCompleto();
-      }).catch(function(e){
-        console.error('Erro vale item:',e);
-        temErro=true;ultimoErroVale=e;concluidos++;
-        finalizarSeCompleto();
-      });
     });
   }
 
@@ -1361,7 +1067,6 @@ return(
   <div className="tab-sw">
     <button onClick={function(){setModo('individual');}} className={modo==='individual'?'on':''}>📥 Individual</button>
     <button onClick={function(){setModo('nota');}} className={modo==='nota'?'on':''}>📋 Entrada por Nota</button>
-    <button onClick={function(){setModo('vale');}} className={modo==='vale'?'on':''}>🧾 Vale</button>
   </div>
   {modo==='individual'&&(
     <div>
@@ -1546,77 +1251,6 @@ return(
       {carrinhoNota.length>0&&<button onClick={salvarCarrinhoNota} disabled={salvandoNota} style={{width:'100%',padding:'15px',background:'#0C6B3E',border:'none',borderRadius:12,color:'#fff',fontWeight:800,fontSize:16,cursor:'pointer',opacity:salvandoNota?0.6:1,marginBottom:14}}>
         {salvandoNota?'Registrando...':'Confirmar entrada de '+carrinhoNota.length+' medicamento(s)'}
       </button>}
-    </div>
-  )}
-
-  {modo==='vale'&&(
-    <div>
-      <div style={{background:'#FFF7ED',border:'1.5px solid #FCD34D',borderRadius:12,padding:'12px 14px',marginBottom:14,fontSize:12,color:'#92400E'}}>
-        📋 Use quando o medicamento chegou pelo <strong>Vale</strong>, antes da Nota Fiscal oficial. O estoque é atualizado normalmente. Depois é só vincular a nota em <strong>🧾 Vale → Pendentes</strong>.
-      </div>
-      <div className="card" style={{marginBottom:14}}>
-        <div className="ch"><div className="ch-title"><div style={{width:3,height:16,background:'#D97706',borderRadius:2}}></div>Dados do Vale</div></div>
-        <input value={valeForn} onChange={function(e){setValeForn(e.target.value);}} placeholder="Fornecedor (opcional)" className="inp"/>
-        <input value={valeObs} onChange={function(e){setValeObs(e.target.value);}} placeholder="Observação (opcional)" className="inp"/>
-      </div>
-
-      <div className="card" style={{marginBottom:14}}>
-        <div className="ch"><div className="ch-title"><div style={{width:3,height:16,background:'#D97706',borderRadius:2}}></div>Adicionar Medicamento</div></div>
-        <input value={searchVale} onChange={function(e){setSearchVale(e.target.value);setSelVale(null);}} placeholder="Buscar medicamento..." className="inp"/>
-        {searchVale.trim()&&!selVale&&<div style={{maxHeight:140,overflowY:'auto',border:'1px solid #E2E8F0',borderRadius:8,background:'#fff',marginBottom:8}}>
-          {medications.filter(function(m){return m.nome.toLowerCase().indexOf(searchVale.toLowerCase())>=0;}).slice(0,8).map(function(m){
-            return(<div key={m.id} onClick={function(){setSelVale(m);setSearchVale(m.nome);}} style={{padding:'9px 12px',fontSize:13,cursor:'pointer',borderBottom:'1px solid #F1F5F9'}}>{m.nome}</div>);
-          })}
-        </div>}
-        {selVale&&<div style={{background:'#FFFBEB',borderRadius:8,padding:'7px 12px',marginBottom:8,fontSize:12,color:'#92400E',fontWeight:600}}>✓ {selVale.nome}</div>}
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
-          <div><Lbl c="Lote *"/><input value={loteVale} onChange={function(e){setLoteVale(e.target.value);}} placeholder="Ex: ABC1234" className="inp" style={{marginBottom:0}}/></div>
-          <div><Lbl c="Validade *"/><input value={valValeItem} onChange={function(e){setValValeItem(e.target.value);}} placeholder="MM/AAAA" className="inp" style={{marginBottom:0}}/></div>
-        </div>
-        <div style={{display:'flex',gap:8}}>
-          <input type="number" value={qtyVale} onChange={function(e){setQtyVale(e.target.value);}} placeholder="Qtd *" className="inp" style={{marginBottom:0,flex:1}}/>
-          <button onClick={adicionarAoCarrinhoVale} disabled={!selVale} style={{flex:1,padding:'10px',background:!selVale?'#E2E8F0':'#D97706',color:!selVale?'#94A3B8':'#fff',border:'none',borderRadius:8,fontWeight:700,fontSize:13,cursor:'pointer'}}>+ Adicionar</button>
-          <button onClick={function(){setShowNovoMedVale(!showNovoMedVale);}} style={{padding:'10px 14px',background:'#EFF6FF',border:'1.5px solid #BFDBFE',borderRadius:8,color:'#1351B4',fontWeight:700,fontSize:12,cursor:'pointer'}}>+ Novo</button>
-        </div>
-        {showNovoMedVale&&<div style={{marginTop:12,paddingTop:12,borderTop:'1px solid #F1F5F9'}}>
-          <div style={{fontWeight:700,fontSize:12,color:'#1351B4',marginBottom:8}}>📦 Cadastrar medicamento novo</div>
-          <input value={novoMedNomeVale} onChange={function(e){setNovoMedNomeVale(e.target.value);}} placeholder="Nome do medicamento" className="inp"/>
-          <div style={{background:'#FFF7ED',border:'1.5px solid #FCD34D',borderRadius:10,padding:'10px 12px',marginBottom:10}}>
-            <div style={{fontWeight:700,fontSize:12,color:'#92400E',marginBottom:8}}>⚠️ Confirme a categoria antes de salvar:</div>
-            <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
-              {Object.keys(TIPOS).map(function(k){var t=TIPOS[k];return(<button key={k} onClick={function(){setNovoMedCatVale(k);}} style={{padding:'7px 12px',borderRadius:20,border:'1.5px solid '+(novoMedCatVale===k?t.cor:'#E2E8F0'),background:novoMedCatVale===k?t.cor:'#fff',color:novoMedCatVale===k?'#fff':'#64748B',cursor:'pointer',fontWeight:novoMedCatVale===k?700:500,fontSize:11}}>{t.icon} {t.label}</button>);})}
-            </div>
-          </div>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
-            <div><Lbl c="Lote *"/><input value={novoMedLoteVale} onChange={function(e){setNovoMedLoteVale(e.target.value);}} placeholder="Lote" className="inp" style={{marginBottom:0}}/></div>
-            <div><Lbl c="Validade *"/><input value={novoMedValVale} onChange={function(e){setNovoMedValVale(e.target.value);}} placeholder="MM/AAAA" className="inp" style={{marginBottom:0}}/></div>
-          </div>
-          <input type="number" value={novoMedQtyVale} onChange={function(e){setNovoMedQtyVale(e.target.value);}} placeholder="Quantidade" className="inp"/>
-          <button onClick={cadastrarNovoMedVale} disabled={!novoMedNomeVale.trim()||salvandoVale} style={{width:'100%',padding:'10px',background:'#1351B4',color:'#fff',border:'none',borderRadius:8,fontWeight:700,fontSize:13,cursor:'pointer',opacity:(!novoMedNomeVale.trim()||salvandoVale)?0.6:1}}>
-            {salvandoVale?'Salvando...':'Cadastrar e adicionar ao carrinho'}
-          </button>
-        </div>}
-      </div>
-
-      {carrinhoVale.length>0&&<div className="card" style={{marginBottom:14,border:'1.5px solid #FCD34D'}}>
-        <div className="ch"><div className="ch-title"><div style={{width:3,height:16,background:'#D97706',borderRadius:2}}></div>Carrinho ({carrinhoVale.length} item{carrinhoVale.length>1?'s':''})</div></div>
-        <div style={{background:'#F0FDF4',borderRadius:8,padding:'6px 10px',marginBottom:10,fontSize:11,color:'#0C6B3E'}}>💾 Salvo automaticamente neste dispositivo — não perde se a tela travar ou fechar.</div>
-        {carrinhoVale.map(function(item2,i){
-          return(<div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 0',borderBottom:i<carrinhoVale.length-1?'1px solid #F1F5F9':'none'}}>
-            <div>
-              <div style={{fontWeight:600,fontSize:13,color:'#1E293B'}}>{item2.medNome}</div>
-              <div style={{fontSize:11,color:'#94A3B8'}}>{item2.qty} un. · Lote {item2.lote} · Val {item2.validade}</div>
-            </div>
-            <button onClick={function(){removerDoCarrinhoVale(i);}} style={{background:'none',border:'none',color:'#DC2626',fontSize:18,cursor:'pointer',padding:'4px 8px'}}>×</button>
-          </div>);
-        })}
-      </div>}
-
-      <button onClick={salvarVale} disabled={!carrinhoVale.length||salvandoVale} style={{width:'100%',padding:'14px',background:(!carrinhoVale.length||salvandoVale)?'#E2E8F0':'#D97706',color:(!carrinhoVale.length||salvandoVale)?'#94A3B8':'#fff',border:'none',borderRadius:12,fontWeight:800,fontSize:16,cursor:'pointer',marginBottom:14}}>
-        {salvandoVale?'Registrando...':'🧾 Confirmar Vale ('+carrinhoVale.length+' item'+(carrinhoVale.length===1?'':'s')+')'}
-      </button>
-
-      <ValesPendentesPainel db={db} user={user} entries={entries}/>
     </div>
   )}
 
@@ -1916,7 +1550,7 @@ function delMed(id){if(!confirm('Excluir medicamento?'))return;db.collection('me
 function salvarEditLote(){if(!editLote)return;setSaving(true);var ps=[];if(editLote.medId)ps.push(db.collection('medicamentos').doc(editLote.medId).update({loteAtual:editLoteVal.trim(),validadeAtual:_normValidade(editLoteData)}));if(editLote.entryId)ps.push(db.collection('entries').doc(editLote.entryId).update({lote:editLoteVal.trim(),validade:_normValidade(editLoteData)}).catch(function(){}));var _hadEntry=!!editLote.entryId;Promise.all(ps).then(function(){if(_hadEntry)_bumpEntriesVersion();setEditLote(null);setSaving(false);}).catch(function(e){alert('Erro: '+e.message);setSaving(false);});}
 function salvarAjuste(){if(!ajusteMed)return;var nq=parseInt(ajusteQty);if(isNaN(nq)||nq<0){alert('Quantidade inválida.');return;}if(!ajusteMotivo.trim()){alert('Informe o motivo.');return;}var atual=loteSel?loteSel.qty:(stock[ajusteMed.id]||0);var diff=nq-atual;if(diff===0){setAjusteId(null);setAjusteMed(null);setAjusteQty('');setAjusteMotivo('');setLoteSel(null);return;}setSaving(true);db.collection('entries').add({medicamentoId:ajusteMed.id,medicamentoNome:ajusteMed.nome,ean:ajusteMed.ean||'',tipo:diff>0?'entrada':'saida',quantidade:Math.abs(diff),lote:loteSel?loteSel.lote:'',validade:loteSel?loteSel.validade:'',observacao:'Balanço: '+ajusteMotivo.trim()+' (era '+atual+', passou a '+nq+')',criadoEm:new Date().toISOString(),date:todayStr(),autorId:user.uid,autorNome:user.name,autorCargo:user.role,autorColor:user.color||B,isAjuste:true}).then(function(){setAjusteId(null);setAjusteMed(null);setAjusteQty('');setAjusteMotivo('');setLoteSel(null);setSaving(false);}).catch(function(e){alert(e.message);setSaving(false);});}
 function handleImportXls(file){if(!file)return;setImporting(true);setImportStatus('Lendo arquivo...');var reader=new FileReader();reader.onload=function(ev){try{var data=new Uint8Array(ev.target.result);var wb=XLSX.read(data,{type:'array'});var catMap={'CONTROLADOS':'controlado','CONTROLADO':'controlado','FARMACIA BASICA':'medicamento','FARMACIA':'medicamento','LEITES':'leite','LEITE':'leite','INJETAVEIS':'injetavel','INJETAVEL':'injetavel','PENSOS':'penso','MATERIAIS':'penso'};var batch=[];for(var si=0;si<wb.SheetNames.length;si++){var sn=wb.SheetNames[si];if(sn.toUpperCase().indexOf('INSTRUC')>=0)continue;var ws2=wb.Sheets[sn];var rows=XLSX.utils.sheet_to_json(ws2,{defval:''});if(!rows||rows.length===0)continue;var su=sn.toUpperCase().trim();var sc='medicamento';for(var key in catMap){if(su.indexOf(key)>=0){sc=catMap[key];break;}}for(var i=0;i<rows.length;i++){var row=rows[i];var nome=row['Nome']||row['NOME']||row['nome']||'';if(!nome||!nome.trim())continue;var cat=row['Categoria']||row['CATEGORIA']||sc;var est2=parseInt(row['Estoque Inicial']||row['estoque']||0)||0;var min2=parseInt(row['Estoque Minimo']||row['minimo']||0)||0;var ean=(row['EAN (opcional)']||row['EAN']||'')+'';var val2=(row['Validade (MM/AAAA)']||row['Validade']||'')+'';var cl=cat.toLowerCase().trim();if(cl.indexOf('injet')>=0)cl='injetavel';else if(cl.indexOf('penso')>=0||cl.indexOf('material')>=0)cl='penso';else if(cl.indexOf('control')>=0)cl='controlado';else if(cl.indexOf('leite')>=0)cl='leite';else cl='medicamento';batch.push({nome:nome.trim(),categoria:cl,minEstoque:min2,ean:ean,validade:_normValidade(val2),estoque:est2,criadoEm:new Date().toISOString()});}}if(batch.length===0){setImportStatus('Nenhum item encontrado.');setImporting(false);return;}setImportStatus('Importando '+batch.length+' itens...');var idx=0,done=0;function next2(){if(idx>=batch.length){setImportStatus('Registrando estoques...');var ei=0;function ne(){if(ei>=batch.length){setImportStatus('Concluido! '+done+' itens!');setImporting(false);return;}var item=batch[ei++];if(item.estoque>0){db.collection('medicamentos').where('nome','==',item.nome).limit(1).get().then(function(s){if(!s.empty){db.collection('entries').add({medicamentoId:s.docs[0].id,medicamentoNome:item.nome,ean:item.ean||'',tipo:'entrada',quantidade:item.estoque,lote:'',validade:item.validade||'',observacao:'Estoque inicial',criadoEm:new Date().toISOString(),date:todayStr(),autorId:user.uid,autorNome:user.name,autorCargo:user.role,autorColor:user.color||B}).then(ne).catch(ne);}else ne();}).catch(ne);}else ne();}ne();return;}var item=batch[idx++];db.collection('medicamentos').add({nome:item.nome,categoria:item.categoria,minEstoque:item.minEstoque,ean:item.ean,criadoEm:item.criadoEm}).then(function(){done++;next2();}).catch(function(){done++;next2();});}next2();}catch(ex){setImportStatus('Erro: '+ex.message);setImporting(false);}};reader.readAsArrayBuffer(file);}
-var divergenciasAtivas=(entries||[]).filter(function(e){return e.divergenciaTipo==='real';});var _cutDesc=(function(){var d=new Date();d.setDate(d.getDate()-30);return d.toISOString().slice(0,10);})();var descartes30=(entries||[]).filter(function(e){return e.tipo==='saida'&&e.descarte&&(e.date||'')>=_cutDesc;});var subTabs=[{id:'estoque',label:'Estoque'},{id:'faltas',label:'Faltas'+(faltas.length>0?' ('+faltas.length+')':'')},{id:'vencimento',label:'Vencimentos'+(totalAlertas>0?' ('+totalAlertas+')':'')},{id:'divergencias',label:'⚠️ Divergências'+(divergenciasAtivas.length>0?' ('+divergenciasAtivas.length+')':'')},{id:'descartes',label:'🗑️ Descartes'+(descartes30.length>0?' ('+descartes30.length+')':'')}];
+var _cutDesc=(function(){var d=new Date();d.setDate(d.getDate()-30);return d.toISOString().slice(0,10);})();var descartes30=(entries||[]).filter(function(e){return e.tipo==='saida'&&e.descarte&&(e.date||'')>=_cutDesc;});var subTabs=[{id:'estoque',label:'Estoque'},{id:'faltas',label:'Faltas'+(faltas.length>0?' ('+faltas.length+')':'')},{id:'vencimento',label:'Vencimentos'+(totalAlertas>0?' ('+totalAlertas+')':'')},{id:'descartes',label:'🗑️ Descartes'+(descartes30.length>0?' ('+descartes30.length+')':'')}];
 var TipoBtn=function(props){var t=TIPOS[props.k];var sel=props.sel===props.k;return <button onClick={function(){props.onClick(props.k);}} style={{padding:'7px 12px',borderRadius:20,border:'1.5px solid '+(sel?t.cor:'#E2E8F0'),background:sel?t.cor:'#fff',color:sel?'#fff':'#64748B',cursor:'pointer',fontWeight:sel?700:500,fontSize:12,transition:'all .15s'}}>{t.icon} {t.label}</button>;};
 function darBaixaVencido(){
     if(!showBaixa)return;
@@ -2038,36 +1672,6 @@ function darBaixaVencido(){
   </div>);})}
 </div>;})()}
 </div>)}</div>)}
-{sub==='divergencias'&&<div style={{padding:'8px 0'}}>
-  {divergenciasAtivas.length===0&&<div style={{textAlign:'center',padding:'40px 0',color:'#94A3B8'}}>
-    <div style={{fontSize:40,marginBottom:8}}>✅</div>
-    <div style={{fontWeight:600}}>Nenhum medicamento em divergência</div>
-  </div>}
-  {divergenciasAtivas.map(function(e){
-    var estoqueReal=stock[e.medicamentoId]||0;
-    return(<div key={e.id} style={{background:'#FFF7ED',borderRadius:14,border:'1.5px solid #FCD34D',padding:14,marginBottom:10}}>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
-        <div style={{flex:1}}>
-          <span style={{background:'#D97706',color:'#fff',borderRadius:6,padding:'2px 8px',fontSize:10,fontWeight:700,display:'inline-block',marginBottom:6}}>⚠️ DIVERGÊNCIA</span>
-          <div style={{fontWeight:700,fontSize:14,color:'#1E293B',marginBottom:2}}>{e.medicamentoNome}</div>
-          <div style={{fontSize:12,color:'#64748B',marginBottom:4}}>
-            Estoque atual: <strong>{estoqueReal}</strong> un.
-            {e.lote&&<span> · Lote: {e.lote}</span>}
-            {e.validade&&<span> · Val: {e.validade}</span>}
-          </div>
-          <div style={{fontSize:11,color:'#92400E',background:'#FEF3C7',borderRadius:6,padding:'4px 8px',display:'inline-block'}}>
-            📋 Representa outro med. na nota — ver Relatório → ⚠️ Divergências
-          </div>
-          <div style={{fontSize:11,color:'#94A3B8',marginTop:4}}>Entrada em {e.date||'—'}</div>
-        </div>
-        <div style={{textAlign:'center',flexShrink:0}}>
-          <div style={{fontWeight:800,fontSize:22,color:'#D97706'}}>{estoqueReal}</div>
-          <div style={{fontSize:10,color:'#94A3B8'}}>em estoque</div>
-        </div>
-      </div>
-    </div>);
-  })}
-</div>}
 {sub==='descartes'&&<div>
   {(function(){
     var descartes=(entries||[]).filter(function(e){return e.tipo==='saida'&&e.descarte;}).sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});
@@ -2822,7 +2426,7 @@ function TabAdmin({user,entries,medications,db}){
               <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>{l.nome||l.userName||'--'}</div>
               <div style={{fontSize:11,color:'#64748B',marginTop:2}}>{l.acao||l.tipo||'acesso'} · {l.criadoEm?new Date(l.criadoEm).toLocaleString('pt-BR'):''}</div>
             </div>
-            <BtnDel col="logs_acesso" id={l.id} nome={l.nome||'log'}/>
+            <span title="Logs de acesso são permanentes — não podem ser apagados (auditoria)" style={{background:'#F1F5F9',color:'#94A3B8',border:'none',borderRadius:7,padding:'5px 10px',fontSize:11,fontWeight:700,whiteSpace:'nowrap'}}>🔒 Protegido</span>
           </div>
         );})}
       </div>}
@@ -6742,6 +6346,27 @@ function TabConferencia(props){
   </div>);
 }
 
+// Calcula a posição (fixed) do balão do tour a partir do retângulo do elemento destacado.
+// Usa a porção VISÍVEL do elemento (interseção com a viewport) — não a altura bruta — para decidir
+// "acima"/"abaixo": um elemento maior que a tela (ex.: a aba inteira, com scroll) antes fazia o balão
+// ficar quase todo fora da viewport. Sem espaço em nenhum dos dois lados, cai pro centro da tela.
+function _tourBalloonStyle(rect,posicao,vw,vh){
+  var balloonW=Math.min(300,vw-32),gap=14,padE=12;
+  if(!rect)return{left:'50%',top:'50%',transform:'translate(-50%,-50%)'};
+  var visTop=Math.max(0,rect.top),visBottom=Math.min(vh,rect.top+rect.height);
+  var pos=posicao||'abaixo';
+  var podeAcima=visTop>=170,podeAbaixo=(visBottom+180)<=vh;
+  if(pos==='abaixo'&&!podeAbaixo)pos=podeAcima?'acima':'centro';
+  else if(pos==='acima'&&!podeAcima)pos=podeAbaixo?'abaixo':'centro';
+  if(pos==='centro')return{left:'50%',top:'50%',transform:'translate(-50%,-50%)'};
+  var cx=rect.left+rect.width/2;
+  var clampX=Math.max(padE,Math.min(cx-balloonW/2,vw-balloonW-padE));
+  if(pos==='acima')return{left:clampX,bottom:(vh-visTop+gap)};
+  if(pos==='abaixo')return{left:clampX,top:(visBottom+gap)};
+  if(pos==='esquerda')return{right:(vw-rect.left+gap),top:Math.max(padE,Math.min(visTop,vh-180))};
+  return{left:(rect.left+rect.width+gap),top:Math.max(padE,Math.min(visTop,vh-180))};
+}
+
 // ===== Motor de tours guiados (tooltip/balão com destaque + overlay escurecido) =====
 function TourEngine(props){
   var user=props.user;
@@ -6832,21 +6457,8 @@ function TourEngine(props){
   function proximo(){if(ultimo)marcarVisto();else setStep(step+1);}
 
   var vw=window.innerWidth,vh=window.innerHeight;
-  var balloonW=Math.min(300,vw-32);var gap=14,padE=12;
-  var bStyle;
-  if(rect){
-    var pos=passo.posicao||'abaixo';
-    if(pos==='acima'&&rect.top<170)pos='abaixo';
-    if(pos==='abaixo'&&rect.top+rect.height+180>vh)pos='acima';
-    var cx=rect.left+rect.width/2;
-    var clampX=Math.max(padE,Math.min(cx-balloonW/2,vw-balloonW-padE));
-    if(pos==='acima')bStyle={left:clampX,bottom:(vh-rect.top+gap)};
-    else if(pos==='abaixo')bStyle={left:clampX,top:(rect.top+rect.height+gap)};
-    else if(pos==='esquerda')bStyle={right:(vw-rect.left+gap),top:Math.max(padE,Math.min(rect.top,vh-180))};
-    else bStyle={left:(rect.left+rect.width+gap),top:Math.max(padE,Math.min(rect.top,vh-180))};
-  }else{
-    bStyle={left:'50%',top:'50%',transform:'translate(-50%,-50%)'};
-  }
+  var balloonW=Math.min(300,vw-32);
+  var bStyle=_tourBalloonStyle(rect,passo.posicao,vw,vh);
   var balloon=Object.assign({position:'fixed',width:balloonW,background:'#fff',borderRadius:16,padding:16,boxShadow:'0 12px 40px rgba(0,0,0,0.35)',zIndex:20002,transition:'top .25s ease,left .25s ease,bottom .25s ease,right .25s ease'},bStyle);
 
   var preparando=pronto!==step; // ação em andamento / aguardando a tela renderizar
@@ -6872,11 +6484,813 @@ function TourEngine(props){
   </div>);
 }
 
+// ===== Módulo de Recebimento e Conciliação Fiscal =====
+var _recSeq=0;var _nfSeq=0;
+
+// ---- Parte 2: comparação automática recebimento × nota fiscal (pura, testável) ----
+// A NOTA FISCAL NUNCA ALTERA O ESTOQUE — esta função só CLASSIFICA divergências.
+function conciliarRecebimentoNota(recebidos,faturados){
+  function agg(list){var m={};(list||[]).forEach(function(it){var id=it.medicamentoId;if(!id)return;if(!m[id])m[id]={medicamentoId:id,medicamentoNome:it.medicamentoNome||'',qtd:0,lote:it.lote||''};m[id].qtd+=parseInt(it.quantidade)||0;if(!m[id].lote&&it.lote)m[id].lote=it.lote;});return m;}
+  var R=agg(recebidos),F=agg(faturados);var rows=[];
+  // 1) medicamentos presentes nos dois -> comparação de quantidade (cenários 1,2,3)
+  Object.keys(R).forEach(function(id){
+    if(F[id]){var qr=R[id].qtd,qf=F[id].qtd;var st=qr===qf?'conciliado':(qf>qr?'fiscal_superior':'recebido_superior');
+      rows.push({medicamentoId:id,medicamentoNome:R[id].medicamentoNome,notaMedicamentoNome:F[id].medicamentoNome,qtdRecebida:qr,qtdFaturada:qf,status:st,lote:R[id].lote||'',justificativa:'',acaoTomada:''});}
+  });
+  var soRec=Object.keys(R).filter(function(id){return !F[id];});
+  var soFat=Object.keys(F).filter(function(id){return !R[id];});
+  var fatRest=soFat.slice();
+  // 2) sobra recebida: pareia por LOTE com sobra faturada -> Produto Divergente (cenário 6); senão Não Faturado (cenário 5)
+  soRec.forEach(function(rid){
+    var lote=R[rid].lote;
+    var par=lote?fatRest.find(function(fid){return F[fid].lote&&F[fid].lote===lote;}):null;
+    if(par){rows.push({medicamentoId:rid,medicamentoNome:R[rid].medicamentoNome,notaMedicamentoId:par,notaMedicamentoNome:F[par].medicamentoNome,qtdRecebida:R[rid].qtd,qtdFaturada:F[par].qtd,status:'divergente',lote:lote,justificativa:'',acaoTomada:''});
+      fatRest=fatRest.filter(function(fid){return fid!==par;});}
+    else{rows.push({medicamentoId:rid,medicamentoNome:R[rid].medicamentoNome,notaMedicamentoNome:'',qtdRecebida:R[rid].qtd,qtdFaturada:0,status:'nao_faturado',lote:R[rid].lote||'',justificativa:'',acaoTomada:''});}
+  });
+  // 3) sobra faturada restante: Produto Faturado Não Recebido (cenário 4)
+  fatRest.forEach(function(fid){rows.push({medicamentoId:fid,medicamentoNome:F[fid].medicamentoNome,notaMedicamentoNome:F[fid].medicamentoNome,qtdRecebida:0,qtdFaturada:F[fid].qtd,status:'nao_recebido',lote:F[fid].lote||'',justificativa:'',acaoTomada:''});});
+  return rows;
+}
+function _concStatusGeral(rows){
+  var divs=(rows||[]).filter(function(r){return r.status!=='conciliado';});
+  if(divs.length===0)return'conciliado';
+  return divs.every(function(r){return r.acaoTomada&&r.acaoTomada!=='';})?'resolvido':'divergencia_aberta';
+}
+function _concItemInfo(s){
+  if(s==='conciliado')return{label:'Conciliado',ico:'✅',cor:'#059669',bg:'#DCFCE7'};
+  if(s==='fiscal_superior')return{label:'Qtd Fiscal Superior ao Recebimento',ico:'⚠️',cor:'#B45309',bg:'#FEF3C7'};
+  if(s==='recebido_superior')return{label:'Qtd Recebida Superior à Faturada',ico:'⚠️',cor:'#B45309',bg:'#FEF3C7'};
+  if(s==='nao_recebido')return{label:'Produto Faturado Não Recebido',ico:'⚠️',cor:'#DC2626',bg:'#FEE2E2'};
+  if(s==='nao_faturado')return{label:'Produto Recebido Não Faturado',ico:'⚠️',cor:'#B45309',bg:'#FEF3C7'};
+  if(s==='divergente')return{label:'Produto Divergente',ico:'🚨',cor:'#DC2626',bg:'#FEE2E2'};
+  return{label:s,ico:'',cor:'#64748B',bg:'#F1F5F9'};
+}
+function _concAcoes(s){
+  var esp=[];
+  if(s==='fiscal_superior')esp=['Aguardar entrega complementar','Solicitar correção','Registrar justificativa'];
+  else if(s==='recebido_superior')esp=['Solicitar correção','Solicitar faturamento complementar','Registrar justificativa'];
+  else if(s==='nao_recebido')esp=['Aguardar entrega','Solicitar correção','Cancelar item'];
+  else if(s==='nao_faturado')esp=['Solicitar nota complementar','Registrar justificativa'];
+  else if(s==='divergente')esp=['Solicitar correção','Registrar devolução','Registrar justificativa'];
+  if(esp.length===0)return[];
+  return['Marcar em análise'].concat(esp);// disponível em toda divergência — mantém aberta p/ investigação, sem resolver ainda
+}
+function _concGeralInfo(s){
+  if(s==='conciliado')return{label:'Conciliado',cor:'#059669',bg:'#DCFCE7'};
+  if(s==='resolvido')return{label:'Resolvido',cor:'#2563EB',bg:'#DBEAFE'};
+  if(s==='em_analise')return{label:'Em análise',cor:'#B45309',bg:'#FEF3C7'};
+  return{label:'Divergência Aberta',cor:'#DC2626',bg:'#FEE2E2'};
+}
+// ---- Parte 3: status de fluxo por item (auditoria/painel) — vocabulário completo do módulo ----
+var _ACAO_STATUS_FLUXO={
+  'Aguardar entrega complementar':'aguardando_entrega_complementar',
+  'Aguardar entrega':'aguardando_entrega_complementar',
+  'Solicitar correção':'aguardando_correcao',
+  'Solicitar faturamento complementar':'aguardando_correcao',
+  'Solicitar nota complementar':'aguardando_correcao',
+  'Registrar justificativa':'resolvido',
+  'Registrar devolução':'resolvido',
+  'Cancelar item':'cancelado'
+};
+function _concItemStatusFluxo(item){
+  if(!item)return'divergencia_aberta';
+  if(item.status==='conciliado')return'conciliado';
+  if(item.acaoTomada)return _ACAO_STATUS_FLUXO[item.acaoTomada]||'resolvido';
+  if(item.emAnalise)return'em_analise';
+  return'divergencia_aberta';
+}
+function _statusFluxoInfo(s){
+  if(s==='pendente_conciliacao')return{label:'Pendente de Conciliação',cor:'#DC2626',bg:'#FEE2E2'};
+  if(s==='conciliado')return{label:'Conciliado',cor:'#059669',bg:'#DCFCE7'};
+  if(s==='divergencia_aberta')return{label:'Divergência Aberta',cor:'#DC2626',bg:'#FEE2E2'};
+  if(s==='em_analise')return{label:'Em Análise',cor:'#7C3AED',bg:'#EDE9FE'};
+  if(s==='aguardando_correcao')return{label:'Aguardando Correção',cor:'#B45309',bg:'#FEF3C7'};
+  if(s==='aguardando_entrega_complementar')return{label:'Aguardando Entrega Complementar',cor:'#B45309',bg:'#FEF3C7'};
+  if(s==='resolvido')return{label:'Resolvido',cor:'#2563EB',bg:'#DBEAFE'};
+  if(s==='cancelado')return{label:'Cancelado',cor:'#64748B',bg:'#F1F5F9'};
+  return{label:s||'—',cor:'#64748B',bg:'#F1F5F9'};
+}
+var STATUS_FLUXO_TODOS=['pendente_conciliacao','conciliado','divergencia_aberta','em_analise','aguardando_correcao','aguardando_entrega_complementar','resolvido','cancelado'];
+
+function _fDsimples(d){if(!d)return'';var p=String(d).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
+
+// ---- Parte 3: Painel de Divergências — linhas puras (pendentes de conciliação + itens de todas as conciliações) ----
+function _buildLinhasDivergencias(recs,concs){
+  var linhas=[];
+  (recs||[]).filter(function(r){return (r.status||'pendente')==='pendente';}).forEach(function(r){
+    (r.itens||[]).forEach(function(it,i){
+      linhas.push({key:'rec_'+r.id+'_'+i,data:r.data||'',fornecedor:r.fornecedor||'',notaFiscal:'',produto:it.medicamentoNome||'',tipo:'—',responsavel:r.responsavel||r.criadoPor||'',statusFluxo:'pendente_conciliacao'});
+    });
+  });
+  (concs||[]).forEach(function(cc){
+    (cc.itens||[]).forEach(function(it,i){
+      linhas.push({key:'conc_'+cc.id+'_'+i,data:cc.notaDataEmissao||(cc.criadoEm||'').slice(0,10),fornecedor:cc.fornecedor||'',notaFiscal:cc.notaNumero||'',produto:it.medicamentoNome||it.notaMedicamentoNome||'',tipo:_concItemInfo(it.status).label,responsavel:cc.criadoPor||'',statusFluxo:_concItemStatusFluxo(it)});
+    });
+  });
+  return linhas;
+}
+function _filtrarDivergencias(linhas,f){
+  f=f||{};
+  return (linhas||[]).filter(function(l){
+    if(f.de&&(l.data||'')<f.de)return false;
+    if(f.ate&&(l.data||'')>f.ate)return false;
+    if(f.fornecedor&&(l.fornecedor||'').toLowerCase().indexOf(f.fornecedor.toLowerCase())<0)return false;
+    if(f.produto&&(l.produto||'').toLowerCase().indexOf(f.produto.toLowerCase())<0)return false;
+    if(f.status&&f.status!=='todos'&&l.statusFluxo!==f.status)return false;
+    return true;
+  });
+}
+
+// ---- Parte 3: Relatórios — filtro comum (período/fornecedor/produto) + 7 construtores de linhas (puros) ----
+function _filtrarRecsConcs(recs,concs,f){
+  f=f||{};
+  var recsF=(recs||[]).filter(function(r){
+    if(f.de&&(r.data||'')<f.de)return false;
+    if(f.ate&&(r.data||'')>f.ate)return false;
+    if(f.fornecedor&&(r.fornecedor||'').toLowerCase().indexOf(f.fornecedor.toLowerCase())<0)return false;
+    return true;
+  });
+  var concsF=(concs||[]).filter(function(cc){
+    var d=cc.notaDataEmissao||(cc.criadoEm||'').slice(0,10);
+    if(f.de&&(d||'')<f.de)return false;
+    if(f.ate&&(d||'')>f.ate)return false;
+    if(f.fornecedor&&(cc.fornecedor||'').toLowerCase().indexOf(f.fornecedor.toLowerCase())<0)return false;
+    return true;
+  });
+  if(f.produto){
+    var pl=f.produto.toLowerCase();
+    recsF=recsF.map(function(r){return Object.assign({},r,{itens:(r.itens||[]).filter(function(it){return (it.medicamentoNome||'').toLowerCase().indexOf(pl)>=0;})});}).filter(function(r){return r.itens.length>0;});
+    concsF=concsF.map(function(cc){return Object.assign({},cc,{itens:(cc.itens||[]).filter(function(it){return (it.medicamentoNome||it.notaMedicamentoNome||'').toLowerCase().indexOf(pl)>=0;})});}).filter(function(cc){return cc.itens.length>0;});
+  }
+  return{recs:recsF,concs:concsF};
+}
+function relRecebimentosPendentes(recs){
+  return (recs||[]).filter(function(r){return (r.status||'pendente')==='pendente';}).map(function(r){return{data:r.data||'',fornecedor:r.fornecedor||'',responsavel:r.responsavel||r.criadoPor||'',itens:(r.itens||[]).length};});
+}
+function relDivergenciasPorFornecedor(concs){
+  var m={};(concs||[]).forEach(function(cc){(cc.itens||[]).forEach(function(it){if(it.status==='conciliado')return;var f=cc.fornecedor||'—';m[f]=(m[f]||0)+1;});});
+  return Object.keys(m).map(function(f){return{fornecedor:f,divergencias:m[f]};}).sort(function(a,b){return b.divergencias-a.divergencias;});
+}
+function relDivergenciasPorPeriodo(concs){
+  var m={};(concs||[]).forEach(function(cc){(cc.itens||[]).forEach(function(it){if(it.status==='conciliado')return;var mes=(cc.notaDataEmissao||cc.criadoEm||'').slice(0,7)||'—';m[mes]=(m[mes]||0)+1;});});
+  return Object.keys(m).sort().map(function(mes){return{periodo:mes,divergencias:m[mes]};});
+}
+function relDivergenciasPorProduto(concs){
+  var m={};(concs||[]).forEach(function(cc){(cc.itens||[]).forEach(function(it){if(it.status==='conciliado')return;var p=it.medicamentoNome||it.notaMedicamentoNome||'—';m[p]=(m[p]||0)+1;});});
+  return Object.keys(m).map(function(p){return{produto:p,divergencias:m[p]};}).sort(function(a,b){return b.divergencias-a.divergencias;});
+}
+function relEntregasComplementares(concs){
+  var rows=[];(concs||[]).forEach(function(cc){(cc.itens||[]).forEach(function(it){if(_concItemStatusFluxo(it)==='aguardando_entrega_complementar')rows.push({notaNumero:cc.notaNumero||'',fornecedor:cc.fornecedor||'',produto:it.medicamentoNome||it.notaMedicamentoNome||'',recebido:it.qtdRecebida||0,faturado:it.qtdFaturada||0});});});
+  return rows;
+}
+function relNotasConciliadas(concs){
+  return (concs||[]).filter(function(cc){return cc.statusGeral==='conciliado';}).map(function(cc){return{notaNumero:cc.notaNumero||'',fornecedor:cc.fornecedor||'',emissao:cc.notaDataEmissao||'',itens:(cc.itens||[]).length};});
+}
+function relNotasPendentes(concs){
+  return (concs||[]).filter(function(cc){return cc.statusGeral==='divergencia_aberta'||cc.statusGeral==='em_analise';}).map(function(cc){return{notaNumero:cc.notaNumero||'',fornecedor:cc.fornecedor||'',emissao:cc.notaDataEmissao||'',status:_concGeralInfo(cc.statusGeral).label};});
+}
+var RELATORIOS_RECEBIMENTO=[
+  {id:'pendentes',label:'Recebimentos pendentes de conciliação',colunas:['Data','Fornecedor','Responsável','Itens'],build:function(recs,concs){return relRecebimentosPendentes(recs).map(function(r){return[_fDsimples(r.data),r.fornecedor,r.responsavel,r.itens];});}},
+  {id:'div_forn',label:'Divergências por fornecedor',colunas:['Fornecedor','Divergências'],build:function(recs,concs){return relDivergenciasPorFornecedor(concs).map(function(r){return[r.fornecedor,r.divergencias];});}},
+  {id:'div_periodo',label:'Divergências por período',colunas:['Período (mês)','Divergências'],build:function(recs,concs){return relDivergenciasPorPeriodo(concs).map(function(r){return[r.periodo,r.divergencias];});}},
+  {id:'div_produto',label:'Divergências por produto',colunas:['Produto','Divergências'],build:function(recs,concs){return relDivergenciasPorProduto(concs).map(function(r){return[r.produto,r.divergencias];});}},
+  {id:'entregas_compl',label:'Entregas complementares',colunas:['Nota Fiscal','Fornecedor','Produto','Recebido','Faturado'],build:function(recs,concs){return relEntregasComplementares(concs).map(function(r){return[r.notaNumero,r.fornecedor,r.produto,r.recebido,r.faturado];});}},
+  {id:'notas_conc',label:'Notas conciliadas',colunas:['Nota Fiscal','Fornecedor','Emissão','Itens'],build:function(recs,concs){return relNotasConciliadas(concs).map(function(r){return[r.notaNumero,r.fornecedor,_fDsimples(r.emissao),r.itens];});}},
+  {id:'notas_pend',label:'Notas pendentes',colunas:['Nota Fiscal','Fornecedor','Emissão','Status'],build:function(recs,concs){return relNotasPendentes(concs).map(function(r){return[r.notaNumero,r.fornecedor,_fDsimples(r.emissao),r.status];});}}
+];
+
+// ---- Parte 3: exportação genérica de relatório (Excel via XLSX; PDF via impressão do navegador) ----
+function exportRelatorioXL(titulo,colunas,linhas,arquivoSlug){
+  var rows=[colunas].concat(linhas);
+  var wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),titulo.slice(0,31));
+  XLSX.writeFile(wb,arquivoSlug+'_'+todayStr()+'.xlsx');
+}
+function _escHtml(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function exportRelatorioPDF(titulo,colunas,linhas){
+  var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+_escHtml(titulo)+'</title><style>body{font-family:Arial,sans-serif;padding:20px;color:#1E293B}h2{color:#1351B4;margin-bottom:2px}table{width:100%;border-collapse:collapse;font-size:12px;margin-top:12px}th,td{border:1px solid #CBD5E1;padding:6px 8px;text-align:left}th{background:#EFF6FF}</style></head><body>';
+  html+='<h2>'+_escHtml(titulo)+'</h2><p>Gerado em '+new Date().toLocaleDateString('pt-BR')+'</p><table><thead><tr>';
+  colunas.forEach(function(c){html+='<th>'+_escHtml(c)+'</th>';});
+  html+='</tr></thead><tbody>';
+  linhas.forEach(function(l){html+='<tr>';l.forEach(function(v){html+='<td>'+_escHtml(v)+'</td>';});html+='</tr>';});
+  html+='</tbody></table></body></html>';
+  var w=window.open('','_blank');
+  if(w&&w.document){w.document.write(html);w.document.close();setTimeout(function(){w.print();},400);}
+}
+
+function ConciliacaoFiscal(props){
+  var user=props.user;var medications=props.medications||[];var B='#1351B4';
+  function blankNfItem(){_nfSeq++;return{key:'nf'+_nfSeq,medId:'',medNome:'',busca:'',qtd:'',lote:'',validade:''};}
+  var _num=useState('');var notaNumero=_num[0];var setNotaNumero=_num[1];
+  var _serie=useState('');var notaSerie=_serie[0];var setNotaSerie=_serie[1];
+  var _emis=useState('');var notaEmissao=_emis[0];var setNotaEmissao=_emis[1];
+  var _forn=useState('');var fornecedor=_forn[0];var setFornecedor=_forn[1];
+  var _valor=useState('');var valorTotal=_valor[0];var setValorTotal=_valor[1];
+  var _anexo=useState('');var anexo=_anexo[0];var setAnexo=_anexo[1];
+  var _recSel=useState('');var recSel=_recSel[0];var setRecSel=_recSel[1];
+  var _nfItens=useState([blankNfItem()]);var nfItens=_nfItens[0];var setNfItens=_nfItens[1];
+  var _foco=useState(null);var focoItem=_foco[0];var setFocoItem=_foco[1];
+  var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];
+  var _recs=useState([]);var recs=_recs[0];var setRecs=_recs[1];
+  var _concs=useState([]);var concs=_concs[0];var setConcs=_concs[1];
+  var _concAtual=useState(null);var concAtual=_concAtual[0];var setConcAtual=_concAtual[1];// {id, itens, statusGeral,...}
+  var _det=useState(null);var detalhe=_det[0];var setDetalhe=_det[1];
+
+  useEffect(function(){
+    var u1=db.collection('recebimentos').orderBy('criadoEm','desc').limit(200).onSnapshot(function(sn){setRecs(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));},function(){});
+    var u2=db.collection('conciliacoes').orderBy('criadoEm','desc').limit(200).onSnapshot(function(sn){setConcs(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));},function(){});
+    return function(){try{u1();}catch(e){}try{u2();}catch(e){}};
+  },[]);
+
+  function fD(d){if(!d)return'';var p=String(d).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
+  // Auditoria: toda ação loga usuário/data/hora/ação + valor anterior/novo. Logs em logs_acesso NUNCA são apagados (sem UI de exclusão).
+  function logAcao(acao,det,valorAnterior,valorNovo){try{db.collection('logs_acesso').add({uid:user.uid||'',nome:user.name||'',cargo:user.role||'',acao:acao,detalhe:det||'',valorAnterior:(valorAnterior===undefined?null:valorAnterior),valorNovo:(valorNovo===undefined?null:valorNovo),criadoEm:new Date().toISOString()}).catch(function(){});}catch(_){}}
+  function setNf(key,patch){setNfItens(function(arr){return arr.map(function(it){return it.key===key?Object.assign({},it,patch):it;});});}
+  function addNf(){setNfItens(function(arr){return arr.concat([blankNfItem()]);});}
+  function delNf(key){setNfItens(function(arr){return arr.length<=1?arr:arr.filter(function(it){return it.key!==key;});});}
+  function escolherMed(key,m){setNf(key,{medId:m.id,medNome:m.nome,busca:''});setFocoItem(null);}
+
+  var pendentes=recs.filter(function(r){return (r.status||'pendente')==='pendente';});
+
+  async function conciliar(){
+    if(!recSel){alert('Selecione o recebimento a conciliar.');return;}
+    if(!notaNumero.trim()){alert('Informe o número da nota fiscal.');return;}
+    var faturados=nfItens.filter(function(it){return it.medId&&(parseInt(it.qtd)||0)>0;}).map(function(it){return{medicamentoId:it.medId,medicamentoNome:it.medNome,quantidade:parseInt(it.qtd)||0,lote:(it.lote||'').trim(),validade:_normValidade((it.validade||'').trim())};});
+    if(faturados.length===0){alert('Adicione ao menos um item da nota fiscal.');return;}
+    var rec=recs.find(function(r){return r.id===recSel;});if(!rec){alert('Recebimento não encontrado.');return;}
+    setSaving(true);
+    try{
+      var rows=conciliarRecebimentoNota(rec.itens||[],faturados);
+      var statusGeral=_concStatusGeral(rows);
+      var now=new Date().toISOString();
+      var concRef=await db.collection('conciliacoes').add({recebimentoId:recSel,notaNumero:notaNumero.trim(),notaSerie:notaSerie.trim(),notaDataEmissao:notaEmissao||'',fornecedor:fornecedor.trim()||rec.fornecedor||'',valorTotal:parseFloat(String(valorTotal).replace(',','.'))||0,anexoURL:anexo.trim(),itens:rows,statusGeral:statusGeral,criadoEm:now,criadoPor:user.name||'',criadoPorId:user.uid||''});
+      // A NOTA NÃO MEXE NO ESTOQUE. Só atualiza o status documental do recebimento.
+      var recStatus=statusGeral==='conciliado'?'conciliado':(statusGeral==='resolvido'?'resolvido':'divergencia');
+      var recLabel=statusGeral==='conciliado'?'Conciliado':(statusGeral==='resolvido'?'Resolvido':'Divergência Aberta');
+      await db.collection('recebimentos').doc(recSel).update({status:recStatus,statusLabel:recLabel,conciliacaoId:concRef.id,conciliadoEm:now,conciliadoPor:user.name||''});
+      logAcao('conciliacao_criada','Conciliação '+concRef.id+' — NF '+notaNumero.trim()+' × receb '+recSel+' — '+rows.length+' item(ns)',rec.status||'pendente',recStatus);
+      setConcAtual({id:concRef.id,recebimentoId:recSel,notaNumero:notaNumero.trim(),itens:rows,statusGeral:statusGeral});
+      // limpa o formulário
+      setNotaNumero('');setNotaSerie('');setNotaEmissao('');setFornecedor('');setValorTotal('');setAnexo('');setRecSel('');setNfItens([blankNfItem()]);setFocoItem(null);
+    }catch(e){alert('Erro ao conciliar: '+((e&&e.message)?e.message:e));}
+    setSaving(false);
+  }
+
+  // Resolver (ou marcar em análise) uma divergência; registra ação/justificativa; se todas resolvidas -> statusGeral 'resolvido'.
+  // Nenhuma divergência é apagada — só recebe uma nova ação (histórico completo fica no item + no log de auditoria).
+  async function resolver(idx,acao,justificativa){
+    if(!concAtual)return;
+    if(acao==='Registrar justificativa'&&!(justificativa||'').trim()){alert('Digite a justificativa antes de registrar.');return;}
+    var antes=concAtual.itens[idx];
+    var statusFluxoAntes=_concItemStatusFluxo(antes);
+    var novos=concAtual.itens.map(function(it,i){
+      if(i!==idx)return it;
+      if(acao==='Marcar em análise')return Object.assign({},it,{emAnalise:true});
+      return Object.assign({},it,{acaoTomada:acao,justificativa:(justificativa||it.justificativa||''),emAnalise:false});
+    });
+    var sg=_concStatusGeral(novos);
+    var statusFluxoDepois=_concItemStatusFluxo(novos[idx]);
+    try{
+      await db.collection('conciliacoes').doc(concAtual.id).update({itens:novos,statusGeral:sg});
+      if(sg==='resolvido'){await db.collection('recebimentos').doc(concAtual.recebimentoId).update({status:'resolvido',statusLabel:'Resolvido'});}
+      logAcao('conciliacao_divergencia_resolvida','Conciliação '+concAtual.id+' — item '+(novos[idx].medicamentoNome||'')+' — ação: '+acao+(justificativa?' — just: '+justificativa:''),statusFluxoAntes,statusFluxoDepois);
+      setConcAtual(Object.assign({},concAtual,{itens:novos,statusGeral:sg}));
+    }catch(e){alert('Erro ao registrar: '+((e&&e.message)?e.message:e));}
+  }
+
+  var inp={width:'100%',padding:'11px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:14,boxSizing:'border-box'};
+  var lbl={fontSize:12,fontWeight:700,color:'#475569',display:'block',marginBottom:5};
+
+  return(
+    <div>
+      <div style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9',marginBottom:16}}>
+        <div style={{fontWeight:800,fontSize:15,color:'#1E293B',marginBottom:4}}>Nota fiscal</div>
+        <div style={{fontSize:11,color:'#94A3B8',marginBottom:14}}>A nota é <strong>documental</strong> — nunca altera o estoque. Serve para conciliar e detectar divergências.</div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
+          <div><label style={lbl}>Número da NF *</label><input value={notaNumero} onChange={function(e){setNotaNumero(e.target.value);}} placeholder="Ex: 12345" style={inp}/></div>
+          <div><label style={lbl}>Série</label><input value={notaSerie} onChange={function(e){setNotaSerie(e.target.value);}} placeholder="Ex: 1" style={inp}/></div>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
+          <div><label style={lbl}>Data de emissão</label><input type="date" value={notaEmissao} onChange={function(e){setNotaEmissao(e.target.value);}} style={inp}/></div>
+          <div><label style={lbl}>Valor total (R$)</label><input value={valorTotal} onChange={function(e){setValorTotal(e.target.value.replace(/[^0-9.,]/g,''));}} inputMode="decimal" placeholder="0,00" style={inp}/></div>
+        </div>
+        <div style={{marginBottom:10}}><label style={lbl}>Fornecedor</label><input value={fornecedor} onChange={function(e){setFornecedor(e.target.value);}} placeholder="Fornecedor da nota" style={inp}/></div>
+        <div style={{marginBottom:10}}><label style={lbl}>Anexo (URL do PDF/XML, opcional)</label><input value={anexo} onChange={function(e){setAnexo(e.target.value);}} placeholder="Cole o link do PDF/XML (opcional)" style={inp}/></div>
+        <div data-tour="conc-selecionar-receb" style={{marginBottom:4}}><label style={lbl}>Recebimento a vincular * <span style={{fontWeight:500,color:'#94A3B8'}}>(só pendentes)</span></label>
+          <select value={recSel} onChange={function(e){setRecSel(e.target.value);}} style={Object.assign({},inp,{background:'#fff'})}>
+            <option value="">Selecione um recebimento pendente...</option>
+            {pendentes.map(function(r){return<option key={r.id} value={r.id}>{fD(r.data)} · {r.fornecedor||'—'} · {(r.itens||[]).length} item(ns)</option>;})}
+          </select>
+          {pendentes.length===0&&<div style={{fontSize:11,color:'#94A3B8',marginTop:4}}>Nenhum recebimento pendente de conciliação.</div>}
+        </div>
+      </div>
+
+      <div style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9',marginBottom:16}}>
+        <div style={{fontWeight:700,fontSize:14,color:'#334155',marginBottom:10}}>Itens da nota fiscal</div>
+        <div style={{display:'flex',flexDirection:'column',gap:10}}>
+          {nfItens.map(function(it,idx){
+            var sug=(!it.medId&&it.busca.trim())?_fuzzyMeds(it.busca,medications,8):[];
+            return(<div key={it.key} style={{background:'#F8FAFC',borderRadius:12,padding:12,border:'1px solid #E2E8F0'}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+                <div style={{fontSize:11,fontWeight:700,color:'#94A3B8'}}>Item {idx+1}</div>
+                {nfItens.length>1&&<button onClick={function(){delNf(it.key);}} style={{background:'#FEE2E2',border:'none',borderRadius:8,width:28,height:28,cursor:'pointer',fontSize:13,color:'#DC2626'}}>✕</button>}
+              </div>
+              {it.medId?
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,background:'#EFF6FF',border:'1.5px solid #BFDBFE',borderRadius:10,padding:'9px 12px',marginBottom:8}}>
+                  <div style={{fontWeight:700,fontSize:13,color:B}}>💊 {it.medNome}</div>
+                  <button onClick={function(){setNf(it.key,{medId:'',medNome:'',busca:''});setFocoItem(it.key);}} style={{background:'#fff',border:'1px solid #BFDBFE',borderRadius:8,padding:'4px 10px',fontSize:11,color:B,cursor:'pointer',fontWeight:600}}>Trocar</button>
+                </div>
+                :<div style={{position:'relative',marginBottom:8}}>
+                  <input value={it.busca} onChange={function(e){setNf(it.key,{busca:e.target.value});setFocoItem(it.key);}} onFocus={function(){setFocoItem(it.key);}} placeholder="Buscar medicamento no cadastro..." style={inp}/>
+                  {focoItem===it.key&&sug.length>0&&<div style={{position:'absolute',top:'100%',left:0,right:0,background:'#fff',border:'1.5px solid #E2E8F0',borderRadius:10,marginTop:4,zIndex:20,maxHeight:200,overflowY:'auto',boxShadow:'0 8px 24px rgba(0,0,0,.12)'}}>
+                    {sug.map(function(x){var m=x.m;return<button key={m.id} onClick={function(){escolherMed(it.key,m);}} style={{width:'100%',textAlign:'left',padding:'10px 12px',border:'none',borderBottom:'1px solid #F1F5F9',background:'#fff',cursor:'pointer',fontSize:13,color:'#1E293B'}}>{m.nome}</button>;})}
+                  </div>}
+                </div>}
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
+                <div><label style={lbl}>Qtd faturada *</label><input type="number" min="1" inputMode="numeric" value={it.qtd} onChange={function(e){setNf(it.key,{qtd:e.target.value.replace(/[^0-9]/g,'')});}} placeholder="0" style={inp}/></div>
+                <div><label style={lbl}>Lote</label><input value={it.lote} onChange={function(e){setNf(it.key,{lote:e.target.value});}} placeholder="Lote" style={inp}/></div>
+                <div><label style={lbl}>Validade</label><input value={it.validade} onChange={function(e){setNf(it.key,{validade:e.target.value});}} placeholder="MM/AAAA" inputMode="numeric" style={inp}/></div>
+              </div>
+            </div>);
+          })}
+        </div>
+        <button onClick={addNf} style={{marginTop:10,width:'100%',padding:'11px',background:'#EFF6FF',border:'1.5px dashed #BFDBFE',borderRadius:10,color:B,fontWeight:700,fontSize:13,cursor:'pointer'}}>+ Adicionar item</button>
+        <button data-tour="conc-conciliar" onClick={conciliar} disabled={saving} style={{marginTop:12,width:'100%',padding:'14px',background:saving?'#94A3B8':B,border:'none',borderRadius:12,color:'#fff',fontWeight:800,fontSize:15,cursor:saving?'default':'pointer'}}>{saving?'Conciliando...':'🔍 Conciliar'}</button>
+      </div>
+
+      {/* RESULTADO DA CONCILIAÇÃO */}
+      {concAtual&&(function(){var gi=_concGeralInfo(concAtual.statusGeral);return(
+        <div style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9',marginBottom:16}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4,flexWrap:'wrap',gap:8}}>
+            <div style={{fontWeight:800,fontSize:15,color:'#1E293B'}}>Resultado da conciliação</div>
+            <span style={{background:gi.bg,color:gi.cor,fontSize:12,fontWeight:800,padding:'5px 12px',borderRadius:20}}>{gi.label}</span>
+          </div>
+          <div style={{fontSize:11,color:'#94A3B8',marginBottom:12}}>NF {concAtual.notaNumero} · o estoque não foi alterado pela nota.</div>
+          <div style={{display:'flex',flexDirection:'column',gap:10}}>
+            {concAtual.itens.map(function(row,i){var ci=_concItemInfo(row.status);var acoes=_concAcoes(row.status);var resolvido=row.acaoTomada&&row.acaoTomada!=='';
+              return(<div key={i} style={{border:'1px solid '+(row.status==='conciliado'?'#D1FAE5':ci.bg),borderRadius:12,overflow:'hidden'}}>
+                <div style={{display:'grid',gridTemplateColumns:'1fr auto auto',gap:8,padding:'10px 12px',alignItems:'center',background:ci.bg+'80'}}>
+                  <div>
+                    <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>{row.medicamentoNome||'—'}{row.status==='divergente'&&row.notaMedicamentoNome?<span style={{color:'#DC2626'}}> ⇄ NF: {row.notaMedicamentoNome}</span>:null}</div>
+                    <div style={{fontSize:12,color:ci.cor,fontWeight:700,marginTop:2}}>{ci.ico} {ci.label}</div>
+                  </div>
+                  <div style={{textAlign:'center'}}><div style={{fontSize:10,color:'#94A3B8'}}>Recebido</div><div style={{fontWeight:800,fontSize:14,color:'#1E293B'}}>{row.status==='nao_recebido'?'—':row.qtdRecebida}</div></div>
+                  <div style={{textAlign:'center'}}><div style={{fontSize:10,color:'#94A3B8'}}>Nota</div><div style={{fontWeight:800,fontSize:14,color:'#1E293B'}}>{row.status==='nao_faturado'?'—':row.qtdFaturada}</div></div>
+                </div>
+                {row.status!=='conciliado'&&<div style={{padding:'10px 12px',background:'#fff'}}>
+                  {resolvido?
+                    <div style={{fontSize:12,color:'#059669',fontWeight:700}}>✅ Ação registrada: {row.acaoTomada}{row.justificativa?' — '+row.justificativa:''}</div>
+                    :<RowAcoes acoes={acoes} onAcao={function(acao,just){resolver(i,acao,just);}}/>}
+                </div>}
+              </div>);
+            })}
+          </div>
+          <button onClick={function(){setConcAtual(null);}} style={{marginTop:14,width:'100%',padding:'11px',background:'#F1F5F9',border:'none',borderRadius:10,color:'#64748B',fontWeight:700,fontSize:13,cursor:'pointer'}}>Fechar resultado</button>
+        </div>);
+      })()}
+
+      {/* HISTÓRICO DE CONCILIAÇÕES */}
+      <div style={{fontWeight:800,fontSize:15,color:'#1E293B',marginBottom:10}}>Conciliações</div>
+      <div style={{display:'flex',flexDirection:'column',gap:10}}>
+        {concs.length===0&&<div style={{textAlign:'center',color:'#94A3B8',padding:20,fontSize:13}}>Nenhuma conciliação registrada.</div>}
+        {concs.map(function(cc){var gi=_concGeralInfo(cc.statusGeral);return(
+          <div key={cc.id} onClick={function(){setDetalhe(cc);}} style={{background:'#fff',borderRadius:14,padding:14,boxShadow:'0 2px 10px rgba(0,0,0,.05)',border:'1px solid #F1F5F9',cursor:'pointer'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
+              <div><div style={{fontWeight:700,fontSize:14,color:'#1E293B'}}>NF {cc.notaNumero||'—'}{cc.notaSerie?' · série '+cc.notaSerie:''}</div>
+                <div style={{fontSize:12,color:'#64748B',marginTop:2}}>{cc.fornecedor||'—'} · {(cc.itens||[]).length} item(ns)</div></div>
+              <span style={{background:gi.bg,color:gi.cor,fontSize:10,fontWeight:800,padding:'4px 9px',borderRadius:20,whiteSpace:'nowrap'}}>{gi.label}</span>
+            </div>
+          </div>);
+        })}
+      </div>
+
+      {/* DETALHE DE CONCILIAÇÃO */}
+      {detalhe&&(function(){var cc=concs.find(function(x){return x.id===detalhe.id;})||detalhe;var gi=_concGeralInfo(cc.statusGeral);return(
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:1000,display:'flex',alignItems:'flex-end',justifyContent:'center'}} onClick={function(){setDetalhe(null);}}>
+          <div style={{background:'#fff',borderRadius:'24px 24px 0 0',padding:'22px 18px 40px',width:'100%',maxWidth:560,maxHeight:'90vh',overflowY:'auto'}} onClick={function(e){e.stopPropagation();}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:8}}>
+              <div><div style={{fontWeight:800,fontSize:17,color:'#1E293B'}}>NF {cc.notaNumero||'—'}</div>
+                <div style={{fontSize:12,color:'#64748B',marginTop:2}}>{cc.fornecedor||'—'}{cc.valorTotal?' · R$ '+Number(cc.valorTotal).toFixed(2):''}{cc.notaDataEmissao?' · emissão '+fD(cc.notaDataEmissao):''}</div>
+                {cc.anexoURL?<a href={cc.anexoURL} target="_blank" rel="noopener" style={{fontSize:12,color:B}}>📎 Anexo</a>:null}</div>
+              <button onClick={function(){setDetalhe(null);}} style={{background:'#F1F5F9',border:'none',borderRadius:10,width:36,height:36,cursor:'pointer',fontSize:18}}>✕</button>
+            </div>
+            <div style={{display:'inline-block',background:gi.bg,color:gi.cor,fontSize:12,fontWeight:800,padding:'6px 12px',borderRadius:20,marginBottom:14}}>{gi.label}</div>
+            <div style={{overflowX:'auto'}}>
+              <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+                <thead><tr style={{color:'#94A3B8',textAlign:'left'}}><th style={{padding:'6px 8px'}}>Medicamento</th><th style={{padding:'6px 8px',textAlign:'center'}}>Receb.</th><th style={{padding:'6px 8px',textAlign:'center'}}>Nota</th><th style={{padding:'6px 8px'}}>Status</th></tr></thead>
+                <tbody>{(cc.itens||[]).map(function(row,i){var ci=_concItemInfo(row.status);return(<tr key={i} style={{borderTop:'1px solid #F1F5F9'}}>
+                  <td style={{padding:'8px'}}>{row.medicamentoNome||'—'}{row.status==='divergente'&&row.notaMedicamentoNome?' ⇄ '+row.notaMedicamentoNome:''}</td>
+                  <td style={{padding:'8px',textAlign:'center'}}>{row.status==='nao_recebido'?'—':row.qtdRecebida}</td>
+                  <td style={{padding:'8px',textAlign:'center'}}>{row.status==='nao_faturado'?'—':row.qtdFaturada}</td>
+                  <td style={{padding:'8px',color:ci.cor,fontWeight:700}}>{ci.ico} {ci.label}{row.acaoTomada?' · '+row.acaoTomada:''}</td>
+                </tr>);})}</tbody>
+              </table>
+            </div>
+          </div>
+        </div>);
+      })()}
+    </div>
+  );
+}
+
+// Botões de ação de uma divergência (com justificativa quando aplicável).
+function RowAcoes(props){
+  var acoes=props.acoes||[];var onAcao=props.onAcao;
+  var _j=useState('');var just=_j[0];var setJust=_j[1];
+  var precisaJust=acoes.indexOf('Registrar justificativa')>=0;
+  return(<div>
+    <div style={{display:'flex',flexWrap:'wrap',gap:6,marginBottom:precisaJust?8:0}}>
+      {acoes.map(function(a){var crit=a==='Registrar devolução'||a==='Cancelar item';var analise=a==='Marcar em análise';return<button key={a} onClick={function(){onAcao(a,just);}} style={{padding:'7px 10px',borderRadius:8,border:'1px solid '+(crit?'#FCA5A5':analise?'#DDD6FE':'#CBD5E1'),background:crit?'#FEF2F2':analise?'#F5F3FF':'#F8FAFC',color:crit?'#DC2626':analise?'#7C3AED':'#475569',fontSize:11,fontWeight:700,cursor:'pointer'}}>{a}</button>;})}
+    </div>
+    {precisaJust&&<input value={just} onChange={function(e){setJust(e.target.value);}} placeholder="Justificativa (para registrar)" style={{width:'100%',padding:'8px 10px',borderRadius:8,border:'1.5px solid #E2E8F0',fontSize:12,boxSizing:'border-box'}}/>}
+  </div>);
+}
+
+// ---- Parte 3: Painel de Divergências ----
+function PainelDivergencias(props){
+  var B='#1351B4';
+  var _recs=useState([]);var recs=_recs[0];var setRecs=_recs[1];
+  var _concs=useState([]);var concs=_concs[0];var setConcs=_concs[1];
+  var _fDe=useState('');var fDe=_fDe[0];var setFDe=_fDe[1];
+  var _fAte=useState('');var fAte=_fAte[0];var setFAte=_fAte[1];
+  var _fForn=useState('');var fForn=_fForn[0];var setFForn=_fForn[1];
+  var _fProd=useState('');var fProd=_fProd[0];var setFProd=_fProd[1];
+  var _fStatus=useState('todos');var fStatus=_fStatus[0];var setFStatus=_fStatus[1];
+
+  useEffect(function(){
+    var u1=db.collection('recebimentos').orderBy('criadoEm','desc').limit(500).onSnapshot(function(sn){setRecs(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));},function(){});
+    var u2=db.collection('conciliacoes').orderBy('criadoEm','desc').limit(500).onSnapshot(function(sn){setConcs(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));},function(){});
+    return function(){try{u1();}catch(e){}try{u2();}catch(e){}};
+  },[]);
+
+  var todas=_buildLinhasDivergencias(recs,concs);
+  var linhas=_filtrarDivergencias(todas,{de:fDe,ate:fAte,fornecedor:fForn,produto:fProd,status:fStatus});
+  var COLS=['Data','Fornecedor','Nota Fiscal','Produto','Tipo de divergência','Responsável','Status'];
+  function linhaExport(l){return[_fDsimples(l.data),l.fornecedor||'—',l.notaFiscal||'—',l.produto||'—',l.tipo||'—',l.responsavel||'—',_statusFluxoInfo(l.statusFluxo).label];}
+  function exportarXL(){exportRelatorioXL('Painel de Divergências',COLS,linhas.map(linhaExport),'painel_divergencias');}
+  function exportarPDF(){exportRelatorioPDF('Painel de Divergências',COLS,linhas.map(linhaExport));}
+
+  var inp={width:'100%',padding:'10px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:13,boxSizing:'border-box'};
+  var lbl={fontSize:11,fontWeight:700,color:'#475569',display:'block',marginBottom:4};
+
+  return(<div>
+    <div data-tour="div-painel" style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9',marginBottom:16}}>
+      <div style={{fontWeight:800,fontSize:15,color:'#1E293B',marginBottom:12}}>🚨 Painel de Divergências</div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+        <div><label style={lbl}>De</label><input type="date" value={fDe} onChange={function(e){setFDe(e.target.value);}} style={inp}/></div>
+        <div><label style={lbl}>Até</label><input type="date" value={fAte} onChange={function(e){setFAte(e.target.value);}} style={inp}/></div>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+        <div><label style={lbl}>Fornecedor</label><input value={fForn} onChange={function(e){setFForn(e.target.value);}} placeholder="Filtrar fornecedor" style={inp}/></div>
+        <div><label style={lbl}>Produto</label><input value={fProd} onChange={function(e){setFProd(e.target.value);}} placeholder="Filtrar produto" style={inp}/></div>
+      </div>
+      <div style={{marginBottom:10}}><label style={lbl}>Status</label>
+        <select value={fStatus} onChange={function(e){setFStatus(e.target.value);}} style={Object.assign({},inp,{background:'#fff'})}>
+          <option value="todos">Todos</option>
+          {STATUS_FLUXO_TODOS.map(function(s){return<option key={s} value={s}>{_statusFluxoInfo(s).label}</option>;})}
+        </select>
+      </div>
+      {(fDe||fAte||fForn||fProd||fStatus!=='todos')&&<button onClick={function(){setFDe('');setFAte('');setFForn('');setFProd('');setFStatus('todos');}} style={{padding:'7px 12px',background:'#F1F5F9',border:'none',borderRadius:8,fontSize:12,color:'#64748B',cursor:'pointer',fontWeight:600}}>Limpar filtros</button>}
+      <div style={{display:'flex',gap:8,marginTop:12}}>
+        <button onClick={exportarXL} style={{flex:1,padding:'10px',background:'#0C6B3E',border:'none',borderRadius:10,color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>📊 Exportar Excel</button>
+        <button onClick={exportarPDF} style={{flex:1,padding:'10px',background:'#D97706',border:'none',borderRadius:10,color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>📄 Exportar PDF</button>
+      </div>
+    </div>
+    <div style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9'}}>
+      <div style={{fontSize:12,color:'#94A3B8',marginBottom:10}}>{linhas.length} registro(s)</div>
+      {linhas.length===0?<div style={{textAlign:'center',color:'#94A3B8',padding:24,fontSize:13}}>Nenhuma divergência encontrada.</div>:
+      <div style={{overflowX:'auto'}}>
+        <table style={{width:'100%',borderCollapse:'collapse',fontSize:12,minWidth:640}}>
+          <thead><tr style={{color:'#94A3B8',textAlign:'left'}}>{COLS.map(function(c){return<th key={c} style={{padding:'6px 8px',whiteSpace:'nowrap'}}>{c}</th>;})}</tr></thead>
+          <tbody>{linhas.map(function(l){var si=_statusFluxoInfo(l.statusFluxo);return(<tr key={l.key} style={{borderTop:'1px solid #F1F5F9'}}>
+            <td style={{padding:'8px',whiteSpace:'nowrap'}}>{_fDsimples(l.data)||'—'}</td>
+            <td style={{padding:'8px'}}>{l.fornecedor||'—'}</td>
+            <td style={{padding:'8px',whiteSpace:'nowrap'}}>{l.notaFiscal||'—'}</td>
+            <td style={{padding:'8px'}}>{l.produto||'—'}</td>
+            <td style={{padding:'8px'}}>{l.tipo||'—'}</td>
+            <td style={{padding:'8px'}}>{l.responsavel||'—'}</td>
+            <td style={{padding:'8px'}}><span style={{background:si.bg,color:si.cor,fontSize:10,fontWeight:800,padding:'3px 8px',borderRadius:20,whiteSpace:'nowrap'}}>{si.label}</span></td>
+          </tr>);})}</tbody>
+        </table>
+      </div>}
+    </div>
+  </div>);
+}
+
+// ---- Parte 3: Relatórios ----
+function RelatoriosRecebimento(props){
+  var _recs=useState([]);var recs=_recs[0];var setRecs=_recs[1];
+  var _concs=useState([]);var concs=_concs[0];var setConcs=_concs[1];
+  var _rel=useState('pendentes');var relSel=_rel[0];var setRelSel=_rel[1];
+  var _fDe=useState('');var fDe=_fDe[0];var setFDe=_fDe[1];
+  var _fAte=useState('');var fAte=_fAte[0];var setFAte=_fAte[1];
+  var _fForn=useState('');var fForn=_fForn[0];var setFForn=_fForn[1];
+  var _fProd=useState('');var fProd=_fProd[0];var setFProd=_fProd[1];
+
+  useEffect(function(){
+    var u1=db.collection('recebimentos').orderBy('criadoEm','desc').limit(500).onSnapshot(function(sn){setRecs(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));},function(){});
+    var u2=db.collection('conciliacoes').orderBy('criadoEm','desc').limit(500).onSnapshot(function(sn){setConcs(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));},function(){});
+    return function(){try{u1();}catch(e){}try{u2();}catch(e){}};
+  },[]);
+
+  var base=_filtrarRecsConcs(recs,concs,{de:fDe,ate:fAte,fornecedor:fForn,produto:fProd});
+  var rep=RELATORIOS_RECEBIMENTO.find(function(r){return r.id===relSel;})||RELATORIOS_RECEBIMENTO[0];
+  var linhas=rep.build(base.recs,base.concs);
+
+  function exportarXL(){exportRelatorioXL(rep.label,rep.colunas,linhas,'relatorio_'+rep.id);}
+  function exportarPDF(){exportRelatorioPDF(rep.label,rep.colunas,linhas);}
+
+  var inp={width:'100%',padding:'10px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:13,boxSizing:'border-box'};
+  var lbl={fontSize:11,fontWeight:700,color:'#475569',display:'block',marginBottom:4};
+
+  return(<div>
+    <div data-tour="rel-painel" style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9',marginBottom:16}}>
+      <div style={{fontWeight:800,fontSize:15,color:'#1E293B',marginBottom:12}}>📑 Relatórios</div>
+      <div style={{marginBottom:10}}><label style={lbl}>Relatório</label>
+        <select value={relSel} onChange={function(e){setRelSel(e.target.value);}} style={Object.assign({},inp,{background:'#fff'})}>
+          {RELATORIOS_RECEBIMENTO.map(function(r){return<option key={r.id} value={r.id}>{r.label}</option>;})}
+        </select>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+        <div><label style={lbl}>De</label><input type="date" value={fDe} onChange={function(e){setFDe(e.target.value);}} style={inp}/></div>
+        <div><label style={lbl}>Até</label><input type="date" value={fAte} onChange={function(e){setFAte(e.target.value);}} style={inp}/></div>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:10}}>
+        <div><label style={lbl}>Fornecedor</label><input value={fForn} onChange={function(e){setFForn(e.target.value);}} placeholder="Filtrar fornecedor" style={inp}/></div>
+        <div><label style={lbl}>Produto</label><input value={fProd} onChange={function(e){setFProd(e.target.value);}} placeholder="Filtrar produto" style={inp}/></div>
+      </div>
+      {(fDe||fAte||fForn||fProd)&&<button onClick={function(){setFDe('');setFAte('');setFForn('');setFProd('');}} style={{marginBottom:10,padding:'7px 12px',background:'#F1F5F9',border:'none',borderRadius:8,fontSize:12,color:'#64748B',cursor:'pointer',fontWeight:600}}>Limpar filtros</button>}
+      <div style={{display:'flex',gap:8}}>
+        <button onClick={exportarXL} style={{flex:1,padding:'10px',background:'#0C6B3E',border:'none',borderRadius:10,color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>📊 Exportar Excel</button>
+        <button onClick={exportarPDF} style={{flex:1,padding:'10px',background:'#D97706',border:'none',borderRadius:10,color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>📄 Exportar PDF</button>
+      </div>
+    </div>
+    <div style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9'}}>
+      <div style={{fontWeight:700,fontSize:13,color:'#334155',marginBottom:2}}>{rep.label}</div>
+      <div style={{fontSize:12,color:'#94A3B8',marginBottom:10}}>{linhas.length} registro(s)</div>
+      {linhas.length===0?<div style={{textAlign:'center',color:'#94A3B8',padding:24,fontSize:13}}>Nenhum dado para este relatório.</div>:
+      <div style={{overflowX:'auto'}}>
+        <table style={{width:'100%',borderCollapse:'collapse',fontSize:12,minWidth:480}}>
+          <thead><tr style={{color:'#94A3B8',textAlign:'left'}}>{rep.colunas.map(function(c){return<th key={c} style={{padding:'6px 8px',whiteSpace:'nowrap'}}>{c}</th>;})}</tr></thead>
+          <tbody>{linhas.map(function(row,i){return(<tr key={i} style={{borderTop:'1px solid #F1F5F9'}}>{row.map(function(v,j){return<td key={j} style={{padding:'8px'}}>{v===''||v==null?'—':v}</td>;})}</tr>);})}</tbody>
+        </table>
+      </div>}
+    </div>
+  </div>);
+}
+
+function TabRecebimento(props){
+  var user=props.user;var medications=props.medications||[];var onSave=props.onSave;
+  var B='#1351B4';
+  function blankItem(){_recSeq++;return{key:'it'+_recSeq,medId:'',medNome:'',busca:'',qtd:'',lote:'',validade:'',obs:''};}
+  var _data=useState(todayStr());var data=_data[0];var setData=_data[1];
+  var _forn=useState('');var fornecedor=_forn[0];var setFornecedor=_forn[1];
+  var _resp=useState(user.name||'');var responsavel=_resp[0];var setResponsavel=_resp[1];
+  var _itens=useState([blankItem()]);var itens=_itens[0];var setItens=_itens[1];
+  var _foco=useState(null);var focoItem=_foco[0];var setFocoItem=_foco[1];// item com dropdown de busca aberto
+  var _aba=useState('fisico');var aba=_aba[0];var setAba=_aba[1];// 'fisico' | 'conciliacao'
+  var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];
+  var _ok=useState('');var ok=_ok[0];var setOk=_ok[1];
+  var _recs=useState([]);var recs=_recs[0];var setRecs=_recs[1];
+  var _det=useState(null);var detalhe=_det[0];var setDetalhe=_det[1];
+  var _cancelRec=useState(null);var cancelRec=_cancelRec[0];var setCancelRec=_cancelRec[1];
+  var _cancelJust=useState('');var cancelJust=_cancelJust[0];var setCancelJust=_cancelJust[1];
+  var _cancelSaving=useState(false);var cancelSaving=_cancelSaving[0];var setCancelSaving=_cancelSaving[1];
+  // filtros da lista
+  var _fDe=useState('');var fDe=_fDe[0];var setFDe=_fDe[1];
+  var _fAte=useState('');var fAte=_fAte[0];var setFAte=_fAte[1];
+  var _fForn=useState('');var fForn=_fForn[0];var setFForn=_fForn[1];
+  var _fStatus=useState('todos');var fStatus=_fStatus[0];var setFStatus=_fStatus[1];
+
+  useEffect(function(){
+    var u=db.collection('recebimentos').orderBy('criadoEm','desc').limit(200).onSnapshot(function(sn){
+      setRecs(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));
+    },function(){});
+    return u;
+  },[]);
+
+  function fD(d){if(!d)return'';var p=String(d).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
+  function stInfo(s){
+    if(s==='conciliado')return{label:'Conciliado',cor:'#10B981',bg:'#DCFCE7'};
+    if(s==='divergencia')return{label:'Divergência Aberta',cor:'#D97706',bg:'#FEF3C7'};
+    if(s==='resolvido')return{label:'Resolvido',cor:'#2563EB',bg:'#DBEAFE'};
+    if(s==='cancelado')return{label:'Cancelado',cor:'#64748B',bg:'#F1F5F9'};
+    return{label:'Pendente de Conciliação Fiscal',cor:'#DC2626',bg:'#FEE2E2'};
+  }
+  // Auditoria: toda ação loga usuário/data/hora/ação + valor anterior/novo. logs_acesso NUNCA é apagado.
+  function logAcao(acao,detalhe,valorAnterior,valorNovo){
+    try{db.collection('logs_acesso').add({uid:user.uid||'',nome:user.name||'',cargo:user.role||'',acao:acao,detalhe:detalhe||'',valorAnterior:(valorAnterior===undefined?null:valorAnterior),valorNovo:(valorNovo===undefined?null:valorNovo),criadoEm:new Date().toISOString()}).catch(function(){});}catch(_){}
+  }
+  function setItem(key,patch){setItens(function(arr){return arr.map(function(it){return it.key===key?Object.assign({},it,patch):it;});});}
+  function addItem(){setItens(function(arr){return arr.concat([blankItem()]);});}
+  function delItem(key){setItens(function(arr){return arr.length<=1?arr:arr.filter(function(it){return it.key!==key;});});}
+  function escolherMed(key,m){setItem(key,{medId:m.id,medNome:m.nome,busca:''});setFocoItem(null);}
+
+  async function finalizar(){
+    var validos=itens.filter(function(it){return it.medId&&(parseInt(it.qtd)||0)>0;});
+    if(!fornecedor.trim()){alert('Informe o fornecedor.');return;}
+    if(validos.length===0){alert('Adicione ao menos um medicamento com quantidade.');return;}
+    setSaving(true);
+    try{
+      var now=new Date().toISOString();
+      var itensBase=validos.map(function(it){return{medicamentoId:it.medId,medicamentoNome:it.medNome,quantidade:parseInt(it.qtd)||0,lote:(it.lote||'').trim(),validade:_normValidade((it.validade||'').trim()),observacao:(it.obs||'').trim()};});
+      var recRef=await db.collection('recebimentos').add({data:data,fornecedor:fornecedor.trim(),responsavel:(responsavel||user.name||'').trim(),responsavelId:user.uid||'',status:'pendente',statusLabel:'Pendente de Conciliação Fiscal',totalItens:validos.length,itens:itensBase,criadoEm:now,criadoPor:user.name||'',criadoPorId:user.uid||''});
+      var recId=recRef.id;
+      var itensComEntry=[];
+      for(var i=0;i<validos.length;i++){
+        var it=validos[i];
+        // entrada real: estoque atualiza na hora e vale no calcStock como qualquer entry.
+        var ref=await onSave({tipo:'entrada',medicamentoId:it.medId,medicamentoNome:it.medNome,quantidade:parseInt(it.qtd)||0,lote:(it.lote||'').trim(),validade:_normValidade((it.validade||'').trim()),observacao:'Recebimento — '+fornecedor.trim(),origemRecebimento:true,recebimentoId:recId,date:data});
+        itensComEntry.push({medicamentoId:it.medId,medicamentoNome:it.medNome,quantidade:parseInt(it.qtd)||0,lote:(it.lote||'').trim(),validade:_normValidade((it.validade||'').trim()),observacao:(it.obs||'').trim(),entryId:(ref&&ref.id)||''});
+      }
+      await db.collection('recebimentos').doc(recId).update({itens:itensComEntry});
+      logAcao('recebimento_criado','Recebimento '+recId+' — forn: '+fornecedor.trim()+' — '+validos.length+' item(ns) — resp: '+(responsavel||user.name||''),null,'pendente');
+      setFornecedor('');setResponsavel(user.name||'');setData(todayStr());setItens([blankItem()]);setFocoItem(null);
+      setOk('✅ Recebimento finalizado — estoque atualizado e disponível para dispensação.');
+      setTimeout(function(){setOk('');},4500);
+    }catch(e){alert('Erro ao finalizar recebimento: '+((e&&e.message)?e.message:e));}
+    setSaving(false);
+  }
+
+  async function cancelar(){
+    var just=(cancelJust||'').trim();
+    if(just.length<5){alert('A justificativa é obrigatória (mín. 5 caracteres).');return;}
+    var rec=cancelRec;if(!rec)return;
+    setCancelSaving(true);
+    try{
+      var now=new Date().toISOString();
+      // Estorno: saída de AJUSTE por item (não aparece em relatórios; conta no calcStock). Nenhum registro é excluído.
+      for(var i=0;i<(rec.itens||[]).length;i++){
+        var it=rec.itens[i];
+        await db.collection('entries').add({tipo:'saida',medicamentoId:it.medicamentoId,medicamentoNome:it.medicamentoNome,quantidade:parseInt(it.quantidade)||0,lote:it.lote||'',validade:it.validade||'',observacao:'Estorno de recebimento cancelado — '+(rec.fornecedor||''),isAjuste:true,estornoRecebimento:true,recebimentoId:rec.id,criadoEm:now,date:todayStr(),autorId:user.uid||'',autorNome:user.name||'',autorCargo:user.role||'',autorColor:user.color||B});
+      }
+      await db.collection('recebimentos').doc(rec.id).update({status:'cancelado',statusLabel:'Cancelado',justificativaCancelamento:just,canceladoEm:now,canceladoPor:user.name||'',canceladoPorId:user.uid||''});
+      logAcao('recebimento_cancelado','Recebimento '+rec.id+' — forn: '+(rec.fornecedor||'')+' — estorno de '+(rec.itens||[]).length+' item(ns) — motivo: '+just,rec.status||'pendente','cancelado');
+      setCancelRec(null);setCancelJust('');setDetalhe(null);
+    }catch(e){alert('Erro ao cancelar: '+((e&&e.message)?e.message:e));}
+    setCancelSaving(false);
+  }
+
+  var listaFiltrada=recs.filter(function(r){
+    if(fDe&&(r.data||'')<fDe)return false;
+    if(fAte&&(r.data||'')>fAte)return false;
+    if(fForn&&!(r.fornecedor||'').toLowerCase().includes(fForn.toLowerCase()))return false;
+    if(fStatus!=='todos'&&(r.status||'pendente')!==fStatus)return false;
+    return true;
+  });
+  var inp={width:'100%',padding:'11px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:14,boxSizing:'border-box'};
+  var lbl={fontSize:12,fontWeight:700,color:'#475569',display:'block',marginBottom:5};
+
+  return(
+    <div style={{maxWidth:560,margin:'0 auto',padding:'16px 14px 40px'}}>
+      <div style={{background:'linear-gradient(135deg,#0D1B4B,#1351B4)',padding:'20px 18px',borderRadius:18,marginBottom:16}}>
+        <div style={{color:'rgba(255,255,255,.7)',fontSize:12,textTransform:'uppercase',letterSpacing:1}}>Entrada de mercadoria</div>
+        <div style={{color:'#fff',fontSize:20,fontWeight:800}}>📦 Recebimento</div>
+        <div style={{color:'rgba(255,255,255,.75)',fontSize:12,marginTop:4}}>Registre a mercadoria recebida — o estoque atualiza na hora e fica pendente de conciliação fiscal.</div>
+      </div>
+
+      {/* SUB-ABAS */}
+      <div data-tour="receb-subabas" style={{display:'flex',gap:8,marginBottom:16,overflowX:'auto'}}>
+        {[['fisico','📦 Recebimento Físico'],['conciliacao','📋 Conciliação Fiscal'],['divergencias','🚨 Divergências'],['relatorios','📑 Relatórios']].map(function(t){return(
+          <button key={t[0]} data-tour={'receb-sub-'+t[0]} onClick={function(){setAba(t[0]);}} style={{flexShrink:0,padding:'11px 14px',borderRadius:12,border:'none',background:aba===t[0]?B:'#F1F5F9',color:aba===t[0]?'#fff':'#64748B',fontWeight:700,fontSize:13,cursor:'pointer',whiteSpace:'nowrap'}}>{t[1]}</button>
+        );})}
+      </div>
+
+      {aba==='conciliacao'&&<ConciliacaoFiscal user={user} medications={medications}/>}
+      {aba==='divergencias'&&<PainelDivergencias user={user}/>}
+      {aba==='relatorios'&&<RelatoriosRecebimento user={user}/>}
+
+      {aba==='fisico'&&<div>
+      {/* FORMULÁRIO */}
+      <div data-tour="receb-form" style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9',marginBottom:16}}>
+        <div style={{fontWeight:800,fontSize:15,color:'#1E293B',marginBottom:12}}>Novo recebimento</div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:12}}>
+          <div><label style={lbl}>📅 Data do recebimento</label><input type="date" value={data} max={todayStr()} onChange={function(e){setData(e.target.value);}} style={inp}/></div>
+          <div><label style={lbl}>Fornecedor *</label><input value={fornecedor} onChange={function(e){setFornecedor(e.target.value);}} placeholder="Nome do fornecedor" style={inp}/></div>
+        </div>
+        <div style={{marginBottom:14}}><label style={lbl}>Responsável pelo recebimento</label><input value={responsavel} onChange={function(e){setResponsavel(e.target.value);}} placeholder="Quem recebeu" style={inp}/></div>
+
+        <div style={{fontWeight:700,fontSize:13,color:'#334155',marginBottom:8}}>Medicamentos recebidos</div>
+        <div style={{display:'flex',flexDirection:'column',gap:10}}>
+          {itens.map(function(it,idx){
+            var sug=(!it.medId&&it.busca.trim())?_fuzzyMeds(it.busca,medications,8):[];
+            return(<div key={it.key} style={{background:'#F8FAFC',borderRadius:12,padding:12,border:'1px solid #E2E8F0'}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+                <div style={{fontSize:11,fontWeight:700,color:'#94A3B8'}}>Item {idx+1}</div>
+                {itens.length>1&&<button onClick={function(){delItem(it.key);}} style={{background:'#FEE2E2',border:'none',borderRadius:8,width:28,height:28,cursor:'pointer',fontSize:13,color:'#DC2626'}}>✕</button>}
+              </div>
+              {it.medId?
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,background:'#EFF6FF',border:'1.5px solid #BFDBFE',borderRadius:10,padding:'9px 12px',marginBottom:8}}>
+                  <div style={{fontWeight:700,fontSize:13,color:B}}>💊 {it.medNome}</div>
+                  <button onClick={function(){setItem(it.key,{medId:'',medNome:'',busca:''});setFocoItem(it.key);}} style={{background:'#fff',border:'1px solid #BFDBFE',borderRadius:8,padding:'4px 10px',fontSize:11,color:B,cursor:'pointer',fontWeight:600}}>Trocar</button>
+                </div>
+                :<div style={{position:'relative',marginBottom:8}}>
+                  <input value={it.busca} onChange={function(e){setItem(it.key,{busca:e.target.value});setFocoItem(it.key);}} onFocus={function(){setFocoItem(it.key);}} placeholder="Buscar medicamento no cadastro..." style={inp}/>
+                  {focoItem===it.key&&sug.length>0&&<div style={{position:'absolute',top:'100%',left:0,right:0,background:'#fff',border:'1.5px solid #E2E8F0',borderRadius:10,marginTop:4,zIndex:20,maxHeight:200,overflowY:'auto',boxShadow:'0 8px 24px rgba(0,0,0,.12)'}}>
+                    {sug.map(function(x){var m=x.m;return<button key={m.id} onClick={function(){escolherMed(it.key,m);}} style={{width:'100%',textAlign:'left',padding:'10px 12px',border:'none',borderBottom:'1px solid #F1F5F9',background:'#fff',cursor:'pointer',fontSize:13,color:'#1E293B'}}>{m.nome}</button>;})}
+                  </div>}
+                  {focoItem===it.key&&it.busca.trim()&&sug.length===0&&<div style={{fontSize:11,color:'#94A3B8',marginTop:4}}>Nenhum medicamento encontrado no cadastro.</div>}
+                </div>}
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:8}}>
+                <div><label style={lbl}>Qtd *</label><input type="number" min="1" inputMode="numeric" value={it.qtd} onChange={function(e){setItem(it.key,{qtd:e.target.value.replace(/[^0-9]/g,'')});}} placeholder="0" style={inp}/></div>
+                <div><label style={lbl}>Lote</label><input value={it.lote} onChange={function(e){setItem(it.key,{lote:e.target.value});}} placeholder="Lote" style={inp}/></div>
+                <div><label style={lbl}>Validade</label><input value={it.validade} onChange={function(e){setItem(it.key,{validade:e.target.value});}} placeholder="MM/AAAA" inputMode="numeric" style={inp}/></div>
+              </div>
+              <div><label style={lbl}>Observações (opcional)</label><input value={it.obs} onChange={function(e){setItem(it.key,{obs:e.target.value});}} placeholder="Observações do item" style={inp}/></div>
+            </div>);
+          })}
+        </div>
+        <button onClick={addItem} style={{marginTop:10,width:'100%',padding:'11px',background:'#EFF6FF',border:'1.5px dashed #BFDBFE',borderRadius:10,color:B,fontWeight:700,fontSize:13,cursor:'pointer'}}>+ Adicionar item</button>
+        {ok&&<div style={{marginTop:12,background:'#DCFCE7',border:'1px solid #86EFAC',borderRadius:10,padding:'10px 12px',fontSize:13,color:'#059669',fontWeight:600}}>{ok}</div>}
+        <button data-tour="receb-finalizar" onClick={finalizar} disabled={saving} style={{marginTop:12,width:'100%',padding:'14px',background:saving?'#94A3B8':'#0C6B3E',border:'none',borderRadius:12,color:'#fff',fontWeight:800,fontSize:15,cursor:saving?'default':'pointer'}}>{saving?'Finalizando...':'✅ Finalizar Recebimento'}</button>
+      </div>
+
+      {/* LISTA DE RECEBIMENTOS */}
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+        <div style={{fontWeight:800,fontSize:15,color:'#1E293B'}}>Recebimentos</div>
+        <div style={{fontSize:12,color:'#94A3B8'}}>{listaFiltrada.length} registro(s)</div>
+      </div>
+      <div style={{background:'#fff',borderRadius:14,padding:12,border:'1px solid #F1F5F9',marginBottom:12}}>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+          <div><label style={lbl}>De</label><input type="date" value={fDe} onChange={function(e){setFDe(e.target.value);}} style={inp}/></div>
+          <div><label style={lbl}>Até</label><input type="date" value={fAte} onChange={function(e){setFAte(e.target.value);}} style={inp}/></div>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+          <div><label style={lbl}>Fornecedor</label><input value={fForn} onChange={function(e){setFForn(e.target.value);}} placeholder="Filtrar fornecedor" style={inp}/></div>
+          <div><label style={lbl}>Status</label><select value={fStatus} onChange={function(e){setFStatus(e.target.value);}} style={Object.assign({},inp,{background:'#fff'})}><option value="todos">Todos</option><option value="pendente">Pendente</option><option value="conciliado">Conciliado</option><option value="divergencia">Divergência Aberta</option><option value="resolvido">Resolvido</option><option value="cancelado">Cancelado</option></select></div>
+        </div>
+        {(fDe||fAte||fForn||fStatus!=='todos')&&<button onClick={function(){setFDe('');setFAte('');setFForn('');setFStatus('todos');}} style={{marginTop:8,padding:'7px 12px',background:'#F1F5F9',border:'none',borderRadius:8,fontSize:12,color:'#64748B',cursor:'pointer',fontWeight:600}}>Limpar filtros</button>}
+      </div>
+      <div style={{display:'flex',flexDirection:'column',gap:10}}>
+        {listaFiltrada.length===0&&<div style={{textAlign:'center',color:'#94A3B8',padding:24,fontSize:13}}>Nenhum recebimento encontrado.</div>}
+        {listaFiltrada.map(function(r){
+          var st=stInfo(r.status||'pendente');
+          return(<div key={r.id} onClick={function(){setDetalhe(r);}} style={{background:'#fff',borderRadius:14,padding:14,boxShadow:'0 2px 10px rgba(0,0,0,.05)',border:'1px solid #F1F5F9',cursor:'pointer',opacity:r.status==='cancelado'?0.7:1}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:700,fontSize:14,color:'#1E293B'}}>{r.fornecedor||'—'}</div>
+                <div style={{fontSize:12,color:'#64748B',marginTop:2}}>📅 {fD(r.data)} · {r.totalItens||(r.itens||[]).length} item(ns){r.responsavel?' · '+r.responsavel:''}</div>
+              </div>
+              <span style={{background:st.bg,color:st.cor,fontSize:10,fontWeight:800,padding:'4px 9px',borderRadius:20,whiteSpace:'nowrap'}}>{r.status==='pendente'||!r.status?'Pendente':st.label}</span>
+            </div>
+          </div>);
+        })}
+      </div>
+      </div>}
+
+      {/* DETALHE */}
+      {detalhe&&(function(){var r=recs.find(function(x){return x.id===detalhe.id;})||detalhe;var st=stInfo(r.status||'pendente');return(
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:1000,display:'flex',alignItems:'flex-end',justifyContent:'center'}} onClick={function(){setDetalhe(null);}}>
+          <div style={{background:'#fff',borderRadius:'24px 24px 0 0',padding:'22px 18px 40px',width:'100%',maxWidth:560,maxHeight:'90vh',overflowY:'auto'}} onClick={function(e){e.stopPropagation();}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:14}}>
+              <div>
+                <div style={{fontWeight:800,fontSize:17,color:'#1E293B'}}>{r.fornecedor||'—'}</div>
+                <div style={{fontSize:12,color:'#64748B',marginTop:2}}>📅 {fD(r.data)} · resp: {r.responsavel||'—'}</div>
+              </div>
+              <button onClick={function(){setDetalhe(null);}} style={{background:'#F1F5F9',border:'none',borderRadius:10,width:36,height:36,cursor:'pointer',fontSize:18}}>✕</button>
+            </div>
+            <div style={{display:'inline-block',background:st.bg,color:st.cor,fontSize:12,fontWeight:800,padding:'6px 12px',borderRadius:20,marginBottom:14}}>{st.label}</div>
+            <div style={{fontWeight:700,fontSize:13,color:'#334155',marginBottom:8}}>Itens recebidos</div>
+            <div style={{display:'flex',flexDirection:'column',gap:8,marginBottom:16}}>
+              {(r.itens||[]).map(function(it,i){return(<div key={i} style={{background:'#F8FAFC',borderRadius:10,padding:'10px 12px',border:'1px solid #E2E8F0'}}>
+                <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>{it.medicamentoNome}</div>
+                <div style={{fontSize:12,color:'#64748B',marginTop:2}}>Qtd: <strong>{it.quantidade}</strong>{it.lote?' · Lote: '+it.lote:''}{it.validade?' · Val: '+it.validade:''}</div>
+                {it.observacao&&<div style={{fontSize:11,color:'#94A3B8',marginTop:2}}>{it.observacao}</div>}
+              </div>);})}
+            </div>
+            {r.status==='cancelado'&&<div style={{background:'#F1F5F9',borderRadius:10,padding:'12px 14px',fontSize:12,color:'#64748B',marginBottom:12}}>
+              <div style={{fontWeight:700,color:'#475569',marginBottom:2}}>Cancelado por {r.canceladoPor||'—'}</div>
+              <div>Motivo: {r.justificativaCancelamento||'—'}</div>
+            </div>}
+            {(r.status==='pendente'||!r.status)&&<div style={{borderTop:'1px solid #F1F5F9',paddingTop:14}}>
+              <div style={{fontSize:12,color:'#94A3B8',marginBottom:8}}>Recebimentos não podem ser excluídos. Ao cancelar, o estoque é estornado (saída de ajuste) e o status muda para Cancelado.</div>
+              <button onClick={function(){setCancelRec(r);setCancelJust('');}} style={{width:'100%',padding:'12px',background:'#FEE2E2',border:'1.5px solid #FECACA',borderRadius:12,color:'#DC2626',fontWeight:700,fontSize:14,cursor:'pointer'}}>🚫 Cancelar recebimento</button>
+            </div>}
+          </div>
+        </div>);})()}
+
+      {/* CANCELAR (justificativa obrigatória) */}
+      {cancelRec&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.6)',zIndex:1100,display:'flex',alignItems:'center',justifyContent:'center',padding:18}} onClick={function(){if(!cancelSaving){setCancelRec(null);setCancelJust('');}}}>
+        <div style={{background:'#fff',borderRadius:20,padding:22,width:'100%',maxWidth:400}} onClick={function(e){e.stopPropagation();}}>
+          <div style={{fontWeight:800,fontSize:17,color:'#DC2626',marginBottom:6}}>Cancelar recebimento</div>
+          <div style={{fontSize:13,color:'#64748B',marginBottom:12}}>O estoque de {(cancelRec.itens||[]).length} item(ns) será estornado. Informe o motivo — a justificativa é obrigatória e fica registrada no log.</div>
+          <textarea value={cancelJust} onChange={function(e){setCancelJust(e.target.value);}} rows={3} placeholder="Justificativa do cancelamento..." style={{width:'100%',padding:'12px',borderRadius:10,border:'1.5px solid #FECACA',fontSize:13,resize:'none',boxSizing:'border-box',marginBottom:12}}/>
+          <div style={{display:'flex',gap:8}}>
+            <button onClick={function(){setCancelRec(null);setCancelJust('');}} disabled={cancelSaving} style={{flex:1,padding:'12px',background:'#F1F5F9',border:'none',borderRadius:10,color:'#64748B',fontWeight:700,fontSize:14,cursor:'pointer'}}>Voltar</button>
+            <button onClick={cancelar} disabled={cancelSaving} style={{flex:1,padding:'12px',background:'#DC2626',border:'none',borderRadius:10,color:'#fff',fontWeight:700,fontSize:14,cursor:'pointer',opacity:cancelSaving?0.7:1}}>{cancelSaving?'Estornando...':'Confirmar cancelamento'}</button>
+          </div>
+        </div>
+      </div>}
+    </div>
+  );
+}
+
 function App(){
 var {confirm2,alert2,ModalRender,modal}=useModal();
 var _ready=useState(false);var ready=_ready[0];var setReady=_ready[1];var _user=useState(null);var user=_user[0];var setUser=_user[1];var _histEntries=useState([]);var histEntries=_histEntries[0];var setHistEntries=_histEntries[1];var _recentEntries=useState([]);var recentEntries=_recentEntries[0];var setRecentEntries=_recentEntries[1];var _fcWinStart=useRef(null);if(!_fcWinStart.current){var _w0=new Date();_w0.setDate(_w0.getDate()-3);_fcWinStart.current=_w0.toISOString();}var _meds=useState([]);var meds=_meds[0];var setMeds=_meds[1];var _loading=useState(true);var loading=_loading[0];var setLoading=_loading[1];var _tab=useState('dashboard');var tab=_tab[0];var setTab=_tab[1];var _menuAberto=useState(false);var menuAberto=_menuAberto[0];var setMenuAberto=_menuAberto[1];var _showSairModal=useState(false);var showSairModal=_showSairModal[0];var setShowSairModal=_showSairModal[1];var _pending=useState(0);var pending=_pending[0];var setPending=_pending[1];var _alertCount=useState(0);var alertCount=_alertCount[0];var setAlertCount=_alertCount[1];
 var _convites=useState([]);var convites=_convites[0];var setConvites=_convites[1];
-var _lowStock=useState([]);var lowStock=_lowStock[0];var setLowStock=_lowStock[1];var _lowBannerFechado=useState(false);var lowBannerFechado=_lowBannerFechado[0];var setLowBannerFechado=_lowBannerFechado[1];var _solicitCount=useState(0);var solicitCount=_solicitCount[0];var setSolicitCount=_solicitCount[1];var _online=useState(navigator.onLine);var online=_online[0];var setOnline=_online[1];var _busca=useState(false);var busca=_busca[0];var setBusca=_busca[1];var _showSolicit=useState(false);var showSolicit=_showSolicit[0];var setShowSolicit=_showSolicit[1];var _showShift=useState(false);var showShift=_showShift[0];var setShowShift=_showShift[1];var _showShiftModal=useState(false);var showShiftModal=_showShiftModal[0];var setShowShiftModal=_showShiftModal[1];
+var _lowStock=useState([]);var lowStock=_lowStock[0];var setLowStock=_lowStock[1];var _solicitCount=useState(0);var solicitCount=_solicitCount[0];var setSolicitCount=_solicitCount[1];var _online=useState(navigator.onLine);var online=_online[0];var setOnline=_online[1];var _busca=useState(false);var busca=_busca[0];var setBusca=_busca[1];var _showSolicit=useState(false);var showSolicit=_showSolicit[0];var setShowSolicit=_showSolicit[1];var _showShift=useState(false);var showShift=_showShift[0];var setShowShift=_showShift[1];var _showShiftModal=useState(false);var showShiftModal=_showShiftModal[0];var setShowShiftModal=_showShiftModal[1];
 var _alertaVenc=useState([]);var alertaVenc=_alertaVenc[0];var setAlertaVenc=_alertaVenc[1];
 var _showAlertaVenc=useState(false);var showAlertaVenc=_showAlertaVenc[0];var setShowAlertaVenc=_showAlertaVenc[1];
 var _dandomBaixaVenc=useState(false);var dandomBaixaVenc=_dandomBaixaVenc[0];var setDandoBaixaVenc=_dandomBaixaVenc[1];var _pendingInvite=useState(null);var pendingInvite=_pendingInvite[0];var setPendingInvite=_pendingInvite[1];var _plantao=useState(null);var plantao=_plantao[0];var setPlantao=_plantao[1];var _isGuest=useState(false);var isGuest=_isGuest[0];var setIsGuest=_isGuest[1];var _allUsers=useState([]);var allUsers=_allUsers[0];var setAllUsers=_allUsers[1];var _shiftChecked=useState(false);var shiftChecked=_shiftChecked[0];var setShiftChecked=_shiftChecked[1];var _shiftId=useState(null);var shiftId=_shiftId[0];var setShiftId=_shiftId[1];var _solicitacoesPlantao=useState([]);var solicitacoesPlantao=_solicitacoesPlantao[0];var setSolicitacoesPlantao=_solicitacoesPlantao[1];var lastAct=useRef(Date.now());
@@ -7206,15 +7620,6 @@ return(
     </div>
     <button onClick={function(){db.collection('plantao_convites').doc(convites[0].id).update({status:'confirmado'});}} style={{background:'rgba(255,255,255,0.2)',border:'1.5px solid rgba(255,255,255,0.4)',borderRadius:8,padding:'6px 12px',color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer',whiteSpace:'nowrap'}}>✅ Confirmar</button>
   </div>}
-  {(user.role==='gestor'||user.role==='tecnico')&&!lowBannerFechado&&lowStock.filter(function(m){return (stock[m.id]||0)<=m.estoqueMin&&m.estoqueMin>0;}).length>0&&<div style={{background:'#FEF3C7',borderLeft:'4px solid #F59E0B',padding:'10px 16px',display:'flex',alignItems:'center',gap:8}}>
-    <span style={{fontSize:16}}>⚠️</span>
-    <div>
-      <div style={{fontSize:12,fontWeight:700,color:'#92400E'}}>Estoque mínimo atingido</div>
-      <div style={{fontSize:11,color:'#92400E'}}>{lowStock.filter(function(m){return (stock[m.id]||0)<=m.estoqueMin&&m.estoqueMin>0;}).length} medicamento(s) abaixo do mínimo</div>
-    </div>
-    <button onClick={function(){setTab('estoque');}} style={{marginLeft:'auto',background:'#F59E0B',border:'none',borderRadius:8,padding:'5px 10px',color:'#fff',fontWeight:700,fontSize:11,cursor:'pointer'}}>Ver</button>
-    <button onClick={function(){setLowBannerFechado(true);}} aria-label="Fechar" title="Fechar" style={{background:'none',border:'none',color:'#92400E',fontWeight:700,fontSize:16,lineHeight:1,cursor:'pointer',padding:'0 4px'}}>✕</button>
-  </div>}
   {!online&&<div style={{background:'#475569',color:'#fff',textAlign:'center',padding:'7px',fontSize:12,fontWeight:600}}>Sem conexao com a internet</div>}
 
   <div className="fadeUp" data-tour="tab-content">
@@ -7240,6 +7645,7 @@ return(
         {tab==='previsao'&&(user.role==='gestor'||user.role==='tecnico')&&<ErrBoundary><TabPrevisao user={user} entries={entries} medications={meds} stock={stock} db={db}/></ErrBoundary>}
         {tab==='histcontas'&&can(user.role,'log')&&<TabHistContas/>}
         {tab==='antibiotico'&&<TabAntibiotico user={user} medications={meds} stock={stock} allUsers={allUsers}/>}
+        {tab==='recebimento'&&<ErrBoundary><TabRecebimento user={user} medications={meds} onSave={addEntry}/></ErrBoundary>}
         {tab==='leites'&&<ErrBoundary><TabLeites user={user} medications={meds} onSave={addEntry} confirm2={confirm2} alert2={alert2}/></ErrBoundary>}
         {tab==='admin'&&user.role==='tecnico'&&<TabAdmin user={user} entries={entries} medications={meds} db={db}/>}
         {tab==='perfil'&&<TabPerfil user={user} onUpdate={function(u){setUser(u);}} onLogout={logout} entries={entries} medications={meds} stock={stock}/>}
@@ -7280,6 +7686,7 @@ return(
           <div style={{flex:1,overflowY:'auto',padding:'8px 0'}}>
             {[
               {id:'estoque',icon:'📦',label:'Estoque',show:true},
+              {id:'recebimento',icon:'🚚',label:'Recebimento',show:true},
               {id:'conferencia',icon:'🧾',label:'Conferência',show:true},
               {id:'leites',icon:'🍼',label:'Leites',show:true},
               {id:'relatorio',icon:'📊',label:'Relatório',show:true},
@@ -7327,7 +7734,7 @@ return(
             <div style={{fontSize:11,color:'rgba(255,255,255,0.5)',marginTop:2}}>{ROLES[user.role]||user.role}</div>
           </div>
           <div style={{flex:1,overflowY:'auto',padding:'8px 0'}}>
-            {[{id:'estoque',icon:'📦',label:'Estoque'},{id:'conferencia',icon:'🧾',label:'Conferência'},{id:'leites',icon:'🍼',label:'Leites'},{id:'relatorio',icon:'📊',label:'Relatório'}].map(function(t){return(
+            {[{id:'estoque',icon:'📦',label:'Estoque'},{id:'recebimento',icon:'🚚',label:'Recebimento'},{id:'conferencia',icon:'🧾',label:'Conferência'},{id:'leites',icon:'🍼',label:'Leites'},{id:'relatorio',icon:'📊',label:'Relatório'}].map(function(t){return(
               <button key={t.id} data-tour={'nav-'+t.id} onClick={function(){setTab(t.id);setMenuAberto(false);}} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'13px 20px',border:'none',background:tab===t.id?'#EFF6FF':'transparent',cursor:'pointer',borderLeft:tab===t.id?'3px solid #1351B4':'3px solid transparent'}}>
                 <span style={{fontSize:20}}>{t.icon}</span>
                 <span style={{fontSize:14,fontWeight:tab===t.id?700:500,color:tab===t.id?'#1351B4':'#1E293B'}}>{t.label}</span>
