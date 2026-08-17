@@ -755,7 +755,41 @@ return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
 </div>);}
 
 function TabSaida(props){var user=props.user;var medications=props.medications;var stock=props.stock;var entries=props.entries;var onSave=props.onSave;var latest=props.latest||{};var isGuest=props.isGuest||false;var canMove=props.canMove!==false;var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};var alert2=props.alert2||function(m){window.alert(m);};var _search=useState('');var search=_search[0];var setSearch=_search[1];var _sel=useState(null);var sel=_sel[0];var setSel=_sel[1];var _qty=useState('');var qty=_qty[0];var setQty=_qty[1];var _lote=useState('');var lote=_lote[0];var setLote=_lote[1];var _val=useState('');var val=_val[0];var setVal=_val[1];var _obs=useState('');var obs=_obs[0];var setObs=_obs[1];var _err=useState('');var err=_err[0];var setErr=_err[1];var _warn=useState('');var warn=_warn[0];var setWarn=_warn[1];var _ok=useState('');var ok=_ok[0];var setOk=_ok[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];var _carrinho=useState([]);var carrinho=_carrinho[0];var setCarrinho=_carrinho[1];var _showCarrinho=useState(false);var showCarrinho=_showCarrinho[0];var setShowCarrinho=_showCarrinho[1];
+var _pacNome=useState('');var pacNome=_pacNome[0];var setPacNome=_pacNome[1];// opcional — só vira vínculo/histórico se o medicamento for Controlado
+var _pacCpf=useState('');var pacCpf=_pacCpf[0];var setPacCpf=_pacCpf[1];
+var _pacCns=useState('');var pacCns=_pacCns[0];var setPacCns=_pacCns[1];
+var _showOCR=useState(false);var showOCR=_showOCR[0];var setShowOCR=_showOCR[1];
+var _pacientesCtrl=useState([]);var pacientesCtrl=_pacientesCtrl[0];var setPacientesCtrl=_pacientesCtrl[1];
+useEffect(function(){
+  var unsub=db.collection('pacientes_controlados').onSnapshot(function(snap){
+    var arr=[];snap.forEach(function(d){arr.push(Object.assign({id:d.id},d.data()));});
+    setPacientesCtrl(arr);
+  },function(){});
+  return function(){try{unsub();}catch(e){}};
+},[]);
 var inStock=medications.filter(function(m){return (stock[m.id]||0)>0;});var filtered=[];if(search.trim()){var s=search.toLowerCase();filtered=inStock.filter(function(m){return m.nome.toLowerCase().indexOf(s)>=0;}).slice(0,8);}var cur=sel?(stock[sel.id]||0):0;
+var ehControlado=!!(sel&&(sel.categoria==='controlado'||sel.cat==='controlado'));
+function limparPaciente(){setPacNome('');setPacCpf('');setPacCns('');}
+function aoConfirmarOCR(dados){
+  setShowOCR(false);
+  setPacNome(dados.nome);
+  setPacCpf(dados.cpf?mascaraCPF(dados.cpf):'');
+  setPacCns(dados.cns?mascaraCNS(dados.cns):'');
+}
+// Busca em memória (lista já carregada via onSnapshot) por CPF/CNS; sem nenhum dos dois, cai pro nome exato.
+// Se não achar, cria um cadastro básico. Só é chamada quando o medicamento é Controlado.
+function vincularPaciente(nome,cpfDig,cnsDig){
+  var existente=null;
+  if(cpfDig)existente=pacientesCtrl.find(function(p){return p.cpf&&p.cpf===cpfDig;});
+  if(!existente&&cnsDig)existente=pacientesCtrl.find(function(p){return p.cns&&p.cns===cnsDig;});
+  if(!existente&&!cpfDig&&!cnsDig)existente=pacientesCtrl.find(function(p){return (p.nome||'').toUpperCase()===nome.toUpperCase();});
+  if(existente){
+    logAcessoPaciente(user,'paciente_ctrl_vinculado','Saída — '+nome+' vinculado ao histórico existente'+(cpfDig?' — CPF '+cpfExibicaoMascarada(cpfDig):''));
+    return Promise.resolve(existente.id);
+  }
+  logAcessoPaciente(user,'paciente_ctrl_criado','Saída — novo cadastro de paciente controlado: '+nome+(cpfDig?' — CPF '+cpfExibicaoMascarada(cpfDig):''));
+  return db.collection('pacientes_controlados').add({nome:nome,cpf:cpfDig||'',cns:cnsDig||'',criadoEm:new Date().toISOString(),criadoPor:user.name||user.email}).then(function(ref){return ref.id;});
+}
 function adicionarCarrinho(){
     if(!sel){setErr('Selecione um medicamento.');return;}
     var q=parseInt(qty);if(!q||q<=0){setErr('Quantidade inválida.');return;}
@@ -799,7 +833,13 @@ function adicionarCarrinho(){
     }
     next();
   }
-  function save(){if(!sel){setErr('Selecione um medicamento.');return;}var q=parseInt(qty);if(!q||q<=0){setErr('Quantidade inválida.');return;}if(q>cur){setErr('Estoque insuficiente! Disponivel: '+cur+' un.');return;}if(q>=500&&!obs.trim()){setErr('⚠️ Saída de '+q+' un. (500 ou mais) exige justificativa. Preencha o campo de observação antes de continuar.');return;}if(q>cur*0.7&&!warn){setWarn('Saida alta: '+q+' de '+cur+' un. disponivel. Confirme clicando novamente.');return;}setSaving(true);setErr('');setWarn('');var lt=lote||(latest[sel.id]?latest[sel.id].lote:'')||'';var vl=val||(latest[sel.id]?latest[sel.id].validade:'')||'';var data={medicamentoId:sel.id,medicamentoNome:sel.nome,ean:sel.ean||'',tipo:'saida',quantidade:q,lote:lt.trim(),validade:vl.trim(),observacao:obs.trim()};if(q>=500)data.saidaGrande=true;var saveFn=(!canMove&&isGuest&&props.onSolicitar)?props.onSolicitar:onSave;saveFn(data).then(function(){if(q>500)db.collection('alertas').add({tipo:'saida_excessiva',medicamentoNome:sel.nome,quantidade:q,estoqueAntes:cur,autorNome:user.name,justificativa:obs.trim(),criadoEm:new Date().toISOString(),lido:false}).catch(function(){});playSound('success');setOk((!canMove&&isGuest)?'Solicitação enviada!':'Saida de '+q+'x '+sel.nome+' registrada!');setQty('');setLote('');setVal('');setObs('');setWarn('');setTimeout(function(){setOk('');},4000);setSaving(false);}).catch(function(e){setErr('Erro: '+(e.message||'tente novamente'));setSaving(false);});}
+  async function save(){if(!sel){setErr('Selecione um medicamento.');return;}var q=parseInt(qty);if(!q||q<=0){setErr('Quantidade inválida.');return;}if(q>cur){setErr('Estoque insuficiente! Disponivel: '+cur+' un.');return;}if(q>=500&&!obs.trim()){setErr('⚠️ Saída de '+q+' un. (500 ou mais) exige justificativa. Preencha o campo de observação antes de continuar.');return;}if(q>cur*0.7&&!warn){setWarn('Saida alta: '+q+' de '+cur+' un. disponivel. Confirme clicando novamente.');return;}setSaving(true);setErr('');setWarn('');var lt=lote||(latest[sel.id]?latest[sel.id].lote:'')||'';var vl=val||(latest[sel.id]?latest[sel.id].validade:'')||'';var data={medicamentoId:sel.id,medicamentoNome:sel.nome,ean:sel.ean||'',tipo:'saida',quantidade:q,lote:lt.trim(),validade:vl.trim(),observacao:obs.trim()};if(q>=500)data.saidaGrande=true;
+    // Vínculo com paciente: SÓ pra medicamentos Controlados. Pra qualquer outra categoria, os campos de
+    // paciente (mesmo preenchidos via foto) são ignorados — não geram pacienteId nem cadastro/histórico.
+    if(ehControlado&&pacNome.trim()){
+      try{var pid=await vincularPaciente(pacNome.trim(),pacCpf.replace(/\D/g,''),pacCns.replace(/\D/g,''));if(pid)data.pacienteId=pid;}catch(eVinc){/* não bloqueia a saída por causa do vínculo */}
+    }
+    var saveFn=(!canMove&&isGuest&&props.onSolicitar)?props.onSolicitar:onSave;saveFn(data).then(function(){if(q>500)db.collection('alertas').add({tipo:'saida_excessiva',medicamentoNome:sel.nome,quantidade:q,estoqueAntes:cur,autorNome:user.name,justificativa:obs.trim(),criadoEm:new Date().toISOString(),lido:false}).catch(function(){});playSound('success');setOk((!canMove&&isGuest)?'Solicitação enviada!':'Saida de '+q+'x '+sel.nome+' registrada!');setQty('');setLote('');setVal('');setObs('');setWarn('');limparPaciente();setTimeout(function(){setOk('');},4000);setSaving(false);}).catch(function(e){setErr('Erro: '+(e.message||'tente novamente'));setSaving(false);});}
 var last10=entries.filter(function(e){return e.tipo==='saida'&&!_ehSaidaNaoReal(e);}).slice(-10).reverse();
 return(
 <div style={{maxWidth:600,margin:'0 auto',padding:'16px 14px'}}>
@@ -861,6 +901,18 @@ return(
         <div><Lbl c="Lote"/><input value={lote} onChange={function(e){setLote(e.target.value);}} placeholder="Ex: ABC1234" className="inp"/></div>
         <div><Lbl c="Validade"/><input value={val} onChange={function(e){setVal(e.target.value);}} placeholder="MM/AAAA" className="inp"/></div>
       </div>
+      {sel&&<div style={{background:ehControlado?'#FFFBEB':'#F8FAFC',border:'1.5px solid '+(ehControlado?'#FCD34D':'#E2E8F0'),borderRadius:12,padding:12,marginBottom:10}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+          <div style={{fontSize:12,fontWeight:700,color:ehControlado?'#92400E':'#475569'}}>👤 Paciente {ehControlado?'(recomendado p/ Controlado)':'(opcional)'}</div>
+          <button type="button" onClick={function(){setShowOCR(true);}} style={{background:'#EFF6FF',border:'1px solid #BFDBFE',borderRadius:8,padding:'5px 10px',fontSize:11,fontWeight:700,color:B,cursor:'pointer',whiteSpace:'nowrap'}}>📷 Identificar paciente</button>
+        </div>
+        <input value={pacNome} onChange={function(e){setPacNome(e.target.value);}} placeholder="Nome do paciente" className="inp" style={{marginBottom:8}}/>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+          <input value={pacCpf} onChange={function(e){setPacCpf(mascaraCPF(e.target.value));}} placeholder="CPF (opcional)" inputMode="numeric" className="inp" style={{marginBottom:0}}/>
+          <input value={pacCns} onChange={function(e){setPacCns(mascaraCNS(e.target.value));}} placeholder="CNS (opcional)" inputMode="numeric" className="inp" style={{marginBottom:0}}/>
+        </div>
+        <div style={{fontSize:11,color:'#94A3B8',marginTop:6}}>{ehControlado?'Vincula esta saída ao histórico do paciente.':'Só entra no histórico se o medicamento for Controlado — aqui é só pra agilizar o preenchimento.'}</div>
+      </div>}
       {parseInt(qty)>=500
         ?<div style={{fontSize:12,fontWeight:800,color:'#B91C1C',marginBottom:6,marginTop:8}}>⚠️ Justificativa obrigatória (saída de 500+ un.)</div>
         :<Lbl c="Observação (opcional)"/>
@@ -907,6 +959,7 @@ return(
       );})}
     </div>
   )}
+  {showOCR&&<LeitorDocumentoOCR user={user} onConfirm={aoConfirmarOCR} onClose={function(){setShowOCR(false);}}/>}
 </div>);}
 
 function TabEntrada(props){var user=props.user;var medications=props.medications;var entries=props.entries||[];var onSave=props.onSave;var isGuest=props.isGuest||false;var canMove=props.canMove!==false;var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};var alert2=props.alert2||function(m){window.alert(m);};var _modo=useState('individual');var modo=_modo[0];var setModo=_modo[1];var _search=useState('');var search=_search[0];var setSearch=_search[1];var _sel=useState(null);var sel=_sel[0];var setSel=_sel[1];var _newNome=useState('');var newNome=_newNome[0];var setNewNome=_newNome[1];var _newEan=useState('');var newEan=_newEan[0];var setNewEan=_newEan[1];var _creating=useState(false);var creating=_creating[0];var setCreating=_creating[1];var _showList=useState(false);var showList=_showList[0];var setShowList=_showList[1];var _qty=useState('');var qty=_qty[0];var setQty=_qty[1];var _lote=useState('');var lote=_lote[0];var setLote=_lote[1];var _val=useState('');var val=_val[0];var setVal=_val[1];var _obs=useState('');var obs=_obs[0];var setObs=_obs[1];var _err=useState('');var err=_err[0];var setErr=_err[1];var _ok=useState('');var ok=_ok[0];var setOk=_ok[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];var _filtEntrada=useState('todos');var filtEntrada=_filtEntrada[0];var setFiltEntrada=_filtEntrada[1];var _loteNota=useState('');var loteNota=_loteNota[0];var setLoteNota=_loteNota[1];var _valNota=useState('');var valNota=_valNota[0];var setValNota=_valNota[1];var _obsNota=useState('');var obsNota=_obsNota[0];var setObsNota=_obsNota[1];var _loteNotaReal=useState('');var loteNotaReal=_loteNotaReal[0];var setLoteNotaReal=_loteNotaReal[1];var _valNotaReal=useState('');var valNotaReal=_valNotaReal[0];var setValNotaReal=_valNotaReal[1];var _qtds=useState({});var qtds=_qtds[0];var setQtds=_qtds[1];var _salvandoNota=useState(false);var salvandoNota=_salvandoNota[0];var setSalvandoNota=_salvandoNota[1];
@@ -2631,9 +2684,6 @@ function TabLeites(props){
   // form
   var _fNome=useState('');var fNome=_fNome[0];var setFNome=_fNome[1];
   var _fResp=useState('');var fResp=_fResp[0];var setFResp=_fResp[1];
-  var _fCpf=useState('');var fCpf=_fCpf[0];var setFCpf=_fCpf[1];// opcional — só p/ cadastro rápido/OCR
-  var _fCns=useState('');var fCns=_fCns[0];var setFCns=_fCns[1];
-  var _showOCR=useState(false);var showOCR=_showOCR[0];var setShowOCR=_showOCR[1];
   // fLeites: lista de leites PRINCIPAIS (todos obrigatórios / entregues). [{leiteId, qtd}]
   var _fLeites=useState([{leiteId:'',qtd:''}]);var fLeites=_fLeites[0];var setFLeites=_fLeites[1];
   // fLeiteAlt: leite OPCIONAL (substituto). NÃO é entregue por padrão — só substitui um principal em falta.
@@ -2676,43 +2726,18 @@ function TabLeites(props){
     return out;
   }
 
-  function resetForm(){setFNome('');setFResp('');setFCpf('');setFCns('');setFLeites([{leiteId:'',qtd:''}]);setFLeiteAlt('');setFMats([]);setFObs('');setEditing(null);}
+  function resetForm(){setFNome('');setFResp('');setFLeites([{leiteId:'',qtd:''}]);setFLeiteAlt('');setFMats([]);setFObs('');setEditing(null);}
 
   function abrirNovo(){resetForm();setShowForm(true);}
   function abrirEditar(p){
     setEditing(p);
     setFNome(p.nome||'');setFResp(p.responsavel||'');
-    setFCpf(p.cpf?mascaraCPF(p.cpf):'');setFCns(p.cns?mascaraCNS(p.cns):'');
     var pl=pacienteLeites(p).map(function(l){return{leiteId:l.leiteId||'',qtd:String(l.qtd||'')};});
     setFLeites(pl.length?pl:[{leiteId:'',qtd:''}]);
     setFLeiteAlt(p.leiteAltId||'');
     setFMats((p.materiais||[]).map(function(m){return Object.assign({},m);}));
     setFObs(p.observacao||'');
     setShowForm(true);
-  }
-
-  // Busca em memória (a lista de pacientes já está carregada via onSnapshot) por CPF/CNS —
-  // usada pela leitura por OCR pra saber se o paciente já existe antes de criar um cadastro novo.
-  function buscarPacienteExistente(cpfDig,cnsDig){
-    if(cpfDig){var p1=pacientes.find(function(p){return p.cpf&&p.cpf===cpfDig;});if(p1)return p1;}
-    if(cnsDig){var p2=pacientes.find(function(p){return p.cns&&p.cns===cnsDig;});if(p2)return p2;}
-    return null;
-  }
-  function aoConfirmarOCR(dados){
-    setShowOCR(false);
-    var existente=buscarPacienteExistente(dados.cpf,dados.cns);
-    if(existente){
-      logAcessoPaciente(user,'paciente_ocr_encontrado','Leites — '+dados.nome+(dados.cpf?' — CPF '+cpfExibicaoMascarada(dados.cpf):''));
-      abrirEditar(existente);
-      return;
-    }
-    logAcessoPaciente(user,'paciente_ocr_criado','Leites — novo cadastro via OCR: '+dados.nome+(dados.cpf?' — CPF '+cpfExibicaoMascarada(dados.cpf):''));
-    var basico={nome:dados.nome,cpf:dados.cpf||'',cns:dados.cns||'',responsavel:'',leites:[],materiais:[],observacao:'',status:'falta',criadoEm:new Date().toISOString(),criadoPor:user.name||user.email};
-    setSaving(true);
-    db.collection('pacientes_leite').add(basico).then(function(ref){
-      setSaving(false);
-      abrirEditar(Object.assign({id:ref.id},basico));
-    }).catch(function(e){setSaving(false);alert2('Erro ao criar cadastro básico: '+(e&&e.message?e.message:e));});
   }
 
   function salvarPaciente(){
@@ -2724,8 +2749,6 @@ function TabLeites(props){
     var obj={
       nome:fNome.trim(),
       responsavel:fResp.trim(),
-      cpf:fCpf.replace(/\D/g,''),
-      cns:fCns.replace(/\D/g,''),
       leites:leitesLimpos,
       // Campos legados (1º leite) para compatibilidade com dados/telas antigas:
       leiteId:primeiro.leiteId,
@@ -2884,7 +2907,6 @@ function TabLeites(props){
       <div style={{display:'flex',gap:8,justifyContent:'space-between',alignItems:'flex-start'}}>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontWeight:800,fontSize:15,color:'#1E293B',wordBreak:'break-word'}}>{p.nome}</div>
-          {p.cpf&&<div style={{fontSize:11,color:'#94A3B8',marginTop:1}}>CPF: {cpfExibicaoMascarada(p.cpf)}</div>}
           {p.responsavel&&<div style={{fontSize:12,color:'#64748B',marginTop:2}}>👤 Resp: {p.responsavel}</div>}
           {pacienteLeites(p).map(function(l,li){return(<div key={li} style={{fontSize:13,color:'#1351B4',fontWeight:600,marginTop:li===0?6:2}}>🍼 {l.nome||'—'}<span style={{color:'#64748B',fontWeight:500}}> · {l.qtd||0} un./mês</span></div>);})}
           {p.leiteAltNome&&<div style={{fontSize:12,color:'#7C3AED',fontWeight:500,marginTop:2}}>🔄 Opcional: {p.leiteAltNome}</div>}
@@ -2930,19 +2952,8 @@ function TabLeites(props){
       <div style={{background:'#fff',borderRadius:20,padding:20,maxWidth:520,width:'100%',maxHeight:'92vh',overflowY:'auto'}}>
         <div style={{fontWeight:800,fontSize:17,color:'#1E293B',marginBottom:14}}>{editing?'✏️ Editar Paciente':'➕ Novo Paciente'}</div>
         <div style={{marginBottom:10}}>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
-            <div style={{fontWeight:700,fontSize:12,color:'#1E293B'}}>Nome do paciente *</div>
-            <button type="button" onClick={function(){setShowOCR(true);}} style={{background:'#EFF6FF',border:'1px solid #BFDBFE',borderRadius:8,padding:'5px 10px',fontSize:11,fontWeight:700,color:'#1351B4',cursor:'pointer',whiteSpace:'nowrap'}}>📷 Ler documento</button>
-          </div>
+          <div style={{fontWeight:700,fontSize:12,color:'#1E293B',marginBottom:4}}>Nome do paciente *</div>
           <input value={fNome} onChange={function(e){setFNome(e.target.value);}} className="inp" placeholder="Ex: João da Silva"/>
-        </div>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
-          <div><div style={{fontWeight:700,fontSize:12,color:'#1E293B',marginBottom:4}}>CPF <span style={{fontWeight:400,color:'#94A3B8'}}>(opcional)</span></div>
-            <input value={fCpf} onChange={function(e){setFCpf(mascaraCPF(e.target.value));}} className="inp" placeholder="000.000.000-00" inputMode="numeric" style={{marginBottom:0}}/>
-          </div>
-          <div><div style={{fontWeight:700,fontSize:12,color:'#1E293B',marginBottom:4}}>CNS <span style={{fontWeight:400,color:'#94A3B8'}}>(opcional)</span></div>
-            <input value={fCns} onChange={function(e){setFCns(mascaraCNS(e.target.value));}} className="inp" placeholder="000 0000 0000 0000" inputMode="numeric" style={{marginBottom:0}}/>
-          </div>
         </div>
         <div style={{marginBottom:10}}>
           <div style={{fontWeight:700,fontSize:12,color:'#1E293B',marginBottom:4}}>Nome do responsável</div>
@@ -2996,7 +3007,6 @@ function TabLeites(props){
         </div>
       </div>
     </div>}
-    {showOCR&&<LeitorDocumentoOCR user={user} onConfirm={aoConfirmarOCR} onClose={function(){setShowOCR(false);}}/>}
     {showBaixa&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
       <div style={{background:'#fff',borderRadius:20,padding:20,maxWidth:520,width:'100%',maxHeight:'92vh',overflowY:'auto'}}>
         <div style={{fontWeight:800,fontSize:17,color:'#0C6B3E',marginBottom:4}}>♻️ Dar Baixa — Entrega ao paciente</div>
@@ -3851,10 +3861,6 @@ function TabAntibiotico({user,medications,stock,allUsers}){
   var _tel=sl('');var telefone=_tel[0];var setTelefone=_tel[1];// WhatsApp p/ lembretes (opcional)
   var _tdo=sl('paciente');var telDono=_tdo[0];var setTelDono=_tdo[1];// 'paciente' | 'responsavel'
   var _rn=sl('');var respNome=_rn[0];var setRespNome=_rn[1];// nome do responsável (quando telDono==='responsavel')
-  var _cpfPac=sl('');var cpfPac=_cpfPac[0];var setCpfPac=_cpfPac[1];// opcional — cadastro rápido/OCR
-  var _cnsPac=sl('');var cnsPac=_cnsPac[0];var setCnsPac=_cnsPac[1];
-  var _showOCR=sl(false);var showOCR=_showOCR[0];var setShowOCR=_showOCR[1];
-  var _ocrAviso=sl('');var ocrAviso=_ocrAviso[0];var setOcrAviso=_ocrAviso[1];// "paciente já tratado antes" (via CPF/CNS)
   var _teId=sl(null);var telEditId=_teId[0];var setTelEditId=_teId[1];// edição inline de telefone no detalhe
   var _teF=sl('');var telEditFone=_teF[0];var setTelEditFone=_teF[1];
   var _teD=sl('paciente');var telEditDono=_teD[0];var setTelEditDono=_teD[1];
@@ -3962,29 +3968,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
   function cCor(s){if(s==='ativo')return'#10B981';if(s==='espera')return'#F59E0B';if(s==='dose_ataque')return'#8B5CF6';if(s==='concluido'||s==='finalizado')return'#3B82F6';if(s==='desistiu')return'#EF4444';return'#64748B';}
   function cLbl(s){if(s==='ativo')return'Em Tratamento';if(s==='espera')return'Aguardando';if(s==='dose_ataque')return'Dose de Ataque';if(s==='concluido')return'Concluído';if(s==='finalizado')return'Concluído';if(s==='desistiu')return'Desistiu';return s;}
   function cIco(s){if(s==='ativo')return'💉';if(s==='espera')return'⏳';if(s==='dose_ataque')return'⚡';if(s==='concluido'||s==='finalizado')return'✅';if(s==='desistiu')return'❌';return'';}
-  function rForm(){setNomePac('');setDiasTrat('');setDataIni(new Date().toISOString().split('T')[0]);setDiaAt('1');setDiasAntes('0');setDosesDia('1');setObsForm('');setMedSel('');setNomeMed('');setCrmMed('');setStatusIni('ativo');setQtdEsp(2);setTelefone('');setTelDono('paciente');setRespNome('');setCpfPac('');setCnsPac('');setOcrAviso('');}
-  // Busca em memória (tratamentos já carregados via onSnapshot) pelo tratamento mais recente com o
-  // mesmo CPF/CNS — usada pela leitura por OCR só como referência (ATB não tem "cadastro de paciente"
-  // separado: cada registro é um tratamento novo, então não abre nem cria nada sozinho aqui).
-  function buscarUltimoTratamentoPaciente(cpfDig,cnsDig){
-    var candidatos=(tratamentos||[]).filter(function(t){return (cpfDig&&t.cpfPac===cpfDig)||(cnsDig&&t.cnsPac===cnsDig);});
-    if(!candidatos.length)return null;
-    return candidatos.slice().sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');})[0];
-  }
-  function aoConfirmarOCR(dados){
-    setShowOCR(false);
-    setNomePac(dados.nome);
-    setCpfPac(dados.cpf?mascaraCPF(dados.cpf):'');
-    setCnsPac(dados.cns?mascaraCNS(dados.cns):'');
-    var anterior=buscarUltimoTratamentoPaciente(dados.cpf,dados.cns);
-    if(anterior){
-      logAcessoPaciente(user,'atb_paciente_ocr_existente','ATB — '+dados.nome+' já tem tratamento(s) anterior(es) — último: '+(anterior.medicamentoNome||''));
-      setOcrAviso('ℹ️ Paciente já teve tratamento(s) anterior(es) neste sistema (último: '+(anterior.medicamentoNome||'—')+', em '+fD(anterior.dataInicio)+').');
-    }else{
-      logAcessoPaciente(user,'atb_paciente_ocr_novo','ATB — novo paciente via OCR: '+dados.nome);
-      setOcrAviso('');
-    }
-  }
+  function rForm(){setNomePac('');setDiasTrat('');setDataIni(new Date().toISOString().split('T')[0]);setDiaAt('1');setDiasAntes('0');setDosesDia('1');setObsForm('');setMedSel('');setNomeMed('');setCrmMed('');setStatusIni('ativo');setQtdEsp(2);setTelefone('');setTelDono('paciente');setRespNome('');}
   // ===== Lembretes via WhatsApp =====
   function mascaraTel(v){var d=String(v||'').replace(/\D/g,'').slice(0,11);if(!d)return'';if(d.length<=2)return'('+d;if(d.length<=6)return'('+d.slice(0,2)+') '+d.slice(2);if(d.length<=10)return'('+d.slice(0,2)+') '+d.slice(2,6)+'-'+d.slice(6);return'('+d.slice(0,2)+') '+d.slice(2,7)+'-'+d.slice(7);}
   function telDigitos(t){return String(t&&t.telefone||'').replace(/\D/g,'');}
@@ -4023,7 +4007,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
       doses=[{data:hj,hora:hr,responsavel:user.name,responsavelCor:user.color||B,qtd:qtdEsp,doseEspera:true}];
       await db.collection('entries').add({tipo:'saida',medicamentoId:medSel,medicamentoNome:mO.nome||'',quantidade:qtdEsp,autorNome:user.name,autorCor:user.color||B,autorId:user.uid,lote:'',validade:'',obs:'Espera ATB - '+nomePac.trim(),criadoEm:new Date().toISOString(),date:hj});
     }
-    await db.collection('tratamentos_atb').add({pacienteNome:nomePac.trim(),cpfPac:cpfPac.replace(/\D/g,''),cnsPac:cnsPac.replace(/\D/g,''),diasTratamento:parseInt(diasTrat)||0,dataInicio:dataInicioCalc,dosesPorDia:dPorDia,qtdPorDose:qDose,medicamentoId:medSel,medicamentoNome:mO.nome||'',nomeMedico:nomeMed.trim(),crmMedico:crmMed.trim(),obs:obsForm.trim(),telefone:telefone.trim(),telefoneDono:telDono,responsavelNome:telDono==='responsavel'?respNome.trim():'',doses:doses,status:statusIni,criadoPor:user.name,criadoEm:new Date().toISOString()});
+    await db.collection('tratamentos_atb').add({pacienteNome:nomePac.trim(),diasTratamento:parseInt(diasTrat)||0,dataInicio:dataInicioCalc,dosesPorDia:dPorDia,qtdPorDose:qDose,medicamentoId:medSel,medicamentoNome:mO.nome||'',nomeMedico:nomeMed.trim(),crmMedico:crmMed.trim(),obs:obsForm.trim(),telefone:telefone.trim(),telefoneDono:telDono,responsavelNome:telDono==='responsavel'?respNome.trim():'',doses:doses,status:statusIni,criadoPor:user.name,criadoEm:new Date().toISOString()});
     setSaving(false);setShowForm(false);rForm();
   }
 
@@ -4185,7 +4169,6 @@ function TabAntibiotico({user,medications,stock,allUsers}){
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:8}}>
                 <div style={{flex:1}}>
                   <div style={{fontWeight:700,fontSize:15,color:'#1E293B'}}>{t.pacienteNome}</div>
-                  {t.cpfPac&&<div style={{fontSize:10,color:'#94A3B8'}}>CPF: {cpfExibicaoMascarada(t.cpfPac)}</div>}
                   {(t.nomeMedico||t.crmMedico)&&<div style={{fontSize:11,color:'#64748B',marginTop:2}}>👨‍⚕️ {t.nomeMedico}{t.crmMedico?' · CRM: '+t.crmMedico:''}</div>}
                   {t.criadoPor&&(function(){
                     var uCriador=(allUsers||[]).find(function(u){return u.name===t.criadoPor;});
@@ -4250,22 +4233,8 @@ function TabAntibiotico({user,medications,stock,allUsers}){
           </div>
           <div style={{display:'flex',flexDirection:'column',gap:12}}>
             <div>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:5}}>
-                <label style={{fontSize:12,fontWeight:700,color:'#475569'}}>Nome do Paciente *</label>
-                <button type="button" onClick={function(){setShowOCR(true);}} style={{background:'#EFF6FF',border:'1px solid #BFDBFE',borderRadius:8,padding:'5px 10px',fontSize:11,fontWeight:700,color:B,cursor:'pointer',whiteSpace:'nowrap'}}>📷 Ler documento</button>
-              </div>
+              <label style={{fontSize:12,fontWeight:700,color:'#475569',display:'block',marginBottom:5}}>Nome do Paciente *</label>
               <input value={nomePac} onChange={function(e){setNomePac(e.target.value);}} placeholder="Nome completo" style={{width:'100%',padding:'12px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:14,boxSizing:'border-box'}}/>
-            </div>
-            {ocrAviso&&<div style={{background:'#EFF6FF',border:'1px solid #BFDBFE',borderRadius:10,padding:'10px 12px',fontSize:12,color:'#1351B4'}}>{ocrAviso}</div>}
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-              <div>
-                <label style={{fontSize:12,fontWeight:700,color:'#475569',display:'block',marginBottom:5}}>CPF <span style={{fontWeight:400,color:'#94A3B8'}}>(opcional)</span></label>
-                <input value={cpfPac} onChange={function(e){setCpfPac(mascaraCPF(e.target.value));}} placeholder="000.000.000-00" inputMode="numeric" style={{width:'100%',padding:'12px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:14,boxSizing:'border-box'}}/>
-              </div>
-              <div>
-                <label style={{fontSize:12,fontWeight:700,color:'#475569',display:'block',marginBottom:5}}>CNS <span style={{fontWeight:400,color:'#94A3B8'}}>(opcional)</span></label>
-                <input value={cnsPac} onChange={function(e){setCnsPac(mascaraCNS(e.target.value));}} placeholder="000 0000 0000 0000" inputMode="numeric" style={{width:'100%',padding:'12px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:14,boxSizing:'border-box'}}/>
-              </div>
             </div>
             <div style={{display:'grid',gridTemplateColumns:'1fr 90px',gap:10}}>
               <div>
@@ -4353,7 +4322,6 @@ function TabAntibiotico({user,medications,stock,allUsers}){
           </div>
         </div>
       </div>}
-      {showOCR&&<LeitorDocumentoOCR user={user} onConfirm={aoConfirmarOCR} onClose={function(){setShowOCR(false);}}/>}
 
       {showDose&&(function(){var hojeStr=new Date().toISOString().split('T')[0];var retroSel=dataDose&&dataDose<hojeStr;return(<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:1100,display:'flex',alignItems:'center',justifyContent:'center',padding:20}} onClick={function(){setShowDose(null);setQtdDose(2);setDataDose('');setDoseQtdDia(1);}}>
         <div style={{background:'#fff',borderRadius:20,padding:28,width:'100%',maxWidth:360,textAlign:'center'}} onClick={function(e){e.stopPropagation();}}>
@@ -7552,6 +7520,92 @@ function TabRecebimento(props){
   );
 }
 
+// ===== Aba de Pacientes (controlados): lista + busca + histórico de saídas vinculadas =====
+function TabPacientes(props){
+  var user=props.user;var entries=props.entries||[];
+  var _pacientes=useState([]);var pacientes=_pacientes[0];var setPacientes=_pacientes[1];
+  var _busca=useState('');var busca=_busca[0];var setBusca=_busca[1];
+  var _sel=useState(null);var sel=_sel[0];var setSel=_sel[1];
+
+  useEffect(function(){
+    var unsub=db.collection('pacientes_controlados').onSnapshot(function(snap){
+      var arr=[];snap.forEach(function(d){arr.push(Object.assign({id:d.id},d.data()));});
+      arr.sort(function(a,b){return (a.nome||'').localeCompare(b.nome||'');});
+      setPacientes(arr);
+    },function(){});
+    return function(){try{unsub();}catch(e){}};
+  },[]);
+
+  var q=busca.trim().toLowerCase();
+  var qDigitos=busca.replace(/\D/g,'');
+  var listaFiltrada=pacientes.filter(function(p){
+    if(!q)return true;
+    if((p.nome||'').toLowerCase().indexOf(q)>=0)return true;
+    if(qDigitos&&((p.cpf||'').indexOf(qDigitos)>=0||(p.cns||'').indexOf(qDigitos)>=0))return true;
+    return false;
+  });
+
+  function historicoDe(p){
+    return entries.filter(function(e){return e.tipo==='saida'&&e.pacienteId===p.id;})
+      .sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});
+  }
+
+  return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
+    <div className="card" style={{marginBottom:14}}>
+      <div className="ch"><div className="ch-title"><div style={{width:3,height:16,background:'#7C3AED',borderRadius:2,flexShrink:0}}/><span>👤 Pacientes</span></div><span style={{fontSize:12,color:'#94A3B8',fontWeight:500}}>{pacientes.length} cadastrado(s)</span></div>
+      <div style={{padding:'12px 16px 16px'}}>
+        <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="Buscar por nome, CPF ou CNS..." className="inp" style={{marginBottom:0}}/>
+      </div>
+    </div>
+    {listaFiltrada.length===0
+      ?<div className="card" style={{padding:40,textAlign:'center',color:'#94A3B8'}}>
+        <div style={{fontSize:40,marginBottom:8}}>👤</div>
+        <div style={{fontWeight:600}}>{pacientes.length===0?'Nenhum paciente cadastrado ainda':'Nenhum paciente encontrado'}</div>
+        <div style={{fontSize:12,marginTop:4}}>Pacientes são vinculados automaticamente ao dar saída de medicamentos Controlados.</div>
+      </div>
+      :<div style={{display:'flex',flexDirection:'column',gap:10}}>
+        {listaFiltrada.map(function(p){var hist=historicoDe(p);return(
+          <div key={p.id} className="card" style={{padding:14,cursor:'pointer'}} onClick={function(){setSel(p);}}>
+            <div style={{fontWeight:700,fontSize:15,color:'#1E293B'}}>{p.nome}</div>
+            {p.cpf&&<div style={{fontSize:11,color:'#94A3B8',marginTop:2}}>CPF: {cpfExibicaoMascarada(p.cpf)}</div>}
+            <div style={{fontSize:12,color:'#7C3AED',fontWeight:600,marginTop:4}}>🔒 {hist.length} retirada{hist.length!==1?'s':''} de controlado{hist.length!==1?'s':''}</div>
+          </div>
+        );})}
+      </div>
+    }
+    {sel&&(function(){var hist=historicoDe(sel);return(
+      <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={function(){setSel(null);}}>
+        <div style={{background:'#fff',borderRadius:20,padding:20,maxWidth:520,width:'100%',maxHeight:'92vh',overflowY:'auto'}} onClick={function(e){e.stopPropagation();}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:14}}>
+            <div>
+              <div style={{fontWeight:800,fontSize:17,color:'#1E293B'}}>{sel.nome}</div>
+              {sel.cpf&&<div style={{fontSize:12,color:'#64748B',marginTop:2}}>CPF: {mascaraCPF(sel.cpf)}</div>}
+              {sel.cns&&<div style={{fontSize:12,color:'#64748B',marginTop:1}}>CNS: {mascaraCNS(sel.cns)}</div>}
+              <div style={{fontSize:11,color:'#94A3B8',marginTop:2}}>Cadastrado em {fmtD(sel.criadoEm)}{sel.criadoPor?' por '+sel.criadoPor:''}</div>
+            </div>
+            <button onClick={function(){setSel(null);}} style={{background:'#F1F5F9',border:'none',borderRadius:10,width:36,height:36,cursor:'pointer',fontSize:18}}>✕</button>
+          </div>
+          <div style={{fontWeight:700,fontSize:13,color:'#334155',marginBottom:10}}>🔒 Histórico de medicamentos Controlados</div>
+          {hist.length===0
+            ?<div style={{textAlign:'center',color:'#94A3B8',padding:24,fontSize:13}}>Nenhuma retirada registrada ainda.</div>
+            :<div style={{display:'flex',flexDirection:'column',gap:8}}>
+              {hist.map(function(e){return(<div key={e.id} style={{background:'#F8FAFC',borderRadius:10,padding:'10px 12px',border:'1px solid #E2E8F0'}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
+                  <div>
+                    <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>{e.medicamentoNome}</div>
+                    <div style={{fontSize:11,color:'#64748B',marginTop:2}}>{fmtD(e.criadoEm)} · Responsável: {e.autorNome||'—'}</div>
+                  </div>
+                  <div style={{fontWeight:800,fontSize:14,color:'#DC2626'}}>−{e.quantidade}</div>
+                </div>
+              </div>);})}
+            </div>
+          }
+        </div>
+      </div>
+    );})()}
+  </div>);
+}
+
 function App(){
 var {confirm2,alert2,ModalRender,modal}=useModal();
 var _ready=useState(false);var ready=_ready[0];var setReady=_ready[1];var _user=useState(null);var user=_user[0];var setUser=_user[1];var _histEntries=useState([]);var histEntries=_histEntries[0];var setHistEntries=_histEntries[1];var _recentEntries=useState([]);var recentEntries=_recentEntries[0];var setRecentEntries=_recentEntries[1];var _fcWinStart=useRef(null);if(!_fcWinStart.current){var _w0=new Date();_w0.setDate(_w0.getDate()-3);_fcWinStart.current=_w0.toISOString();}var _meds=useState([]);var meds=_meds[0];var setMeds=_meds[1];var _loading=useState(true);var loading=_loading[0];var setLoading=_loading[1];var _tab=useState('dashboard');var tab=_tab[0];var setTab=_tab[1];var _menuAberto=useState(false);var menuAberto=_menuAberto[0];var setMenuAberto=_menuAberto[1];var _showSairModal=useState(false);var showSairModal=_showSairModal[0];var setShowSairModal=_showSairModal[1];var _pending=useState(0);var pending=_pending[0];var setPending=_pending[1];var _alertCount=useState(0);var alertCount=_alertCount[0];var setAlertCount=_alertCount[1];
@@ -7912,6 +7966,7 @@ return(
         {tab==='histcontas'&&can(user.role,'log')&&<TabHistContas/>}
         {tab==='antibiotico'&&<TabAntibiotico user={user} medications={meds} stock={stock} allUsers={allUsers}/>}
         {tab==='recebimento'&&<ErrBoundary><TabRecebimento user={user} medications={meds} onSave={addEntry}/></ErrBoundary>}
+        {tab==='pacientes'&&<ErrBoundary><TabPacientes user={user} entries={entries}/></ErrBoundary>}
         {tab==='leites'&&<ErrBoundary><TabLeites user={user} medications={meds} onSave={addEntry} confirm2={confirm2} alert2={alert2}/></ErrBoundary>}
         {tab==='admin'&&user.role==='tecnico'&&<TabAdmin user={user} entries={entries} medications={meds} db={db}/>}
         {tab==='perfil'&&<TabPerfil user={user} onUpdate={function(u){setUser(u);}} onLogout={logout} entries={entries} medications={meds} stock={stock}/>}
@@ -7953,6 +8008,7 @@ return(
             {[
               {id:'estoque',icon:'📦',label:'Estoque',show:true},
               {id:'recebimento',icon:'🚚',label:'Recebimento',show:true},
+              {id:'pacientes',icon:'👤',label:'Pacientes',show:true},
               {id:'conferencia',icon:'🧾',label:'Conferência',show:true},
               {id:'leites',icon:'🍼',label:'Leites',show:true},
               {id:'relatorio',icon:'📊',label:'Relatório',show:true},
@@ -8000,7 +8056,7 @@ return(
             <div style={{fontSize:11,color:'rgba(255,255,255,0.5)',marginTop:2}}>{ROLES[user.role]||user.role}</div>
           </div>
           <div style={{flex:1,overflowY:'auto',padding:'8px 0'}}>
-            {[{id:'estoque',icon:'📦',label:'Estoque'},{id:'recebimento',icon:'🚚',label:'Recebimento'},{id:'conferencia',icon:'🧾',label:'Conferência'},{id:'leites',icon:'🍼',label:'Leites'},{id:'relatorio',icon:'📊',label:'Relatório'}].map(function(t){return(
+            {[{id:'estoque',icon:'📦',label:'Estoque'},{id:'recebimento',icon:'🚚',label:'Recebimento'},{id:'pacientes',icon:'👤',label:'Pacientes'},{id:'conferencia',icon:'🧾',label:'Conferência'},{id:'leites',icon:'🍼',label:'Leites'},{id:'relatorio',icon:'📊',label:'Relatório'}].map(function(t){return(
               <button key={t.id} data-tour={'nav-'+t.id} onClick={function(){setTab(t.id);setMenuAberto(false);}} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'13px 20px',border:'none',background:tab===t.id?'#EFF6FF':'transparent',cursor:'pointer',borderLeft:tab===t.id?'3px solid #1351B4':'3px solid transparent'}}>
                 <span style={{fontSize:20}}>{t.icon}</span>
                 <span style={{fontSize:14,fontWeight:tab===t.id?700:500,color:tab===t.id?'#1351B4':'#1E293B'}}>{t.label}</span>
