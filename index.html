@@ -376,9 +376,9 @@ function extrairNomeTexto(texto){
 }
 // Auditoria: registra criação/acesso a cadastro de paciente em logs_acesso (usuário, cargo, ação, hora).
 function logAcessoPaciente(user,acao,detalhe){try{db.collection('logs_acesso').add({uid:(user&&user.uid)||'',nome:(user&&user.name)||'',cargo:(user&&user.role)||'',acao:acao,detalhe:detalhe||'',criadoEm:new Date().toISOString()}).catch(function(){});}catch(_){}}
-function calcStock(entries){var s={};for(var i=0;i<entries.length;i++){var e=entries[i];if(!e.medicamentoId)continue;if(!s[e.medicamentoId])s[e.medicamentoId]=0;if(e.tipo==='entrada'){if(e.divergenciaTipo==='nota')continue;// entrada fictícia de nota — não entra no estoque real
-s[e.medicamentoId]+=(Number(e.quantidade)||0);}else if(e.tipo==='saida'){if(e.ficticioDiv)continue;// saída fictícia — não subtrai do estoque real
-s[e.medicamentoId]-=(Number(e.quantidade)||0);}}return s;}
+function calcStock(entries){var s={};for(var i=0;i<entries.length;i++){var e=entries[i];if(!e.medicamentoId)continue;if(!s[e.medicamentoId])s[e.medicamentoId]=0;if(e.tipo==='entrada'){if(e.divergenciaTipo==='nota')continue;
+s[e.medicamentoId]+=(Number(e.quantidade)||0);}else if(e.tipo==='saida'){if(e.ficticioDiv)continue;
+s[e.medicamentoId]-=(Number(e.quantidade)||0);}}for(var k in s){if(s[k]<0)s[k]=0;}return s;}
 function calcLatest(entries){var info={};var sorted=[];for(var i=0;i<entries.length;i++){if(entries[i].tipo==='entrada')sorted.push(entries[i]);}sorted.sort(function(a,b){return (a.criadoEm||'').localeCompare(b.criadoEm||'');});for(var j=0;j<sorted.length;j++){var e=sorted[j];if(e.medicamentoId)info[e.medicamentoId]={lote:e.lote||'',validade:e.validade||''};}return info;}
 // Converte um ano em 2 dígitos para 4: <=50 -> 20XX (ex: 28->2028); >50 -> 19XX (ex: 98->1998). Ano já com 3+ dígitos passa direto.
 function _anoVal(y){var n=parseInt(y,10);if(isNaN(n))return NaN;if(n<100)return n<=50?2000+n:1900+n;return n;}
@@ -755,41 +755,7 @@ return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
 </div>);}
 
 function TabSaida(props){var user=props.user;var medications=props.medications;var stock=props.stock;var entries=props.entries;var onSave=props.onSave;var latest=props.latest||{};var isGuest=props.isGuest||false;var canMove=props.canMove!==false;var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};var alert2=props.alert2||function(m){window.alert(m);};var _search=useState('');var search=_search[0];var setSearch=_search[1];var _sel=useState(null);var sel=_sel[0];var setSel=_sel[1];var _qty=useState('');var qty=_qty[0];var setQty=_qty[1];var _lote=useState('');var lote=_lote[0];var setLote=_lote[1];var _val=useState('');var val=_val[0];var setVal=_val[1];var _obs=useState('');var obs=_obs[0];var setObs=_obs[1];var _err=useState('');var err=_err[0];var setErr=_err[1];var _warn=useState('');var warn=_warn[0];var setWarn=_warn[1];var _ok=useState('');var ok=_ok[0];var setOk=_ok[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];var _carrinho=useState([]);var carrinho=_carrinho[0];var setCarrinho=_carrinho[1];var _showCarrinho=useState(false);var showCarrinho=_showCarrinho[0];var setShowCarrinho=_showCarrinho[1];
-var _pacNome=useState('');var pacNome=_pacNome[0];var setPacNome=_pacNome[1];// opcional — só vira vínculo/histórico se o medicamento for Controlado
-var _pacCpf=useState('');var pacCpf=_pacCpf[0];var setPacCpf=_pacCpf[1];
-var _pacCns=useState('');var pacCns=_pacCns[0];var setPacCns=_pacCns[1];
-var _showOCR=useState(false);var showOCR=_showOCR[0];var setShowOCR=_showOCR[1];
-var _pacientesCtrl=useState([]);var pacientesCtrl=_pacientesCtrl[0];var setPacientesCtrl=_pacientesCtrl[1];
-useEffect(function(){
-  var unsub=db.collection('pacientes_controlados').onSnapshot(function(snap){
-    var arr=[];snap.forEach(function(d){arr.push(Object.assign({id:d.id},d.data()));});
-    setPacientesCtrl(arr);
-  },function(){});
-  return function(){try{unsub();}catch(e){}};
-},[]);
 var inStock=medications.filter(function(m){return (stock[m.id]||0)>0;});var filtered=[];if(search.trim()){var s=search.toLowerCase();filtered=inStock.filter(function(m){return m.nome.toLowerCase().indexOf(s)>=0;}).slice(0,8);}var cur=sel?(stock[sel.id]||0):0;
-var ehControlado=!!(sel&&(sel.categoria==='controlado'||sel.cat==='controlado'));
-function limparPaciente(){setPacNome('');setPacCpf('');setPacCns('');}
-function aoConfirmarOCR(dados){
-  setShowOCR(false);
-  setPacNome(dados.nome);
-  setPacCpf(dados.cpf?mascaraCPF(dados.cpf):'');
-  setPacCns(dados.cns?mascaraCNS(dados.cns):'');
-}
-// Busca em memória (lista já carregada via onSnapshot) por CPF/CNS; sem nenhum dos dois, cai pro nome exato.
-// Se não achar, cria um cadastro básico. Só é chamada quando o medicamento é Controlado.
-function vincularPaciente(nome,cpfDig,cnsDig){
-  var existente=null;
-  if(cpfDig)existente=pacientesCtrl.find(function(p){return p.cpf&&p.cpf===cpfDig;});
-  if(!existente&&cnsDig)existente=pacientesCtrl.find(function(p){return p.cns&&p.cns===cnsDig;});
-  if(!existente&&!cpfDig&&!cnsDig)existente=pacientesCtrl.find(function(p){return (p.nome||'').toUpperCase()===nome.toUpperCase();});
-  if(existente){
-    logAcessoPaciente(user,'paciente_ctrl_vinculado','Saída — '+nome+' vinculado ao histórico existente'+(cpfDig?' — CPF '+cpfExibicaoMascarada(cpfDig):''));
-    return Promise.resolve(existente.id);
-  }
-  logAcessoPaciente(user,'paciente_ctrl_criado','Saída — novo cadastro de paciente controlado: '+nome+(cpfDig?' — CPF '+cpfExibicaoMascarada(cpfDig):''));
-  return db.collection('pacientes_controlados').add({nome:nome,cpf:cpfDig||'',cns:cnsDig||'',criadoEm:new Date().toISOString(),criadoPor:user.name||user.email}).then(function(ref){return ref.id;});
-}
 function adicionarCarrinho(){
     if(!sel){setErr('Selecione um medicamento.');return;}
     var q=parseInt(qty);if(!q||q<=0){setErr('Quantidade inválida.');return;}
@@ -836,12 +802,7 @@ function adicionarCarrinho(){
     next();
   }
   async function save(){if(!sel){setErr('Selecione um medicamento.');return;}var q=parseInt(qty);if(!q||q<=0){setErr('Quantidade inválida.');return;}if(cur<=0){setErr('Estoque zerado! Saída bloqueada — não há unidades disponíveis de '+sel.nome+'.');return;}if(q>cur){setErr('Quantidade ('+q+') maior que o estoque disponível ('+cur+' un.). Máximo permitido: '+cur+' un.');return;}if(q>=500&&!obs.trim()){setErr('⚠️ Saída de '+q+' un. (500 ou mais) exige justificativa. Preencha o campo de observação antes de continuar.');return;}if(q>cur*0.7&&!warn){setWarn('Saida alta: '+q+' de '+cur+' un. disponivel. Confirme clicando novamente.');return;}setSaving(true);setErr('');setWarn('');var lt=lote||(latest[sel.id]?latest[sel.id].lote:'')||'';var vl=val||(latest[sel.id]?latest[sel.id].validade:'')||'';var data={medicamentoId:sel.id,medicamentoNome:sel.nome,ean:sel.ean||'',tipo:'saida',quantidade:q,lote:lt.trim(),validade:vl.trim(),observacao:obs.trim()};if(q>=500)data.saidaGrande=true;
-    // Vínculo com paciente: SÓ pra medicamentos Controlados. Pra qualquer outra categoria, os campos de
-    // paciente (mesmo preenchidos via foto) são ignorados — não geram pacienteId nem cadastro/histórico.
-    if(ehControlado&&pacNome.trim()){
-      try{var pid=await vincularPaciente(pacNome.trim(),pacCpf.replace(/\D/g,''),pacCns.replace(/\D/g,''));if(pid)data.pacienteId=pid;}catch(eVinc){/* não bloqueia a saída por causa do vínculo */}
-    }
-    var saveFn=(!canMove&&isGuest&&props.onSolicitar)?props.onSolicitar:onSave;saveFn(data).then(function(){if(q>500)db.collection('alertas').add({tipo:'saida_excessiva',medicamentoNome:sel.nome,quantidade:q,estoqueAntes:cur,autorNome:user.name,justificativa:obs.trim(),criadoEm:new Date().toISOString(),lido:false}).catch(function(){});playSound('success');setOk((!canMove&&isGuest)?'Solicitação enviada!':'Saida de '+q+'x '+sel.nome+' registrada!');setQty('');setLote('');setVal('');setObs('');setWarn('');limparPaciente();setTimeout(function(){setOk('');},4000);setSaving(false);}).catch(function(e){setErr('Erro: '+(e.message||'tente novamente'));setSaving(false);});}
+    var saveFn=(!canMove&&isGuest&&props.onSolicitar)?props.onSolicitar:onSave;saveFn(data).then(function(){if(q>500)db.collection('alertas').add({tipo:'saida_excessiva',medicamentoNome:sel.nome,quantidade:q,estoqueAntes:cur,autorNome:user.name,justificativa:obs.trim(),criadoEm:new Date().toISOString(),lido:false}).catch(function(){});playSound('success');setOk((!canMove&&isGuest)?'Solicitação enviada!':'Saida de '+q+'x '+sel.nome+' registrada!');setQty('');setLote('');setVal('');setObs('');setWarn('');setTimeout(function(){setOk('');},4000);setSaving(false);}).catch(function(e){setErr('Erro: '+(e.message||'tente novamente'));setSaving(false);});}
 var last10=entries.filter(function(e){return e.tipo==='saida'&&!_ehSaidaNaoReal(e);}).slice(-10).reverse();
 return(
 <div style={{maxWidth:600,margin:'0 auto',padding:'16px 14px'}}>
@@ -903,18 +864,6 @@ return(
         <div><Lbl c="Lote"/><input value={lote} onChange={function(e){setLote(e.target.value);}} placeholder="Ex: ABC1234" className="inp"/></div>
         <div><Lbl c="Validade"/><input value={val} onChange={function(e){setVal(e.target.value);}} placeholder="MM/AAAA" className="inp"/></div>
       </div>
-      {sel&&<div style={{background:ehControlado?'#FFFBEB':'#F8FAFC',border:'1.5px solid '+(ehControlado?'#FCD34D':'#E2E8F0'),borderRadius:12,padding:12,marginBottom:10}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
-          <div style={{fontSize:12,fontWeight:700,color:ehControlado?'#92400E':'#475569'}}>👤 Paciente {ehControlado?'(recomendado p/ Controlado)':'(opcional)'}</div>
-          <button type="button" onClick={function(){setShowOCR(true);}} style={{background:'#EFF6FF',border:'1px solid #BFDBFE',borderRadius:8,padding:'5px 10px',fontSize:11,fontWeight:700,color:B,cursor:'pointer',whiteSpace:'nowrap'}}>📷 Identificar paciente</button>
-        </div>
-        <input value={pacNome} onChange={function(e){setPacNome(e.target.value);}} placeholder="Nome do paciente" className="inp" style={{marginBottom:8}}/>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
-          <input value={pacCpf} onChange={function(e){setPacCpf(mascaraCPF(e.target.value));}} placeholder="CPF (opcional)" inputMode="numeric" className="inp" style={{marginBottom:0}}/>
-          <input value={pacCns} onChange={function(e){setPacCns(mascaraCNS(e.target.value));}} placeholder="CNS (opcional)" inputMode="numeric" className="inp" style={{marginBottom:0}}/>
-        </div>
-        <div style={{fontSize:11,color:'#94A3B8',marginTop:6}}>{ehControlado?'Vincula esta saída ao histórico do paciente.':'Só entra no histórico se o medicamento for Controlado — aqui é só pra agilizar o preenchimento.'}</div>
-      </div>}
       {parseInt(qty)>=500
         ?<div style={{fontSize:12,fontWeight:800,color:'#B91C1C',marginBottom:6,marginTop:8}}>⚠️ Justificativa obrigatória (saída de 500+ un.)</div>
         :<Lbl c="Observação (opcional)"/>
@@ -961,7 +910,7 @@ return(
       );})}
     </div>
   )}
-  {showOCR&&<LeitorDocumentoOCR user={user} onConfirm={aoConfirmarOCR} onClose={function(){setShowOCR(false);}}/>}
+
 </div>);}
 
 function TabEntrada(props){var user=props.user;var medications=props.medications;var entries=props.entries||[];var onSave=props.onSave;var isGuest=props.isGuest||false;var canMove=props.canMove!==false;var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};var alert2=props.alert2||function(m){window.alert(m);};var _modo=useState('individual');var modo=_modo[0];var setModo=_modo[1];var _search=useState('');var search=_search[0];var setSearch=_search[1];var _sel=useState(null);var sel=_sel[0];var setSel=_sel[1];var _newNome=useState('');var newNome=_newNome[0];var setNewNome=_newNome[1];var _newEan=useState('');var newEan=_newEan[0];var setNewEan=_newEan[1];var _creating=useState(false);var creating=_creating[0];var setCreating=_creating[1];var _showList=useState(false);var showList=_showList[0];var setShowList=_showList[1];var _qty=useState('');var qty=_qty[0];var setQty=_qty[1];var _lote=useState('');var lote=_lote[0];var setLote=_lote[1];var _val=useState('');var val=_val[0];var setVal=_val[1];var _obs=useState('');var obs=_obs[0];var setObs=_obs[1];var _err=useState('');var err=_err[0];var setErr=_err[1];var _ok=useState('');var ok=_ok[0];var setOk=_ok[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];var _filtEntrada=useState('todos');var filtEntrada=_filtEntrada[0];var setFiltEntrada=_filtEntrada[1];var _loteNota=useState('');var loteNota=_loteNota[0];var setLoteNota=_loteNota[1];var _valNota=useState('');var valNota=_valNota[0];var setValNota=_valNota[1];var _obsNota=useState('');var obsNota=_obsNota[0];var setObsNota=_obsNota[1];var _loteNotaReal=useState('');var loteNotaReal=_loteNotaReal[0];var setLoteNotaReal=_loteNotaReal[1];var _valNotaReal=useState('');var valNotaReal=_valNotaReal[0];var setValNotaReal=_valNotaReal[1];var _qtds=useState({});var qtds=_qtds[0];var setQtds=_qtds[1];var _salvandoNota=useState(false);var salvandoNota=_salvandoNota[0];var setSalvandoNota=_salvandoNota[1];
@@ -7816,7 +7765,7 @@ var entries=useMemo(function(){
   return out;
 },[histEntries,recentEntries]);
 var stock=useMemo(function(){return calcStock(entries);},[entries]);
-var latest=useMemo(function(){return calcLatest(entries);},[entries]);
+var latest=useMemo(function(){var l=calcLatest(entries);for(var k in l){if((stock[k]||0)<=0)l[k]={lote:'',validade:''};}return l;},[entries,stock]);
 var lowCount=useMemo(function(){var c=0;meds.forEach(function(m){if(m.minEstoque&&(stock[m.id]||0)<=m.minEstoque&&(stock[m.id]||0)>0)c++;});return c;},[meds,stock]);
 function checkShift(u){if(shiftChecked)return;setShiftChecked(true);autoFecharPlantoesAntigos();var today=todayStr();var role=u.role;if(role==='gestor'||role==='tecnico'){setIsGuest(false);db.collection('plantoes').doc(today).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);}else{setPlantao(null);setShiftId(null);}}).catch(function(){});return;}if(!isShiftTime()){setIsGuest(true);return;}var leftKey='fc_shift_saiu_'+today;var encKey='fc_shift_enc_'+today;var leftToday=localStorage.getItem(encKey)||localStorage.getItem(leftKey);if(leftToday){db.collection('plantoes').doc(today).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);var readicionado=false;if(p.iniciadoPor===u.uid){readicionado=true;}else if(p.equipe){for(var j=0;j<p.equipe.length;j++){if(p.equipe[j].id===u.uid&&p.equipe[j].status==='confirmado'){readicionado=true;break;}}}if(readicionado){localStorage.removeItem(leftKey);localStorage.removeItem(encKey);setIsGuest(false);}else{setIsGuest(true);}}else{setIsGuest(true);}}).catch(function(){setIsGuest(true);});return;}db.collection('plantao_convites').where('para','==',u.uid).where('status','==','pendente').get().then(function(invSnap){var todayInvite=null;for(var i=0;i<invSnap.docs.length;i++){var d=invSnap.docs[i].data();if(d.data===today){var o={id:invSnap.docs[i].id};for(var k in d)o[k]=d[k];todayInvite=o;break;}}if(todayInvite){setPendingInvite(todayInvite);return;}db.collection('plantoes').doc(today).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);var inTeam=false;
               // Quem iniciou o plantão nunca é convidado
