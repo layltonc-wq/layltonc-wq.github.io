@@ -901,7 +901,7 @@ return(
         <div><Lbl c="Lote"/><input value={lote} onChange={function(e){setLote(e.target.value);}} placeholder="Ex: ABC1234" className="inp"/></div>
         <div><Lbl c="Validade"/><input value={val} onChange={function(e){setVal(e.target.value);}} placeholder="MM/AAAA" className="inp"/></div>
       </div>
-      {sel&&<div style={{background:ehControlado?'#FFFBEB':'#F8FAFC',border:'1.5px solid '+(ehControlado?'#FCD34D':'#E2E8F0'),borderRadius:12,padding:12,marginBottom:10}}>
+      <div style={{background:ehControlado?'#FFFBEB':'#F8FAFC',border:'1.5px solid '+(ehControlado?'#FCD34D':'#E2E8F0'),borderRadius:12,padding:12,marginBottom:10}}>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
           <div style={{fontSize:12,fontWeight:700,color:ehControlado?'#92400E':'#475569'}}>👤 Paciente {ehControlado?'(recomendado p/ Controlado)':'(opcional)'}</div>
           <button type="button" onClick={function(){setShowOCR(true);}} style={{background:'#EFF6FF',border:'1px solid #BFDBFE',borderRadius:8,padding:'5px 10px',fontSize:11,fontWeight:700,color:B,cursor:'pointer',whiteSpace:'nowrap'}}>📷 Identificar paciente</button>
@@ -912,7 +912,7 @@ return(
           <input value={pacCns} onChange={function(e){setPacCns(mascaraCNS(e.target.value));}} placeholder="CNS (opcional)" inputMode="numeric" className="inp" style={{marginBottom:0}}/>
         </div>
         <div style={{fontSize:11,color:'#94A3B8',marginTop:6}}>{ehControlado?'Vincula esta saída ao histórico do paciente.':'Só entra no histórico se o medicamento for Controlado — aqui é só pra agilizar o preenchimento.'}</div>
-      </div>}
+      </div>
       {parseInt(qty)>=500
         ?<div style={{fontSize:12,fontWeight:800,color:'#B91C1C',marginBottom:6,marginTop:8}}>⚠️ Justificativa obrigatória (saída de 500+ un.)</div>
         :<Lbl c="Observação (opcional)"/>
