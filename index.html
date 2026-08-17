@@ -6346,6 +6346,27 @@ function TabConferencia(props){
   </div>);
 }
 
+// Calcula a posição (fixed) do balão do tour a partir do retângulo do elemento destacado.
+// Usa a porção VISÍVEL do elemento (interseção com a viewport) — não a altura bruta — para decidir
+// "acima"/"abaixo": um elemento maior que a tela (ex.: a aba inteira, com scroll) antes fazia o balão
+// ficar quase todo fora da viewport. Sem espaço em nenhum dos dois lados, cai pro centro da tela.
+function _tourBalloonStyle(rect,posicao,vw,vh){
+  var balloonW=Math.min(300,vw-32),gap=14,padE=12;
+  if(!rect)return{left:'50%',top:'50%',transform:'translate(-50%,-50%)'};
+  var visTop=Math.max(0,rect.top),visBottom=Math.min(vh,rect.top+rect.height);
+  var pos=posicao||'abaixo';
+  var podeAcima=visTop>=170,podeAbaixo=(visBottom+180)<=vh;
+  if(pos==='abaixo'&&!podeAbaixo)pos=podeAcima?'acima':'centro';
+  else if(pos==='acima'&&!podeAcima)pos=podeAbaixo?'abaixo':'centro';
+  if(pos==='centro')return{left:'50%',top:'50%',transform:'translate(-50%,-50%)'};
+  var cx=rect.left+rect.width/2;
+  var clampX=Math.max(padE,Math.min(cx-balloonW/2,vw-balloonW-padE));
+  if(pos==='acima')return{left:clampX,bottom:(vh-visTop+gap)};
+  if(pos==='abaixo')return{left:clampX,top:(visBottom+gap)};
+  if(pos==='esquerda')return{right:(vw-rect.left+gap),top:Math.max(padE,Math.min(visTop,vh-180))};
+  return{left:(rect.left+rect.width+gap),top:Math.max(padE,Math.min(visTop,vh-180))};
+}
+
 // ===== Motor de tours guiados (tooltip/balão com destaque + overlay escurecido) =====
 function TourEngine(props){
   var user=props.user;
@@ -6436,21 +6457,8 @@ function TourEngine(props){
   function proximo(){if(ultimo)marcarVisto();else setStep(step+1);}
 
   var vw=window.innerWidth,vh=window.innerHeight;
-  var balloonW=Math.min(300,vw-32);var gap=14,padE=12;
-  var bStyle;
-  if(rect){
-    var pos=passo.posicao||'abaixo';
-    if(pos==='acima'&&rect.top<170)pos='abaixo';
-    if(pos==='abaixo'&&rect.top+rect.height+180>vh)pos='acima';
-    var cx=rect.left+rect.width/2;
-    var clampX=Math.max(padE,Math.min(cx-balloonW/2,vw-balloonW-padE));
-    if(pos==='acima')bStyle={left:clampX,bottom:(vh-rect.top+gap)};
-    else if(pos==='abaixo')bStyle={left:clampX,top:(rect.top+rect.height+gap)};
-    else if(pos==='esquerda')bStyle={right:(vw-rect.left+gap),top:Math.max(padE,Math.min(rect.top,vh-180))};
-    else bStyle={left:(rect.left+rect.width+gap),top:Math.max(padE,Math.min(rect.top,vh-180))};
-  }else{
-    bStyle={left:'50%',top:'50%',transform:'translate(-50%,-50%)'};
-  }
+  var balloonW=Math.min(300,vw-32);
+  var bStyle=_tourBalloonStyle(rect,passo.posicao,vw,vh);
   var balloon=Object.assign({position:'fixed',width:balloonW,background:'#fff',borderRadius:16,padding:16,boxShadow:'0 12px 40px rgba(0,0,0,0.35)',zIndex:20002,transition:'top .25s ease,left .25s ease,bottom .25s ease,right .25s ease'},bStyle);
 
   var preparando=pronto!==step; // ação em andamento / aguardando a tela renderizar
