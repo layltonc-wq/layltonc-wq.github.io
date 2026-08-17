@@ -221,6 +221,16 @@ var TOURS=[
     {seletor:'[data-tour="conf-confirmar"]',texto:'Clique aqui pra aplicar a contagem no estoque imediatamente — as saídas passam a descontar desse novo valor.',posicao:'acima'},
     {seletor:'[data-tour="conf-lote"]',texto:'Pode cadastrar lote e validade durante a conferência.',posicao:'acima'},
     {seletor:'[data-tour="conf-finalizar"]',texto:'Finalize cada categoria separadamente quando terminar.',posicao:'acima'}
+  ]},
+  {id:'tour_recebimento',titulo:'Novo módulo: Recebimento e Conciliação Fiscal',passos:[
+    {acao:{tipo:'aba',aba:'recebimento'},seletor:'[data-tour="tab-content"]',texto:'Nova aba! Aqui você registra a mercadoria que chegou e depois concilia com a nota fiscal.',posicao:'abaixo'},
+    {seletor:'[data-tour="receb-subabas"]',texto:'4 seções: Recebimento Físico, Conciliação Fiscal, Divergências e Relatórios.',posicao:'abaixo'},
+    {seletor:'[data-tour="receb-form"]',texto:'Preencha o fornecedor e adicione os medicamentos recebidos — com quantidade, lote e validade.',posicao:'abaixo'},
+    {seletor:'[data-tour="receb-finalizar"]',texto:'Ao finalizar, o estoque já atualiza na hora e o recebimento fica "Pendente de Conciliação Fiscal" — aguardando a nota chegar.',posicao:'acima'},
+    {acao:{tipo:'clicar',seletor:'[data-tour="receb-sub-conciliacao"]'},seletor:'[data-tour="conc-selecionar-receb"]',texto:'Quando a nota fiscal chegar, cadastre os dados dela aqui e escolha o recebimento pendente pra vincular.',posicao:'abaixo'},
+    {seletor:'[data-tour="conc-conciliar"]',texto:'O sistema compara automaticamente cada medicamento recebido × faturado e aponta as divergências. Regra de ouro: a nota NUNCA altera o estoque — ela é só documental.',posicao:'acima'},
+    {acao:{tipo:'clicar',seletor:'[data-tour="receb-sub-divergencias"]'},seletor:'[data-tour="div-painel"]',texto:'Todas as divergências ficam listadas aqui, com filtros — do "Pendente de Conciliação" até "Resolvido".',posicao:'abaixo'},
+    {acao:{tipo:'clicar',seletor:'[data-tour="receb-sub-relatorios"]'},seletor:'[data-tour="rel-painel"]',texto:'E aqui os relatórios prontos (pendências, divergências por fornecedor/produto/período, notas conciliadas...) — exporte em Excel ou PDF quando precisar.',posicao:'abaixo'}
   ]}
 ];
 function todayStr(){return new Date().toISOString().slice(0,10);}
@@ -6759,7 +6769,7 @@ function ConciliacaoFiscal(props){
         </div>
         <div style={{marginBottom:10}}><label style={lbl}>Fornecedor</label><input value={fornecedor} onChange={function(e){setFornecedor(e.target.value);}} placeholder="Fornecedor da nota" style={inp}/></div>
         <div style={{marginBottom:10}}><label style={lbl}>Anexo (URL do PDF/XML, opcional)</label><input value={anexo} onChange={function(e){setAnexo(e.target.value);}} placeholder="Cole o link do PDF/XML (opcional)" style={inp}/></div>
-        <div style={{marginBottom:4}}><label style={lbl}>Recebimento a vincular * <span style={{fontWeight:500,color:'#94A3B8'}}>(só pendentes)</span></label>
+        <div data-tour="conc-selecionar-receb" style={{marginBottom:4}}><label style={lbl}>Recebimento a vincular * <span style={{fontWeight:500,color:'#94A3B8'}}>(só pendentes)</span></label>
           <select value={recSel} onChange={function(e){setRecSel(e.target.value);}} style={Object.assign({},inp,{background:'#fff'})}>
             <option value="">Selecione um recebimento pendente...</option>
             {pendentes.map(function(r){return<option key={r.id} value={r.id}>{fD(r.data)} · {r.fornecedor||'—'} · {(r.itens||[]).length} item(ns)</option>;})}
@@ -6798,7 +6808,7 @@ function ConciliacaoFiscal(props){
           })}
         </div>
         <button onClick={addNf} style={{marginTop:10,width:'100%',padding:'11px',background:'#EFF6FF',border:'1.5px dashed #BFDBFE',borderRadius:10,color:B,fontWeight:700,fontSize:13,cursor:'pointer'}}>+ Adicionar item</button>
-        <button onClick={conciliar} disabled={saving} style={{marginTop:12,width:'100%',padding:'14px',background:saving?'#94A3B8':B,border:'none',borderRadius:12,color:'#fff',fontWeight:800,fontSize:15,cursor:saving?'default':'pointer'}}>{saving?'Conciliando...':'🔍 Conciliar'}</button>
+        <button data-tour="conc-conciliar" onClick={conciliar} disabled={saving} style={{marginTop:12,width:'100%',padding:'14px',background:saving?'#94A3B8':B,border:'none',borderRadius:12,color:'#fff',fontWeight:800,fontSize:15,cursor:saving?'default':'pointer'}}>{saving?'Conciliando...':'🔍 Conciliar'}</button>
       </div>
 
       {/* RESULTADO DA CONCILIAÇÃO */}
@@ -6917,7 +6927,7 @@ function PainelDivergencias(props){
   var lbl={fontSize:11,fontWeight:700,color:'#475569',display:'block',marginBottom:4};
 
   return(<div>
-    <div style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9',marginBottom:16}}>
+    <div data-tour="div-painel" style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9',marginBottom:16}}>
       <div style={{fontWeight:800,fontSize:15,color:'#1E293B',marginBottom:12}}>🚨 Painel de Divergências</div>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
         <div><label style={lbl}>De</label><input type="date" value={fDe} onChange={function(e){setFDe(e.target.value);}} style={inp}/></div>
@@ -6987,7 +6997,7 @@ function RelatoriosRecebimento(props){
   var lbl={fontSize:11,fontWeight:700,color:'#475569',display:'block',marginBottom:4};
 
   return(<div>
-    <div style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9',marginBottom:16}}>
+    <div data-tour="rel-painel" style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9',marginBottom:16}}>
       <div style={{fontWeight:800,fontSize:15,color:'#1E293B',marginBottom:12}}>📑 Relatórios</div>
       <div style={{marginBottom:10}}><label style={lbl}>Relatório</label>
         <select value={relSel} onChange={function(e){setRelSel(e.target.value);}} style={Object.assign({},inp,{background:'#fff'})}>
@@ -7133,9 +7143,9 @@ function TabRecebimento(props){
       </div>
 
       {/* SUB-ABAS */}
-      <div style={{display:'flex',gap:8,marginBottom:16,overflowX:'auto'}}>
+      <div data-tour="receb-subabas" style={{display:'flex',gap:8,marginBottom:16,overflowX:'auto'}}>
         {[['fisico','📦 Recebimento Físico'],['conciliacao','📋 Conciliação Fiscal'],['divergencias','🚨 Divergências'],['relatorios','📑 Relatórios']].map(function(t){return(
-          <button key={t[0]} onClick={function(){setAba(t[0]);}} style={{flexShrink:0,padding:'11px 14px',borderRadius:12,border:'none',background:aba===t[0]?B:'#F1F5F9',color:aba===t[0]?'#fff':'#64748B',fontWeight:700,fontSize:13,cursor:'pointer',whiteSpace:'nowrap'}}>{t[1]}</button>
+          <button key={t[0]} data-tour={'receb-sub-'+t[0]} onClick={function(){setAba(t[0]);}} style={{flexShrink:0,padding:'11px 14px',borderRadius:12,border:'none',background:aba===t[0]?B:'#F1F5F9',color:aba===t[0]?'#fff':'#64748B',fontWeight:700,fontSize:13,cursor:'pointer',whiteSpace:'nowrap'}}>{t[1]}</button>
         );})}
       </div>
 
@@ -7145,7 +7155,7 @@ function TabRecebimento(props){
 
       {aba==='fisico'&&<div>
       {/* FORMULÁRIO */}
-      <div style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9',marginBottom:16}}>
+      <div data-tour="receb-form" style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9',marginBottom:16}}>
         <div style={{fontWeight:800,fontSize:15,color:'#1E293B',marginBottom:12}}>Novo recebimento</div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:12}}>
           <div><label style={lbl}>📅 Data do recebimento</label><input type="date" value={data} max={todayStr()} onChange={function(e){setData(e.target.value);}} style={inp}/></div>
@@ -7185,7 +7195,7 @@ function TabRecebimento(props){
         </div>
         <button onClick={addItem} style={{marginTop:10,width:'100%',padding:'11px',background:'#EFF6FF',border:'1.5px dashed #BFDBFE',borderRadius:10,color:B,fontWeight:700,fontSize:13,cursor:'pointer'}}>+ Adicionar item</button>
         {ok&&<div style={{marginTop:12,background:'#DCFCE7',border:'1px solid #86EFAC',borderRadius:10,padding:'10px 12px',fontSize:13,color:'#059669',fontWeight:600}}>{ok}</div>}
-        <button onClick={finalizar} disabled={saving} style={{marginTop:12,width:'100%',padding:'14px',background:saving?'#94A3B8':'#0C6B3E',border:'none',borderRadius:12,color:'#fff',fontWeight:800,fontSize:15,cursor:saving?'default':'pointer'}}>{saving?'Finalizando...':'✅ Finalizar Recebimento'}</button>
+        <button data-tour="receb-finalizar" onClick={finalizar} disabled={saving} style={{marginTop:12,width:'100%',padding:'14px',background:saving?'#94A3B8':'#0C6B3E',border:'none',borderRadius:12,color:'#fff',fontWeight:800,fontSize:15,cursor:saving?'default':'pointer'}}>{saving?'Finalizando...':'✅ Finalizar Recebimento'}</button>
       </div>
 
       {/* LISTA DE RECEBIMENTOS */}
