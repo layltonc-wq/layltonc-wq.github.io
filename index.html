@@ -396,9 +396,10 @@ function computeVencimentos(medications,entries,stock){
     saidas.forEach(function(e){var lk=e.lote;if(loteMap[lk])loteMap[lk].saida+=(e.quantidade||0);});
     var lotes=Object.keys(loteMap).map(function(k){var l=loteMap[k];return Object.assign({},l,{qty:Math.max(0,l.entrada-l.saida)});}).filter(function(l){return l.qty>0;});
     var ul=me.slice().sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});
-    var info=ul.length>0?{lote:ul[0].lote||'',validade:ul[0].validade||''}:{lote:'',validade:''};
-    if(m.loteAtual)info.lote=m.loteAtual;if(m.validadeAtual)info.validade=m.validadeAtual;
-    return {id:m.id,nome:m.nome,est:stock[m.id]||0,info:info,lotes:lotes};
+    var est=stock[m.id]||0;
+    var info=est<=0?{lote:'',validade:''}:(ul.length>0?{lote:ul[0].lote||'',validade:ul[0].validade||''}:{lote:'',validade:''});
+    if(est>0){if(m.loteAtual)info.lote=m.loteAtual;if(m.validadeAtual)info.validade=m.validadeAtual;}
+    return {id:m.id,nome:m.nome,est:est,info:info,lotes:lotes};
   });
   var venc30=[],venc60=[],venc90=[],vencidos=[];
   medList.forEach(function(m){
@@ -1591,9 +1592,10 @@ var medListBase=useMemo(function(){
   return medications.map(function(m){
     var mi=idx[m.id]||{loteMap:{},ult:null};
     var lotes=Object.keys(mi.loteMap).map(function(k){var l=mi.loteMap[k];return Object.assign({},l,{qty:Math.max(0,l.entrada-l.saida)});}).filter(function(l){return l.qty>0;});
-    var info=mi.ult?{lote:mi.ult.lote||'',validade:mi.ult.validade||''}:{lote:'',validade:''};
-    if(m.loteAtual)info.lote=m.loteAtual;if(m.validadeAtual)info.validade=m.validadeAtual;
-    return {id:m.id,nome:m.nome,ean:m.ean,est:stock[m.id]||0,info:info,minEstoque:m.minEstoque||0,cat:m.categoria||'medicamento',lotes:lotes};
+    var est=stock[m.id]||0;
+    var info=est<=0?{lote:'',validade:''}:(mi.ult?{lote:mi.ult.lote||'',validade:mi.ult.validade||''}:{lote:'',validade:''});
+    if(est>0){if(m.loteAtual)info.lote=m.loteAtual;if(m.validadeAtual)info.validade=m.validadeAtual;}
+    return {id:m.id,nome:m.nome,ean:m.ean,est:est,info:info,minEstoque:m.minEstoque||0,cat:m.categoria||'medicamento',lotes:lotes};
   });
 },[entries,medications,stock]);
 var medList=medListBase;
