@@ -755,6 +755,150 @@ return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
   </div>
 </div>);}
 
+function TabVisaoGeral(props){
+var entries=props.entries;var medications=props.medications;var stock=props.stock;var user=props.user;
+
+var totalMeds=medications.length;
+var totalUnits=useMemo(function(){var s=0;for(var k in stock)s+=(stock[k]||0);return s;},[stock]);
+
+var vencData=useMemo(function(){return computeVencimentos(medications,entries,stock);},[medications,entries,stock]);
+var alertCount=useMemo(function(){return vencData.vencidos.length+vencData.venc30.length+medications.filter(function(m){return m.minEstoque&&(stock[m.id]||0)<=m.minEstoque&&(stock[m.id]||0)>0;}).length;},[vencData,medications,stock]);
+
+var medsVencidos=useMemo(function(){return vencData.vencidos.length;},[vencData]);
+
+var catData=useMemo(function(){var cats={};medications.forEach(function(m){var cat=m.categoria||'medicamento';var est=stock[m.id]||0;if(!cats[cat])cats[cat]=0;cats[cat]+=est;});var arr=[];for(var k in cats){var ti=TIPOS[k]||TIPOS.medicamento;arr.push({key:k,label:ti.label,cor:ti.cor,icon:ti.icon,val:cats[k]});}arr.sort(function(a,b){return b.val-a.val;});return arr;},[medications,stock]);
+
+var top10Saidas=useMemo(function(){var map={};entries.forEach(function(e){if(e.tipo!=='saida')return;if(e.origemConferencia||e.isAjuste)return;if(_ehSaidaNaoReal(e))return;var d30=new Date();d30.setDate(d30.getDate()-30);var dt=new Date(e.criadoEm||0);if(dt<d30)return;var mid=e.medicamentoId;if(!mid)return;if(!map[mid])map[mid]={id:mid,nome:e.medicamentoNome||mid,total:0};map[mid].total+=(e.quantidade||0);});var arr=[];for(var k in map)arr.push(map[k]);arr.sort(function(a,b){return b.total-a.total;});return arr.slice(0,10);},[entries]);
+
+var saidasHoje=useMemo(function(){var hoje=todayStr();var porCat={};var totalGeral=0;entries.forEach(function(e){if(e.tipo!=='saida')return;if(!(e.criadoEm||'').startsWith(hoje))return;if(e.origemConferencia||e.isAjuste)return;if(_ehSaidaNaoReal(e))return;var qty=e.quantidade||0;totalGeral+=qty;var med=medications.find(function(m){return m.id===e.medicamentoId;});var cat=med?med.categoria||'medicamento':'medicamento';if(!porCat[cat])porCat[cat]=0;porCat[cat]+=qty;});var arr=[];for(var k in porCat){var ti=TIPOS[k]||TIPOS.medicamento;arr.push({key:k,label:ti.label,icon:ti.icon,cor:ti.cor,val:porCat[k]});}arr.sort(function(a,b){return b.val-a.val;});return {cats:arr,total:totalGeral};},[entries,medications]);
+
+var rankFunc=useMemo(function(){var d30=new Date();d30.setDate(d30.getDate()-30);var map={};entries.forEach(function(e){if(e.origemConferencia||e.isAjuste)return;if(_ehSaidaNaoReal(e))return;var dt=new Date(e.criadoEm||0);if(dt<d30)return;var nome=e.autorNome||'Desconhecido';if(!map[nome])map[nome]={nome:nome,total:0};map[nome].total+=(e.quantidade||0);});var arr=[];for(var k in map)arr.push(map[k]);arr.sort(function(a,b){return b.total-a.total;});return arr;},[entries]);
+
+var kpi=[
+  {icon:'💊',label:'Medicamentos',val:totalMeds,sub:'cadastrados',color:'#1351B4',bg:'#DBEAFE'},
+  {icon:'📦',label:'Estoque Total',val:totalUnits,sub:'unidades',color:'#0C6B3E',bg:'#DCFCE7'},
+  {icon:'🔔',label:'Alertas Ativos',val:alertCount,sub:'vencimento + baixo',color:alertCount>0?'#DC2626':'#0C6B3E',bg:alertCount>0?'#FEE2E2':'#DCFCE7'},
+  {icon:'☠️',label:'Vencidos',val:medsVencidos,sub:'lotes vencidos',color:medsVencidos>0?'#DC2626':'#0C6B3E',bg:medsVencidos>0?'#FEE2E2':'#DCFCE7'},
+];
+
+var donutTotal=0;catData.forEach(function(c){donutTotal+=c.val;});
+var donutArcs=[];var cumAngle=-90;
+catData.forEach(function(c){var pct=donutTotal>0?c.val/donutTotal:0;var angle=pct*360;var startRad=(cumAngle*Math.PI)/180;var endRad=((cumAngle+angle)*Math.PI)/180;var largeArc=angle>180?1:0;var r=40;var cx=50;var cy=50;var x1=cx+r*Math.cos(startRad);var y1=cy+r*Math.sin(startRad);var x2=cx+r*Math.cos(endRad);var y2=cy+r*Math.sin(endRad);if(angle>0.5)donutArcs.push({d:'M'+x1+' '+y1+' A'+r+' '+r+' 0 '+largeArc+' 1 '+x2+' '+y2,cor:c.cor,label:c.label,pct:Math.round(pct*100)});cumAngle+=angle;});
+
+var maxTop10=1;top10Saidas.forEach(function(m){if(m.total>maxTop10)maxTop10=m.total;});
+
+return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
+  <div style={{marginBottom:16}}>
+    <div style={{fontWeight:900,fontSize:20,color:'#0A2D6E',marginBottom:2}}>Visao Geral</div>
+    <div style={{fontSize:12,color:'#94A3B8'}}>Panorama do estoque e movimentacoes</div>
+  </div>
+
+  <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:10,marginBottom:16}}>
+    {kpi.map(function(s){return(
+      <div key={s.label} className="stat-card" style={{color:s.color}}>
+        <div className="stat-icon" style={{background:s.bg}}>{s.icon}</div>
+        <div className="stat-val">{s.val}</div>
+        <div className="stat-label">{s.label}</div>
+        <div className="stat-sub">{s.sub}</div>
+      </div>
+    );})}
+  </div>
+
+  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:16}}>
+    <div className="card">
+      <div className="ch"><div className="ch-title"><div className="ch-accent"/><span>Estoque por Categoria</span></div></div>
+      <div style={{padding:'12px',textAlign:'center'}}>
+        {donutTotal===0?<div style={{padding:'24px',color:'#94A3B8',fontSize:13}}>Sem dados</div>:(
+          <div>
+            <svg viewBox="0 0 100 100" width="120" height="120" style={{margin:'0 auto',display:'block'}}>
+              {donutArcs.map(function(a,i){return <path key={i} d={a.d} fill="none" stroke={a.cor} strokeWidth="18" strokeLinecap="butt"/>;})}
+              <text x="50" y="53" textAnchor="middle" fontSize="12" fontWeight="800" fill="#1E293B">{donutTotal}</text>
+              <text x="50" y="62" textAnchor="middle" fontSize="5" fill="#94A3B8">unid.</text>
+            </svg>
+            <div style={{marginTop:8}}>
+              {catData.map(function(c){return(
+                <div key={c.key} style={{display:'flex',alignItems:'center',gap:6,fontSize:10,color:'#475569',marginBottom:3}}>
+                  <div style={{width:8,height:8,borderRadius:2,background:c.cor,flexShrink:0}}/>
+                  <span style={{flex:1,textAlign:'left'}}>{c.icon} {c.label}</span>
+                  <span style={{fontWeight:700}}>{c.val}</span>
+                </div>
+              );})}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+
+    <div className="card">
+      <div className="ch"><div className="ch-title"><div className="ch-accent"/><span>Top 10 Saidas do Mes</span></div></div>
+      <div style={{padding:'8px 10px'}}>
+        {top10Saidas.length===0?<div style={{padding:'24px',color:'#94A3B8',fontSize:12,textAlign:'center'}}>Nenhuma saida no periodo</div>:
+          top10Saidas.map(function(m,i){var w=Math.round((m.total/maxTop10)*100);return(
+            <div key={m.id} style={{display:'flex',alignItems:'center',gap:6,marginBottom:4}}>
+              <span style={{fontSize:10,fontWeight:700,color:'#64748B',width:14,textAlign:'right',flexShrink:0}}>{i+1}</span>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:10,fontWeight:600,color:'#1E293B',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',marginBottom:1}}>{m.nome}</div>
+                <div style={{height:5,background:'#F1F5F9',borderRadius:3,overflow:'hidden'}}>
+                  <div style={{width:w+'%',height:'100%',background:'#DC2626',borderRadius:3}}/>
+                </div>
+              </div>
+              <span style={{fontSize:10,fontWeight:800,color:'#DC2626',minWidth:28,textAlign:'right',flexShrink:0}}>{m.total}</span>
+            </div>
+          );})}
+      </div>
+    </div>
+  </div>
+
+  <div className="card" style={{marginBottom:16}}>
+    <div className="ch"><div className="ch-title"><div className="ch-accent"/><span>Saidas do Dia</span></div></div>
+    <div style={{padding:'12px 14px'}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+        <span style={{fontSize:13,fontWeight:700,color:'#1E293B'}}>Total geral</span>
+        <span style={{fontSize:22,fontWeight:900,color:'#DC2626'}}>{saidasHoje.total}</span>
+      </div>
+      {saidasHoje.cats.length===0?<div style={{padding:'12px',color:'#94A3B8',fontSize:12,textAlign:'center'}}>Nenhuma saida registrada hoje</div>:(
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(130px,1fr))',gap:8}}>
+          {saidasHoje.cats.map(function(c){var pct=saidasHoje.total>0?Math.round((c.val/saidasHoje.total)*100):0;return(
+            <div key={c.key} style={{background:'#F8FAFC',borderRadius:10,padding:'10px 12px',border:'1px solid #E2E8F0'}}>
+              <div style={{display:'flex',alignItems:'center',gap:5,marginBottom:6}}>
+                <span style={{fontSize:14}}>{c.icon}</span>
+                <span style={{fontSize:11,fontWeight:700,color:c.cor}}>{c.label}</span>
+              </div>
+              <div style={{fontSize:18,fontWeight:900,color:'#1E293B'}}>{c.val}</div>
+              <div style={{height:4,background:'#E2E8F0',borderRadius:2,marginTop:4,overflow:'hidden'}}>
+                <div style={{width:pct+'%',height:'100%',background:c.cor,borderRadius:2}}/>
+              </div>
+              <div style={{fontSize:9,color:'#94A3B8',marginTop:2,textAlign:'right'}}>{pct}%</div>
+            </div>
+          );})}
+        </div>
+      )}
+    </div>
+  </div>
+
+  <div className="card" style={{marginBottom:16}}>
+    <div className="ch"><div className="ch-title"><div className="ch-accent"/><span>Ranking de Movimentacoes — Mes</span></div></div>
+    <div style={{padding:'8px 12px'}}>
+      {rankFunc.length===0?<div style={{padding:'16px',color:'#94A3B8',fontSize:12,textAlign:'center'}}>Nenhuma movimentacao no periodo</div>:rankFunc.map(function(f,i){
+        var medalha=i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
+        var maxR=rankFunc[0].total||1;
+        var w=Math.round((f.total/maxR)*100);
+        return(<div key={f.nome} style={{padding:'5px 0',borderBottom:'1px solid #F1F5F9',display:'flex',alignItems:'center',gap:8}}>
+          <span style={{fontSize:16,width:22,textAlign:'center',flexShrink:0}}>{medalha||<span style={{fontSize:11,fontWeight:700,color:'#94A3B8'}}>{i+1}</span>}</span>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:12,fontWeight:700,color:'#1E293B',marginBottom:2}}>{f.nome}</div>
+            <div style={{height:5,background:'#F1F5F9',borderRadius:3,overflow:'hidden'}}>
+              <div style={{width:w+'%',height:'100%',background:i<3?'#1351B4':'#94A3B8',borderRadius:3}}/>
+            </div>
+          </div>
+          <span style={{fontSize:12,fontWeight:800,color:i<3?'#1351B4':'#64748B',minWidth:36,textAlign:'right',flexShrink:0}}>{f.total}</span>
+        </div>);
+      })}
+    </div>
+  </div>
+</div>);
+}
+
 function TabSaida(props){var user=props.user;var medications=props.medications;var stock=props.stock;var entries=props.entries;var onSave=props.onSave;var latest=props.latest||{};var isGuest=props.isGuest||false;var canMove=props.canMove!==false;var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};var alert2=props.alert2||function(m){window.alert(m);};var _search=useState('');var search=_search[0];var setSearch=_search[1];var _sel=useState(null);var sel=_sel[0];var setSel=_sel[1];var _qty=useState('');var qty=_qty[0];var setQty=_qty[1];var _lote=useState('');var lote=_lote[0];var setLote=_lote[1];var _val=useState('');var val=_val[0];var setVal=_val[1];var _obs=useState('');var obs=_obs[0];var setObs=_obs[1];var _err=useState('');var err=_err[0];var setErr=_err[1];var _warn=useState('');var warn=_warn[0];var setWarn=_warn[1];var _ok=useState('');var ok=_ok[0];var setOk=_ok[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];var _carrinho=useState([]);var carrinho=_carrinho[0];var setCarrinho=_carrinho[1];var _showCarrinho=useState(false);var showCarrinho=_showCarrinho[0];var setShowCarrinho=_showCarrinho[1];
 var inStock=medications.filter(function(m){return (stock[m.id]||0)>0;});var filtered=[];if(search.trim()){var s=search.toLowerCase();filtered=inStock.filter(function(m){return m.nome.toLowerCase().indexOf(s)>=0;}).slice(0,8);}var cur=sel?(stock[sel.id]||0):0;
 function adicionarCarrinho(){
@@ -7843,7 +7987,7 @@ if(pendingInvite)return <InviteScreen invite={pendingInvite} onConfirm={handleCo
 var isManagerRole=(user.role==='gestor'||user.role==='tecnico');
 var canMove=isManagerRole||!isGuest;
 var badge=pending+alertCount+solicitCount;
-var navTabs=[{id:'dashboard',icon:'🏠',label:'Início',show:true},{id:'saida',icon:'💊',label:'Saída',show:true},{id:'entrada',icon:'📥',label:'Entrada',show:true},{id:'estoque',icon:'📦',label:'Estoque',show:true},{id:'antibiotico',icon:'🧬',label:'ATB',show:true},{id:'relatorio',icon:'📊',label:'Relatório',show:true},{id:'gestao',icon:'👥',label:'Gestão',show:can(user.role,'gestao'),badge:badge},{id:'log',icon:'🔐',label:'Log',show:can(user.role,'log')},{id:'histcontas',icon:'📋',label:'Contas',show:can(user.role,'log')},{id:'admin',icon:'🔧',label:'Admin',show:user.role==='tecnico'},{id:'perfil',icon:'👤',label:'Perfil',show:true}].filter(function(t){return t.show;});
+var navTabs=[{id:'dashboard',icon:'🏠',label:'Início',show:true},{id:'visaogeral',icon:'📈',label:'Visão Geral',show:isManagerRole},{id:'saida',icon:'💊',label:'Saída',show:true},{id:'entrada',icon:'📥',label:'Entrada',show:true},{id:'estoque',icon:'📦',label:'Estoque',show:true},{id:'antibiotico',icon:'🧬',label:'ATB',show:true},{id:'relatorio',icon:'📊',label:'Relatório',show:true},{id:'gestao',icon:'👥',label:'Gestão',show:can(user.role,'gestao'),badge:badge},{id:'log',icon:'🔐',label:'Log',show:can(user.role,'log')},{id:'histcontas',icon:'📋',label:'Contas',show:can(user.role,'log')},{id:'admin',icon:'🔧',label:'Admin',show:user.role==='tecnico'},{id:'perfil',icon:'👤',label:'Perfil',show:true}].filter(function(t){return t.show;});
 return(
 <div style={{minHeight:'100vh',background:'#EEF2F7',position:'relative',overflow:'hidden'}}>
   {/* MARCA D'ÁGUA BACKGROUND */}
@@ -7950,6 +8094,7 @@ return(
     ):(
       <div>
         {tab==='dashboard'&&<TabDashboard entries={entries} medications={meds} stock={stock} user={user} plantao={plantao} isGuest={isGuest} onSolicitar={function(){setShowSolicit(true);}} onEncerrar={encerrarPlantao} onSair={sairDoPlantao} onSolicitarEntrada={solicitarEntradaPlantao} shiftId={shiftId} onIniciar={function(){setShowShiftModal(true);}}/>}
+        {tab==='visaogeral'&&isManagerRole&&<TabVisaoGeral entries={entries} medications={meds} stock={stock} user={user}/>}
         {tab==='saida'&&<TabSaida user={user} medications={meds} stock={stock} entries={entries} onSave={addEntry} onSolicitar={addSolicitacao} latest={latest} isGuest={isGuest} canMove={canMove} confirm2={confirm2} alert2={alert2}/>}
         {tab==='entrada'&&<TabEntrada user={user} medications={meds} entries={entries} onSave={addEntry} onSolicitar={addSolicitacao} isGuest={isGuest} canMove={canMove} confirm2={confirm2} alert2={alert2}/>}
         {tab==='estoque'&&<TabEstoque user={user} medications={meds} entries={entries} stock={stock} onSave={addEntry} confirm2={confirm2} alert2={alert2}/>}
@@ -8002,6 +8147,7 @@ return(
           </div>
           <div style={{flex:1,overflowY:'auto',padding:'8px 0'}}>
             {[
+              {id:'visaogeral',icon:'📈',label:'Visão Geral',show:true},
               {id:'estoque',icon:'📦',label:'Estoque',show:true},
               {id:'recebimento',icon:'🚚',label:'Recebimento',show:true},
               {id:'pacientes',icon:'👤',label:'Pacientes',show:true},
