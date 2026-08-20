@@ -7992,7 +7992,10 @@ function TabRecebimento(props){
         var it=validos[i];
         // entrada real: estoque atualiza na hora e vale no calcStock como qualquer entry.
         var medCad=medications.find(function(m){return m.id===it.medId;});
-        var catMed=medCad?medCad.categoria:'medicamento';
+        // Fallback duplo: se o medicamento existe mas o cadastro veio SEM categoria (bug antigo, doc criado
+        // sem esse campo), ainda cai no default 'medicamento'. Antes, medCad.categoria === undefined vazava
+        // pro Firestore e explodia com "Unsupported field value: undefined".
+        var catMed=(medCad&&medCad.categoria)||'medicamento';
         var ref=await onSave({tipo:'entrada',medicamentoId:it.medId,medicamentoNome:it.medNome,quantidade:parseInt(it.qtd)||0,lote:(it.lote||'').trim(),validade:_normValidade((it.validade||'').trim()),observacao:'Recebimento — '+fornecedor.trim(),origemRecebimento:true,recebimentoId:recId,date:data,categoriaMed:catMed});
         itensComEntry.push({medicamentoId:it.medId,medicamentoNome:it.medNome,quantidade:parseInt(it.qtd)||0,lote:(it.lote||'').trim(),validade:_normValidade((it.validade||'').trim()),observacao:(it.obs||'').trim(),entryId:(ref&&ref.id)||''});
       }
@@ -8012,16 +8015,40 @@ function TabRecebimento(props){
     setCancelSaving(true);
     try{
       var now=new Date().toISOString();
-      // Estorno: saída de AJUSTE por item (não aparece em relatórios; conta no calcStock). Nenhum registro é excluído.
-      for(var i=0;i<(rec.itens||[]).length;i++){
-        var it=rec.itens[i];
-        await db.collection('entries').add({tipo:'saida',medicamentoId:it.medicamentoId,medicamentoNome:it.medicamentoNome,quantidade:parseInt(it.quantidade)||0,lote:it.lote||'',validade:it.validade||'',observacao:'Estorno de recebimento cancelado — '+(rec.fornecedor||''),isAjuste:true,estornoRecebimento:true,recebimentoId:rec.id,criadoEm:now,date:todayStr(),autorId:user.uid||'',autorNome:user.name||'',autorCargo:user.role||'',autorColor:user.color||B});
+      // BATCH ATÔMICO: se qualquer op falhar, NADA é commitado. Antes: loop sequencial com await por item;
+      // se um estorno falhasse, o catch pegava e o update({status:'cancelado'}) NUNCA era chamado,
+      // deixando o recebimento marcado como "pendente" mesmo depois do usuário clicar "Cancelar".
+      var batch=db.batch();
+      var itens=rec.itens||[];
+      for(var i=0;i<itens.length;i++){
+        var it=itens[i];
+        // Sanitiza cada entry: filtra qualquer undefined pra não repetir "Unsupported field value: undefined".
+        var entryObj={tipo:'saida',medicamentoId:it.medicamentoId||'',medicamentoNome:it.medicamentoNome||'',quantidade:parseInt(it.quantidade)||0,lote:it.lote||'',validade:it.validade||'',observacao:'Estorno de recebimento cancelado — '+(rec.fornecedor||''),isAjuste:true,estornoRecebimento:true,recebimentoId:rec.id,criadoEm:now,date:todayStr(),autorId:user.uid||'',autorNome:user.name||'',autorCargo:user.role||'',autorColor:user.color||B};
+        for(var _k in entryObj)if(entryObj[_k]===undefined)delete entryObj[_k];
+        batch.set(db.collection('entries').doc(),entryObj);
       }
-      await db.collection('recebimentos').doc(rec.id).update({status:'cancelado',statusLabel:'Cancelado',justificativaCancelamento:just,canceladoEm:now,canceladoPor:user.name||'',canceladoPorId:user.uid||''});
-      logAcao('recebimento_cancelado','Recebimento '+rec.id+' — forn: '+(rec.fornecedor||'')+' — estorno de '+(rec.itens||[]).length+' item(ns) — motivo: '+just,rec.status||'pendente','cancelado');
+      batch.update(db.collection('recebimentos').doc(rec.id),{status:'cancelado',statusLabel:'Cancelado',justificativaCancelamento:just,canceladoEm:now,canceladoPor:user.name||'',canceladoPorId:user.uid||''});
+      await batch.commit();
+      logAcao('recebimento_cancelado','Recebimento '+rec.id+' — forn: '+(rec.fornecedor||'')+' — estorno de '+itens.length+' item(ns) — motivo: '+just,rec.status||'pendente','cancelado');
       setCancelRec(null);setCancelJust('');setDetalhe(null);
     }catch(e){alert('Erro ao cancelar: '+((e&&e.message)?e.message:e));}
     setCancelSaving(false);
+  }
+  // Duplicar recebimento: pré-preenche o formulário de novo recebimento com os itens de um existente
+  // (inclusive cancelado), pra economizar digitação e recuperar recebimentos perdidos por erro.
+  // Não copia o status/id — o usuário só clica "Finalizar" pra criar um novo recebimento independente.
+  function duplicar(rec){
+    if(!rec)return;
+    setFornecedor(rec.fornecedor||'');
+    setResponsavel(user.name||'');// responsável do novo recebimento é quem está duplicando
+    setData(todayStr());// data padrão hoje (o usuário pode ajustar)
+    var novos=(rec.itens||[]).map(function(it){_recSeq++;return{key:'it'+_recSeq,medId:it.medicamentoId||'',medNome:it.medicamentoNome||'',busca:'',qtd:String(it.quantidade||''),lote:it.lote||'',validade:it.validade||'',obs:it.observacao||''};});
+    setItens(novos.length?novos:[blankItem()]);
+    setFocoItem(null);setDetalhe(null);setAba('fisico');
+    setOk('📋 Formulário pré-preenchido a partir do recebimento anterior. Revise e clique em "Finalizar" para salvar.');
+    setTimeout(function(){setOk('');},6000);
+    // Rola pro topo do formulário
+    setTimeout(function(){try{window.scrollTo({top:0,behavior:'smooth'});}catch(_){window.scrollTo(0,0);}},50);
   }
 
   var listaFiltrada=recs.filter(function(r){
@@ -8118,13 +8145,18 @@ function TabRecebimento(props){
         {listaFiltrada.length===0&&<div style={{textAlign:'center',color:'#94A3B8',padding:24,fontSize:13}}>Nenhum recebimento encontrado.</div>}
         {listaFiltrada.map(function(r){
           var st=stInfo(r.status||'pendente');
-          return(<div key={r.id} onClick={function(){setDetalhe(r);}} style={{background:'#fff',borderRadius:14,padding:14,boxShadow:'0 2px 10px rgba(0,0,0,.05)',border:'1px solid #F1F5F9',cursor:'pointer',opacity:r.status==='cancelado'?0.7:1}}>
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
-              <div style={{flex:1}}>
-                <div style={{fontWeight:700,fontSize:14,color:'#1E293B'}}>{r.fornecedor||'—'}</div>
-                <div style={{fontSize:12,color:'#64748B',marginTop:2}}>📅 {fD(r.data)} · {r.totalItens||(r.itens||[]).length} item(ns){r.responsavel?' · '+r.responsavel:''}</div>
+          return(<div key={r.id} style={{background:'#fff',borderRadius:14,padding:14,boxShadow:'0 2px 10px rgba(0,0,0,.05)',border:'1px solid #F1F5F9',opacity:r.status==='cancelado'?0.7:1}}>
+            <div onClick={function(){setDetalhe(r);}} style={{cursor:'pointer'}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
+                <div style={{flex:1}}>
+                  <div style={{fontWeight:700,fontSize:14,color:'#1E293B'}}>{r.fornecedor||'—'}</div>
+                  <div style={{fontSize:12,color:'#64748B',marginTop:2}}>📅 {fD(r.data)} · {r.totalItens||(r.itens||[]).length} item(ns){r.responsavel?' · '+r.responsavel:''}</div>
+                </div>
+                <span style={{background:st.bg,color:st.cor,fontSize:10,fontWeight:800,padding:'4px 9px',borderRadius:20,whiteSpace:'nowrap'}}>{r.status==='pendente'||!r.status?'Pendente':st.label}</span>
               </div>
-              <span style={{background:st.bg,color:st.cor,fontSize:10,fontWeight:800,padding:'4px 9px',borderRadius:20,whiteSpace:'nowrap'}}>{r.status==='pendente'||!r.status?'Pendente':st.label}</span>
+            </div>
+            <div style={{marginTop:8,paddingTop:8,borderTop:'1px solid #F1F5F9',display:'flex',gap:6,justifyContent:'flex-end'}}>
+              <button onClick={function(e){e.stopPropagation();duplicar(r);}} title="Duplicar este recebimento" style={{background:'#EFF6FF',color:B,border:'none',borderRadius:8,padding:'6px 12px',fontSize:11,fontWeight:700,cursor:'pointer'}}>📋 Duplicar</button>
             </div>
           </div>);
         })}
@@ -8155,10 +8187,13 @@ function TabRecebimento(props){
               <div style={{fontWeight:700,color:'#475569',marginBottom:2}}>Cancelado por {r.canceladoPor||'—'}</div>
               <div>Motivo: {r.justificativaCancelamento||'—'}</div>
             </div>}
-            {(r.status==='pendente'||!r.status)&&<div style={{borderTop:'1px solid #F1F5F9',paddingTop:14}}>
-              <div style={{fontSize:12,color:'#94A3B8',marginBottom:8}}>Recebimentos não podem ser excluídos. Ao cancelar, o estoque é estornado (saída de ajuste) e o status muda para Cancelado.</div>
-              <button onClick={function(){setCancelRec(r);setCancelJust('');}} style={{width:'100%',padding:'12px',background:'#FEE2E2',border:'1.5px solid #FECACA',borderRadius:12,color:'#DC2626',fontWeight:700,fontSize:14,cursor:'pointer'}}>🚫 Cancelar recebimento</button>
-            </div>}
+            <div style={{borderTop:'1px solid #F1F5F9',paddingTop:14,display:'flex',flexDirection:'column',gap:8}}>
+              <button onClick={function(){duplicar(r);}} style={{width:'100%',padding:'12px',background:'#EFF6FF',border:'1.5px solid #BFDBFE',borderRadius:12,color:B,fontWeight:700,fontSize:14,cursor:'pointer'}}>📋 Duplicar recebimento</button>
+              {(r.status==='pendente'||!r.status)&&<div>
+                <div style={{fontSize:12,color:'#94A3B8',marginBottom:8}}>Recebimentos não podem ser excluídos. Ao cancelar, o estoque é estornado (saída de ajuste) e o status muda para Cancelado.</div>
+                <button onClick={function(){setCancelRec(r);setCancelJust('');}} style={{width:'100%',padding:'12px',background:'#FEE2E2',border:'1.5px solid #FECACA',borderRadius:12,color:'#DC2626',fontWeight:700,fontSize:14,cursor:'pointer'}}>🚫 Cancelar recebimento</button>
+              </div>}
+            </div>
           </div>
         </div>);})()}
 
@@ -8457,6 +8492,9 @@ function sairDoPlantao(){if(!confirm('Sair do plantao?'))return;localStorage.set
 function addSolicitacao(data){var obj={medicamentoId:data.medicamentoId,medicamentoNome:data.medicamentoNome,ean:data.ean||'',tipo:data.tipo,quantidade:data.quantidade,lote:data.lote||'',validade:_normValidade(data.validade||''),observacao:data.observação||'',solicitanteId:user.uid,solicitanteNome:user.name,solicitanteCargo:user.role,solicitanteColor:user.color||B,status:'pendente',criadoEm:new Date().toISOString(),origem:'convidado'};return db.collection('solicitacoes').add(obj);}
 function addEntry(data){try{var obj={criadoEm:new Date().toISOString(),date:todayStr(),autorId:user.uid,autorNome:user.name||user.email,autorCargo:user.role||'',autorColor:user.color||B};for(var k in data)obj[k]=data[k];if(obj.quantidade!==undefined)obj.quantidade=Number(obj.quantidade)||0;
   if(obj.validade)obj.validade=_normValidade(obj.validade);// normaliza MM/AA -> MM/AAAA
+  // Defesa contra "Unsupported field value: undefined" — remove qualquer campo com valor undefined que
+  // um chamador tenha deixado passar (ex.: categoriaMed vindo de um cadastro antigo sem categoria).
+  for(var _k in obj)if(obj[_k]===undefined)delete obj[_k];
   var promise=db.collection('entries').add(obj);
   // Se for saída real, verificar se há divergência de substituição vinculada
   if(obj.tipo==='saida'&&obj.medicamentoId&&!obj.ficticioDiv){
