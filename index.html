@@ -962,11 +962,20 @@ function _cmpParseRecebido(rows){
   }
   return out;
 }
-// Agrupa itens com mesmo nome normalizado, somando as quantidades (junta duplicatas/tabelas múltiplas).
+// Chave de agrupamento de duplicatas: reaproveita _expandeSiglas (já expande CP/COMP/SUSP etc. e colapsa
+// qualquer sequência de espaços/pontuação/tabs/NBSP em um único separador de token) e, antes disso, remove
+// o espaço entre número e unidade de concentração (ex.: "400 mg" -> "400mg") — mesma normalização que
+// _concentracao já aplica — para que a MESMA dose escrita com ou sem espaço vire a mesma chave.
+// Sem isso, a mesma linha do RECEBIDO escrita de forma levemente diferente em folhas/páginas diferentes
+// (ex.: "Albendazol 400mg comprimido" vs "Albendazol  400 mg COMP.") virava dois itens em vez de um só somado.
+function _cmpChave(nome){
+  return _expandeSiglas(String(nome||'').replace(/(\d+(?:[.,]\d+)?)\s+(mg|mcg|g|ml|ui|%)\b/gi,'$1$2'));
+}
+// Agrupa itens do mesmo medicamento (mesma chave _cmpChave), somando as quantidades (junta duplicatas/tabelas múltiplas).
 function _cmpAgrupar(itens){
   var map={};
   itens.forEach(function(it){
-    var k=_norm(it.nome);
+    var k=_cmpChave(it.nome);
     if(!map[k])map[k]={nome:it.nome,qtd:0};
     map[k].qtd+=it.qtd;
   });
