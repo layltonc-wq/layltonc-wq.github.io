@@ -1001,11 +1001,36 @@ function _cmpChave(nome){
     .map(function(t){return _CMP_EXTRA_SIG[t]||_SIGLAS[t]||t;})
     .join(' ');
 }
+// Variantes que qualificam o público-alvo do medicamento — se um lado especifica e o outro não, ou
+// se ambos especificam mas com valores diferentes, o par é MUITO menos provável de ser o mesmo produto.
+// Ex.: "AAS 100mg" (pedido genérico) NÃO deve casar automaticamente com "AAS 100mg infantil" (recebido).
+var _CMP_VARIANTES=['infantil','pediatrico','pediatrica','pediatrico','pediatria','bebe','crianca','neonatal',
+                    'adulto','adulta','geriatrico','geriatrica','idoso','idosa',
+                    'feminino','feminina','masculino','masculina',
+                    'veterinario','veterinaria','animal'];
+function _cmpExtraiVariantes(nome){
+  var toks=_norm(String(nome||'')).split(/[^a-z0-9%]+/);
+  var v={};
+  toks.forEach(function(t){if(_CMP_VARIANTES.indexOf(t)>=0)v[t]=1;});
+  return Object.keys(v);
+}
 // Score de matching entre um nome de pedido e um nome de recebido — pré-normaliza pelos EXTRA siglas
 // (via _cmpChave) e depois delega pro _scoreItemMed já existente (fuzzy + concentração + siglas globais),
 // que é idempotente sobre nomes já expandidos. Assim "ALBENDAZOL CPS" (pedido) casa com
 // "Albendazol comprimidos" (recebido) mesmo com plural/variante que o _SIGLAS global não conhece.
-function _cmpScore(a,b){return _scoreItemMed(_cmpChave(a),_cmpChave(b));}
+// Penalidades de variante APÓS o score base (aplica-se ANTES do limiar de aceitação):
+//  -50 se um lado tem uma variante que o outro não tem (ex.: só um menciona "infantil")
+//  -50 adicionais para cada variante diferente (evita casar "adulto" com "infantil" quando ambos aparecem)
+function _cmpScore(a,b){
+  var base=_scoreItemMed(_cmpChave(a),_cmpChave(b));
+  var va=_cmpExtraiVariantes(a),vb=_cmpExtraiVariantes(b);
+  // conjunto simétrico de diferenças = variantes só em um lado
+  var soA=va.filter(function(x){return vb.indexOf(x)<0;});
+  var soB=vb.filter(function(x){return va.indexOf(x)<0;});
+  var divergencias=soA.length+soB.length;
+  if(divergencias>0)base-=50*divergencias;
+  return base;
+}
 // Agrupa itens do mesmo medicamento (mesma chave _cmpChave), somando as quantidades (junta duplicatas/tabelas múltiplas).
 // Segunda passada: se um grupo SEM dose e apenas um grupo COM dose compartilharem o mesmo nome-base
 // (ex.: "albendazol comprimido" + "albendazol 400mg comprimido"), mergeia — assume que é o mesmo produto
@@ -1031,34 +1056,50 @@ function _cmpAgrupar(itens){
   });
   return grupos.filter(function(g){return !absorvidos[g.__k];}).map(function(g){return {nome:g.nome,qtd:g.qtd};});
 }
-// Casa pedido x recebido por melhor par (maior score primeiro), usando _cmpScore (que aplica siglas extras).
-function _cmpComparar(pedido,recebido){
+// Casa pedido x recebido por melhor par (maior score primeiro), usando _cmpScore (que aplica siglas extras
+// e penalidade de variantes). Aceita OVERRIDES manuais: {pi: ri | null} — força o par (ri) ou marca "sem par"
+// (null) para o item pi do pedido, independente do fuzzy score. Overrides são aplicados ANTES do algoritmo
+// automático, então o item recebido escolhido manualmente sai da lista de candidatos livres.
+function _cmpComparar(pedido,recebido,overrides){
+  overrides=overrides||{};
+  var matchR={},usadoP={},usadoR={},manual={};
+  // 1. Aplica overrides primeiro. null/undefined = "sem par (não veio)"; número >=0 = índice do recebido.
+  Object.keys(overrides).forEach(function(k){
+    var pi=parseInt(k,10);var ri=overrides[k];
+    if(isNaN(pi)||pi<0||pi>=pedido.length)return;
+    if(ri===null){matchR[pi]=-1;usadoP[pi]=true;manual[pi]=true;return;}
+    if(typeof ri!=='number'||ri<0||ri>=recebido.length)return;
+    matchR[pi]=ri;usadoP[pi]=true;usadoR[ri]=true;manual[pi]=true;
+  });
+  // 2. Algoritmo automático para o restante.
   var pares=[];
   pedido.forEach(function(p,pi){
+    if(usadoP[pi])return;
     recebido.forEach(function(r,ri){
+      if(usadoR[ri])return;
       var score=_cmpScore(p.nome,r.nome);
       if(score>=45)pares.push({pi:pi,ri:ri,score:score});
     });
   });
   pares.sort(function(a,b){return b.score-a.score;});
-  var usadoP={},usadoR={},matchR={};
   pares.forEach(function(par){
     if(usadoP[par.pi]||usadoR[par.ri])return;
     usadoP[par.pi]=true;usadoR[par.ri]=true;matchR[par.pi]=par.ri;
   });
   var linhas=[];
   pedido.forEach(function(p,pi){
-    if(matchR[pi]!==undefined){
-      var r=recebido[matchR[pi]];
+    var ri=matchR[pi];
+    if(ri!==undefined&&ri>=0){
+      var r=recebido[ri];
       var diff=r.qtd-p.qtd;
-      linhas.push({nome:p.nome,qtdPedida:p.qtd,qtdRecebida:r.qtd,diferenca:diff,status:diff===0?'ok':(diff<0?'faltou':'amais')});
+      linhas.push({pi:pi,ri:ri,manual:!!manual[pi],nome:p.nome,nomeRecebido:r.nome,qtdPedida:p.qtd,qtdRecebida:r.qtd,diferenca:diff,status:diff===0?'ok':(diff<0?'faltou':'amais')});
     }else{
-      linhas.push({nome:p.nome,qtdPedida:p.qtd,qtdRecebida:null,diferenca:-p.qtd,status:'naoveio'});
+      linhas.push({pi:pi,ri:-1,manual:!!manual[pi],nome:p.nome,nomeRecebido:null,qtdPedida:p.qtd,qtdRecebida:null,diferenca:-p.qtd,status:'naoveio'});
     }
   });
   recebido.forEach(function(r,ri){
     if(usadoR[ri])return;
-    linhas.push({nome:r.nome,qtdPedida:null,qtdRecebida:r.qtd,diferenca:r.qtd,status:'naoconstava'});
+    linhas.push({pi:-1,ri:ri,manual:false,nome:r.nome,nomeRecebido:r.nome,qtdPedida:null,qtdRecebida:r.qtd,diferenca:r.qtd,status:'naoconstava'});
   });
   return linhas;
 }
@@ -1080,6 +1121,9 @@ function TabComparacaoPedido(props){
   var _soDivergencias=useState(false);var soDivergencias=_soDivergencias[0];var setSoDivergencias=_soDivergencias[1];
   var _ordem=useState('nome');var ordem=_ordem[0];var setOrdem=_ordem[1];
   var _showPreview=useState(false);var showPreview=_showPreview[0];var setShowPreview=_showPreview[1];
+  var _overrides=useState({});var overrides=_overrides[0];var setOverrides=_overrides[1];
+  var _reassoc=useState(null);var reassoc=_reassoc[0];var setReassoc=_reassoc[1];// linha aberta pra reassociação
+  var _reassocBusca=useState('');var reassocBusca=_reassocBusca[0];var setReassocBusca=_reassocBusca[1];
   var refPedido=useRef(null);var refRecebido=useRef(null);
 
   function lerArquivo(file,parser,setLoading,setItens,setNome){
@@ -1097,7 +1141,7 @@ function TabComparacaoPedido(props){
         tabelas.forEach(function(rows){todos=todos.concat(parser(rows));});
         var agrupado=_cmpAgrupar(todos);
         if(agrupado.length===0){setErro('Nenhum item encontrado em "'+file.name+'". Verifique o formato do arquivo.');setLoading(false);return;}
-        setItens(agrupado);setNome(file.name);setLoading(false);
+        setItens(agrupado);setNome(file.name);setLoading(false);setOverrides({});
       }).catch(function(e){setErro('Erro ao ler "'+file.name+'": '+(e&&e.message?e.message:'formato inválido'));setLoading(false);});
     };
     reader.onerror=function(){setErro('Erro ao abrir "'+file.name+'".');setLoading(false);};
@@ -1106,8 +1150,19 @@ function TabComparacaoPedido(props){
 
   var linhas=useMemo(function(){
     if(!pedidoItens||!recebidoItens)return [];
-    return _cmpComparar(pedidoItens,recebidoItens);
-  },[pedidoItens,recebidoItens]);
+    return _cmpComparar(pedidoItens,recebidoItens,overrides);
+  },[pedidoItens,recebidoItens,overrides]);
+
+  // Reassocia manualmente uma linha do pedido a um item do recebido (ou marca "sem par").
+  function aplicarReassoc(pi,ri){
+    var novo={};for(var k in overrides)novo[k]=overrides[k];
+    novo[pi]=ri;setOverrides(novo);setReassoc(null);setReassocBusca('');
+  }
+  function desfazerReassoc(pi){
+    var novo={};for(var k in overrides)if(parseInt(k,10)!==pi)novo[k]=overrides[k];
+    setOverrides(novo);
+  }
+  function limparTodosOverrides(){setOverrides({});}
 
   var linhasOrdenadas=useMemo(function(){
     var arr=soDivergencias?linhas.filter(function(l){return l.status!=='ok';}):linhas.slice();
@@ -1124,7 +1179,7 @@ function TabComparacaoPedido(props){
     return {totalPedido:totalPedido,totalRecebido:totalRecebido,ok:ok,div:div};
   },[pedidoItens,recebidoItens,linhas]);
 
-  function limpar(){setPedidoItens(null);setRecebidoItens(null);setNomePedido('');setNomeRecebido('');setErro('');setShowPreview(false);}
+  function limpar(){setPedidoItens(null);setRecebidoItens(null);setNomePedido('');setNomeRecebido('');setErro('');setShowPreview(false);setOverrides({});setReassoc(null);}
 
   // Detecta itens dentro da MESMA lista (pedido ou recebido) que provavelmente são o mesmo medicamento
   // mas escaparam do agrupamento — sinal de que alguma variação de nome não foi normalizada. Ajuda o
@@ -1157,7 +1212,8 @@ function TabComparacaoPedido(props){
       var st=_CMP_STATUS[l.status];
       var diffTxt=l.diferenca>0?'+'+l.diferenca:l.diferenca;
       var statusTxt=st.label+((l.status==='faltou'||l.status==='amais')?' '+Math.abs(l.diferenca):'');
-      html+='<tr style="background:'+st.bg+'"><td>'+_escHtml(l.nome)+'</td><td>'+(l.qtdPedida==null?'—':l.qtdPedida)+'</td><td>'+(l.qtdRecebida==null?'—':l.qtdRecebida)+'</td><td style="color:'+st.cor+';font-weight:700">'+diffTxt+'</td><td style="color:'+st.cor+';font-weight:700">'+_escHtml(statusTxt)+'</td></tr>';
+      var nomeCell=_escHtml(l.nome)+(l.manual?' 🔗':'')+(l.nomeRecebido&&l.nome!==l.nomeRecebido?'<div style="font-size:10px;color:#64748B;margin-top:2px">↳ recebido: '+_escHtml(l.nomeRecebido)+'</div>':'');
+      html+='<tr style="background:'+st.bg+'"><td>'+nomeCell+'</td><td>'+(l.qtdPedida==null?'—':l.qtdPedida)+'</td><td>'+(l.qtdRecebida==null?'—':l.qtdRecebida)+'</td><td style="color:'+st.cor+';font-weight:700">'+diffTxt+'</td><td style="color:'+st.cor+';font-weight:700">'+_escHtml(statusTxt)+'</td></tr>';
     });
     html+='</tbody></table></body></html>';
     var w=window.open('','_blank');
@@ -1170,12 +1226,13 @@ function TabComparacaoPedido(props){
       [],
       ['Total Pedido',resumo.totalPedido,'Total Recebido',resumo.totalRecebido,'Itens OK',resumo.ok,'Divergências',resumo.div],
       [],
-      ['Medicamento','Qtd. Pedida','Qtd. Recebida','Diferença','Status']
+      ['Medicamento','Recebido como','Qtd. Pedida','Qtd. Recebida','Diferença','Status','Reassoc. manual?']
     ];
     linhasOrdenadas.forEach(function(l){
       var st=_CMP_STATUS[l.status];
       var statusTxt=st.label+((l.status==='faltou'||l.status==='amais')?' '+Math.abs(l.diferenca):'');
-      rows.push([l.nome,l.qtdPedida==null?'—':l.qtdPedida,l.qtdRecebida==null?'—':l.qtdRecebida,l.diferenca,statusTxt]);
+      var recebidoComo=l.nomeRecebido&&l.nome!==l.nomeRecebido?l.nomeRecebido:'';
+      rows.push([l.nome,recebidoComo,l.qtdPedida==null?'—':l.qtdPedida,l.qtdRecebida==null?'—':l.qtdRecebida,l.diferenca,statusTxt,l.manual?'Sim':'']);
     });
     var wb=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'Comparacao');
@@ -1263,6 +1320,11 @@ function TabComparacaoPedido(props){
         </div>
       </div>
 
+      {Object.keys(overrides).length>0&&<div style={{marginBottom:8,padding:'8px 12px',background:'#EDE9FE',borderRadius:8,fontSize:11,color:'#5B21B6',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+        <span>🔗 {Object.keys(overrides).length} reassociação(ões) manual(is) aplicada(s)</span>
+        <button onClick={limparTodosOverrides} style={{background:'#7C3AED',color:'#fff',border:'none',borderRadius:6,padding:'4px 10px',fontSize:10,fontWeight:700,cursor:'pointer'}}>Desfazer todas</button>
+      </div>}
+
       <div className="card">
         <div style={{overflowX:'auto'}}>
           <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
@@ -1273,25 +1335,64 @@ function TabComparacaoPedido(props){
                 <th style={{textAlign:'right',padding:'10px 12px',color:'#64748B',fontWeight:700}}>Recebida</th>
                 <th style={{textAlign:'right',padding:'10px 12px',color:'#64748B',fontWeight:700}}>Diferença</th>
                 <th style={{textAlign:'left',padding:'10px 12px',color:'#64748B',fontWeight:700}}>Status</th>
+                <th style={{padding:'10px 8px'}}></th>
               </tr>
             </thead>
             <tbody>
               {linhasOrdenadas.length===0
-                ?<tr><td colSpan={5} style={{padding:24,textAlign:'center',color:'#94A3B8'}}>{soDivergencias?'Nenhuma divergência encontrada.':'Nenhum item.'}</td></tr>
+                ?<tr><td colSpan={6} style={{padding:24,textAlign:'center',color:'#94A3B8'}}>{soDivergencias?'Nenhuma divergência encontrada.':'Nenhum item.'}</td></tr>
                 :linhasOrdenadas.map(function(l,i){
                   var st=_CMP_STATUS[l.status];
+                  var nomesDivergem=l.nomeRecebido&&l.nome!==l.nomeRecebido;
+                  var podeReassoc=l.pi>=0; // só linhas que vieram do pedido podem ser reassociadas
                   return(<tr key={i} style={{borderBottom:'1px solid #F1F5F9',background:st.bg+'55'}}>
-                    <td style={{padding:'9px 12px',fontWeight:600,color:'#1E293B'}}>{l.nome}</td>
+                    <td style={{padding:'9px 12px',fontWeight:600,color:'#1E293B'}}>
+                      <div>{l.nome}{l.manual&&<span title="Reassociação manual" style={{marginLeft:6,fontSize:10,color:'#7C3AED',fontWeight:700}}>🔗</span>}</div>
+                      {nomesDivergem&&<div style={{fontSize:10,color:'#94A3B8',marginTop:2,fontWeight:400}}>↳ recebido como: {l.nomeRecebido}</div>}
+                    </td>
                     <td style={{padding:'9px 12px',textAlign:'right',color:'#334155'}}>{l.qtdPedida==null?'—':l.qtdPedida}</td>
                     <td style={{padding:'9px 12px',textAlign:'right',color:'#334155'}}>{l.qtdRecebida==null?'—':l.qtdRecebida}</td>
                     <td style={{padding:'9px 12px',textAlign:'right',fontWeight:700,color:st.cor}}>{l.diferenca>0?'+'+l.diferenca:l.diferenca}</td>
                     <td style={{padding:'9px 12px'}}><span style={{background:st.bg,color:st.cor,padding:'3px 9px',borderRadius:20,fontWeight:700,fontSize:11,whiteSpace:'nowrap'}}>{st.label}{(l.status==='faltou'||l.status==='amais')?' '+Math.abs(l.diferenca):''}</span></td>
+                    <td style={{padding:'9px 8px',whiteSpace:'nowrap'}}>
+                      {podeReassoc&&<button onClick={function(){setReassoc(l);setReassocBusca('');}} title="Reassociar manualmente" style={{background:'#EDE9FE',color:'#7C3AED',border:'none',borderRadius:6,padding:'4px 8px',fontSize:11,fontWeight:700,cursor:'pointer'}}>🔗</button>}
+                    </td>
                   </tr>);
                 })}
             </tbody>
           </table>
         </div>
       </div>
+
+      {reassoc&&<div onClick={function(){setReassoc(null);}} style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.7)',zIndex:9500,display:'flex',alignItems:'center',justifyContent:'center',padding:16,backdropFilter:'blur(4px)'}}>
+        <div onClick={function(e){e.stopPropagation();}} style={{background:'#fff',borderRadius:16,padding:20,maxWidth:560,width:'100%',maxHeight:'85vh',overflowY:'auto',boxShadow:'0 20px 60px rgba(0,0,0,0.25)'}}>
+          <div style={{fontWeight:800,fontSize:16,color:'#0A2D6E',marginBottom:4}}>🔗 Reassociar manualmente</div>
+          <div style={{fontSize:12,color:'#64748B',marginBottom:12}}>Escolha qual item do RECEBIDO deve casar com <strong>{reassoc.nome}</strong> (pedido: {reassoc.qtdPedida}).</div>
+          <input value={reassocBusca} onChange={function(e){setReassocBusca(e.target.value);}} placeholder="Filtrar itens do recebido..." className="inp" autoFocus/>
+          <div style={{maxHeight:340,overflowY:'auto',border:'1px solid #E2E8F0',borderRadius:10,marginBottom:12}}>
+            <button onClick={function(){aplicarReassoc(reassoc.pi,null);}} style={{width:'100%',padding:'10px 12px',border:'none',borderBottom:'1px solid #F1F5F9',background:'#FEE2E2',color:'#B91C1C',fontSize:12,fontWeight:700,cursor:'pointer',textAlign:'left'}}>
+              ✖ Sem par — marcar como "não veio"
+            </button>
+            {(recebidoItens||[]).map(function(r,ri){
+              if(reassocBusca.trim()&&_norm(r.nome).indexOf(_norm(reassocBusca))<0)return null;
+              var usadoPor=null;
+              linhas.forEach(function(ll){if(ll.pi>=0&&ll.ri===ri&&ll.pi!==reassoc.pi)usadoPor=ll.nome;});
+              var estaAtual=reassoc.ri===ri;
+              return(<button key={ri} onClick={function(){aplicarReassoc(reassoc.pi,ri);}} style={{width:'100%',padding:'10px 12px',border:'none',borderBottom:'1px solid #F1F5F9',background:estaAtual?'#DBEAFE':'#fff',cursor:'pointer',textAlign:'left',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:12,fontWeight:600,color:'#1E293B'}}>{r.nome}{estaAtual&&<span style={{marginLeft:6,fontSize:10,color:'#1351B4',fontWeight:700}}>(atual)</span>}</div>
+                  {usadoPor&&<div style={{fontSize:10,color:'#B45309',marginTop:2}}>⚠ atualmente em uso por: {usadoPor}</div>}
+                </div>
+                <span style={{fontSize:12,fontWeight:800,color:'#334155',whiteSpace:'nowrap'}}>{r.qtd} un.</span>
+              </button>);
+            })}
+          </div>
+          <div style={{display:'flex',gap:8}}>
+            {reassoc.manual&&<button onClick={function(){desfazerReassoc(reassoc.pi);setReassoc(null);}} className="bs" style={{flex:1,padding:'10px 0',color:'#7C3AED',borderColor:'#DDD6FE',fontWeight:700}}>↺ Desfazer reassociação (voltar ao automático)</button>}
+            <button onClick={function(){setReassoc(null);}} className="bs" style={{flex:1,padding:'10px 0'}}>Cancelar</button>
+          </div>
+        </div>
+      </div>}
     </div>)}
 
     {(!pedidoItens||!recebidoItens)&&<div className="card" style={{padding:40,textAlign:'center',color:'#94A3B8'}}>
