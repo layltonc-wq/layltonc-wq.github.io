@@ -946,6 +946,17 @@ function _cmpParsePedido(rows){
   }
   return out;
 }
+// Palavras que identificam linhas de CABEÇALHO/SEÇÃO em arquivos de recebido — devem ser ignoradas.
+// Comparação por igualdade normalizada (com _norm) para não confundir com nomes de medicamentos reais.
+var _CMP_HEADERS={medicamento:1,medicamentos:1,item:1,itens:1,descricao:1,'descrição':1,produto:1,produtos:1,nome:1,'nº':1,no:1,num:1,numero:1,'número':1};
+function _cmpEhLinhaCabecalho(nome){
+  var nl=_norm(String(nome||'').trim());
+  if(_CMP_HEADERS[nl])return true;
+  if(nl.indexOf('folha')>=0)return true;                // "FOLHA 001", "Folha 2"
+  if(/^p[aá]gina\b/.test(nl))return true;               // "Página 1"
+  if(/^total\b/.test(nl))return true;                   // "Total geral"
+  return false;
+}
 // RECEBIDO: 1ª coluna = nome, 2ª coluna = quantidade. Linhas sem quantidade numérica (ex.: "FOLHA 001") são ignoradas.
 function _cmpParseRecebido(rows){
   if(!rows||rows.length===0)return [];
@@ -954,24 +965,52 @@ function _cmpParseRecebido(rows){
     var row=rows[r]||[];
     var nome=String(row[0]||'').trim();
     if(!nome)continue;
-    var nlow=_norm(nome);
-    if(nlow==='medicamento'||nlow==='item'||nlow==='descricao'||nlow==='descrição'||nlow.indexOf('folha')>=0)continue;
+    if(_cmpEhLinhaCabecalho(nome))continue;
     var qtd=parseInt(String(row[1]||'').replace(/[^0-9]/g,''))||0;
     if(qtd<=0)continue;
     out.push({nome:nome,qtd:qtd});
   }
   return out;
 }
-// Chave de agrupamento de duplicatas: reaproveita _expandeSiglas (já expande CP/COMP/SUSP etc. e colapsa
-// qualquer sequência de espaços/pontuação/tabs/NBSP em um único separador de token) e, antes disso, remove
-// o espaço entre número e unidade de concentração (ex.: "400 mg" -> "400mg") — mesma normalização que
-// _concentracao já aplica — para que a MESMA dose escrita com ou sem espaço vire a mesma chave.
-// Sem isso, a mesma linha do RECEBIDO escrita de forma levemente diferente em folhas/páginas diferentes
-// (ex.: "Albendazol 400mg comprimido" vs "Albendazol  400 mg COMP.") virava dois itens em vez de um só somado.
+// Abreviações EXTRAS (plurais e variantes raras) só usadas no agrupamento/matching da Comparação —
+// mantidas separadas do _SIGLAS global pra não afetar outras telas (ATAs etc.).
+// _SIGLAS já cobre: cpr,cp,comp,cprs (comprimido); susp,sus (suspensão); caps,cap (cápsula); amp (ampola); etc.
+// Aqui cobrimos: plurais (comprimidos, cápsulas...), variantes soltas (cps, compr, gts...).
+var _CMP_EXTRA_SIG={
+  cps:'comprimido',compr:'comprimido',comprim:'comprimido',comprimidos:'comprimido',
+  suspensoes:'suspensao','suspensões':'suspensao',
+  capsulas:'capsula','cápsulas':'capsula',
+  drageas:'drageas','drágeas':'drageas',dragea:'drageas','drágea':'drageas',drg:'drageas',
+  ampolas:'ampola',amps:'ampola',
+  frascos:'frasco',frs:'frasco',
+  gotas:'gotas',gt:'gotas',gts:'gotas',gtas:'gotas',gota:'gotas',
+  solucoes:'solucao','soluções':'solucao',
+  xaropes:'xarope',xpe:'xarope',
+  caixas:'caixa',cxs:'caixa',cx:'caixa',
+  envelopes:'envelope',envs:'envelope',env:'envelope',
+  sachet:'sache','sachês':'sache','sachets':'sache'
+};
+// Chave de agrupamento de duplicatas: normaliza o nome pra uma forma canônica que colapsa variações comuns
+// de formatação (espaços múltiplos, pontuação, maiúsculas/minúsculas, acentos), colapsa o espaço entre
+// número e unidade de dose ("400 mg" -> "400mg"), e expande TODAS as abreviações/plurais (via _SIGLAS
+// global + _CMP_EXTRA_SIG local). Sem esses passos, a MESMA droga escrita levemente diferente em
+// folhas/páginas diferentes virava DOIS grupos separados em vez de um só somado.
 function _cmpChave(nome){
-  return _expandeSiglas(String(nome||'').replace(/(\d+(?:[.,]\d+)?)\s+(mg|mcg|g|ml|ui|%)\b/gi,'$1$2'));
+  var s=String(nome||'').replace(/(\d+(?:[.,]\d+)?)\s+(mg|mcg|g|ml|ui|%|l|kg)\b/gi,'$1$2');
+  return _norm(s).split(/[^a-z0-9%]+/).filter(Boolean)
+    .map(function(t){return _CMP_EXTRA_SIG[t]||_SIGLAS[t]||t;})
+    .join(' ');
 }
+// Score de matching entre um nome de pedido e um nome de recebido — pré-normaliza pelos EXTRA siglas
+// (via _cmpChave) e depois delega pro _scoreItemMed já existente (fuzzy + concentração + siglas globais),
+// que é idempotente sobre nomes já expandidos. Assim "ALBENDAZOL CPS" (pedido) casa com
+// "Albendazol comprimidos" (recebido) mesmo com plural/variante que o _SIGLAS global não conhece.
+function _cmpScore(a,b){return _scoreItemMed(_cmpChave(a),_cmpChave(b));}
 // Agrupa itens do mesmo medicamento (mesma chave _cmpChave), somando as quantidades (junta duplicatas/tabelas múltiplas).
+// Segunda passada: se um grupo SEM dose e apenas um grupo COM dose compartilharem o mesmo nome-base
+// (ex.: "albendazol comprimido" + "albendazol 400mg comprimido"), mergeia — assume que é o mesmo produto
+// só com a dose omitida na anotação. Se houver AMBIGUIDADE (duas doses diferentes concorrendo pelo
+// mesmo "sem dose"), NÃO mergeia — melhor ficar separado e a preview destacar pro usuário resolver.
 function _cmpAgrupar(itens){
   var map={};
   itens.forEach(function(it){
@@ -979,14 +1018,25 @@ function _cmpAgrupar(itens){
     if(!map[k])map[k]={nome:it.nome,qtd:0};
     map[k].qtd+=it.qtd;
   });
-  return Object.keys(map).map(function(k){return map[k];});
+  var grupos=Object.keys(map).map(function(k){return {__k:k,nome:map[k].nome,qtd:map[k].qtd};});
+  var reDose=/\b\d+(?:[.,]\d+)?(?:mg|mcg|g|ml|ui|%|l|kg)\b/g;
+  function temDose(k){reDose.lastIndex=0;return reDose.test(k);}
+  function semDoseKey(k){return k.replace(reDose,'').replace(/\s+/g,' ').trim();}
+  var comDose=grupos.filter(function(g){return temDose(g.__k);});
+  var semDose=grupos.filter(function(g){return !temDose(g.__k);});
+  var absorvidos={};
+  semDose.forEach(function(sd){
+    var candidatos=comDose.filter(function(cd){return semDoseKey(cd.__k)===sd.__k;});
+    if(candidatos.length===1){candidatos[0].qtd+=sd.qtd;absorvidos[sd.__k]=true;}
+  });
+  return grupos.filter(function(g){return !absorvidos[g.__k];}).map(function(g){return {nome:g.nome,qtd:g.qtd};});
 }
-// Casa pedido x recebido por melhor par (maior score primeiro), reaproveitando _scoreItemMed (fuzzy + siglas + concentração).
+// Casa pedido x recebido por melhor par (maior score primeiro), usando _cmpScore (que aplica siglas extras).
 function _cmpComparar(pedido,recebido){
   var pares=[];
   pedido.forEach(function(p,pi){
     recebido.forEach(function(r,ri){
-      var score=_scoreItemMed(p.nome,r.nome);
+      var score=_cmpScore(p.nome,r.nome);
       if(score>=45)pares.push({pi:pi,ri:ri,score:score});
     });
   });
@@ -1029,6 +1079,7 @@ function TabComparacaoPedido(props){
   var _erro=useState('');var erro=_erro[0];var setErro=_erro[1];
   var _soDivergencias=useState(false);var soDivergencias=_soDivergencias[0];var setSoDivergencias=_soDivergencias[1];
   var _ordem=useState('nome');var ordem=_ordem[0];var setOrdem=_ordem[1];
+  var _showPreview=useState(false);var showPreview=_showPreview[0];var setShowPreview=_showPreview[1];
   var refPedido=useRef(null);var refRecebido=useRef(null);
 
   function lerArquivo(file,parser,setLoading,setItens,setNome){
@@ -1073,7 +1124,25 @@ function TabComparacaoPedido(props){
     return {totalPedido:totalPedido,totalRecebido:totalRecebido,ok:ok,div:div};
   },[pedidoItens,recebidoItens,linhas]);
 
-  function limpar(){setPedidoItens(null);setRecebidoItens(null);setNomePedido('');setNomeRecebido('');setErro('');}
+  function limpar(){setPedidoItens(null);setRecebidoItens(null);setNomePedido('');setNomeRecebido('');setErro('');setShowPreview(false);}
+
+  // Detecta itens dentro da MESMA lista (pedido ou recebido) que provavelmente são o mesmo medicamento
+  // mas escaparam do agrupamento — sinal de que alguma variação de nome não foi normalizada. Ajuda o
+  // usuário a identificar visualmente linhas que deveriam estar somadas. Usa _cmpScore com limiar alto (75).
+  function _cmpDuplicatasSuspeitas(itens){
+    var pares=[];
+    for(var i=0;i<itens.length;i++){
+      for(var j=i+1;j<itens.length;j++){
+        var sc=_cmpScore(itens[i].nome,itens[j].nome);
+        if(sc>=75)pares.push([i,j,sc]);
+      }
+    }
+    var grupos={};
+    pares.forEach(function(p){grupos[p[0]]=1;grupos[p[1]]=1;});
+    return grupos;
+  }
+  var dupPed=useMemo(function(){return pedidoItens?_cmpDuplicatasSuspeitas(pedidoItens):{};},[pedidoItens]);
+  var dupRec=useMemo(function(){return recebidoItens?_cmpDuplicatasSuspeitas(recebidoItens):{};},[recebidoItens]);
 
   // Exportação: reaproveita a mesma técnica de exportRelatorioPDF (window.open + document.write + print)
   // e de exportarExcel/exportRelatorioXL (XLSX.utils.book_new/aoa_to_sheet/writeFile), adaptadas pra
@@ -1134,10 +1203,44 @@ function TabComparacaoPedido(props){
         </div>
       </div>
       {erro&&<div style={{margin:'0 14px 14px',padding:'10px 14px',background:'#FEE2E2',border:'1px solid #FCA5A5',borderRadius:10,color:'#B91C1C',fontSize:12}}>{erro}</div>}
-      {(pedidoItens||recebidoItens)&&<div style={{padding:'0 14px 14px'}}>
+      {(pedidoItens||recebidoItens)&&<div style={{padding:'0 14px 14px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+        <button onClick={function(){setShowPreview(!showPreview);}} style={{background:showPreview?'#EFF6FF':'#F1F5F9',color:showPreview?'#1351B4':'#64748B',border:'none',borderRadius:8,padding:'6px 12px',fontSize:12,fontWeight:700,cursor:'pointer'}}>{showPreview?'▲ Ocultar':'▼ Conferir'} extração</button>
         <button onClick={limpar} style={{background:'none',border:'none',color:'#94A3B8',fontSize:12,cursor:'pointer',textDecoration:'underline'}}>Limpar e recomeçar</button>
       </div>}
     </div>
+
+    {showPreview&&(pedidoItens||recebidoItens)&&<div className="card" style={{marginBottom:16}}>
+      <div className="ch"><div className="ch-title"><div className="ch-accent"/><span>Preview — itens extraídos de cada arquivo</span></div></div>
+      <div style={{padding:'10px 14px 4px',fontSize:11,color:'#64748B'}}>
+        Conferência visual do que foi lido de cada arquivo (antes de comparar). Linhas em <span style={{background:'#FEF3C7',color:'#92400E',padding:'1px 6px',borderRadius:4,fontWeight:700}}>amarelo</span> parecem duplicatas do mesmo medicamento que deveriam estar somadas — verifique se o arquivo tem grafias divergentes.
+      </div>
+      <div style={{padding:'6px 14px 14px',display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+        <div>
+          <div style={{fontSize:12,fontWeight:700,color:'#1351B4',marginBottom:6}}>📄 Pedido ({pedidoItens?pedidoItens.length:0} itens agrupados{pedidoItens?' · '+pedidoItens.reduce(function(a,i){return a+i.qtd;},0)+' unid.':''})</div>
+          <div style={{maxHeight:260,overflowY:'auto',border:'1px solid #E2E8F0',borderRadius:8}}>
+            {!pedidoItens||pedidoItens.length===0
+              ?<div style={{padding:14,fontSize:12,color:'#94A3B8',textAlign:'center'}}>Sem pedido carregado</div>
+              :pedidoItens.map(function(it,i){var d=dupPed[i];return(
+                <div key={i} style={{padding:'6px 10px',borderBottom:'1px solid #F1F5F9',display:'flex',justifyContent:'space-between',fontSize:11,background:d?'#FEF3C7':'transparent'}}>
+                  <span style={{flex:1,color:'#334155',wordBreak:'break-word',paddingRight:8}}>{it.nome}</span>
+                  <span style={{fontWeight:700,color:d?'#92400E':'#1E293B',whiteSpace:'nowrap'}}>{it.qtd}</span>
+                </div>);})}
+          </div>
+        </div>
+        <div>
+          <div style={{fontSize:12,fontWeight:700,color:'#0C6B3E',marginBottom:6}}>📦 Recebido ({recebidoItens?recebidoItens.length:0} itens agrupados{recebidoItens?' · '+recebidoItens.reduce(function(a,i){return a+i.qtd;},0)+' unid.':''})</div>
+          <div style={{maxHeight:260,overflowY:'auto',border:'1px solid #E2E8F0',borderRadius:8}}>
+            {!recebidoItens||recebidoItens.length===0
+              ?<div style={{padding:14,fontSize:12,color:'#94A3B8',textAlign:'center'}}>Sem recebido carregado</div>
+              :recebidoItens.map(function(it,i){var d=dupRec[i];return(
+                <div key={i} style={{padding:'6px 10px',borderBottom:'1px solid #F1F5F9',display:'flex',justifyContent:'space-between',fontSize:11,background:d?'#FEF3C7':'transparent'}}>
+                  <span style={{flex:1,color:'#334155',wordBreak:'break-word',paddingRight:8}}>{it.nome}</span>
+                  <span style={{fontWeight:700,color:d?'#92400E':'#1E293B',whiteSpace:'nowrap'}}>{it.qtd}</span>
+                </div>);})}
+          </div>
+        </div>
+      </div>
+    </div>}
 
     {pedidoItens&&recebidoItens&&(<div>
       <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginBottom:10}}>
