@@ -899,6 +899,509 @@ return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
 </div>);
 }
 
+// ===== Comparação de Pedido x Recebido — ferramenta de conferência visual (não altera Firestore/estoque) =====
+// Lê tabelas de um .docx (via mammoth) ou .xlsx (via SheetJS) e devolve uma lista de "tabelas" (array de linhas, cada linha = array de células em texto).
+function _cmpExtrairTabelasDocx(arrayBuffer){
+  return mammoth.convertToHtml({arrayBuffer:arrayBuffer}).then(function(res){
+    var div=document.createElement('div');div.innerHTML=res.value;
+    var out=[];
+    div.querySelectorAll('table').forEach(function(tab){
+      var rows=[];
+      tab.querySelectorAll('tr').forEach(function(tr){
+        var row=[];
+        tr.querySelectorAll('td,th').forEach(function(c){row.push(c.textContent.trim());});
+        rows.push(row);
+      });
+      out.push(rows);
+    });
+    return out;
+  });
+}
+function _cmpExtrairTabelasXlsx(arrayBuffer){
+  var wb=XLSX.read(new Uint8Array(arrayBuffer),{type:'array'});
+  var out=[];
+  wb.SheetNames.forEach(function(sn){
+    var rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:''});
+    out.push(rows.map(function(r){return (r||[]).map(function(c){return String(c==null?'':c).trim();});}));
+  });
+  return out;
+}
+// PEDIDO: 1ª coluna = nome; quantidade = coluna cujo cabeçalho contém "TOTAL" (senão, última coluna).
+function _cmpParsePedido(rows){
+  if(!rows||rows.length<2)return [];
+  var header=rows[0].map(function(c){return _norm(String(c||''));});
+  var totalIdx=-1;
+  for(var i=1;i<header.length;i++){if(header[i].indexOf('total')>=0){totalIdx=i;break;}}
+  if(totalIdx===-1)totalIdx=rows[0].length-1;
+  var out=[];
+  for(var r=1;r<rows.length;r++){
+    var row=rows[r]||[];
+    var nome=String(row[0]||'').trim();
+    if(!nome)continue;
+    var nlow=_norm(nome);
+    if(nlow==='total'||nlow.indexOf('total geral')>=0)continue;
+    var qtd=parseInt(String(row[totalIdx]||'').replace(/[^0-9]/g,''))||0;
+    if(qtd<=0)continue;
+    out.push({nome:nome,qtd:qtd});
+  }
+  return out;
+}
+// Palavras que identificam linhas de CABEÇALHO/SEÇÃO em arquivos de recebido — devem ser ignoradas.
+// Comparação por igualdade normalizada (com _norm) para não confundir com nomes de medicamentos reais.
+var _CMP_HEADERS={medicamento:1,medicamentos:1,item:1,itens:1,descricao:1,'descrição':1,produto:1,produtos:1,nome:1,'nº':1,no:1,num:1,numero:1,'número':1};
+function _cmpEhLinhaCabecalho(nome){
+  var nl=_norm(String(nome||'').trim());
+  if(_CMP_HEADERS[nl])return true;
+  if(nl.indexOf('folha')>=0)return true;                // "FOLHA 001", "Folha 2"
+  if(/^p[aá]gina\b/.test(nl))return true;               // "Página 1"
+  if(/^total\b/.test(nl))return true;                   // "Total geral"
+  return false;
+}
+// RECEBIDO: 1ª coluna = nome, 2ª coluna = quantidade. Linhas sem quantidade numérica (ex.: "FOLHA 001") são ignoradas.
+function _cmpParseRecebido(rows){
+  if(!rows||rows.length===0)return [];
+  var out=[];
+  for(var r=0;r<rows.length;r++){
+    var row=rows[r]||[];
+    var nome=String(row[0]||'').trim();
+    if(!nome)continue;
+    if(_cmpEhLinhaCabecalho(nome))continue;
+    var qtd=parseInt(String(row[1]||'').replace(/[^0-9]/g,''))||0;
+    if(qtd<=0)continue;
+    out.push({nome:nome,qtd:qtd});
+  }
+  return out;
+}
+// Abreviações EXTRAS (plurais e variantes raras) só usadas no agrupamento/matching da Comparação —
+// mantidas separadas do _SIGLAS global pra não afetar outras telas (ATAs etc.).
+// _SIGLAS já cobre: cpr,cp,comp,cprs (comprimido); susp,sus (suspensão); caps,cap (cápsula); amp (ampola); etc.
+// Aqui cobrimos: plurais (comprimidos, cápsulas...), variantes soltas (cps, compr, gts...).
+var _CMP_EXTRA_SIG={
+  cps:'comprimido',compr:'comprimido',comprim:'comprimido',comprimidos:'comprimido',
+  suspensoes:'suspensao','suspensões':'suspensao',
+  capsulas:'capsula','cápsulas':'capsula',
+  drageas:'drageas','drágeas':'drageas',dragea:'drageas','drágea':'drageas',drg:'drageas',
+  ampolas:'ampola',amps:'ampola',
+  frascos:'frasco',frs:'frasco',
+  gotas:'gotas',gt:'gotas',gts:'gotas',gtas:'gotas',gota:'gotas',
+  solucoes:'solucao','soluções':'solucao',
+  xaropes:'xarope',xpe:'xarope',
+  caixas:'caixa',cxs:'caixa',cx:'caixa',
+  envelopes:'envelope',envs:'envelope',env:'envelope',
+  sachet:'sache','sachês':'sache','sachets':'sache'
+};
+// Chave de agrupamento de duplicatas: normaliza o nome pra uma forma canônica que colapsa variações comuns
+// de formatação (espaços múltiplos, pontuação, maiúsculas/minúsculas, acentos), colapsa o espaço entre
+// número e unidade de dose ("400 mg" -> "400mg"), e expande TODAS as abreviações/plurais (via _SIGLAS
+// global + _CMP_EXTRA_SIG local). Sem esses passos, a MESMA droga escrita levemente diferente em
+// folhas/páginas diferentes virava DOIS grupos separados em vez de um só somado.
+function _cmpChave(nome){
+  var s=String(nome||'').replace(/(\d+(?:[.,]\d+)?)\s+(mg|mcg|g|ml|ui|%|l|kg)\b/gi,'$1$2');
+  return _norm(s).split(/[^a-z0-9%]+/).filter(Boolean)
+    .map(function(t){return _CMP_EXTRA_SIG[t]||_SIGLAS[t]||t;})
+    .join(' ');
+}
+// Variantes que qualificam o público-alvo do medicamento — se um lado especifica e o outro não, ou
+// se ambos especificam mas com valores diferentes, o par é MUITO menos provável de ser o mesmo produto.
+// Ex.: "AAS 100mg" (pedido genérico) NÃO deve casar automaticamente com "AAS 100mg infantil" (recebido).
+var _CMP_VARIANTES=['infantil','pediatrico','pediatrica','pediatrico','pediatria','bebe','crianca','neonatal',
+                    'adulto','adulta','geriatrico','geriatrica','idoso','idosa',
+                    'feminino','feminina','masculino','masculina',
+                    'veterinario','veterinaria','animal'];
+function _cmpExtraiVariantes(nome){
+  var toks=_norm(String(nome||'')).split(/[^a-z0-9%]+/);
+  var v={};
+  toks.forEach(function(t){if(_CMP_VARIANTES.indexOf(t)>=0)v[t]=1;});
+  return Object.keys(v);
+}
+// Score de matching entre um nome de pedido e um nome de recebido — pré-normaliza pelos EXTRA siglas
+// (via _cmpChave) e depois delega pro _scoreItemMed já existente (fuzzy + concentração + siglas globais),
+// que é idempotente sobre nomes já expandidos. Assim "ALBENDAZOL CPS" (pedido) casa com
+// "Albendazol comprimidos" (recebido) mesmo com plural/variante que o _SIGLAS global não conhece.
+// Penalidades de variante APÓS o score base (aplica-se ANTES do limiar de aceitação):
+//  -50 se um lado tem uma variante que o outro não tem (ex.: só um menciona "infantil")
+//  -50 adicionais para cada variante diferente (evita casar "adulto" com "infantil" quando ambos aparecem)
+function _cmpScore(a,b){
+  var base=_scoreItemMed(_cmpChave(a),_cmpChave(b));
+  var va=_cmpExtraiVariantes(a),vb=_cmpExtraiVariantes(b);
+  // conjunto simétrico de diferenças = variantes só em um lado
+  var soA=va.filter(function(x){return vb.indexOf(x)<0;});
+  var soB=vb.filter(function(x){return va.indexOf(x)<0;});
+  var divergencias=soA.length+soB.length;
+  if(divergencias>0)base-=50*divergencias;
+  return base;
+}
+// Agrupa itens do mesmo medicamento (mesma chave _cmpChave), somando as quantidades (junta duplicatas/tabelas múltiplas).
+// Segunda passada: se um grupo SEM dose e apenas um grupo COM dose compartilharem o mesmo nome-base
+// (ex.: "albendazol comprimido" + "albendazol 400mg comprimido"), mergeia — assume que é o mesmo produto
+// só com a dose omitida na anotação. Se houver AMBIGUIDADE (duas doses diferentes concorrendo pelo
+// mesmo "sem dose"), NÃO mergeia — melhor ficar separado e a preview destacar pro usuário resolver.
+function _cmpAgrupar(itens){
+  var map={};
+  itens.forEach(function(it){
+    var k=_cmpChave(it.nome);
+    if(!map[k])map[k]={nome:it.nome,qtd:0};
+    map[k].qtd+=it.qtd;
+  });
+  var grupos=Object.keys(map).map(function(k){return {__k:k,nome:map[k].nome,qtd:map[k].qtd};});
+  var reDose=/\b\d+(?:[.,]\d+)?(?:mg|mcg|g|ml|ui|%|l|kg)\b/g;
+  function temDose(k){reDose.lastIndex=0;return reDose.test(k);}
+  function semDoseKey(k){return k.replace(reDose,'').replace(/\s+/g,' ').trim();}
+  var comDose=grupos.filter(function(g){return temDose(g.__k);});
+  var semDose=grupos.filter(function(g){return !temDose(g.__k);});
+  var absorvidos={};
+  semDose.forEach(function(sd){
+    var candidatos=comDose.filter(function(cd){return semDoseKey(cd.__k)===sd.__k;});
+    if(candidatos.length===1){candidatos[0].qtd+=sd.qtd;absorvidos[sd.__k]=true;}
+  });
+  return grupos.filter(function(g){return !absorvidos[g.__k];}).map(function(g){return {nome:g.nome,qtd:g.qtd};});
+}
+// Casa pedido x recebido por melhor par (maior score primeiro), usando _cmpScore (que aplica siglas extras
+// e penalidade de variantes). Aceita OVERRIDES manuais: {pi: ri | null} — força o par (ri) ou marca "sem par"
+// (null) para o item pi do pedido, independente do fuzzy score. Overrides são aplicados ANTES do algoritmo
+// automático, então o item recebido escolhido manualmente sai da lista de candidatos livres.
+function _cmpComparar(pedido,recebido,overrides){
+  overrides=overrides||{};
+  var matchR={},usadoP={},usadoR={},manual={};
+  // 1. Aplica overrides primeiro. null/undefined = "sem par (não veio)"; número >=0 = índice do recebido.
+  Object.keys(overrides).forEach(function(k){
+    var pi=parseInt(k,10);var ri=overrides[k];
+    if(isNaN(pi)||pi<0||pi>=pedido.length)return;
+    if(ri===null){matchR[pi]=-1;usadoP[pi]=true;manual[pi]=true;return;}
+    if(typeof ri!=='number'||ri<0||ri>=recebido.length)return;
+    matchR[pi]=ri;usadoP[pi]=true;usadoR[ri]=true;manual[pi]=true;
+  });
+  // 2. Algoritmo automático para o restante.
+  var pares=[];
+  pedido.forEach(function(p,pi){
+    if(usadoP[pi])return;
+    recebido.forEach(function(r,ri){
+      if(usadoR[ri])return;
+      var score=_cmpScore(p.nome,r.nome);
+      if(score>=45)pares.push({pi:pi,ri:ri,score:score});
+    });
+  });
+  pares.sort(function(a,b){return b.score-a.score;});
+  pares.forEach(function(par){
+    if(usadoP[par.pi]||usadoR[par.ri])return;
+    usadoP[par.pi]=true;usadoR[par.ri]=true;matchR[par.pi]=par.ri;
+  });
+  var linhas=[];
+  pedido.forEach(function(p,pi){
+    var ri=matchR[pi];
+    if(ri!==undefined&&ri>=0){
+      var r=recebido[ri];
+      var diff=r.qtd-p.qtd;
+      linhas.push({pi:pi,ri:ri,manual:!!manual[pi],nome:p.nome,nomeRecebido:r.nome,qtdPedida:p.qtd,qtdRecebida:r.qtd,diferenca:diff,status:diff===0?'ok':(diff<0?'faltou':'amais')});
+    }else{
+      linhas.push({pi:pi,ri:-1,manual:!!manual[pi],nome:p.nome,nomeRecebido:null,qtdPedida:p.qtd,qtdRecebida:null,diferenca:-p.qtd,status:'naoveio'});
+    }
+  });
+  recebido.forEach(function(r,ri){
+    if(usadoR[ri])return;
+    linhas.push({pi:-1,ri:ri,manual:false,nome:r.nome,nomeRecebido:r.nome,qtdPedida:null,qtdRecebida:r.qtd,diferenca:r.qtd,status:'naoconstava'});
+  });
+  return linhas;
+}
+var _CMP_STATUS={
+  ok:{label:'✅ OK',cor:'#0C6B3E',bg:'#DCFCE7'},
+  faltou:{label:'🔴 Faltou',cor:'#DC2626',bg:'#FEE2E2'},
+  amais:{label:'🟡 Veio a mais',cor:'#B45309',bg:'#FEF3C7'},
+  naoveio:{label:'🔴 Não veio',cor:'#DC2626',bg:'#FEE2E2'},
+  naoconstava:{label:'🔵 Não constava no pedido',cor:'#1351B4',bg:'#DBEAFE'}
+};
+function TabComparacaoPedido(props){
+  var _pedidoItens=useState(null);var pedidoItens=_pedidoItens[0];var setPedidoItens=_pedidoItens[1];
+  var _recebidoItens=useState(null);var recebidoItens=_recebidoItens[0];var setRecebidoItens=_recebidoItens[1];
+  var _nomePedido=useState('');var nomePedido=_nomePedido[0];var setNomePedido=_nomePedido[1];
+  var _nomeRecebido=useState('');var nomeRecebido=_nomeRecebido[0];var setNomeRecebido=_nomeRecebido[1];
+  var _loadingPedido=useState(false);var loadingPedido=_loadingPedido[0];var setLoadingPedido=_loadingPedido[1];
+  var _loadingRecebido=useState(false);var loadingRecebido=_loadingRecebido[0];var setLoadingRecebido=_loadingRecebido[1];
+  var _erro=useState('');var erro=_erro[0];var setErro=_erro[1];
+  var _soDivergencias=useState(false);var soDivergencias=_soDivergencias[0];var setSoDivergencias=_soDivergencias[1];
+  var _ordem=useState('nome');var ordem=_ordem[0];var setOrdem=_ordem[1];
+  var _showPreview=useState(false);var showPreview=_showPreview[0];var setShowPreview=_showPreview[1];
+  var _overrides=useState({});var overrides=_overrides[0];var setOverrides=_overrides[1];
+  var _reassoc=useState(null);var reassoc=_reassoc[0];var setReassoc=_reassoc[1];// linha aberta pra reassociação
+  var _reassocBusca=useState('');var reassocBusca=_reassocBusca[0];var setReassocBusca=_reassocBusca[1];
+  var refPedido=useRef(null);var refRecebido=useRef(null);
+
+  function lerArquivo(file,parser,setLoading,setItens,setNome){
+    if(!file)return;
+    var isDocx=/\.docx$/i.test(file.name);
+    var isXlsx=/\.xlsx?$/i.test(file.name);
+    if(!isDocx&&!isXlsx){setErro('Formato não suportado. Envie um arquivo .docx ou .xlsx.');return;}
+    setErro('');setLoading(true);
+    var reader=new FileReader();
+    reader.onload=function(ev){
+      var ab=ev.target.result;
+      var p=isDocx?_cmpExtrairTabelasDocx(ab):Promise.resolve(_cmpExtrairTabelasXlsx(ab));
+      p.then(function(tabelas){
+        var todos=[];
+        tabelas.forEach(function(rows){todos=todos.concat(parser(rows));});
+        var agrupado=_cmpAgrupar(todos);
+        if(agrupado.length===0){setErro('Nenhum item encontrado em "'+file.name+'". Verifique o formato do arquivo.');setLoading(false);return;}
+        setItens(agrupado);setNome(file.name);setLoading(false);setOverrides({});
+      }).catch(function(e){setErro('Erro ao ler "'+file.name+'": '+(e&&e.message?e.message:'formato inválido'));setLoading(false);});
+    };
+    reader.onerror=function(){setErro('Erro ao abrir "'+file.name+'".');setLoading(false);};
+    reader.readAsArrayBuffer(file);
+  }
+
+  var linhas=useMemo(function(){
+    if(!pedidoItens||!recebidoItens)return [];
+    return _cmpComparar(pedidoItens,recebidoItens,overrides);
+  },[pedidoItens,recebidoItens,overrides]);
+
+  // Reassocia manualmente uma linha do pedido a um item do recebido (ou marca "sem par").
+  function aplicarReassoc(pi,ri){
+    var novo={};for(var k in overrides)novo[k]=overrides[k];
+    novo[pi]=ri;setOverrides(novo);setReassoc(null);setReassocBusca('');
+  }
+  function desfazerReassoc(pi){
+    var novo={};for(var k in overrides)if(parseInt(k,10)!==pi)novo[k]=overrides[k];
+    setOverrides(novo);
+  }
+  function limparTodosOverrides(){setOverrides({});}
+
+  var linhasOrdenadas=useMemo(function(){
+    var arr=soDivergencias?linhas.filter(function(l){return l.status!=='ok';}):linhas.slice();
+    if(ordem==='diferenca')arr.sort(function(a,b){return Math.abs(b.diferenca)-Math.abs(a.diferenca);});
+    else arr.sort(function(a,b){return (a.nome||'').localeCompare(b.nome||'');});
+    return arr;
+  },[linhas,soDivergencias,ordem]);
+
+  var resumo=useMemo(function(){
+    var totalPedido=(pedidoItens||[]).reduce(function(a,i){return a+i.qtd;},0);
+    var totalRecebido=(recebidoItens||[]).reduce(function(a,i){return a+i.qtd;},0);
+    var ok=linhas.filter(function(l){return l.status==='ok';}).length;
+    var div=linhas.length-ok;
+    return {totalPedido:totalPedido,totalRecebido:totalRecebido,ok:ok,div:div};
+  },[pedidoItens,recebidoItens,linhas]);
+
+  function limpar(){setPedidoItens(null);setRecebidoItens(null);setNomePedido('');setNomeRecebido('');setErro('');setShowPreview(false);setOverrides({});setReassoc(null);}
+
+  // Detecta itens dentro da MESMA lista (pedido ou recebido) que provavelmente são o mesmo medicamento
+  // mas escaparam do agrupamento — sinal de que alguma variação de nome não foi normalizada. Ajuda o
+  // usuário a identificar visualmente linhas que deveriam estar somadas. Usa _cmpScore com limiar alto (75).
+  function _cmpDuplicatasSuspeitas(itens){
+    var pares=[];
+    for(var i=0;i<itens.length;i++){
+      for(var j=i+1;j<itens.length;j++){
+        var sc=_cmpScore(itens[i].nome,itens[j].nome);
+        if(sc>=75)pares.push([i,j,sc]);
+      }
+    }
+    var grupos={};
+    pares.forEach(function(p){grupos[p[0]]=1;grupos[p[1]]=1;});
+    return grupos;
+  }
+  var dupPed=useMemo(function(){return pedidoItens?_cmpDuplicatasSuspeitas(pedidoItens):{};},[pedidoItens]);
+  var dupRec=useMemo(function(){return recebidoItens?_cmpDuplicatasSuspeitas(recebidoItens):{};},[recebidoItens]);
+
+  // Exportação: reaproveita a mesma técnica de exportRelatorioPDF (window.open + document.write + print)
+  // e de exportarExcel/exportRelatorioXL (XLSX.utils.book_new/aoa_to_sheet/writeFile), adaptadas pra
+  // incluir cabeçalho, resumo e — no PDF — a cor de destaque de cada status.
+  function exportarComparacaoPDF(){
+    var hoje=new Date().toLocaleDateString('pt-BR');
+    var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Comparação de Pedido</title><style>body{font-family:Arial,sans-serif;padding:20px;color:#1E293B}h2{color:#1351B4;margin-bottom:2px}table{width:100%;border-collapse:collapse;font-size:12px;margin-top:12px}th,td{border:1px solid #CBD5E1;padding:6px 8px;text-align:left}th{background:#EFF6FF}.resumo{display:flex;gap:22px;margin-top:10px}.resumo div{font-size:11px;color:#64748B}.resumo b{display:block;font-size:16px;color:#1E293B}</style></head><body>';
+    html+='<h2>Comparação de Pedido — '+_escHtml(hoje)+'</h2>';
+    html+='<div class="resumo"><div>Total Pedido<b>'+resumo.totalPedido+'</b></div><div>Total Recebido<b>'+resumo.totalRecebido+'</b></div><div>Itens OK<b style="color:#0C6B3E">'+resumo.ok+'</b></div><div>Divergências<b style="color:'+(resumo.div>0?'#DC2626':'#0C6B3E')+'">'+resumo.div+'</b></div></div>';
+    html+='<table><thead><tr><th>Medicamento</th><th>Qtd. Pedida</th><th>Qtd. Recebida</th><th>Diferença</th><th>Status</th></tr></thead><tbody>';
+    linhasOrdenadas.forEach(function(l){
+      var st=_CMP_STATUS[l.status];
+      var diffTxt=l.diferenca>0?'+'+l.diferenca:l.diferenca;
+      var statusTxt=st.label+((l.status==='faltou'||l.status==='amais')?' '+Math.abs(l.diferenca):'');
+      var nomeCell=_escHtml(l.nome)+(l.manual?' 🔗':'')+(l.nomeRecebido&&l.nome!==l.nomeRecebido?'<div style="font-size:10px;color:#64748B;margin-top:2px">↳ recebido: '+_escHtml(l.nomeRecebido)+'</div>':'');
+      html+='<tr style="background:'+st.bg+'"><td>'+nomeCell+'</td><td>'+(l.qtdPedida==null?'—':l.qtdPedida)+'</td><td>'+(l.qtdRecebida==null?'—':l.qtdRecebida)+'</td><td style="color:'+st.cor+';font-weight:700">'+diffTxt+'</td><td style="color:'+st.cor+';font-weight:700">'+_escHtml(statusTxt)+'</td></tr>';
+    });
+    html+='</tbody></table></body></html>';
+    var w=window.open('','_blank');
+    if(w&&w.document){w.document.write(html);w.document.close();setTimeout(function(){w.print();},400);}
+  }
+  function exportarComparacaoXL(){
+    var hoje=new Date().toLocaleDateString('pt-BR');
+    var rows=[
+      ['Comparação de Pedido — '+hoje],
+      [],
+      ['Total Pedido',resumo.totalPedido,'Total Recebido',resumo.totalRecebido,'Itens OK',resumo.ok,'Divergências',resumo.div],
+      [],
+      ['Medicamento','Recebido como','Qtd. Pedida','Qtd. Recebida','Diferença','Status','Reassoc. manual?']
+    ];
+    linhasOrdenadas.forEach(function(l){
+      var st=_CMP_STATUS[l.status];
+      var statusTxt=st.label+((l.status==='faltou'||l.status==='amais')?' '+Math.abs(l.diferenca):'');
+      var recebidoComo=l.nomeRecebido&&l.nome!==l.nomeRecebido?l.nomeRecebido:'';
+      rows.push([l.nome,recebidoComo,l.qtdPedida==null?'—':l.qtdPedida,l.qtdRecebida==null?'—':l.qtdRecebida,l.diferenca,statusTxt,l.manual?'Sim':'']);
+    });
+    var wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'Comparacao');
+    XLSX.writeFile(wb,'comparacao-pedido-'+todayStr()+'.xlsx');
+  }
+
+  return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
+    <div style={{marginBottom:16}}>
+      <div style={{fontWeight:900,fontSize:20,color:'#0A2D6E',marginBottom:2}}>🔍 Comparação de Pedido</div>
+      <div style={{fontSize:12,color:'#94A3B8'}}>Confira divergências entre o que foi pedido e o que foi recebido — apenas conferência visual, não altera o estoque</div>
+    </div>
+
+    <div className="card" style={{marginBottom:16}}>
+      <div className="ch"><div className="ch-title"><div className="ch-accent"/><span>Arquivos</span></div></div>
+      <div style={{padding:14,display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+        <div>
+          <input ref={refPedido} type="file" accept=".docx,.xlsx" style={{display:'none'}} onChange={function(e){var f=e.target.files&&e.target.files[0];lerArquivo(f,_cmpParsePedido,setLoadingPedido,setPedidoItens,setNomePedido);e.target.value='';}}/>
+          <button onClick={function(){refPedido.current&&refPedido.current.click();}} disabled={loadingPedido} className="bs" style={{fontWeight:700,color:'#1351B4',borderColor:'#BFDBFE'}}>{loadingPedido?'⏳ Lendo...':'📄 Pedido'}</button>
+          {nomePedido&&<div style={{fontSize:11,color:'#64748B',marginTop:6,wordBreak:'break-word'}}>{nomePedido} — {pedidoItens?pedidoItens.length:0} itens</div>}
+        </div>
+        <div>
+          <input ref={refRecebido} type="file" accept=".docx,.xlsx" style={{display:'none'}} onChange={function(e){var f=e.target.files&&e.target.files[0];lerArquivo(f,_cmpParseRecebido,setLoadingRecebido,setRecebidoItens,setNomeRecebido);e.target.value='';}}/>
+          <button onClick={function(){refRecebido.current&&refRecebido.current.click();}} disabled={loadingRecebido} className="bs" style={{fontWeight:700,color:'#0C6B3E',borderColor:'#86EFAC'}}>{loadingRecebido?'⏳ Lendo...':'📦 Recebido'}</button>
+          {nomeRecebido&&<div style={{fontSize:11,color:'#64748B',marginTop:6,wordBreak:'break-word'}}>{nomeRecebido} — {recebidoItens?recebidoItens.length:0} itens</div>}
+        </div>
+      </div>
+      {erro&&<div style={{margin:'0 14px 14px',padding:'10px 14px',background:'#FEE2E2',border:'1px solid #FCA5A5',borderRadius:10,color:'#B91C1C',fontSize:12}}>{erro}</div>}
+      {(pedidoItens||recebidoItens)&&<div style={{padding:'0 14px 14px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+        <button onClick={function(){setShowPreview(!showPreview);}} style={{background:showPreview?'#EFF6FF':'#F1F5F9',color:showPreview?'#1351B4':'#64748B',border:'none',borderRadius:8,padding:'6px 12px',fontSize:12,fontWeight:700,cursor:'pointer'}}>{showPreview?'▲ Ocultar':'▼ Conferir'} extração</button>
+        <button onClick={limpar} style={{background:'none',border:'none',color:'#94A3B8',fontSize:12,cursor:'pointer',textDecoration:'underline'}}>Limpar e recomeçar</button>
+      </div>}
+    </div>
+
+    {showPreview&&(pedidoItens||recebidoItens)&&<div className="card" style={{marginBottom:16}}>
+      <div className="ch"><div className="ch-title"><div className="ch-accent"/><span>Preview — itens extraídos de cada arquivo</span></div></div>
+      <div style={{padding:'10px 14px 4px',fontSize:11,color:'#64748B'}}>
+        Conferência visual do que foi lido de cada arquivo (antes de comparar). Linhas em <span style={{background:'#FEF3C7',color:'#92400E',padding:'1px 6px',borderRadius:4,fontWeight:700}}>amarelo</span> parecem duplicatas do mesmo medicamento que deveriam estar somadas — verifique se o arquivo tem grafias divergentes.
+      </div>
+      <div style={{padding:'6px 14px 14px',display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+        <div>
+          <div style={{fontSize:12,fontWeight:700,color:'#1351B4',marginBottom:6}}>📄 Pedido ({pedidoItens?pedidoItens.length:0} itens agrupados{pedidoItens?' · '+pedidoItens.reduce(function(a,i){return a+i.qtd;},0)+' unid.':''})</div>
+          <div style={{maxHeight:260,overflowY:'auto',border:'1px solid #E2E8F0',borderRadius:8}}>
+            {!pedidoItens||pedidoItens.length===0
+              ?<div style={{padding:14,fontSize:12,color:'#94A3B8',textAlign:'center'}}>Sem pedido carregado</div>
+              :pedidoItens.map(function(it,i){var d=dupPed[i];return(
+                <div key={i} style={{padding:'6px 10px',borderBottom:'1px solid #F1F5F9',display:'flex',justifyContent:'space-between',fontSize:11,background:d?'#FEF3C7':'transparent'}}>
+                  <span style={{flex:1,color:'#334155',wordBreak:'break-word',paddingRight:8}}>{it.nome}</span>
+                  <span style={{fontWeight:700,color:d?'#92400E':'#1E293B',whiteSpace:'nowrap'}}>{it.qtd}</span>
+                </div>);})}
+          </div>
+        </div>
+        <div>
+          <div style={{fontSize:12,fontWeight:700,color:'#0C6B3E',marginBottom:6}}>📦 Recebido ({recebidoItens?recebidoItens.length:0} itens agrupados{recebidoItens?' · '+recebidoItens.reduce(function(a,i){return a+i.qtd;},0)+' unid.':''})</div>
+          <div style={{maxHeight:260,overflowY:'auto',border:'1px solid #E2E8F0',borderRadius:8}}>
+            {!recebidoItens||recebidoItens.length===0
+              ?<div style={{padding:14,fontSize:12,color:'#94A3B8',textAlign:'center'}}>Sem recebido carregado</div>
+              :recebidoItens.map(function(it,i){var d=dupRec[i];return(
+                <div key={i} style={{padding:'6px 10px',borderBottom:'1px solid #F1F5F9',display:'flex',justifyContent:'space-between',fontSize:11,background:d?'#FEF3C7':'transparent'}}>
+                  <span style={{flex:1,color:'#334155',wordBreak:'break-word',paddingRight:8}}>{it.nome}</span>
+                  <span style={{fontWeight:700,color:d?'#92400E':'#1E293B',whiteSpace:'nowrap'}}>{it.qtd}</span>
+                </div>);})}
+          </div>
+        </div>
+      </div>
+    </div>}
+
+    {pedidoItens&&recebidoItens&&(<div>
+      <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginBottom:10}}>
+        <button onClick={exportarComparacaoPDF} className="bs" style={{width:'auto',padding:'9px 14px',fontWeight:700,color:'#B91C1C',borderColor:'#FCA5A5'}}>📄 Baixar PDF</button>
+        <button onClick={exportarComparacaoXL} className="bs" style={{width:'auto',padding:'9px 14px',fontWeight:700,color:'#0C6B3E',borderColor:'#86EFAC'}}>📊 Baixar Excel</button>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10,marginBottom:16}}>
+        <div className="stat-card"><div className="stat-icon" style={{background:'#DBEAFE'}}>📄</div><div className="stat-val">{resumo.totalPedido}</div><div className="stat-label">Total Pedido</div></div>
+        <div className="stat-card"><div className="stat-icon" style={{background:'#DCFCE7'}}>📦</div><div className="stat-val">{resumo.totalRecebido}</div><div className="stat-label">Total Recebido</div></div>
+        <div className="stat-card" style={{color:'#0C6B3E'}}><div className="stat-icon" style={{background:'#DCFCE7'}}>✅</div><div className="stat-val">{resumo.ok}</div><div className="stat-label">Itens OK</div></div>
+        <div className="stat-card" style={{color:resumo.div>0?'#DC2626':'#0C6B3E'}}><div className="stat-icon" style={{background:resumo.div>0?'#FEE2E2':'#DCFCE7'}}>⚠️</div><div className="stat-val">{resumo.div}</div><div className="stat-label">Divergências</div></div>
+      </div>
+
+      <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap',marginBottom:10}}>
+        <button onClick={function(){setSoDivergencias(!soDivergencias);}} style={{background:soDivergencias?'#1351B4':'#F1F5F9',color:soDivergencias?'#fff':'#64748B',border:'none',borderRadius:20,padding:'8px 14px',fontSize:12,fontWeight:700,cursor:'pointer'}}>{soDivergencias?'✓ ':''}Apenas divergências</button>
+        <div style={{display:'flex',gap:4,marginLeft:'auto'}}>
+          <span style={{fontSize:11,color:'#94A3B8',alignSelf:'center',marginRight:4}}>Ordenar:</span>
+          <button onClick={function(){setOrdem('nome');}} style={{background:ordem==='nome'?'#EFF6FF':'#F1F5F9',color:ordem==='nome'?'#1351B4':'#64748B',border:'none',borderRadius:8,padding:'6px 10px',fontSize:11,fontWeight:700,cursor:'pointer'}}>Nome</button>
+          <button onClick={function(){setOrdem('diferenca');}} style={{background:ordem==='diferenca'?'#EFF6FF':'#F1F5F9',color:ordem==='diferenca'?'#1351B4':'#64748B',border:'none',borderRadius:8,padding:'6px 10px',fontSize:11,fontWeight:700,cursor:'pointer'}}>Maior diferença</button>
+        </div>
+      </div>
+
+      {Object.keys(overrides).length>0&&<div style={{marginBottom:8,padding:'8px 12px',background:'#EDE9FE',borderRadius:8,fontSize:11,color:'#5B21B6',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+        <span>🔗 {Object.keys(overrides).length} reassociação(ões) manual(is) aplicada(s)</span>
+        <button onClick={limparTodosOverrides} style={{background:'#7C3AED',color:'#fff',border:'none',borderRadius:6,padding:'4px 10px',fontSize:10,fontWeight:700,cursor:'pointer'}}>Desfazer todas</button>
+      </div>}
+
+      <div className="card">
+        <div style={{overflowX:'auto'}}>
+          <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+            <thead>
+              <tr style={{background:'#F8FAFC',borderBottom:'1px solid #E2E8F0'}}>
+                <th style={{textAlign:'left',padding:'10px 12px',color:'#64748B',fontWeight:700}}>Medicamento</th>
+                <th style={{textAlign:'right',padding:'10px 12px',color:'#64748B',fontWeight:700}}>Pedida</th>
+                <th style={{textAlign:'right',padding:'10px 12px',color:'#64748B',fontWeight:700}}>Recebida</th>
+                <th style={{textAlign:'right',padding:'10px 12px',color:'#64748B',fontWeight:700}}>Diferença</th>
+                <th style={{textAlign:'left',padding:'10px 12px',color:'#64748B',fontWeight:700}}>Status</th>
+                <th style={{padding:'10px 8px'}}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {linhasOrdenadas.length===0
+                ?<tr><td colSpan={6} style={{padding:24,textAlign:'center',color:'#94A3B8'}}>{soDivergencias?'Nenhuma divergência encontrada.':'Nenhum item.'}</td></tr>
+                :linhasOrdenadas.map(function(l,i){
+                  var st=_CMP_STATUS[l.status];
+                  var nomesDivergem=l.nomeRecebido&&l.nome!==l.nomeRecebido;
+                  var podeReassoc=l.pi>=0; // só linhas que vieram do pedido podem ser reassociadas
+                  return(<tr key={i} style={{borderBottom:'1px solid #F1F5F9',background:st.bg+'55'}}>
+                    <td style={{padding:'9px 12px',fontWeight:600,color:'#1E293B'}}>
+                      <div>{l.nome}{l.manual&&<span title="Reassociação manual" style={{marginLeft:6,fontSize:10,color:'#7C3AED',fontWeight:700}}>🔗</span>}</div>
+                      {nomesDivergem&&<div style={{fontSize:10,color:'#94A3B8',marginTop:2,fontWeight:400}}>↳ recebido como: {l.nomeRecebido}</div>}
+                    </td>
+                    <td style={{padding:'9px 12px',textAlign:'right',color:'#334155'}}>{l.qtdPedida==null?'—':l.qtdPedida}</td>
+                    <td style={{padding:'9px 12px',textAlign:'right',color:'#334155'}}>{l.qtdRecebida==null?'—':l.qtdRecebida}</td>
+                    <td style={{padding:'9px 12px',textAlign:'right',fontWeight:700,color:st.cor}}>{l.diferenca>0?'+'+l.diferenca:l.diferenca}</td>
+                    <td style={{padding:'9px 12px'}}><span style={{background:st.bg,color:st.cor,padding:'3px 9px',borderRadius:20,fontWeight:700,fontSize:11,whiteSpace:'nowrap'}}>{st.label}{(l.status==='faltou'||l.status==='amais')?' '+Math.abs(l.diferenca):''}</span></td>
+                    <td style={{padding:'9px 8px',whiteSpace:'nowrap'}}>
+                      {podeReassoc&&<button onClick={function(){setReassoc(l);setReassocBusca('');}} title="Reassociar manualmente" style={{background:'#EDE9FE',color:'#7C3AED',border:'none',borderRadius:6,padding:'4px 8px',fontSize:11,fontWeight:700,cursor:'pointer'}}>🔗</button>}
+                    </td>
+                  </tr>);
+                })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {reassoc&&<div onClick={function(){setReassoc(null);}} style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.7)',zIndex:9500,display:'flex',alignItems:'center',justifyContent:'center',padding:16,backdropFilter:'blur(4px)'}}>
+        <div onClick={function(e){e.stopPropagation();}} style={{background:'#fff',borderRadius:16,padding:20,maxWidth:560,width:'100%',maxHeight:'85vh',overflowY:'auto',boxShadow:'0 20px 60px rgba(0,0,0,0.25)'}}>
+          <div style={{fontWeight:800,fontSize:16,color:'#0A2D6E',marginBottom:4}}>🔗 Reassociar manualmente</div>
+          <div style={{fontSize:12,color:'#64748B',marginBottom:12}}>Escolha qual item do RECEBIDO deve casar com <strong>{reassoc.nome}</strong> (pedido: {reassoc.qtdPedida}).</div>
+          <input value={reassocBusca} onChange={function(e){setReassocBusca(e.target.value);}} placeholder="Filtrar itens do recebido..." className="inp" autoFocus/>
+          <div style={{maxHeight:340,overflowY:'auto',border:'1px solid #E2E8F0',borderRadius:10,marginBottom:12}}>
+            <button onClick={function(){aplicarReassoc(reassoc.pi,null);}} style={{width:'100%',padding:'10px 12px',border:'none',borderBottom:'1px solid #F1F5F9',background:'#FEE2E2',color:'#B91C1C',fontSize:12,fontWeight:700,cursor:'pointer',textAlign:'left'}}>
+              ✖ Sem par — marcar como "não veio"
+            </button>
+            {(recebidoItens||[]).map(function(r,ri){
+              if(reassocBusca.trim()&&_norm(r.nome).indexOf(_norm(reassocBusca))<0)return null;
+              var usadoPor=null;
+              linhas.forEach(function(ll){if(ll.pi>=0&&ll.ri===ri&&ll.pi!==reassoc.pi)usadoPor=ll.nome;});
+              var estaAtual=reassoc.ri===ri;
+              return(<button key={ri} onClick={function(){aplicarReassoc(reassoc.pi,ri);}} style={{width:'100%',padding:'10px 12px',border:'none',borderBottom:'1px solid #F1F5F9',background:estaAtual?'#DBEAFE':'#fff',cursor:'pointer',textAlign:'left',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:12,fontWeight:600,color:'#1E293B'}}>{r.nome}{estaAtual&&<span style={{marginLeft:6,fontSize:10,color:'#1351B4',fontWeight:700}}>(atual)</span>}</div>
+                  {usadoPor&&<div style={{fontSize:10,color:'#B45309',marginTop:2}}>⚠ atualmente em uso por: {usadoPor}</div>}
+                </div>
+                <span style={{fontSize:12,fontWeight:800,color:'#334155',whiteSpace:'nowrap'}}>{r.qtd} un.</span>
+              </button>);
+            })}
+          </div>
+          <div style={{display:'flex',gap:8}}>
+            {reassoc.manual&&<button onClick={function(){desfazerReassoc(reassoc.pi);setReassoc(null);}} className="bs" style={{flex:1,padding:'10px 0',color:'#7C3AED',borderColor:'#DDD6FE',fontWeight:700}}>↺ Desfazer reassociação (voltar ao automático)</button>}
+            <button onClick={function(){setReassoc(null);}} className="bs" style={{flex:1,padding:'10px 0'}}>Cancelar</button>
+          </div>
+        </div>
+      </div>}
+    </div>)}
+
+    {(!pedidoItens||!recebidoItens)&&<div className="card" style={{padding:40,textAlign:'center',color:'#94A3B8'}}>
+      <div style={{fontSize:40,marginBottom:8}}>🔍</div>
+      <div style={{fontWeight:600}}>Envie os dois arquivos (Pedido e Recebido) para comparar.</div>
+    </div>}
+  </div>);
+}
+
 function TabSaida(props){var user=props.user;var medications=props.medications;var stock=props.stock;var entries=props.entries;var onSave=props.onSave;var latest=props.latest||{};var isGuest=props.isGuest||false;var canMove=props.canMove!==false;var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};var alert2=props.alert2||function(m){window.alert(m);};var _search=useState('');var search=_search[0];var setSearch=_search[1];var _sel=useState(null);var sel=_sel[0];var setSel=_sel[1];var _qty=useState('');var qty=_qty[0];var setQty=_qty[1];var _lote=useState('');var lote=_lote[0];var setLote=_lote[1];var _val=useState('');var val=_val[0];var setVal=_val[1];var _obs=useState('');var obs=_obs[0];var setObs=_obs[1];var _err=useState('');var err=_err[0];var setErr=_err[1];var _warn=useState('');var warn=_warn[0];var setWarn=_warn[1];var _ok=useState('');var ok=_ok[0];var setOk=_ok[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];var _carrinho=useState([]);var carrinho=_carrinho[0];var setCarrinho=_carrinho[1];var _showCarrinho=useState(false);var showCarrinho=_showCarrinho[0];var setShowCarrinho=_showCarrinho[1];
 var inStock=medications.filter(function(m){return (stock[m.id]||0)>0;});var filtered=[];if(search.trim()){var s=search.toLowerCase();filtered=inStock.filter(function(m){return m.nome.toLowerCase().indexOf(s)>=0;}).slice(0,8);}var cur=sel?(stock[sel.id]||0):0;
 function adicionarCarrinho(){
@@ -7988,7 +8491,7 @@ if(pendingInvite)return <InviteScreen invite={pendingInvite} onConfirm={handleCo
 var isManagerRole=(user.role==='gestor'||user.role==='tecnico');
 var canMove=isManagerRole||!isGuest;
 var badge=pending+alertCount+solicitCount;
-var navTabs=[{id:'dashboard',icon:'🏠',label:'Início',show:true},{id:'visaogeral',icon:'📈',label:'Visão Geral',show:isManagerRole},{id:'saida',icon:'💊',label:'Saída',show:true},{id:'entrada',icon:'📥',label:'Entrada',show:true},{id:'estoque',icon:'📦',label:'Estoque',show:true},{id:'antibiotico',icon:'🧬',label:'ATB',show:true},{id:'relatorio',icon:'📊',label:'Relatório',show:true},{id:'gestao',icon:'👥',label:'Gestão',show:can(user.role,'gestao'),badge:badge},{id:'log',icon:'🔐',label:'Log',show:can(user.role,'log')},{id:'histcontas',icon:'📋',label:'Contas',show:can(user.role,'log')},{id:'admin',icon:'🔧',label:'Admin',show:user.role==='tecnico'},{id:'perfil',icon:'👤',label:'Perfil',show:true}].filter(function(t){return t.show;});
+var navTabs=[{id:'dashboard',icon:'🏠',label:'Início',show:true},{id:'visaogeral',icon:'📈',label:'Visão Geral',show:isManagerRole},{id:'comparapedido',icon:'🔍',label:'Comparação de Pedido',show:isManagerRole},{id:'saida',icon:'💊',label:'Saída',show:true},{id:'entrada',icon:'📥',label:'Entrada',show:true},{id:'estoque',icon:'📦',label:'Estoque',show:true},{id:'antibiotico',icon:'🧬',label:'ATB',show:true},{id:'relatorio',icon:'📊',label:'Relatório',show:true},{id:'gestao',icon:'👥',label:'Gestão',show:can(user.role,'gestao'),badge:badge},{id:'log',icon:'🔐',label:'Log',show:can(user.role,'log')},{id:'histcontas',icon:'📋',label:'Contas',show:can(user.role,'log')},{id:'admin',icon:'🔧',label:'Admin',show:user.role==='tecnico'},{id:'perfil',icon:'👤',label:'Perfil',show:true}].filter(function(t){return t.show;});
 return(
 <div style={{minHeight:'100vh',background:'#EEF2F7',position:'relative',overflow:'hidden'}}>
   {/* MARCA D'ÁGUA BACKGROUND */}
@@ -8096,6 +8599,7 @@ return(
       <div>
         {tab==='dashboard'&&<TabDashboard entries={entries} medications={meds} stock={stock} user={user} plantao={plantao} isGuest={isGuest} onSolicitar={function(){setShowSolicit(true);}} onEncerrar={encerrarPlantao} onSair={sairDoPlantao} onSolicitarEntrada={solicitarEntradaPlantao} shiftId={shiftId} onIniciar={function(){setShowShiftModal(true);}}/>}
         {tab==='visaogeral'&&isManagerRole&&<TabVisaoGeral entries={entries} medications={meds} stock={stock} user={user}/>}
+        {tab==='comparapedido'&&isManagerRole&&<ErrBoundary><TabComparacaoPedido/></ErrBoundary>}
         {tab==='saida'&&<TabSaida user={user} medications={meds} stock={stock} entries={entries} onSave={addEntry} onSolicitar={addSolicitacao} latest={latest} isGuest={isGuest} canMove={canMove} confirm2={confirm2} alert2={alert2}/>}
         {tab==='entrada'&&<TabEntrada user={user} medications={meds} entries={entries} onSave={addEntry} onSolicitar={addSolicitacao} isGuest={isGuest} canMove={canMove} confirm2={confirm2} alert2={alert2}/>}
         {tab==='estoque'&&<TabEstoque user={user} medications={meds} entries={entries} stock={stock} onSave={addEntry} confirm2={confirm2} alert2={alert2}/>}
@@ -8149,6 +8653,7 @@ return(
           <div style={{flex:1,overflowY:'auto',padding:'8px 0'}}>
             {[
               {id:'visaogeral',icon:'📈',label:'Visão Geral',show:true},
+              {id:'comparapedido',icon:'🔍',label:'Comparação de Pedido',show:true},
               {id:'estoque',icon:'📦',label:'Estoque',show:true},
               {id:'recebimento',icon:'🚚',label:'Recebimento',show:true},
               {id:'pacientes',icon:'👤',label:'Pacientes',show:true},
