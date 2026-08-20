@@ -2767,6 +2767,7 @@ function LeitorDocumentoOCR(props){
 function TabLeites(props){
   var user=props.user;
   var medications=props.medications||[];
+  var stock=props.stock||{};
   var onSave=props.onSave;
   var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};
   var alert2=props.alert2||function(m){window.alert(m);};
@@ -8108,7 +8109,7 @@ return(
         {tab==='antibiotico'&&<TabAntibiotico user={user} medications={meds} stock={stock} allUsers={allUsers}/>}
         {tab==='recebimento'&&<ErrBoundary><TabRecebimento user={user} medications={meds} onSave={addEntry}/></ErrBoundary>}
         {tab==='pacientes'&&<ErrBoundary><TabPacientes user={user} entries={entries}/></ErrBoundary>}
-        {tab==='leites'&&<ErrBoundary><TabLeites user={user} medications={meds} onSave={addEntry} confirm2={confirm2} alert2={alert2}/></ErrBoundary>}
+        {tab==='leites'&&<ErrBoundary><TabLeites user={user} medications={meds} stock={stock} onSave={addEntry} confirm2={confirm2} alert2={alert2}/></ErrBoundary>}
         {tab==='admin'&&user.role==='tecnico'&&<TabAdmin user={user} entries={entries} medications={meds} db={db}/>}
         {tab==='perfil'&&<TabPerfil user={user} onUpdate={function(u){setUser(u);}} onLogout={logout} entries={entries} medications={meds} stock={stock}/>}
       </div>
