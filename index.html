@@ -1344,7 +1344,7 @@ function TabComparacaoPedido(props){
                 :linhasOrdenadas.map(function(l,i){
                   var st=_CMP_STATUS[l.status];
                   var nomesDivergem=l.nomeRecebido&&l.nome!==l.nomeRecebido;
-                  var podeReassoc=l.pi>=0; // só linhas que vieram do pedido podem ser reassociadas
+                  var podeReassoc=l.pi>=0||(l.pi===-1&&l.ri>=0); // pedido: escolhe recebido; naoconstava: escolhe pedido órfão
                   return(<tr key={i} style={{borderBottom:'1px solid #F1F5F9',background:st.bg+'55'}}>
                     <td style={{padding:'9px 12px',fontWeight:600,color:'#1E293B'}}>
                       <div>{l.nome}{l.manual&&<span title="Reassociação manual" style={{marginLeft:6,fontSize:10,color:'#7C3AED',fontWeight:700}}>🔗</span>}</div>
@@ -1364,35 +1364,56 @@ function TabComparacaoPedido(props){
         </div>
       </div>
 
-      {reassoc&&<div onClick={function(){setReassoc(null);}} style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.7)',zIndex:9500,display:'flex',alignItems:'center',justifyContent:'center',padding:16,backdropFilter:'blur(4px)'}}>
-        <div onClick={function(e){e.stopPropagation();}} style={{background:'#fff',borderRadius:16,padding:20,maxWidth:560,width:'100%',maxHeight:'85vh',overflowY:'auto',boxShadow:'0 20px 60px rgba(0,0,0,0.25)'}}>
-          <div style={{fontWeight:800,fontSize:16,color:'#0A2D6E',marginBottom:4}}>🔗 Reassociar manualmente</div>
-          <div style={{fontSize:12,color:'#64748B',marginBottom:12}}>Escolha qual item do RECEBIDO deve casar com <strong>{reassoc.nome}</strong> (pedido: {reassoc.qtdPedida}).</div>
-          <input value={reassocBusca} onChange={function(e){setReassocBusca(e.target.value);}} placeholder="Filtrar itens do recebido..." className="inp" autoFocus/>
-          <div style={{maxHeight:340,overflowY:'auto',border:'1px solid #E2E8F0',borderRadius:10,marginBottom:12}}>
-            <button onClick={function(){aplicarReassoc(reassoc.pi,null);}} style={{width:'100%',padding:'10px 12px',border:'none',borderBottom:'1px solid #F1F5F9',background:'#FEE2E2',color:'#B91C1C',fontSize:12,fontWeight:700,cursor:'pointer',textAlign:'left'}}>
-              ✖ Sem par — marcar como "não veio"
-            </button>
-            {(recebidoItens||[]).map(function(r,ri){
-              if(reassocBusca.trim()&&_norm(r.nome).indexOf(_norm(reassocBusca))<0)return null;
-              var usadoPor=null;
-              linhas.forEach(function(ll){if(ll.pi>=0&&ll.ri===ri&&ll.pi!==reassoc.pi)usadoPor=ll.nome;});
-              var estaAtual=reassoc.ri===ri;
-              return(<button key={ri} onClick={function(){aplicarReassoc(reassoc.pi,ri);}} style={{width:'100%',padding:'10px 12px',border:'none',borderBottom:'1px solid #F1F5F9',background:estaAtual?'#DBEAFE':'#fff',cursor:'pointer',textAlign:'left',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontSize:12,fontWeight:600,color:'#1E293B'}}>{r.nome}{estaAtual&&<span style={{marginLeft:6,fontSize:10,color:'#1351B4',fontWeight:700}}>(atual)</span>}</div>
-                  {usadoPor&&<div style={{fontSize:10,color:'#B45309',marginTop:2}}>⚠ atualmente em uso por: {usadoPor}</div>}
-                </div>
-                <span style={{fontSize:12,fontWeight:800,color:'#334155',whiteSpace:'nowrap'}}>{r.qtd} un.</span>
-              </button>);
-            })}
+      {reassoc&&(function(){
+        // Direção "pedido": linha veio de um item do pedido (pi>=0) — escolhe qual RECEBIDO casa com ele.
+        // Direção "recebido": linha "não constava" (pi===-1, ri>=0) — escolhe qual PEDIDO casa com este recebido.
+        var direcaoPedido=reassoc.pi>=0;
+        var itens=direcaoPedido?(recebidoItens||[]):(pedidoItens||[]);
+        var placeholder=direcaoPedido?'Filtrar itens do recebido...':'Filtrar itens do pedido...';
+        var titulo=direcaoPedido
+          ?[<span key="0">Escolha qual item do <strong>RECEBIDO</strong> deve casar com </span>,<strong key="1">{reassoc.nome}</strong>,<span key="2"> (pedido: {reassoc.qtdPedida}).</span>]
+          :[<span key="0">Escolha qual item do <strong>PEDIDO</strong> corresponde a </span>,<strong key="1">{reassoc.nome}</strong>,<span key="2"> (recebido: {reassoc.qtdRecebida}).</span>];
+        return(<div onClick={function(){setReassoc(null);}} style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.7)',zIndex:9500,display:'flex',alignItems:'center',justifyContent:'center',padding:16,backdropFilter:'blur(4px)'}}>
+          <div onClick={function(e){e.stopPropagation();}} style={{background:'#fff',borderRadius:16,padding:20,maxWidth:560,width:'100%',maxHeight:'85vh',overflowY:'auto',boxShadow:'0 20px 60px rgba(0,0,0,0.25)'}}>
+            <div style={{fontWeight:800,fontSize:16,color:'#0A2D6E',marginBottom:4}}>🔗 Reassociar manualmente</div>
+            <div style={{fontSize:12,color:'#64748B',marginBottom:12}}>{titulo}</div>
+            <input value={reassocBusca} onChange={function(e){setReassocBusca(e.target.value);}} placeholder={placeholder} className="inp" autoFocus/>
+            <div style={{maxHeight:340,overflowY:'auto',border:'1px solid #E2E8F0',borderRadius:10,marginBottom:12}}>
+              {direcaoPedido&&<button onClick={function(){aplicarReassoc(reassoc.pi,null);}} style={{width:'100%',padding:'10px 12px',border:'none',borderBottom:'1px solid #F1F5F9',background:'#FEE2E2',color:'#B91C1C',fontSize:12,fontWeight:700,cursor:'pointer',textAlign:'left'}}>
+                ✖ Sem par — marcar como "não veio"
+              </button>}
+              {itens.map(function(it,idx){
+                if(reassocBusca.trim()&&_norm(it.nome).indexOf(_norm(reassocBusca))<0)return null;
+                // usadoPor: quem já está usando esse item no outro lado
+                var usadoPor=null,estaAtual=false;
+                if(direcaoPedido){
+                  linhas.forEach(function(ll){if(ll.pi>=0&&ll.ri===idx&&ll.pi!==reassoc.pi)usadoPor=ll.nome;});
+                  estaAtual=(reassoc.ri===idx);
+                }else{
+                  // escolhendo um item do pedido pra este recebido — usadoPor = quem esse pedido já pega
+                  linhas.forEach(function(ll){if(ll.pi===idx&&ll.ri>=0&&ll.ri!==reassoc.ri)usadoPor='recebido: '+ll.nomeRecebido;});
+                  // "atual" faz sentido só na direção pedido→recebido; aqui pi==-1, nada é atual
+                }
+                var qtdLabel=direcaoPedido?(it.qtd+' un.'):('pediu '+it.qtd);
+                return(<button key={idx} onClick={function(){
+                  if(direcaoPedido)aplicarReassoc(reassoc.pi,idx);
+                  else aplicarReassoc(idx,reassoc.ri);
+                }} style={{width:'100%',padding:'10px 12px',border:'none',borderBottom:'1px solid #F1F5F9',background:estaAtual?'#DBEAFE':'#fff',cursor:'pointer',textAlign:'left',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:12,fontWeight:600,color:'#1E293B'}}>{it.nome}{estaAtual&&<span style={{marginLeft:6,fontSize:10,color:'#1351B4',fontWeight:700}}>(atual)</span>}</div>
+                    {usadoPor&&<div style={{fontSize:10,color:'#B45309',marginTop:2}}>⚠ atualmente em uso por: {usadoPor}</div>}
+                  </div>
+                  <span style={{fontSize:12,fontWeight:800,color:'#334155',whiteSpace:'nowrap'}}>{qtdLabel}</span>
+                </button>);
+              })}
+            </div>
+            <div style={{display:'flex',gap:8}}>
+              {direcaoPedido&&reassoc.manual&&<button onClick={function(){desfazerReassoc(reassoc.pi);setReassoc(null);}} className="bs" style={{flex:1,padding:'10px 0',color:'#7C3AED',borderColor:'#DDD6FE',fontWeight:700}}>↺ Desfazer reassociação (voltar ao automático)</button>}
+              <button onClick={function(){setReassoc(null);}} className="bs" style={{flex:1,padding:'10px 0'}}>Cancelar</button>
+            </div>
           </div>
-          <div style={{display:'flex',gap:8}}>
-            {reassoc.manual&&<button onClick={function(){desfazerReassoc(reassoc.pi);setReassoc(null);}} className="bs" style={{flex:1,padding:'10px 0',color:'#7C3AED',borderColor:'#DDD6FE',fontWeight:700}}>↺ Desfazer reassociação (voltar ao automático)</button>}
-            <button onClick={function(){setReassoc(null);}} className="bs" style={{flex:1,padding:'10px 0'}}>Cancelar</button>
-          </div>
-        </div>
-      </div>}
+        </div>);
+      })()}
     </div>)}
 
     {(!pedidoItens||!recebidoItens)&&<div className="card" style={{padding:40,textAlign:'center',color:'#94A3B8'}}>
