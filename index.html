@@ -1066,6 +1066,44 @@ function TabComparacaoPedido(props){
 
   function limpar(){setPedidoItens(null);setRecebidoItens(null);setNomePedido('');setNomeRecebido('');setErro('');}
 
+  // Exportação: reaproveita a mesma técnica de exportRelatorioPDF (window.open + document.write + print)
+  // e de exportarExcel/exportRelatorioXL (XLSX.utils.book_new/aoa_to_sheet/writeFile), adaptadas pra
+  // incluir cabeçalho, resumo e — no PDF — a cor de destaque de cada status.
+  function exportarComparacaoPDF(){
+    var hoje=new Date().toLocaleDateString('pt-BR');
+    var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Comparação de Pedido</title><style>body{font-family:Arial,sans-serif;padding:20px;color:#1E293B}h2{color:#1351B4;margin-bottom:2px}table{width:100%;border-collapse:collapse;font-size:12px;margin-top:12px}th,td{border:1px solid #CBD5E1;padding:6px 8px;text-align:left}th{background:#EFF6FF}.resumo{display:flex;gap:22px;margin-top:10px}.resumo div{font-size:11px;color:#64748B}.resumo b{display:block;font-size:16px;color:#1E293B}</style></head><body>';
+    html+='<h2>Comparação de Pedido — '+_escHtml(hoje)+'</h2>';
+    html+='<div class="resumo"><div>Total Pedido<b>'+resumo.totalPedido+'</b></div><div>Total Recebido<b>'+resumo.totalRecebido+'</b></div><div>Itens OK<b style="color:#0C6B3E">'+resumo.ok+'</b></div><div>Divergências<b style="color:'+(resumo.div>0?'#DC2626':'#0C6B3E')+'">'+resumo.div+'</b></div></div>';
+    html+='<table><thead><tr><th>Medicamento</th><th>Qtd. Pedida</th><th>Qtd. Recebida</th><th>Diferença</th><th>Status</th></tr></thead><tbody>';
+    linhasOrdenadas.forEach(function(l){
+      var st=_CMP_STATUS[l.status];
+      var diffTxt=l.diferenca>0?'+'+l.diferenca:l.diferenca;
+      var statusTxt=st.label+((l.status==='faltou'||l.status==='amais')?' '+Math.abs(l.diferenca):'');
+      html+='<tr style="background:'+st.bg+'"><td>'+_escHtml(l.nome)+'</td><td>'+(l.qtdPedida==null?'—':l.qtdPedida)+'</td><td>'+(l.qtdRecebida==null?'—':l.qtdRecebida)+'</td><td style="color:'+st.cor+';font-weight:700">'+diffTxt+'</td><td style="color:'+st.cor+';font-weight:700">'+_escHtml(statusTxt)+'</td></tr>';
+    });
+    html+='</tbody></table></body></html>';
+    var w=window.open('','_blank');
+    if(w&&w.document){w.document.write(html);w.document.close();setTimeout(function(){w.print();},400);}
+  }
+  function exportarComparacaoXL(){
+    var hoje=new Date().toLocaleDateString('pt-BR');
+    var rows=[
+      ['Comparação de Pedido — '+hoje],
+      [],
+      ['Total Pedido',resumo.totalPedido,'Total Recebido',resumo.totalRecebido,'Itens OK',resumo.ok,'Divergências',resumo.div],
+      [],
+      ['Medicamento','Qtd. Pedida','Qtd. Recebida','Diferença','Status']
+    ];
+    linhasOrdenadas.forEach(function(l){
+      var st=_CMP_STATUS[l.status];
+      var statusTxt=st.label+((l.status==='faltou'||l.status==='amais')?' '+Math.abs(l.diferenca):'');
+      rows.push([l.nome,l.qtdPedida==null?'—':l.qtdPedida,l.qtdRecebida==null?'—':l.qtdRecebida,l.diferenca,statusTxt]);
+    });
+    var wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'Comparacao');
+    XLSX.writeFile(wb,'comparacao-pedido-'+todayStr()+'.xlsx');
+  }
+
   return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
     <div style={{marginBottom:16}}>
       <div style={{fontWeight:900,fontSize:20,color:'#0A2D6E',marginBottom:2}}>🔍 Comparação de Pedido</div>
@@ -1093,6 +1131,10 @@ function TabComparacaoPedido(props){
     </div>
 
     {pedidoItens&&recebidoItens&&(<div>
+      <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginBottom:10}}>
+        <button onClick={exportarComparacaoPDF} className="bs" style={{width:'auto',padding:'9px 14px',fontWeight:700,color:'#B91C1C',borderColor:'#FCA5A5'}}>📄 Baixar PDF</button>
+        <button onClick={exportarComparacaoXL} className="bs" style={{width:'auto',padding:'9px 14px',fontWeight:700,color:'#0C6B3E',borderColor:'#86EFAC'}}>📊 Baixar Excel</button>
+      </div>
       <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10,marginBottom:16}}>
         <div className="stat-card"><div className="stat-icon" style={{background:'#DBEAFE'}}>📄</div><div className="stat-val">{resumo.totalPedido}</div><div className="stat-label">Total Pedido</div></div>
         <div className="stat-card"><div className="stat-icon" style={{background:'#DCFCE7'}}>📦</div><div className="stat-val">{resumo.totalRecebido}</div><div className="stat-label">Total Recebido</div></div>
