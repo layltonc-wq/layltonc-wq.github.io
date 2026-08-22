@@ -7987,18 +7987,24 @@ function TabRecebimento(props){
     if(!fornecedor.trim()){alert('Informe o fornecedor.');return;}
     if(validos.length===0){alert('Adicione ao menos um medicamento com quantidade.');return;}
     setSaving(true);
+    console.group('%c📦 finalizar() Recebimento','background:#1351B4;color:#fff;padding:3px 8px;border-radius:4px;font-weight:bold');
+    console.log('Fornecedor:',fornecedor.trim(),'| Itens:',validos.length,'| Data:',data);
     try{
       var now=new Date().toISOString();
-      // BATCH ATÔMICO: todas as entries + doc do recebimento + updates de loteAtual num único commit.
-      // Bug anterior: loop sequencial `await onSave(...)` — se qualquer item falhasse (rede, undefined,
-      // permissão), os itens ANTERIORES ficavam no Firestore e o `update({itens})` NUNCA rodava.
-      // Resultado: recebimento aparecia na lista mas alguns itens NÃO viravam entry (estoque não subia).
-      // Agora: se qualquer item do batch falhar, NADA é escrito — o try/catch pega e o usuário reenvia.
+      // BATCH ATÔMICO — SÓ o dado crítico: as entries (movimento de estoque) + o doc do recebimento.
+      // Regra de ouro: o único jeito de as entries não subirem o estoque é o batch inteiro falhar, e
+      // o batch só contém escritas que SEMPRE são permitidas (add de entries + add do recebimento).
+      //
+      // POR QUE loteAtual/validadeAtual saíram do batch: no #41 eu tinha posto batch.update() nos
+      // medicamentos DENTRO deste batch. Mas update() FALHA se o doc do medicamento não existir (deletado,
+      // id órfão, cache stale). Como o batch é atômico, esse update falho DERRUBAVA TODAS as entries junto
+      // — bastava UM item do recebimento referenciar um med problemático pra NENHUM item subir o estoque.
+      // Agora o update do cadastro é best-effort DEPOIS do commit (com .catch) — cosmético, nunca bloqueia.
       var batch=db.batch();
       var recRef=db.collection('recebimentos').doc();  // gera id sem escrever ainda
       var recId=recRef.id;
       var itensComEntry=[];
-      var lotesParaAtualizar=[];// para updates finais de loteAtual/validadeAtual dos meds
+      var lotesParaAtualizar=[];
       for(var i=0;i<validos.length;i++){
         var it=validos[i];
         var medCad=medications.find(function(m){return m.id===it.medId;});
@@ -8017,19 +8023,29 @@ function TabRecebimento(props){
         };
         for(var _k in entryObj)if(entryObj[_k]===undefined)delete entryObj[_k];
         batch.set(entryRef,entryObj);
+        console.log('  →',it.medNome,'| qtd',qtdNum,'| lote',loteTrim||'—','| val',valNorm||'—','| entryId',entryRef.id);
         itensComEntry.push({medicamentoId:it.medId,medicamentoNome:it.medNome,quantidade:qtdNum,lote:loteTrim,validade:valNorm,observacao:(it.obs||'').trim(),entryId:entryRef.id});
         if(loteTrim&&valNorm)lotesParaAtualizar.push({medId:it.medId,lote:loteTrim,validade:valNorm});
       }
-      // Cria o doc do recebimento JÁ COM os entryIds preenchidos (não precisa de update depois).
+      // Doc do recebimento JÁ COM os entryIds preenchidos (não precisa de update depois).
       batch.set(recRef,{data:data,fornecedor:fornecedor.trim(),responsavel:(responsavel||user.name||'').trim(),responsavelId:user.uid||'',status:'pendente',statusLabel:'Pendente de Conciliação Fiscal',totalItens:validos.length,itens:itensComEntry,criadoEm:now,criadoPor:user.name||'',criadoPorId:user.uid||''});
-      // Atualiza loteAtual/validadeAtual do cadastro (LIFO — último lote recebido vira o "atual").
-      lotesParaAtualizar.forEach(function(x){batch.update(db.collection('medicamentos').doc(x.medId),{loteAtual:x.lote,validadeAtual:x.validade});});
+      console.log('Committing batch: '+validos.length+' entries + 1 recebimento (updates de cadastro ficam FORA do batch)...');
       await batch.commit();
+      console.log('%c✅ Batch commitado com SUCESSO — estoque atualizado. Recebimento: '+recId,'color:#0C6B3E;font-weight:bold');
+      // Best-effort (fora do batch): atualiza loteAtual/validadeAtual do cadastro (LIFO). Se falhar (med
+      // deletado etc.), NÃO afeta o estoque — a entry já foi criada. Cada update é isolado com .catch.
+      lotesParaAtualizar.forEach(function(x){db.collection('medicamentos').doc(x.medId).update({loteAtual:x.lote,validadeAtual:x.validade}).catch(function(err){console.warn('loteAtual não atualizado p/',x.medId,'(cosmético, estoque OK):',err&&err.message);});});
+      console.groupEnd();
       logAcao('recebimento_criado','Recebimento '+recId+' — forn: '+fornecedor.trim()+' — '+validos.length+' item(ns) — resp: '+(responsavel||user.name||''),null,'pendente');
       setFornecedor('');setResponsavel(user.name||'');setData(todayStr());setItens([blankItem()]);setFocoItem(null);
       setOk('✅ Recebimento finalizado — estoque atualizado e disponível para dispensação.');
       setTimeout(function(){setOk('');},4500);
-    }catch(e){alert('Erro ao finalizar recebimento: '+((e&&e.message)?e.message:e));}
+    }catch(e){
+      console.error('%c❌ Batch FALHOU — nada foi escrito','color:#DC2626;font-weight:bold',e);
+      console.log('  code:',(e&&e.code)||'(sem code)','| message:',(e&&e.message)||String(e));
+      console.groupEnd();
+      alert('Erro ao finalizar recebimento: '+((e&&e.message)?e.message:e)+'\n\n(Abra F12 → Console pra ver os detalhes. Nada foi salvo — pode tentar de novo.)');
+    }
     setSaving(false);
   }
 
