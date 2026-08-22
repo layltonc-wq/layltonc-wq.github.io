@@ -7952,6 +7952,7 @@ function TabRecebimento(props){
   var _cancelRec=useState(null);var cancelRec=_cancelRec[0];var setCancelRec=_cancelRec[1];
   var _cancelJust=useState('');var cancelJust=_cancelJust[0];var setCancelJust=_cancelJust[1];
   var _cancelSaving=useState(false);var cancelSaving=_cancelSaving[0];var setCancelSaving=_cancelSaving[1];
+  var _verif=useState(null);var verif=_verif[0];var setVerif=_verif[1];// diagnóstico/recuperação de estoque
   // filtros da lista
   var _fDe=useState('');var fDe=_fDe[0];var setFDe=_fDe[1];
   var _fAte=useState('');var fAte=_fAte[0];var setFAte=_fAte[1];
@@ -8092,6 +8093,50 @@ function TabRecebimento(props){
     setTimeout(function(){try{window.scrollTo({top:0,behavior:'smooth'});}catch(_){window.scrollTo(0,0);}},50);
   }
 
+  // ── Verificação e recuperação de estoque ─────────────────────────────
+  // Consulta o Firestore DIRETO (autoritativo, não depende da janela de 3 dias do App) para descobrir
+  // itens de recebimento que nunca viraram entrada no estoque (batch parcial de bugs anteriores).
+  async function verificarRecebimentos(){
+    setVerif({loading:true});
+    try{
+      var recsSnap=await db.collection('recebimentos').limit(1000).get();
+      var ativos=[];recsSnap.forEach(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];if((o.status||'pendente')!=='cancelado')ativos.push(o);});
+      var entSnap=await db.collection('entries').where('origemRecebimento','==',true).get();
+      var porRec={};// recebimentoId -> { medicamentoId: qtdSomada }
+      entSnap.forEach(function(d){var e=d.data();if(!e.recebimentoId||e.tipo!=='entrada')return;if(!porRec[e.recebimentoId])porRec[e.recebimentoId]={};porRec[e.recebimentoId][e.medicamentoId]=(porRec[e.recebimentoId][e.medicamentoId]||0)+(Number(e.quantidade)||0);});
+      var faltantes=[];
+      ativos.forEach(function(r){
+        (r.itens||[]).forEach(function(it){
+          if(!it.medicamentoId)return;
+          var jaTem=porRec[r.id]&&porRec[r.id][it.medicamentoId];
+          if(!jaTem)faltantes.push({recId:r.id,fornecedor:r.fornecedor||'',data:r.data||'',medicamentoId:it.medicamentoId,medicamentoNome:it.medicamentoNome||'?',quantidade:parseInt(it.quantidade)||0,lote:it.lote||'',validade:it.validade||''});
+        });
+      });
+      setVerif({faltantes:faltantes,totalRec:ativos.length});
+    }catch(e){setVerif({erro:(e&&e.message)||String(e)});}
+  }
+  async function recuperarFaltantes(){
+    var f=(verif&&verif.faltantes)||[];if(!f.length)return;
+    setVerif(Object.assign({},verif,{recuperando:true}));
+    try{
+      var now=new Date().toISOString();var CHUNK=400;var criadas=0;
+      for(var ci=0;ci<f.length;ci+=CHUNK){
+        var batch=db.batch();
+        f.slice(ci,ci+CHUNK).forEach(function(x){
+          var medCad=medications.find(function(m){return m.id===x.medicamentoId;});
+          var catMed=(medCad&&medCad.categoria)||'medicamento';
+          var obj={criadoEm:now,date:x.data||todayStr(),autorId:user.uid||'',autorNome:user.name||'(recuperação)',autorCargo:user.role||'',autorColor:user.color||B,tipo:'entrada',medicamentoId:x.medicamentoId,medicamentoNome:x.medicamentoNome,quantidade:x.quantidade,lote:x.lote||'',validade:x.validade||'',observacao:'Recebimento — '+(x.fornecedor||'')+' (recuperação de entrada perdida)',origemRecebimento:true,recebimentoId:x.recId,categoriaMed:catMed};
+          for(var _k in obj)if(obj[_k]===undefined)delete obj[_k];
+          batch.set(db.collection('entries').doc(),obj);
+        });
+        await batch.commit();
+        criadas+=f.slice(ci,ci+CHUNK).length;
+      }
+      logAcao('recebimento_recuperado','Recuperação de '+criadas+' entrada(s) de estoque perdida(s) em recebimentos',null,null);
+      setVerif({recuperado:criadas});
+    }catch(e){setVerif(Object.assign({},verif,{erro:(e&&e.message)||String(e),recuperando:false}));}
+  }
+
   var listaFiltrada=recs.filter(function(r){
     if(fDe&&(r.data||'')<fDe)return false;
     if(fAte&&(r.data||'')>fAte)return false;
@@ -8164,6 +8209,13 @@ function TabRecebimento(props){
         <button onClick={addItem} style={{marginTop:10,width:'100%',padding:'11px',background:'#EFF6FF',border:'1.5px dashed #BFDBFE',borderRadius:10,color:B,fontWeight:700,fontSize:13,cursor:'pointer'}}>+ Adicionar item</button>
         {ok&&<div style={{marginTop:12,background:'#DCFCE7',border:'1px solid #86EFAC',borderRadius:10,padding:'10px 12px',fontSize:13,color:'#059669',fontWeight:600}}>{ok}</div>}
         <button data-tour="receb-finalizar" onClick={finalizar} disabled={saving} style={{marginTop:12,width:'100%',padding:'14px',background:saving?'#94A3B8':'#0C6B3E',border:'none',borderRadius:12,color:'#fff',fontWeight:800,fontSize:15,cursor:saving?'default':'pointer'}}>{saving?'Finalizando...':'✅ Finalizar Recebimento'}</button>
+      </div>
+
+      {/* VERIFICAÇÃO / RECUPERAÇÃO DE ESTOQUE */}
+      <div style={{background:'#FFFBEB',border:'1.5px solid #FDE68A',borderRadius:12,padding:'12px 14px',marginBottom:16}}>
+        <div style={{fontWeight:700,fontSize:13,color:'#92400E',marginBottom:4}}>🔧 Estoque não bateu com o recebimento?</div>
+        <div style={{fontSize:12,color:'#B45309',marginBottom:10}}>Verifica se todo item de recebimento realmente virou entrada no estoque e recria as que faltaram (de bugs antigos), sem redigitar.</div>
+        <button onClick={verificarRecebimentos} disabled={verif&&verif.loading} style={{width:'100%',padding:'11px',background:verif&&verif.loading?'#94A3B8':'#D97706',border:'none',borderRadius:10,color:'#fff',fontWeight:700,fontSize:13,cursor:'pointer'}}>{verif&&verif.loading?'⏳ Verificando...':'🔍 Verificar estoque dos recebimentos'}</button>
       </div>
 
       {/* LISTA DE RECEBIMENTOS */}
@@ -8248,6 +8300,54 @@ function TabRecebimento(props){
             <button onClick={function(){setCancelRec(null);setCancelJust('');}} disabled={cancelSaving} style={{flex:1,padding:'12px',background:'#F1F5F9',border:'none',borderRadius:10,color:'#64748B',fontWeight:700,fontSize:14,cursor:'pointer'}}>Voltar</button>
             <button onClick={cancelar} disabled={cancelSaving} style={{flex:1,padding:'12px',background:'#DC2626',border:'none',borderRadius:10,color:'#fff',fontWeight:700,fontSize:14,cursor:'pointer',opacity:cancelSaving?0.7:1}}>{cancelSaving?'Estornando...':'Confirmar cancelamento'}</button>
           </div>
+        </div>
+      </div>}
+
+      {/* MODAL — resultado da verificação/recuperação de estoque */}
+      {verif&&!verif.loading&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.6)',zIndex:1100,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={function(){if(!verif.recuperando)setVerif(null);}}>
+        <div style={{background:'#fff',borderRadius:18,padding:20,width:'100%',maxWidth:520,maxHeight:'88vh',overflowY:'auto'}} onClick={function(e){e.stopPropagation();}}>
+          {verif.erro?
+            <div>
+              <div style={{fontWeight:800,fontSize:16,color:'#DC2626',marginBottom:8}}>❌ Erro na verificação</div>
+              <div style={{fontSize:13,color:'#64748B',marginBottom:16}}>{verif.erro}</div>
+              <button onClick={function(){setVerif(null);}} className="bs" style={{width:'100%',padding:'11px'}}>Fechar</button>
+            </div>
+          :verif.recuperado!==undefined?
+            <div style={{textAlign:'center'}}>
+              <div style={{fontSize:44,marginBottom:8}}>✅</div>
+              <div style={{fontWeight:800,fontSize:17,color:'#0C6B3E',marginBottom:6}}>{verif.recuperado} entrada(s) recuperada(s)!</div>
+              <div style={{fontSize:13,color:'#64748B',marginBottom:18}}>O estoque foi atualizado. Os medicamentos que faltavam já devem aparecer na aba Estoque com o saldo correto.</div>
+              <button onClick={function(){setVerif(null);}} style={{width:'100%',padding:'12px',background:'#0C6B3E',border:'none',borderRadius:10,color:'#fff',fontWeight:700,fontSize:14,cursor:'pointer'}}>Concluído</button>
+            </div>
+          :(verif.faltantes&&verif.faltantes.length===0)?
+            <div style={{textAlign:'center'}}>
+              <div style={{fontSize:44,marginBottom:8}}>✅</div>
+              <div style={{fontWeight:800,fontSize:17,color:'#0C6B3E',marginBottom:6}}>Tudo certo!</div>
+              <div style={{fontSize:13,color:'#64748B',marginBottom:18}}>Todos os {verif.totalRec} recebimento(s) ativos têm suas entradas no estoque. Nada a recuperar.</div>
+              <div style={{fontSize:12,color:'#94A3B8',marginBottom:16,background:'#F8FAFC',borderRadius:8,padding:'10px 12px',textAlign:'left'}}>Se mesmo assim um medicamento não aparece com o saldo esperado na aba Estoque, pode ser que ele esteja cadastrado em <strong>outra categoria</strong> (confira o filtro de categoria) ou com <strong>nome ligeiramente diferente</strong>. Me avise qual medicamento pra eu investigar.</div>
+              <button onClick={function(){setVerif(null);}} className="bs" style={{width:'100%',padding:'11px'}}>Fechar</button>
+            </div>
+          :
+            <div>
+              <div style={{fontWeight:800,fontSize:16,color:'#B45309',marginBottom:4}}>⚠️ {verif.faltantes.length} item(ns) sem entrada no estoque</div>
+              <div style={{fontSize:12,color:'#64748B',marginBottom:12}}>Estes itens foram cadastrados em recebimentos mas nunca creditaram o estoque (bug de salvamento anterior). Clique em recuperar pra criar as entradas — o estoque será atualizado.</div>
+              <div style={{maxHeight:300,overflowY:'auto',border:'1px solid #E2E8F0',borderRadius:10,marginBottom:14}}>
+                {verif.faltantes.map(function(x,i){return(
+                  <div key={i} style={{padding:'9px 12px',borderBottom:i<verif.faltantes.length-1?'1px solid #F1F5F9':'none',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:12,fontWeight:700,color:'#1E293B'}}>{x.medicamentoNome}</div>
+                      <div style={{fontSize:10,color:'#94A3B8'}}>{x.fornecedor||'—'} · {fD(x.data)}{x.lote?' · Lote '+x.lote:''}{x.validade?' · Val '+x.validade:''}</div>
+                    </div>
+                    <span style={{fontSize:13,fontWeight:800,color:'#0C6B3E',whiteSpace:'nowrap'}}>+{x.quantidade}</span>
+                  </div>);
+                })}
+              </div>
+              <div style={{display:'flex',gap:8}}>
+                <button onClick={function(){setVerif(null);}} disabled={verif.recuperando} className="bs" style={{flex:1,padding:'12px'}}>Fechar</button>
+                <button onClick={recuperarFaltantes} disabled={verif.recuperando} style={{flex:2,padding:'12px',background:verif.recuperando?'#94A3B8':'#0C6B3E',border:'none',borderRadius:10,color:'#fff',fontWeight:700,fontSize:14,cursor:'pointer'}}>{verif.recuperando?'⏳ Recuperando...':'✅ Recuperar '+verif.faltantes.length+' entrada(s)'}</button>
+              </div>
+            </div>
+          }
         </div>
       </div>}
     </div>
