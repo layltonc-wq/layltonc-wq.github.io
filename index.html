@@ -7989,22 +7989,42 @@ function TabRecebimento(props){
     setSaving(true);
     try{
       var now=new Date().toISOString();
-      var itensBase=validos.map(function(it){return{medicamentoId:it.medId,medicamentoNome:it.medNome,quantidade:parseInt(it.qtd)||0,lote:(it.lote||'').trim(),validade:_normValidade((it.validade||'').trim()),observacao:(it.obs||'').trim()};});
-      var recRef=await db.collection('recebimentos').add({data:data,fornecedor:fornecedor.trim(),responsavel:(responsavel||user.name||'').trim(),responsavelId:user.uid||'',status:'pendente',statusLabel:'Pendente de Conciliação Fiscal',totalItens:validos.length,itens:itensBase,criadoEm:now,criadoPor:user.name||'',criadoPorId:user.uid||''});
+      // BATCH ATÔMICO: todas as entries + doc do recebimento + updates de loteAtual num único commit.
+      // Bug anterior: loop sequencial `await onSave(...)` — se qualquer item falhasse (rede, undefined,
+      // permissão), os itens ANTERIORES ficavam no Firestore e o `update({itens})` NUNCA rodava.
+      // Resultado: recebimento aparecia na lista mas alguns itens NÃO viravam entry (estoque não subia).
+      // Agora: se qualquer item do batch falhar, NADA é escrito — o try/catch pega e o usuário reenvia.
+      var batch=db.batch();
+      var recRef=db.collection('recebimentos').doc();  // gera id sem escrever ainda
       var recId=recRef.id;
       var itensComEntry=[];
+      var lotesParaAtualizar=[];// para updates finais de loteAtual/validadeAtual dos meds
       for(var i=0;i<validos.length;i++){
         var it=validos[i];
-        // entrada real: estoque atualiza na hora e vale no calcStock como qualquer entry.
         var medCad=medications.find(function(m){return m.id===it.medId;});
-        // Fallback duplo: se o medicamento existe mas o cadastro veio SEM categoria (bug antigo, doc criado
-        // sem esse campo), ainda cai no default 'medicamento'. Antes, medCad.categoria === undefined vazava
-        // pro Firestore e explodia com "Unsupported field value: undefined".
         var catMed=(medCad&&medCad.categoria)||'medicamento';
-        var ref=await onSave({tipo:'entrada',medicamentoId:it.medId,medicamentoNome:it.medNome,quantidade:parseInt(it.qtd)||0,lote:(it.lote||'').trim(),validade:_normValidade((it.validade||'').trim()),observacao:'Recebimento — '+fornecedor.trim(),origemRecebimento:true,recebimentoId:recId,date:data,categoriaMed:catMed});
-        itensComEntry.push({medicamentoId:it.medId,medicamentoNome:it.medNome,quantidade:parseInt(it.qtd)||0,lote:(it.lote||'').trim(),validade:_normValidade((it.validade||'').trim()),observacao:(it.obs||'').trim(),entryId:(ref&&ref.id)||''});
+        var qtdNum=parseInt(it.qtd)||0;
+        var loteTrim=(it.lote||'').trim();
+        var valNorm=_normValidade((it.validade||'').trim());
+        var entryRef=db.collection('entries').doc();
+        var entryObj={
+          criadoEm:now,date:data,autorId:user.uid||'',autorNome:user.name||user.email||'',
+          autorCargo:user.role||'',autorColor:user.color||B,
+          tipo:'entrada',medicamentoId:it.medId,medicamentoNome:it.medNome,
+          quantidade:qtdNum,lote:loteTrim,validade:valNorm,
+          observacao:'Recebimento — '+fornecedor.trim(),
+          origemRecebimento:true,recebimentoId:recId,categoriaMed:catMed
+        };
+        for(var _k in entryObj)if(entryObj[_k]===undefined)delete entryObj[_k];
+        batch.set(entryRef,entryObj);
+        itensComEntry.push({medicamentoId:it.medId,medicamentoNome:it.medNome,quantidade:qtdNum,lote:loteTrim,validade:valNorm,observacao:(it.obs||'').trim(),entryId:entryRef.id});
+        if(loteTrim&&valNorm)lotesParaAtualizar.push({medId:it.medId,lote:loteTrim,validade:valNorm});
       }
-      await db.collection('recebimentos').doc(recId).update({itens:itensComEntry});
+      // Cria o doc do recebimento JÁ COM os entryIds preenchidos (não precisa de update depois).
+      batch.set(recRef,{data:data,fornecedor:fornecedor.trim(),responsavel:(responsavel||user.name||'').trim(),responsavelId:user.uid||'',status:'pendente',statusLabel:'Pendente de Conciliação Fiscal',totalItens:validos.length,itens:itensComEntry,criadoEm:now,criadoPor:user.name||'',criadoPorId:user.uid||''});
+      // Atualiza loteAtual/validadeAtual do cadastro (LIFO — último lote recebido vira o "atual").
+      lotesParaAtualizar.forEach(function(x){batch.update(db.collection('medicamentos').doc(x.medId),{loteAtual:x.lote,validadeAtual:x.validade});});
+      await batch.commit();
       logAcao('recebimento_criado','Recebimento '+recId+' — forn: '+fornecedor.trim()+' — '+validos.length+' item(ns) — resp: '+(responsavel||user.name||''),null,'pendente');
       setFornecedor('');setResponsavel(user.name||'');setData(todayStr());setItens([blankItem()]);setFocoItem(null);
       setOk('✅ Recebimento finalizado — estoque atualizado e disponível para dispensação.');
