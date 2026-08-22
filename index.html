@@ -1485,19 +1485,24 @@ return(
           <div className="sdrop">
             {filtered.map(function(m){return(
               <div key={m.id} className="sdi" onClick={function(){setSel(m);setSearch(m.nome);setWarn('');
-                // FEFO: pegar lote com validade mais próxima
+                // FEFO: pegar lote com validade mais próxima que AINDA TEM SALDO.
+                // BUG antigo: só olhava entradas — lote zerado por descarte/saída anterior continuava
+                // sendo escolhido. Correção: calcula saldo por lote (entrada - saída) e filtra >0.
                 (function(){
-                  var lotesEntrada={};
+                  var lotesMap={};
                   (entries||[]).forEach(function(e){
-                    if(e.tipo!=='entrada'||e.medicamentoId!==m.id||!e.lote)return;
+                    if(e.medicamentoId!==m.id||!e.lote)return;
                     var key=e.lote+'|'+(e.validade||'');
-                    if(!lotesEntrada[key])lotesEntrada[key]={lote:e.lote,validade:e.validade||''};
+                    if(!lotesMap[key])lotesMap[key]={lote:e.lote,validade:e.validade||'',entrada:0,saida:0};
+                    if(e.tipo==='entrada'){if(e.divergenciaTipo!=='nota')lotesMap[key].entrada+=(Number(e.quantidade)||0);}
+                    else if(e.tipo==='saida'){if(!e.ficticioDiv)lotesMap[key].saida+=(Number(e.quantidade)||0);}
                   });
-                  var lotes=Object.values(lotesEntrada);
+                  var lotes=Object.values(lotesMap)
+                    .map(function(l){return Object.assign({},l,{qty:l.entrada-l.saida});})
+                    .filter(function(l){return l.qty>0;});
                   if(lotes.length===0)return;
                   // Ordenar pela validade mais próxima (FEFO)
                   lotes.sort(function(a,b){
-                    // Converter MM/YYYY para data do último dia do mês
                     function toDate(v){return _dataValidade(v)||new Date(9999,11,31);}
                     return toDate(a.validade)-toDate(b.validade);
                   });
@@ -8496,6 +8501,17 @@ function addEntry(data){try{var obj={criadoEm:new Date().toISOString(),date:toda
   // um chamador tenha deixado passar (ex.: categoriaMed vindo de um cadastro antigo sem categoria).
   for(var _k in obj)if(obj[_k]===undefined)delete obj[_k];
   var promise=db.collection('entries').add(obj);
+  // Bug: medicamentos com entradas de Recebimento (que trazem lote/validade) apareciam com "Sem lote/
+  // validade no cadastro — atribuir" no TabEstoque, porque loteAtual/validadeAtual no doc do medicamento
+  // nunca eram atualizados por entrada. Correção: em toda entrada com lote+validade preenchidos, atualiza
+  // o cadastro. LIFO (último lote recebido vira o "atual"). NÃO afeta o cálculo FEFO da saída — este só
+  // olha as ENTRIES (entrada - saída por lote), não o loteAtual/validadeAtual do cadastro.
+  if(obj.tipo==='entrada'&&obj.medicamentoId&&obj.lote&&obj.validade&&!obj.origemConferencia&&obj.divergenciaTipo!=='nota'){
+    promise=promise.then(function(ref){
+      db.collection('medicamentos').doc(obj.medicamentoId).update({loteAtual:obj.lote,validadeAtual:obj.validade}).catch(function(){});
+      return ref;
+    });
+  }
   // Se for saída real, verificar se há divergência de substituição vinculada
   if(obj.tipo==='saida'&&obj.medicamentoId&&!obj.ficticioDiv){
     promise=promise.then(function(ref){
