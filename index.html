@@ -2114,8 +2114,9 @@ function HistModal(props){
     Promise.all(entsDoLote.map(function(e){return db.collection('entries').doc(e.id).delete();})).then(function(){_bumpEntriesVersion();setLoteAjuste(null);});
   }
 
-  // EXCLUSÃO PERMANENTE de um lançamento individual — SÓ TÉCNICO. Remove o doc de entries de vez
-  // (não é estorno; o registro some do histórico e do cálculo de estoque). Fica registrado em logs_acesso.
+  // EXCLUSÃO PERMANENTE de um lançamento individual — TÉCNICO e GESTOR (coordenadora). Remove o doc de
+  // entries de vez (não é estorno; some do histórico e do cálculo de estoque). Fica registrado em logs_acesso.
+  var podeExcluirLancamento=user&&(user.role==='tecnico'||user.role==='gestor');
   var _excId=useState(null);var excId=_excId[0];var setExcId=_excId[1];// id do lançamento aguardando confirmação
   var _excSaving=useState(false);var excSaving=_excSaving[0];var setExcSaving=_excSaving[1];
   function excluirLancamento(e){
@@ -2234,10 +2235,10 @@ function HistModal(props){
     </div>}
 
     {aba==='hist'&&<div style={{maxHeight:360,overflowY:'auto'}}>
-      {user&&user.role==='tecnico'&&hist.length>0&&<div style={{fontSize:11,color:'#94A3B8',padding:'0 0 8px'}}>🔧 Como técnico, você pode excluir lançamentos permanentemente (🗑). Use com cuidado — a exclusão não pode ser desfeita.</div>}
+      {podeExcluirLancamento&&hist.length>0&&<div style={{fontSize:11,color:'#94A3B8',padding:'0 0 8px'}}>🔧 Você pode excluir lançamentos permanentemente (🗑). Use com cuidado — a exclusão não pode ser desfeita.</div>}
       {hist.length===0?<div style={{textAlign:'center',padding:32,color:'#94A3B8'}}>Nenhum registro encontrado.</div>
       :hist.map(function(e,i){
-        var podeExcluir=user&&user.role==='tecnico';
+        var podeExcluir=podeExcluirLancamento;
         var emConfirm=excId===e.id;
         return(<div key={e.id} style={{padding:'12px 0',borderTop:i>0?'1px solid #F8FAFC':'none',display:'flex',gap:12,alignItems:'flex-start',background:emConfirm?'#FEF2F2':'transparent'}}>
         <div style={{width:32,height:32,borderRadius:8,background:e.tipo==='entrada'?'#DCFCE7':'#FEE2E2',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,flexShrink:0}}>{e.tipo==='entrada'?'📥':'💊'}</div>
