@@ -6377,6 +6377,36 @@ function TabPrevisao(props){
                 {chipMeds.map(function(m){return(<span key={m.id} style={{background:'#F1F5F9',borderRadius:16,padding:'4px 10px',fontSize:11,color:'#475569',display:'flex',alignItems:'center',gap:6}}>{m.nome}<button onClick={function(){if(editando){removeMedDraft(m.id);}else{desvincular(m.id);}}} style={{background:'none',border:'none',color:'#94A3B8',cursor:'pointer',fontSize:13,padding:0,lineHeight:1}}>×</button></span>);})}
               </div>);
             })()}
+            {/* Definir quantidades/valores do pedido DIRETO na Gerenciar Atas (mesmo estado do consolidado) */}
+            {editAta!==ata.id&&meds.length>0&&(function(){
+              var itensPorMed={};if(ata.itens)ata.itens.forEach(function(it){if(it.medicamentoId)itensPorMed[it.medicamentoId]=it;});
+              var totalAtaPedido=meds.reduce(function(s,m){return s+valorPedido(m)*valorUnit(m.id,itensPorMed[m.id]||null);},0);
+              return(<div style={{marginTop:10,background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:10,padding:'10px'}}>
+                <div style={{fontSize:11,fontWeight:700,color:'#475569',marginBottom:8,textTransform:'uppercase',letterSpacing:'.03em'}}>Definir pedido desta ata</div>
+                {meds.slice().sort(function(a,b){return (a.nome||'').localeCompare(b.nome||'');}).map(function(m){
+                  var it=itensPorMed[m.id]||null;
+                  var pAuto=calcularPrevisao(m).pedir;
+                  var val=valorPedido(m);var edu=ajustes[m.id]!==undefined;
+                  var vUnitStr=precos[m.id]!==undefined?precos[m.id]:(it&&it.vUnit?String(it.vUnit).replace('.',','):'');
+                  var vt=val*valorUnit(m.id,it);
+                  return(<div key={m.id} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 0',borderTop:'1px solid #EEF2F8'}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:12,fontWeight:600,color:'#1E293B',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{m.nome}</div>
+                      <div style={{fontSize:10,color:'#94A3B8'}}>sugestão: {pAuto}{vt>0?' · total: R$ '+vt.toFixed(2).replace('.',','):''}</div>
+                    </div>
+                    <div style={{display:'flex',flexDirection:'column',alignItems:'center'}}>
+                      <span style={{fontSize:9,color:'#94A3B8',fontWeight:600}}>PEDIR</span>
+                      <input type="number" min="0" value={val} onChange={function(e){var v=e.target.value;setAjustes(function(pr){var n=Object.assign({},pr);n[m.id]=v;return n;});}} style={{width:64,padding:'6px 4px',border:'2px solid '+(edu?'#F59E0B':'#CBD5E1'),borderRadius:8,fontSize:14,fontWeight:800,textAlign:'center',outline:'none',background:edu?'#FFFBEB':'#fff'}}/>
+                    </div>
+                    <div style={{display:'flex',flexDirection:'column',alignItems:'center'}}>
+                      <span style={{fontSize:9,color:'#94A3B8',fontWeight:600}}>V.UNIT</span>
+                      <input type="text" inputMode="decimal" value={vUnitStr} onChange={function(e){var v=e.target.value;setPrecos(function(pr){var n=Object.assign({},pr);n[m.id]=v;return n;});}} placeholder="R$" style={{width:64,padding:'6px 4px',border:'1.5px solid #CBD5E1',borderRadius:8,fontSize:12,fontWeight:700,textAlign:'center',outline:'none'}}/>
+                    </div>
+                  </div>);
+                })}
+                {totalAtaPedido>0&&<div style={{marginTop:8,paddingTop:8,borderTop:'1px solid #E2E8F0',textAlign:'right',fontSize:12,fontWeight:800,color:cor}}>Total do pedido: R$ {totalAtaPedido.toFixed(2).replace('.',',')}</div>}
+              </div>);
+            })()}
             {editAta===ata.id&&editItens&&editItens.length>0&&(function(){
               var pendentesUnicos=(autoMatches||[]).filter(function(am,idx){return editItens[idx]&&!editItens[idx].medicamentoId&&am.cands.length===1;}).length;
               return(<div style={{marginTop:10,background:'#EFF6FF',border:'1.5px solid #BFDBFE',borderRadius:12,padding:'12px'}}>
