@@ -282,6 +282,30 @@ function initFB(c){try{
 // ao mudar, rebuscam o histórico completo do servidor. Adições não chamam isto (o listener de 3 dias já pega).
 // Fire-and-forget: nunca bloqueia nem quebra a mutação original.
 function _bumpEntriesVersion(){try{if(db)db.collection('_meta').doc('entries_version').set({v:Date.now(),at:new Date().toISOString()},{merge:true}).catch(function(){});}catch(e){}}
+// Impressão/PDF robusta: usa um IFRAME oculto em vez de window.open('_blank').
+// Por quê: no celular, abrir uma janela em branco e chamar print() com frequência TRAVA a aba
+// principal (o app "congela") e ainda esbarra em bloqueador de pop-up. O iframe imprime só o seu
+// próprio conteúdo, sem pop-up, sem travar o app; é removido depois. Fallback para window.open se
+// o iframe falhar. Retorna false se nada funcionou (para o chamador avisar o usuário).
+function _imprimirDoc(html){
+  try{
+    var f=document.createElement('iframe');
+    f.setAttribute('aria-hidden','true');
+    f.style.cssText='position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none';
+    document.body.appendChild(f);
+    var doc=f.contentWindow.document;
+    doc.open();doc.write(html);doc.close();
+    var done=false;
+    var go=function(){if(done)return;done=true;try{f.contentWindow.focus();f.contentWindow.print();}catch(e){}
+      setTimeout(function(){try{document.body.removeChild(f);}catch(e){}},3000);};
+    try{f.contentWindow.onload=go;}catch(e){}
+    setTimeout(go,700); // fallback: imprime mesmo se onload não disparar
+    return true;
+  }catch(e){
+    try{var w=window.open('','_blank');if(w&&w.document){w.document.write(html);w.document.close();setTimeout(function(){try{w.print();}catch(_){}} ,400);return true;}}catch(_){}
+    return false;
+  }
+}
 function loadCfg(){
   var env=localStorage.getItem('farmacontrol_env')||'prod';
   var cfgs={
@@ -1216,8 +1240,7 @@ function TabComparacaoPedido(props){
       html+='<tr style="background:'+st.bg+'"><td>'+nomeCell+'</td><td>'+(l.qtdPedida==null?'—':l.qtdPedida)+'</td><td>'+(l.qtdRecebida==null?'—':l.qtdRecebida)+'</td><td style="color:'+st.cor+';font-weight:700">'+diffTxt+'</td><td style="color:'+st.cor+';font-weight:700">'+_escHtml(statusTxt)+'</td></tr>';
     });
     html+='</tbody></table></body></html>';
-    var w=window.open('','_blank');
-    if(w&&w.document){w.document.write(html);w.document.close();setTimeout(function(){w.print();},400);}
+    _imprimirDoc(html);
   }
   function exportarComparacaoXL(){
     var hoje=new Date().toLocaleDateString('pt-BR');
@@ -2488,7 +2511,7 @@ function darBaixaVencido(){
         html+='<tr><td>'+(e.date||'')+'</td><td>'+(e.medicamentoNome||'')+'</td><td>'+(e.quantidade||0)+'</td><td>'+(e.lote||'—')+'</td><td>'+(e.validade||'—')+'</td><td>'+(e.observacao||'—')+'</td><td>'+(e.autorNome||'—')+'</td></tr>';
       });
       html+='</table></body></html>';
-      var w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(function(){w.print();},400);}
+      _imprimirDoc(html);
     }
     return(<div>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14,flexWrap:'wrap',gap:8}}>
@@ -2684,7 +2707,7 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
         lista.forEach(function(it){html+='<tr><td>'+it.nome+'</td><td>'+it.cat+'</td><td>'+it.horarios.join(', ')+'</td><td style="text-align:center;font-weight:700">'+it.total+'</td></tr>';});
         html+='<tr class="total"><td colspan="3">TOTAL</td><td style="text-align:center">'+totalGeral+'</td></tr>';
         html+='</table></body></html>';
-        var w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(function(){w.print();},400);}
+        _imprimirDoc(html);
       }} className="bp">🖨️ Imprimir / Salvar PDF</button>
     </div>);
   })()}
@@ -2974,7 +2997,7 @@ function TabDivergenciasPainel(props){
       html+='<tr><td>'+(d.date||'')+'</td><td>'+(d.nfNumero||'—')+'</td><td>'+(d.notaMedNome||'')+'</td><td>'+(d.realMedNome||'')+'</td><td>'+(d.realQty||0)+'</td><td>'+(d.realLote||'—')+'</td><td>'+(d.motivo||'—')+'</td><td class="'+(d.status==='confirmada'?'conf':'pend')+'">'+(d.status==='confirmada'?'✅ Confirmada':'⏳ Pendente')+'</td><td>'+(d.registradoPor||'')+'</td></tr>';
     });
     html+='</table></body></html>';
-    var w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(function(){w.print();},400);}
+    _imprimirDoc(html);
   }
   var pendentes=divs.filter(function(d){return d.status==='pendente';});
   var confirmadas=divs.filter(function(d){return d.status!=='pendente';});
@@ -5595,25 +5618,22 @@ function TabPrevisao(props){
   // API pública mantida: mesma assinatura, agora só uma consulta ao mapa memoizado.
   function calcularPrevisao(med){return (med&&previsaoMap[med.id])||calcularPrevisaoCore(med);}
 
-  // Medicamentos de uma ata
-  function medsDaAta(ataId){
-    var porAtaId=medications.filter(function(m){return m.ataId===ataId;});
-    // Também buscar pelos medicamentos vinculados nos itens da ata
-    var ataObj=atas.find(function(a){return a.id===ataId;});
-    if(!ataObj||!ataObj.itens||!ataObj.itens.length)return porAtaId;
-    var porItens=medications.filter(function(m){
-      return ataObj.itens.some(function(it){return it.medicamentoId&&it.medicamentoId===m.id;});
-    });
-    // Combinar sem duplicatas
-    var mapa={};
-    porAtaId.concat(porItens).forEach(function(m){mapa[m.id]=m;});
-    return Object.values(mapa);
-  }
-  // Medicamentos sem ata
-  // Medicamentos vinculados via itens de ata (mesmo sem ataId no doc)
-  var medVinculadosViaItens={};
-  atas.forEach(function(a){if(a.itens)a.itens.forEach(function(it){if(it.medicamentoId)medVinculadosViaItens[it.medicamentoId]=true;});});
-  var medsSemAta=medications.filter(function(m){return !m.ataId&&!medVinculadosViaItens[m.id];});
+  // PERF: mapa ataId -> [medicamentos] memoizado. Antes medsDaAta fazia 2x medications.filter +
+  // atas.find A CADA chamada, e era chamado para toda ata em todo render (travava ao digitar
+  // quantidade na Gerenciar Atas). Agora é O(meds + atas×itens) uma vez, e cada consulta é O(1).
+  var medsPorAta=useMemo(function(){
+    var byId={};medications.forEach(function(m){byId[m.id]=m;});
+    var acc={};
+    medications.forEach(function(m){if(m.ataId){if(!acc[m.ataId])acc[m.ataId]={};acc[m.ataId][m.id]=m;}});
+    atas.forEach(function(a){if(a.itens)a.itens.forEach(function(it){if(it.medicamentoId&&byId[it.medicamentoId]){if(!acc[a.id])acc[a.id]={};acc[a.id][it.medicamentoId]=byId[it.medicamentoId];}});});
+    var out={};Object.keys(acc).forEach(function(k){out[k]=Object.values(acc[k]);});
+    return out;
+  },[medications,atas]);
+  // Medicamentos de uma ata (lookup O(1) no mapa memoizado)
+  function medsDaAta(ataId){return medsPorAta[ataId]||[];}
+  // Medicamentos vinculados via itens de ata (memoizado — usado no filtro do render a cada tecla)
+  var medVinculadosViaItens=useMemo(function(){var mv={};atas.forEach(function(a){if(a.itens)a.itens.forEach(function(it){if(it.medicamentoId)mv[it.medicamentoId]=true;});});return mv;},[atas]);
+  var medsSemAta=useMemo(function(){return medications.filter(function(m){return !m.ataId&&!medVinculadosViaItens[m.id];});},[medications,medVinculadosViaItens]);
 
   function valorPedido(med){
     var p=calcularPrevisao(med);
@@ -5940,8 +5960,7 @@ function TabPrevisao(props){
       '<td style="padding:7px 8px;border:1px solid #ddd"></td>'+
       '<td style="padding:7px 8px;border:1px solid #ddd;text-align:right">R$ '+totalVal.toFixed(2).replace('.',',')+
       '</td></tr></tfoot></table></body></html>';
-    var w=window.open('','_blank');
-    if(w){w.document.write(html);w.document.close();setTimeout(function(){w.print();},500);}
+    if(!_imprimirDoc(html))setMsg('e:Não foi possível abrir a impressão. Tente de novo.');
   }
 
   // atasFiltro (opcional): array de ATAs para gerar o pedido SÓ delas (pedido unitário por ata),
@@ -6017,9 +6036,7 @@ function TabPrevisao(props){
     html+='<div class="assinatura">COORDENADORA DA FARMÁCIA</div>';
     html+='</body></html>';
 
-    var w=window.open('','_blank');
-    if(w){w.document.write(html);w.document.close();setTimeout(function(){w.print();},500);}
-    else{setMsg('e:Permita pop-ups para gerar o PDF');}
+    if(!_imprimirDoc(html))setMsg('e:Não foi possível abrir a impressão. Tente de novo.');
   }
 
 
@@ -7643,8 +7660,7 @@ function exportRelatorioPDF(titulo,colunas,linhas){
   html+='</tr></thead><tbody>';
   linhas.forEach(function(l){html+='<tr>';l.forEach(function(v){html+='<td>'+_escHtml(v)+'</td>';});html+='</tr>';});
   html+='</tbody></table></body></html>';
-  var w=window.open('','_blank');
-  if(w&&w.document){w.document.write(html);w.document.close();setTimeout(function(){w.print();},400);}
+  _imprimirDoc(html);
 }
 
 function ConciliacaoFiscal(props){
