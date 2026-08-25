@@ -5441,6 +5441,7 @@ function TabPrevisao(props){
   var _sub=useState('previsao');var sub=_sub[0];var setSub=_sub[1];
   var _diasPrev=useState(30);var diasPrev=_diasPrev[0];var setDiasPrev=_diasPrev[1];
   var _ajustes=useState({});var ajustes=_ajustes[0];var setAjustes=_ajustes[1];
+  var _precos=useState({});var precos=_precos[0];var setPrecos=_precos[1];// valor unitário manual por medicamento (string)
   var _ataAberta=useState(null);var ataAberta=_ataAberta[0];var setAtaAberta=_ataAberta[1];
   var _msg=useState('');var msg=_msg[0];var setMsg=_msg[1];
   // estados de cadastro de ata
@@ -5618,6 +5619,29 @@ function TabPrevisao(props){
     var p=calcularPrevisao(med);
     var aj=ajustes[med.id];
     return aj!==undefined?(parseInt(aj)||0):p.pedir;
+  }
+  // Valor unitário EFETIVO de um medicamento no pedido: preferência para o valor digitado manualmente
+  // (estado precos), depois o vUnit do item da ata (se houver), senão 0 (exibido como "—").
+  function valorUnit(medId,item){
+    var pm=precos[medId];
+    if(pm!==undefined&&pm!==''){var n=parseFloat(String(pm).replace(',','.'));if(!isNaN(n))return n;}
+    return item&&item.vUnit?item.vUnit:0;
+  }
+  // FONTE ÚNICA das linhas de pedido de uma ATA — usada por PDF consolidado, PDF por ATA e Excel.
+  // Corrige o bug em que só os medicamentos presentes em ata.itens eram considerados: aqui percorremos
+  // TODOS os medicamentos vinculados (medsDaAta = união de ataId + itens), casando cada um ao seu item
+  // da ata (por medicamentoId) para herdar descrição/unidade/vUnit. A quantidade vem SEMPRE de
+  // valorPedido (ajuste manual quando existe, senão a sugestão automática). Filtra qtd>0.
+  function linhasPedidoAta(ata){
+    var itensPorMed={};
+    if(ata&&ata.itens)ata.itens.forEach(function(it){if(it.medicamentoId)itensPorMed[it.medicamentoId]=it;});
+    return medsDaAta(ata.id).map(function(med){
+      var item=itensPorMed[med.id]||null;
+      var qtd=valorPedido(med);
+      var vU=valorUnit(med.id,item);
+      return {med:med,item:item,qtd:qtd,vUnit:vU,vTotal:qtd*vU,
+              desc:(item&&item.descricao)||med.nome,unidade:(item&&item.unidade)||'UN',num:(item&&item.num)||''};
+    }).filter(function(x){return x.qtd>0;});
   }
 
   // ── AÇÕES ────────────────────────────────────────────────────
@@ -5826,21 +5850,26 @@ function TabPrevisao(props){
     var filtrando=Array.isArray(atasFiltro);
     var listaAtas=filtrando?atasFiltro:atas;
     var wb=XLSX.utils.book_new();
-    var dadosGeral=[['ATA','Categoria','Medicamento','Estoque Atual','Estoque Mín.','Sugestão Pedido','Método','Limite Ata']];
+    // Só entram itens com quantidade a pedir > 0; colunas de valor unitário e total incluídas.
+    var dadosGeral=[['ATA','Categoria','Medicamento','Estoque Atual','Estoque Mín.','Qtd. Pedir','V. Unit.','V. Total','Método']];
+    var grandTotal=0;
     listaAtas.forEach(function(ata){
-      var meds=medsDaAta(ata.id);
-      meds.forEach(function(m){
-        var p=calcularPrevisao(m);
-        dadosGeral.push([ata.nome,LBL[ata.categoria]||ata.categoria,m.nome,stock[m.id]||0,m.minEstoque||0,valorPedido(m),p.metodo,ata.limite||'sem limite']);
+      linhasPedidoAta(ata).forEach(function(x){
+        var p=calcularPrevisao(x.med);
+        grandTotal+=x.vTotal;
+        dadosGeral.push([ata.nome,LBL[ata.categoria]||ata.categoria,x.med.nome,stock[x.med.id]||0,x.med.minEstoque||0,x.qtd,x.vUnit>0?x.vUnit:'',x.vTotal>0?x.vTotal:'',p.metodo]);
       });
     });
     if(!filtrando)medsSemAta.forEach(function(m){
+      var q=valorPedido(m);if(q<=0)return;
+      var vU=valorUnit(m.id,null);var vT=q*vU;grandTotal+=vT;
       var p=calcularPrevisao(m);
-      dadosGeral.push(['(sem ata)','—',m.nome,stock[m.id]||0,m.minEstoque||0,valorPedido(m),p.metodo,'—']);
+      dadosGeral.push(['(sem ata)','—',m.nome,stock[m.id]||0,m.minEstoque||0,q,vU>0?vU:'',vT>0?vT:'',p.metodo]);
     });
-    if(dadosGeral.length===1){setMsg('e:Nenhum medicamento vinculado'+(filtrando?' a esta ata.':'.'));return;}
+    if(dadosGeral.length===1){setMsg('e:Nenhum medicamento com pedido > 0'+(filtrando?' nesta ata.':'.')+' Ajuste as quantidades.');return;}
+    if(grandTotal>0)dadosGeral.push(['','','','','','','TOTAL GERAL',grandTotal,'']);
     var ws=XLSX.utils.aoa_to_sheet(dadosGeral);
-    XLSX.utils.book_append_sheet(wb,ws,'Previsao Mensal');
+    XLSX.utils.book_append_sheet(wb,ws,'Pedido');
     var hoje=new Date().toLocaleDateString('pt-BR').replace(/\//g,'-');
     var slug=filtrando?(listaAtas[0].nome||'ata').replace(/[^a-zA-Z0-9]+/g,'_').slice(0,40)+'_':'';
     XLSX.writeFile(wb,'Previsao_Pedido_'+slug+hoje+'.xlsx');
@@ -5867,23 +5896,28 @@ function TabPrevisao(props){
   function gerarPDFAta(ata,grupoMeds,catKey){
     var hoje=new Date().toLocaleDateString('pt-BR');
     var nomeAta=ata.nome||'ATA';
-    var totalUn=grupoMeds.reduce(function(s,x){return s+valorPedido(x.med);},0);
-    var totalVal=grupoMeds.reduce(function(s,x){return s+(valorPedido(x.med)*(x.item.vUnit||0));},0);
-    var linhas=grupoMeds.map(function(x){
-      var m=x.med;var item=x.item;
-      var qtd=valorPedido(m);
+    // Fonte única: TODOS os medicamentos vinculados à ATA com qtd>0 (qtd manual ou automática).
+    // Ignora o grupoMeds recebido da tela (que só tinha os visíveis) — corrige o bug de perder a
+    // quantidade manual de medicamentos vinculados por ataId que não estavam em ata.itens.
+    var grupoPedir=linhasPedidoAta(ata);
+    var totalUn=grupoPedir.reduce(function(s,x){return s+x.qtd;},0);
+    var totalVal=grupoPedir.reduce(function(s,x){return s+x.vTotal;},0);
+    var linhas=grupoPedir.map(function(x){
+      var item=x.item;
+      var qtd=x.qtd;
       var saldo=item?(item.qtdTeto-((item.pedidoAcumulado)||0)):'-';
-      var vU=item?item.vUnit||0:0;
-      var vT=qtd*vU;
-      return '<tr><td style="padding:6px 8px;border:1px solid #ddd">'+(item?item.num||'':'')+
-        '</td><td style="padding:6px 8px;border:1px solid #ddd">'+(item?item.descricao||m.nome:m.nome)+
-        '</td><td style="padding:6px 8px;border:1px solid #ddd;text-align:center">'+(item?item.unidade||'UN':'UN')+
+      var vU=x.vUnit;
+      var vT=x.vTotal;
+      return '<tr><td style="padding:6px 8px;border:1px solid #ddd">'+(x.num||'')+
+        '</td><td style="padding:6px 8px;border:1px solid #ddd">'+x.desc+
+        '</td><td style="padding:6px 8px;border:1px solid #ddd;text-align:center">'+x.unidade+
         '</td><td style="padding:6px 8px;border:1px solid #ddd;text-align:center">'+qtd+
         '</td><td style="padding:6px 8px;border:1px solid #ddd;text-align:center">'+saldo+
-        '</td><td style="padding:6px 8px;border:1px solid #ddd;text-align:right">R$ '+vU.toFixed(2).replace('.',',')+
-        '</td><td style="padding:6px 8px;border:1px solid #ddd;text-align:right">R$ '+vT.toFixed(2).replace('.',',')+
+        '</td><td style="padding:6px 8px;border:1px solid #ddd;text-align:right">'+(vU>0?'R$ '+vU.toFixed(2).replace('.',','):'—')+
+        '</td><td style="padding:6px 8px;border:1px solid #ddd;text-align:right">'+(vT>0?'R$ '+vT.toFixed(2).replace('.',','):'—')+
         '</td></tr>';
     }).join('');
+    if(grupoPedir.length===0){setMsg('e:Nenhum medicamento com pedido > 0 nesta ata. Ajuste as quantidades antes de exportar.');return;}
     var html='<!DOCTYPE html><html><head><meta charset="utf-8">'+
       '<style>body{font-family:Arial,sans-serif;padding:24px;font-size:12px}'+
       'h2{color:#1351B4;margin-bottom:4px}h3{color:#475569;margin-bottom:16px;font-size:13px}'+
@@ -5918,30 +5952,10 @@ function TabPrevisao(props){
     var dataHoje=hoje.toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'}).replace(' de ',' DE ').toUpperCase();
     var numPedidoDoc=numPedido.trim()||('N/'+new Date().getFullYear());
 
-    // Construir seções por categoria
+    // Construir seções por ATA — fonte única linhasPedidoAta (TODOS os meds vinculados, qtd manual+auto).
     var secoes=[];
-    // Atas com itens vinculados
     listaAtas.forEach(function(ata){
-      var itensPedido=[];
-      // Itens da ata que têm medicamento vinculado
-      if(ata.itens&&ata.itens.length>0){
-        ata.itens.forEach(function(it){
-          if(!it.medicamentoId)return;
-          var med=medications.find(function(m){return m.id===it.medicamentoId;});
-          if(!med)return;
-          var qtd=ajustes[med.id]!==undefined?parseInt(ajustes[med.id])||0:calcularPrevisao(med).pedir;
-          if(qtd===0)return;
-          var vU=it.vUnit||0;
-          itensPedido.push({desc:it.descricao||med.nome,unidade:it.unidade||'UN',qtd:qtd,vUnit:vU,vTotal:vU*qtd});
-        });
-      } else {
-        // Ata sem itens importados: usa medicamentos vinculados
-        medsDaAta(ata.id).forEach(function(med){
-          var qtd=ajustes[med.id]!==undefined?parseInt(ajustes[med.id])||0:calcularPrevisao(med).pedir;
-          if(qtd===0)return;
-          itensPedido.push({desc:med.nome,unidade:'UN',qtd:qtd,vUnit:0,vTotal:0});
-        });
-      }
+      var itensPedido=linhasPedidoAta(ata).map(function(x){return {desc:x.desc,unidade:x.unidade,qtd:x.qtd,vUnit:x.vUnit,vTotal:x.vTotal};});
       if(itensPedido.length>0)secoes.push({titulo:ata.nome.toUpperCase(),itens:itensPedido,cor:COR[ata.categoria]||'#1351B4'});
     });
     // Medicamentos sem ata não entram no PDF oficial
@@ -5975,22 +5989,25 @@ function TabPrevisao(props){
     html+=montarCabecalhoPedido();
 
     // Tabelas por seção
+    var grandTotalVal=0;
     secoes.forEach(function(sec){
-      var totalQtd=sec.itens.reduce(function(a,it){return a+it.qtd;},0);
       var totalVal=sec.itens.reduce(function(a,it){return a+it.vTotal;},0);
+      grandTotalVal+=totalVal;
       html+='<div class="section-title">'+sec.titulo+'</div>';
       html+='<table><thead><tr><th style="width:90px">QUANT</th><th>DISCRIMINAÇÃO</th><th style="width:80px">V.UNIT</th><th style="width:90px">V.TOTAL</th></tr></thead><tbody>';
       sec.itens.forEach(function(it){
         html+='<tr>';
         html+='<td class="num">'+it.qtd+' '+(it.unidade||'UN')+'</td>';
         html+='<td>'+it.desc+'</td>';
-        html+='<td class="vunit">'+(it.vUnit>0?'R$ '+it.vUnit.toFixed(2):'—')+'</td>';
-        html+='<td class="vtotal">'+(it.vTotal>0?it.vTotal.toFixed(2):'—')+'</td>';
+        html+='<td class="vunit">'+(it.vUnit>0?'R$ '+it.vUnit.toFixed(2).replace('.',','):'—')+'</td>';
+        html+='<td class="vtotal">'+(it.vTotal>0?'R$ '+it.vTotal.toFixed(2).replace('.',','):'—')+'</td>';
         html+='</tr>';
       });
       html+='</tbody></table>';
-      if(totalVal>0){html+='<table><tbody><tr class="total-row"><td colspan="3">TOTAL</td><td>R$ '+totalVal.toFixed(2)+'</td></tr></tbody></table>';}
+      if(totalVal>0){html+='<table><tbody><tr class="total-row"><td colspan="3">SUBTOTAL '+sec.titulo+'</td><td>R$ '+totalVal.toFixed(2).replace('.',',')+'</td></tr></tbody></table>';}
     });
+    // Total geral do pedido (soma de todas as seções)
+    if(grandTotalVal>0){html+='<table style="margin-top:10px"><tbody><tr class="total-row" style="background:#1351B4"><td colspan="3" style="color:#fff;text-align:right">TOTAL GERAL DO PEDIDO</td><td style="color:#fff">R$ '+grandTotalVal.toFixed(2).replace('.',',')+'</td></tr></tbody></table>';}
 
     // Rodapé
     html+='<div style="margin-top:20px;font-size:11px"><b>LOCAL DE ENTREGA:</b> CAF - UNIDADE HOSPITALAR</div>';
@@ -6073,12 +6090,18 @@ function TabPrevisao(props){
           var categorias=Object.keys(LBL);
           var algumaMostrada=false;
           var secoes=categorias.map(function(catKey){
-            // Medicamentos desta categoria com consumo configurado
+            // Medicamentos desta categoria. Regra de exibição no fechamento de pedido:
+            //  - Medicamento VINCULADO a uma ATA aparece SEMPRE, mesmo com sugestão 0 (o usuário pode
+            //    querer pedir manualmente algo que o sistema não sugeriu). Antes, o filtro temConfig
+            //    escondia todo medicamento da ATA sem consumo/mínimo configurado.
+            //  - Medicamento SEM ata continua exigindo consumo/mínimo (temConfig), pra não despejar o
+            //    catálogo inteiro na tela.
             var medsCat=medications.filter(function(m){
+              var vinculadoAta=!!m.ataId||!!medVinculadosViaItens[m.id];
               var temConfig=(Number(m.consumoEstimado||0)>0||Number(m.minEstoque||m.estoqueMin||0)>0);
               var matchCat=(m.categoria||'medicamento')===catKey;
               var matchBusca=!buscaL||m.nome.toLowerCase().indexOf(buscaL)>=0;
-              return temConfig&&matchCat&&matchBusca;
+              return (vinculadoAta||temConfig)&&matchCat&&matchBusca;
             });
             // Filtro "só urgentes" (ruptura em ≤30d) e ordenação por urgência (acaba antes primeiro; sem previsão por último)
             if(soUrg)medsCat=medsCat.filter(function(m){var d=calcularPrevisao(m).diasParaAcabar;return d!==null&&d<=30;});
@@ -6094,9 +6117,16 @@ function TabPrevisao(props){
             var semAta=[];
             medsCat.forEach(function(m){
               var vinculo=null;
+              // 1) tenta casar por item da ata (traz descrição/vUnit)
               atas.forEach(function(a){
                 if(a.itens)a.itens.forEach(function(it){if(it.medicamentoId===m.id)vinculo={ata:a,item:it};});
               });
+              // 2) senão, casa pela vinculação direta m.ataId (medicamento sem item na ata) — antes esses
+              //    caíam em "Sem ATA vinculada" (pasta colapsada) e ficavam invisíveis no fechamento.
+              if(!vinculo&&m.ataId){
+                var aDir=atas.find(function(a){return a.id===m.ataId;});
+                if(aDir)vinculo={ata:aDir,item:null};
+              }
               if(vinculo){
                 var aId=vinculo.ata.id;
                 if(!atasMapa[aId])atasMapa[aId]={ata:vinculo.ata,meds:[]};
@@ -6130,8 +6160,14 @@ function TabPrevisao(props){
                 </div>
                 <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:3}}>
                   <div style={{fontSize:10,color:'#94A3B8',fontWeight:600}}>PEDIR</div>
-                  <input type="number" value={val} onChange={function(e){var v=e.target.value;setAjustes(function(pr){var n=Object.assign({},pr);n[m.id]=v;return n;});}} style={{width:72,padding:'8px 6px',border:'2px solid '+(editado?'#F59E0B':cor2+'60'),borderRadius:10,fontSize:16,fontWeight:800,textAlign:'center',color:'#1E293B',outline:'none',background:editado?'#FFFBEB':'#fff'}}/>
+                  <input type="number" min="0" value={val} onChange={function(e){var v=e.target.value;setAjustes(function(pr){var n=Object.assign({},pr);n[m.id]=v;return n;});}} style={{width:72,padding:'8px 6px',border:'2px solid '+(editado?'#F59E0B':cor2+'60'),borderRadius:10,fontSize:16,fontWeight:800,textAlign:'center',color:'#1E293B',outline:'none',background:editado?'#FFFBEB':'#fff'}}/>
+                  <div style={{fontSize:9,color:'#94A3B8',whiteSpace:'nowrap'}}>sugestão: {p.pedir}</div>
                   {editado&&<button onClick={function(){setAjustes(function(pr){var n=Object.assign({},pr);delete n[m.id];return n;});}} style={{fontSize:10,color:'#94A3B8',background:'none',border:'none',cursor:'pointer',padding:0}}>↺ auto</button>}
+                </div>
+                <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:3}}>
+                  <div style={{fontSize:10,color:'#94A3B8',fontWeight:600}}>V. UNIT.</div>
+                  <input type="text" inputMode="decimal" value={precos[m.id]!==undefined?precos[m.id]:(item&&item.vUnit?String(item.vUnit).replace('.',','):'')} onChange={function(e){var v=e.target.value;setPrecos(function(pr){var n=Object.assign({},pr);n[m.id]=v;return n;});}} placeholder={item&&item.vUnit?'':'R$'} style={{width:72,padding:'8px 6px',border:'1.5px solid #CBD5E1',borderRadius:10,fontSize:13,fontWeight:700,textAlign:'center',color:'#1E293B',outline:'none',background:'#fff'}}/>
+                  <div style={{fontSize:9,color:'#94A3B8',whiteSpace:'nowrap'}}>tot: {(function(){var vt=val*valorUnit(m.id,item);return vt>0?'R$ '+vt.toFixed(2).replace('.',','):'—';})()}</div>
                 </div>
               </div>);
             }
@@ -6158,9 +6194,9 @@ function TabPrevisao(props){
                   var ata=grupo.ata;
                   var aKey='prev_ata_'+catKey+'_'+ata.id;
                   var ataAberta=pastasAbertas[aKey]!==false;
-                  var totalAta=grupo.meds.reduce(function(s,x){return s+(valorPedido(x.med)*x.item.vUnit);},0);
+                  var totalAta=grupo.meds.reduce(function(s,x){return s+(valorPedido(x.med)*valorUnit(x.med.id,x.item));},0);
                   var qtdTotalAta=grupo.meds.reduce(function(s,x){return s+valorPedido(x.med);},0);
-                  var saldoTotalAta=grupo.meds.reduce(function(s,x){return s+(x.item.qtdTeto-(x.item.pedidoAcumulado||0));},0);
+                  var saldoTotalAta=grupo.meds.reduce(function(s,x){return s+(x.item?(x.item.qtdTeto-(x.item.pedidoAcumulado||0)):0);},0);
                   var corAta=cor+'CC';
                   return(<div key={ata.id} style={{marginBottom:8,borderRadius:12,overflow:'hidden',border:'1.5px solid '+cor+'40'}}>
                     {/* Cabeçalho da ATA — div clicável (não <button>) para permitir o botão PDF aninhado (HTML válido) */}
