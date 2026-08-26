@@ -7615,28 +7615,67 @@ function _parsearPDFNotaConciliacao(linhas){
   var vtm=texto.match(/VALOR\s*TOTAL\s*[:\s]*(R\$\s*)?([\d.,]+)/i)||texto.match(/TOTAL\s*[:\s]*(R\$\s*)?([\d.,]+)/i);
   var valorTotal=vtm?(vtm[2]||vtm[1]||'').replace(/[R$\s]/g,'').replace('.','').replace(',','.').trim():'';
   var itens=[];
-  var unidades='UN|UNID|AMP|AMPOLA|FR|FRASCO|CX|CAIXA|CP|CPR|COMP|ML|KG|G|VD|PC|PCT|BIS|CAP|SER|BCA|FAR|SAC|TB|TUBO|BLISTER|BL';
-  linhas.forEach(function(lRaw){
+  var unidadesArr=['UN','UNID','AMP','AMPOLA','FR','FRASCO','CX','CAIXA','CP','CPR','COMP','ML','KG','G','VD','PC','PCT','BIS','CAP','SER','BCA','FAR','SAC','TB','TUBO','BLISTER','BL'];
+  var unidadesSet={};unidadesArr.forEach(function(u){unidadesSet[u]=true;});
+  var unidades=unidadesArr.join('|');
+  // DANFE às vezes traz o valor unitário com até 10 casas decimais (campo vUnCom da NF-e) — não só 2.
+  function achaValorMonetario(toks){for(var j=0;j<toks.length;j++){if(/^\d{1,3}(?:\.\d{3})*,\d{2,10}$|^\d+,\d{2,10}$/.test(toks[j]))return parseFloat(toks[j].replace(/\./g,'').replace(',','.'));}return 0;}
+  // Lote/validade: nem sempre estão na mesma linha da tabela — em muitas DANFEs vêm em "Dados Adicionais
+  // do Produto" logo abaixo do item (rastreabilidade ANVISA). Procura primeiro na própria linha do item,
+  // senão espia a linha seguinte (best-effort — o campo continua editável na tela se não achar nada).
+  function achaLoteValidade(linhaAtual,linhaSeguinte){
+    var alvo=linhaAtual+' '+(linhaSeguinte||'');
+    var loteM=alvo.match(/LOTE[:\s]*([A-Z0-9][A-Z0-9\-\.\/]{1,19})/i);
+    var validM=alvo.match(/VALID(?:ADE)?[:\s]*(\d{2}[\/\-]\d{2,4})/i);
+    var validade='';
+    if(validM){var pv=validM[1].split(/[\/\-]/);validade=pv[0]+'/'+pv[1];}
+    return{lote:loteM?loteM[1]:'',validade:validade};
+  }
+  for(var li=0;li<linhas.length;li++){
+    var lRaw=linhas[li];
     var l=(lRaw||'').trim();
-    if(!l||l.length<5)return;
-    if(/^(item|descri|produto|c[oó]digo|quant|unidade|valor|total|cest|cean|ncm)\b/i.test(l))return; // linha de cabeçalho da tabela
+    if(!l||l.length<5)continue;
+    if(/^(item|descri|produto|c[oó]digo|quant|unidade|valor|total|cest|cean|ncm)\b/i.test(l))continue; // linha de cabeçalho da tabela
     // CEAN/EAN: sequência de 12-14 dígitos (código de barras); retira da linha antes de procurar qtd/unidade
     // pra não confundir o código com a quantidade.
     var ceanM=l.match(/\b(\d{12,14})\b/);
     var cean=ceanM?ceanM[1]:'';
     var lBusca=cean?l.replace(cean,' '):l;
-    var m1=lBusca.match(new RegExp('(.{4,70}?)\\s+(\\d+(?:[.,]\\d+)?)\\s*('+unidades+')\\b','i'));
-    if(!m1)return;
-    var desc=m1[1].replace(/^\d+\s+/,'').replace(/\s{2,}/g,' ').trim();
-    var qtd=parseFloat(m1[2].replace(',','.'));
-    if(desc.length<4||!(qtd>0)||qtd>=1000000)return;
-    if(/^(TOTAL|VALOR|PESO|FRETE|DESCONTO|SUBTOTAL)/i.test(desc))return;
-    // Valor unitário: primeiro valor em formato monetário (com centavos) DEPOIS da qtd/unidade na linha.
-    var resto=lBusca.slice(m1.index+m1[0].length);
-    var vM=resto.match(/\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2}/);
-    var vUnit=vM?parseFloat(vM[0].replace(/\./g,'').replace(',','.')):0;
-    itens.push({descricao:desc.toUpperCase(),qtd:qtd,unidade:m1[3].toUpperCase(),cean:cean,vUnit:vUnit||0});
-  });
+    var desc='',qtd=0,unidade='',vUnit=0,achou=false;
+    // TENTATIVA 1 (preferida): ordem real da DANFE — CÓDIGO/DESCRIÇÃO/NCM/CST/CFOP/UNID/QUANT/V.UNIT/V.TOTAL.
+    // Busca o token de UNIDADE (bate com a lista conhecida) seguido de um NÚMERO — como CFOP/NCM vêm
+    // ANTES da unidade (nunca depois), isso evita ler o CFOP como se fosse a quantidade (bug reportado:
+    // quantidade sempre saindo como um CFOP comum, ex. "5102").
+    var toks=lBusca.split(/\s+/).filter(Boolean);
+    for(var i=0;i<toks.length-1;i++){
+      var tUp=toks[i].toUpperCase().replace(/[^A-Z]/g,'');
+      if(unidadesSet[tUp]&&/^\d+(?:[.,]\d+)?$/.test(toks[i+1])){
+        var q1=parseFloat(toks[i+1].replace(',','.'));
+        if(!(q1>0)||q1>=1000000)continue;
+        var descToks=toks.slice(0,i);
+        while(descToks.length>1&&/^\d{1,8}$/.test(descToks[descToks.length-1]))descToks.pop(); // descarta código/NCM/CST/CFOP colados antes da unidade
+        var d1=descToks.join(' ').trim();
+        if(d1.length<4||/^(TOTAL|VALOR|PESO|FRETE|DESCONTO|SUBTOTAL)/i.test(d1))continue;
+        desc=d1;qtd=q1;unidade=tUp;vUnit=achaValorMonetario(toks.slice(i+2));achou=true;break;
+      }
+    }
+    // TENTATIVA 2 (fallback): layouts simples sem códigos fiscais — "descrição qtd unidade" (ordem antiga).
+    if(!achou){
+      var m1=lBusca.match(new RegExp('(.{4,70}?)\\s+(\\d+(?:[.,]\\d+)?)\\s*('+unidades+')\\b','i'));
+      if(m1){
+        var d2=m1[1].replace(/^\d+\s+/,'').replace(/\s{2,}/g,' ').trim();
+        var q2=parseFloat(m1[2].replace(',','.'));
+        if(d2.length>=4&&q2>0&&q2<1000000&&!/^(TOTAL|VALOR|PESO|FRETE|DESCONTO|SUBTOTAL)/i.test(d2)){
+          desc=d2;qtd=q2;unidade=m1[3].toUpperCase();
+          vUnit=achaValorMonetario(lBusca.slice(m1.index+m1[0].length).split(/\s+/).filter(Boolean));
+          achou=true;
+        }
+      }
+    }
+    if(!achou)continue;
+    var lv=achaLoteValidade(l,linhas[li+1]);
+    itens.push({descricao:desc.toUpperCase(),qtd:qtd,unidade:unidade,cean:cean,vUnit:vUnit||0,lote:lv.lote,validade:lv.validade});
+  }
   return{nNF:nNF,dataEmissao:dataEmissao,valorTotal:valorTotal,itens:itens};
 }
 
@@ -7913,7 +7952,7 @@ function ConciliacaoFiscal(props){
         var med=(top&&top.score>=80)?top.m:null; // só auto-vincula com confiança alta; o resto fica pra revisão
         _pdfItSeq++;
         return{key:'pdfit'+_pdfItSeq,xProd:it.descricao,qtd:String(Math.round(it.qtd)),unidade:it.unidade,cean:it.cean||'',vUnit:it.vUnit||0,
-          medId:med?med.id:'',medNome:med?med.nome:'',busca:'',lote:'',validade:'',conciliado:false,
+          medId:med?med.id:'',medNome:med?med.nome:'',busca:'',lote:it.lote||'',validade:it.validade||'',conciliado:false,
           sugestoes:med?[]:candidatos.filter(function(x){return !med||x.m.id!==med.id;})};
       }));
       setPdfOk(parsed.itens.length+' item(ns) identificado(s) no PDF! Confira os vínculos, marque os conciliados e registre.');
