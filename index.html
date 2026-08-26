@@ -7552,7 +7552,36 @@ function TourEngine(props){
 }
 
 // ===== Módulo de Recebimento e Conciliação Fiscal =====
-var _recSeq=0;var _nfSeq=0;
+var _recSeq=0;var _nfSeq=0;var _pdfItSeq=0;
+
+// Extrai número/data/valor da nota e as linhas de item (descrição+qtd+unidade) do texto de um PDF de NF.
+// Mesma técnica já usada em TabNotas (pdf.js + regex) — função própria e independente pra não acoplar
+// as duas telas (Conciliação Fiscal x Conferência de Notas continuam evoluindo sem se atrapalhar).
+function _parsearPDFNotaConciliacao(texto){
+  var nNFm=texto.match(/N[uU][mM][eE][rR][oO]\s*:?\s*(\d{1,9})/)||texto.match(/NF[\s\-e]*n?[\s\.]*[oO°]?[\s\.]*:?\s*(\d{6,9})/i)||texto.match(/\b(\d{6,9})\b/);
+  var nNF=nNFm?nNFm[1]:'';
+  var dtm=texto.match(/emiss[ao][oa][:\s]*(\d{2}[\/\-]\d{2}[\/\-]\d{4})/i)||texto.match(/(\d{2}\/\d{2}\/\d{4})/);
+  var dataEmissao='';
+  if(dtm){var pts=dtm[1].split(/[\/\-]/);dataEmissao=pts[2]+'-'+pts[1]+'-'+pts[0];}
+  var vtm=texto.match(/VALOR\s*TOTAL\s*[:\s]*(R\$\s*)?([\d.,]+)/i)||texto.match(/TOTAL\s*[:\s]*(R\$\s*)?([\d.,]+)/i);
+  var valorTotal=vtm?(vtm[2]||vtm[1]||'').replace(/[R$\s]/g,'').replace('.','').replace(',','.').trim():'';
+  var itens=[];
+  var unidades='UN|UNID|AMP|AMPOLA|FR|FRASCO|CX|CAIXA|CP|COMP|ML|KG|G|VD|PC|PCT|BIS|CAP|SER|BCA|FAR|SAC|TB|TUBO';
+  var linhas=texto.split('\n');
+  for(var i=0;i<linhas.length;i++){
+    var l=linhas[i].trim();
+    if(!l||l.length<5)continue;
+    var m1=l.match(new RegExp('(.{4,60}?)\\s+(\\d+(?:[.,]\\d+)?)\\s+('+unidades+')\\b','i'));
+    if(m1){
+      var desc=m1[1].replace(/^\d+\s+/,'').trim();
+      var qtd=parseFloat(m1[2].replace(',','.'));
+      if(desc.length>=4&&qtd>0&&qtd<100000&&!/^(TOTAL|VALOR|PESO|FRETE|DESCONTO)/i.test(desc)){
+        itens.push({descricao:desc.toUpperCase(),qtd:qtd,unidade:m1[3].toUpperCase()});
+      }
+    }
+  }
+  return{nNF:nNF,dataEmissao:dataEmissao,valorTotal:valorTotal,itens:itens};
+}
 
 // ---- Parte 2: comparação automática recebimento × nota fiscal (pura, testável) ----
 // Ao conciliar, o estoque passa a refletir a quantidade da NOTA FISCAL.
@@ -7763,6 +7792,18 @@ function ConciliacaoFiscal(props){
   var _concs=useState([]);var concs=_concs[0];var setConcs=_concs[1];
   var _concAtual=useState(null);var concAtual=_concAtual[0];var setConcAtual=_concAtual[1];// {id, itens, statusGeral,...}
   var _det=useState(null);var detalhe=_det[0];var setDetalhe=_det[1];
+  // Importação de PDF da nota fiscal — fluxo independente do "Conciliar" manual acima: registra a nota
+  // direto (soma ao estoque), sem depender de já existir um Recebimento Físico pendente pra vincular.
+  var _pdfItens=useState([]);var pdfItens=_pdfItens[0];var setPdfItens=_pdfItens[1];
+  var _pdfFoco=useState(null);var pdfFoco=_pdfFoco[0];var setPdfFoco=_pdfFoco[1];
+  var _pdfProcessando=useState(false);var pdfProcessando=_pdfProcessando[0];var setPdfProcessando=_pdfProcessando[1];
+  var _pdfSaving=useState(false);var pdfSaving=_pdfSaving[0];var setPdfSaving=_pdfSaving[1];
+  var _pdfErro=useState('');var pdfErro=_pdfErro[0];var setPdfErro=_pdfErro[1];
+  var _pdfOk=useState('');var pdfOk=_pdfOk[0];var setPdfOk=_pdfOk[1];
+  var _pdfNumero=useState('');var pdfNumero=_pdfNumero[0];var setPdfNumero=_pdfNumero[1];
+  var _pdfEmissao=useState('');var pdfEmissao=_pdfEmissao[0];var setPdfEmissao=_pdfEmissao[1];
+  var _pdfForn=useState('');var pdfForn=_pdfForn[0];var setPdfForn=_pdfForn[1];
+  var _pdfValor=useState('');var pdfValor=_pdfValor[0];var setPdfValor=_pdfValor[1];
 
   useEffect(function(){
     var u1=db.collection('recebimentos').orderBy('criadoEm','desc').limit(200).onSnapshot(function(sn){setRecs(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));},function(){});
@@ -7777,6 +7818,75 @@ function ConciliacaoFiscal(props){
   function addNf(){setNfItens(function(arr){return arr.concat([blankNfItem()]);});}
   function delNf(key){setNfItens(function(arr){return arr.length<=1?arr:arr.filter(function(it){return it.key!==key;});});}
   function escolherMed(key,m){setNf(key,{medId:m.id,medNome:m.nome,busca:''});setFocoItem(null);}
+
+  // ---- Importação de PDF da nota fiscal ----
+  function setPdfItem(key,patch){setPdfItens(function(arr){return arr.map(function(it){return it.key===key?Object.assign({},it,patch):it;});});}
+  function delPdfItem(key){setPdfItens(function(arr){return arr.filter(function(it){return it.key!==key;});});}
+  function escolherMedPdf(key,m){setPdfItem(key,{medId:m.id,medNome:m.nome,busca:''});setPdfFoco(null);}
+  function toggleConciliadoPdf(key){setPdfItem(key,{conciliado:!pdfItens.find(function(it){return it.key===key;}).conciliado});}
+
+  async function importarPDFNota(e){
+    var file=e.target.files&&e.target.files[0];if(!file)return;
+    if(!file.name.toLowerCase().endsWith('.pdf')){setPdfErro('Selecione um arquivo .pdf da nota fiscal.');e.target.value='';return;}
+    setPdfErro('');setPdfOk('');setPdfProcessando(true);
+    var pdfLib=window.pdfjsLib;
+    if(!pdfLib){setPdfErro('Biblioteca de leitura de PDF não carregada. Recarregue a página.');setPdfProcessando(false);return;}
+    pdfLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    try{
+      var buf=await file.arrayBuffer();
+      var pdf=await pdfLib.getDocument({data:buf}).promise;
+      var texto='';
+      for(var pg=1;pg<=pdf.numPages;pg++){var page=await pdf.getPage(pg);var tc=await page.getTextContent();texto+=tc.items.map(function(i){return i.str;}).join(' ')+'\n';}
+      var parsed=_parsearPDFNotaConciliacao(texto);
+      if(parsed.itens.length===0){setPdfErro('Não foi possível identificar medicamentos no PDF. Confira o arquivo — você ainda pode conferir manualmente na seção acima.');setPdfProcessando(false);e.target.value='';return;}
+      setPdfNumero(parsed.nNF);setPdfEmissao(parsed.dataEmissao);setPdfValor(parsed.valorTotal);
+      setPdfItens(parsed.itens.map(function(it){
+        var sug=_fuzzyMeds(it.descricao,medications,1)[0];
+        var med=(sug&&sug.score>=60)?sug.m:null;
+        _pdfItSeq++;
+        return{key:'pdfit'+_pdfItSeq,xProd:it.descricao,qtd:String(Math.round(it.qtd)),unidade:it.unidade,medId:med?med.id:'',medNome:med?med.nome:'',busca:'',lote:'',validade:'',conciliado:false};
+      }));
+      setPdfOk(parsed.itens.length+' item(ns) identificado(s) no PDF! Confira os vínculos, marque os conciliados e registre.');
+      setTimeout(function(){setPdfOk('');},5000);
+    }catch(ex){setPdfErro('Erro ao ler o PDF: '+((ex&&ex.message)?ex.message:ex));}
+    setPdfProcessando(false);e.target.value='';
+  }
+
+  // Registra a nota importada: TODOS os itens vinculados a um medicamento entram no estoque (batch
+  // atômico, mesmo padrão do Recebimento Físico); os marcados "conciliado" ficam OK, os demais viram
+  // divergência (aparecem no Painel de Divergências) e desaparecem sozinhos quando o estoque zerar.
+  async function registrarNotaImportada(){
+    var validos=pdfItens.filter(function(it){return it.medId&&(parseFloat(it.qtd)||0)>0;});
+    if(validos.length===0){setPdfErro('Vincule ao menos um item a um medicamento do cadastro antes de registrar.');return;}
+    setPdfSaving(true);
+    try{
+      var now=new Date().toISOString();
+      var batch=db.batch();
+      var rows=validos.map(function(it){
+        var qtdNum=Math.round(parseFloat(it.qtd))||0;
+        var entryRef=db.collection('entries').doc();
+        batch.set(entryRef,{
+          criadoEm:now,date:pdfEmissao||todayStr(),autorId:user.uid||'',autorNome:user.name||'',autorCargo:user.role||'',autorColor:user.color||B,
+          tipo:'entrada',medicamentoId:it.medId,medicamentoNome:it.medNome,quantidade:qtdNum,
+          lote:(it.lote||'').trim(),validade:_normValidade((it.validade||'').trim()),
+          observacao:'Nota Fiscal '+(pdfNumero||'(a verificar)')+' — importação PDF'+(it.conciliado?'':' (divergência: não conciliado na conferência)'),
+          origemConciliacaoPDF:true
+        });
+        return{medicamentoId:it.medId,medicamentoNome:it.medNome,qtdRecebida:qtdNum,qtdFaturada:qtdNum,status:it.conciliado?'conciliado':'divergente',lote:(it.lote||'').trim(),justificativa:'',acaoTomada:'',origemPdf:true};
+      });
+      var concRef=db.collection('conciliacoes').doc();
+      var statusGeral=_concStatusGeral(rows);
+      batch.set(concRef,{recebimentoId:'',origem:'importacao_pdf',notaNumero:(pdfNumero||'').trim(),notaSerie:'',notaDataEmissao:pdfEmissao||'',fornecedor:(pdfForn||'').trim(),valorTotal:parseFloat(String(pdfValor||'').replace(',','.'))||0,anexoURL:'',itens:rows,statusGeral:statusGeral,criadoEm:now,criadoPor:user.name||'',criadoPorId:user.uid||''});
+      await batch.commit();
+      var nDiv=rows.filter(function(r){return r.status==='divergente';}).length;
+      var puladas=pdfItens.length-validos.length;
+      logAcao('nota_pdf_importada','Nota '+(pdfNumero||'(sem número)')+' importada via PDF — '+rows.length+' item(ns), '+nDiv+' divergência(s)'+(puladas>0?', '+puladas+' sem vínculo':''),null,concRef.id);
+      setPdfOk('✅ Nota importada! '+rows.length+' item(ns) somados ao estoque'+(nDiv>0?' — '+nDiv+' não conciliado(s) em Divergências.':'.')+(puladas>0?' ⚠️ '+puladas+' item(ns) sem medicamento vinculado NÃO foram registrados.':''));
+      setTimeout(function(){setPdfOk('');},6000);
+      setPdfItens([]);setPdfNumero('');setPdfEmissao('');setPdfForn('');setPdfValor('');
+    }catch(e){setPdfErro('Erro ao registrar: '+((e&&e.message)?e.message:e));}
+    setPdfSaving(false);
+  }
 
   var pendentes=recs.filter(function(r){return (r.status||'pendente')==='pendente';});
 
@@ -7850,6 +7960,67 @@ function ConciliacaoFiscal(props){
 
   return(
     <div>
+      {/* ===== Importação de PDF da nota fiscal ===== */}
+      <div style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9',marginBottom:16}}>
+        <div style={{fontWeight:800,fontSize:15,color:'#1E293B',marginBottom:4}}>📄 Importar PDF da Nota Fiscal</div>
+        <div style={{fontSize:11,color:'#94A3B8',marginBottom:14}}>O app lê os itens do PDF automaticamente. Marque "Conciliado" nos que conferem — os demais entram no estoque normalmente, mas ficam como divergência no painel ao lado.</div>
+        <label style={{display:'block',cursor:pdfProcessando?'default':'pointer'}}>
+          <div style={{border:'2px dashed #1351B4',borderRadius:10,padding:'16px',textAlign:'center',background:'#EFF6FF',marginBottom:8,opacity:pdfProcessando?0.6:1}}>
+            <div style={{fontSize:28,marginBottom:4}}>📂</div>
+            <div style={{fontWeight:700,fontSize:13,color:B,marginBottom:2}}>{pdfProcessando?'Lendo o PDF...':'Clique aqui para selecionar o PDF da nota fiscal'}</div>
+            <div style={{fontSize:11,color:'#64748B'}}>Arquivo .pdf da nota fiscal do fornecedor</div>
+          </div>
+          <input type="file" accept=".pdf" disabled={pdfProcessando} onChange={importarPDFNota} style={{display:'none'}}/>
+        </label>
+        {pdfOk&&<div style={{background:'#DCFCE7',border:'1px solid #86EFAC',borderRadius:10,padding:'10px 12px',fontSize:13,color:'#059669',fontWeight:600,marginBottom:8}}>{pdfOk}</div>}
+        {pdfErro&&<div style={{background:'#FEE2E2',border:'1px solid #FCA5A5',borderRadius:10,padding:'10px 12px',fontSize:13,color:'#DC2626',fontWeight:600,marginBottom:8}}>{pdfErro}</div>}
+
+        {pdfItens.length>0&&<div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
+            <div><label style={lbl}>Número da NF</label><input value={pdfNumero} onChange={function(e){setPdfNumero(e.target.value);}} placeholder="Ex: 12345" style={inp}/></div>
+            <div><label style={lbl}>Data de emissão</label><input type="date" value={pdfEmissao} onChange={function(e){setPdfEmissao(e.target.value);}} style={inp}/></div>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:14}}>
+            <div><label style={lbl}>Fornecedor</label><input value={pdfForn} onChange={function(e){setPdfForn(e.target.value);}} placeholder="Fornecedor da nota" style={inp}/></div>
+            <div><label style={lbl}>Valor total (R$)</label><input value={pdfValor} onChange={function(e){setPdfValor(e.target.value.replace(/[^0-9.,]/g,''));}} inputMode="decimal" placeholder="0,00" style={inp}/></div>
+          </div>
+          <div style={{fontWeight:700,fontSize:13,color:'#334155',marginBottom:8}}>{pdfItens.length} item(ns) do PDF</div>
+          <div style={{display:'flex',flexDirection:'column',gap:10}}>
+            {pdfItens.map(function(it){
+              var sug=(!it.medId&&it.busca.trim())?_fuzzyMeds(it.busca,medications,8):[];
+              return(<div key={it.key} style={{background:it.conciliado?'#F0FDF4':'#FFFBEB',borderRadius:12,padding:12,border:'1px solid '+(it.conciliado?'#BBF7D0':'#FDE68A')}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:8,gap:8}}>
+                  <div style={{fontSize:12,color:'#475569'}}>Nota diz: <strong>{it.xProd}</strong> · {it.qtd} {it.unidade}</div>
+                  <button onClick={function(){delPdfItem(it.key);}} style={{background:'#FEE2E2',border:'none',borderRadius:8,width:28,height:28,cursor:'pointer',fontSize:13,color:'#DC2626',flexShrink:0}}>✕</button>
+                </div>
+                {it.medId?
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,background:'#EFF6FF',border:'1.5px solid #BFDBFE',borderRadius:10,padding:'9px 12px',marginBottom:8}}>
+                    <div style={{fontWeight:700,fontSize:13,color:B}}>💊 {it.medNome}</div>
+                    <button onClick={function(){setPdfItem(it.key,{medId:'',medNome:'',busca:''});setPdfFoco(it.key);}} style={{background:'#fff',border:'1px solid #BFDBFE',borderRadius:8,padding:'4px 10px',fontSize:11,color:B,cursor:'pointer',fontWeight:600}}>Trocar</button>
+                  </div>
+                  :<div style={{position:'relative',marginBottom:8}}>
+                    <input value={it.busca} onChange={function(e){setPdfItem(it.key,{busca:e.target.value});setPdfFoco(it.key);}} onFocus={function(){setPdfFoco(it.key);}} placeholder="Vincular a medicamento do cadastro..." style={inp}/>
+                    {pdfFoco===it.key&&sug.length>0&&<div style={{position:'absolute',top:'100%',left:0,right:0,background:'#fff',border:'1.5px solid #E2E8F0',borderRadius:10,marginTop:4,zIndex:20,maxHeight:200,overflowY:'auto',boxShadow:'0 8px 24px rgba(0,0,0,.12)'}}>
+                      {sug.map(function(x){var m=x.m;return<button key={m.id} onClick={function(){escolherMedPdf(it.key,m);}} style={{width:'100%',textAlign:'left',padding:'10px 12px',border:'none',borderBottom:'1px solid #F1F5F9',background:'#fff',cursor:'pointer',fontSize:13,color:'#1E293B'}}>{m.nome}</button>;})}
+                    </div>}
+                    {pdfFoco===it.key&&it.busca.trim()&&sug.length===0&&<div style={{fontSize:11,color:'#94A3B8',marginTop:4}}>Nenhum medicamento encontrado no cadastro.</div>}
+                  </div>}
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:8}}>
+                  <div><label style={lbl}>Qtd</label><input type="number" min="1" inputMode="numeric" value={it.qtd} onChange={function(e){setPdfItem(it.key,{qtd:e.target.value.replace(/[^0-9]/g,'')});}} style={inp}/></div>
+                  <div><label style={lbl}>Lote</label><input value={it.lote} onChange={function(e){setPdfItem(it.key,{lote:e.target.value});}} placeholder="Lote" style={inp}/></div>
+                  <div><label style={lbl}>Validade</label><input value={it.validade} onChange={function(e){setPdfItem(it.key,{validade:e.target.value});}} placeholder="MM/AAAA" inputMode="numeric" style={inp}/></div>
+                </div>
+                <label style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer'}}>
+                  <input type="checkbox" checked={!!it.conciliado} onChange={function(){toggleConciliadoPdf(it.key);}} style={{width:18,height:18}}/>
+                  <span style={{fontSize:13,fontWeight:700,color:it.conciliado?'#059669':'#B45309'}}>{it.conciliado?'✅ Conciliado — confere com a nota':'⚠️ Não conciliado — vai para Divergências'}</span>
+                </label>
+              </div>);
+            })}
+          </div>
+          <button onClick={registrarNotaImportada} disabled={pdfSaving} style={{marginTop:12,width:'100%',padding:'14px',background:pdfSaving?'#94A3B8':'#0C6B3E',border:'none',borderRadius:12,color:'#fff',fontWeight:800,fontSize:15,cursor:pdfSaving?'default':'pointer'}}>{pdfSaving?'Registrando...':'✅ Registrar Nota Importada'}</button>
+        </div>}
+      </div>
+
       <div style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9',marginBottom:16}}>
         <div style={{fontWeight:800,fontSize:15,color:'#1E293B',marginBottom:4}}>Nota fiscal</div>
         <div style={{fontSize:11,color:'#94A3B8',marginBottom:14}}>Ao conciliar, o estoque é ajustado para refletir a nota fiscal. Divergências ficam registradas como pendentes.</div>
@@ -7996,6 +8167,7 @@ function RowAcoes(props){
 // ---- Parte 3: Painel de Divergências ----
 function PainelDivergencias(props){
   var B='#1351B4';
+  var stock=props.stock||{};
   var _recs=useState([]);var recs=_recs[0];var setRecs=_recs[1];
   var _concs=useState([]);var concs=_concs[0];var setConcs=_concs[1];
   var _fDe=useState('');var fDe=_fDe[0];var setFDe=_fDe[1];
@@ -8003,6 +8175,23 @@ function PainelDivergencias(props){
   var _fForn=useState('');var fForn=_fForn[0];var setFForn=_fForn[1];
   var _fProd=useState('');var fProd=_fProd[0];var setFProd=_fProd[1];
   var _fStatus=useState('todos');var fStatus=_fStatus[0];var setFStatus=_fStatus[1];
+  // Divergências criadas pela importação de PDF (Conciliação Fiscal) somem sozinhas da lista quando o
+  // estoque do medicamento chega a zero (saída completa) — debounce por doc pra não reenviar update
+  // repetido enquanto o listener do Firestore ainda não refletiu a alteração anterior.
+  var _lastAutoResolve=useRef({});
+  useEffect(function(){
+    (concs||[]).forEach(function(cc){
+      if(!cc.itens||!cc.itens.length)return;
+      var temZerado=cc.itens.some(function(it){return it.origemPdf&&it.status==='divergente'&&(stock[it.medicamentoId]||0)<=0;});
+      if(!temZerado)return;
+      var last=_lastAutoResolve.current[cc.id]||0;
+      if(Date.now()-last<4000)return;
+      _lastAutoResolve.current[cc.id]=Date.now();
+      var novos=cc.itens.filter(function(it){return !(it.origemPdf&&it.status==='divergente'&&(stock[it.medicamentoId]||0)<=0);});
+      var sg=_concStatusGeral(novos);
+      db.collection('conciliacoes').doc(cc.id).update({itens:novos,statusGeral:sg}).catch(function(){});
+    });
+  },[concs,stock]);
 
   useEffect(function(){
     var u1=db.collection('recebimentos').orderBy('criadoEm','desc').limit(500).onSnapshot(function(sn){setRecs(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));},function(){});
@@ -8127,7 +8316,7 @@ function RelatoriosRecebimento(props){
 }
 
 function TabRecebimento(props){
-  var user=props.user;var medications=props.medications||[];var onSave=props.onSave;
+  var user=props.user;var medications=props.medications||[];var onSave=props.onSave;var stock=props.stock||{};
   var B='#1351B4';
   function blankItem(){_recSeq++;return{key:'it'+_recSeq,medId:'',medNome:'',busca:'',qtd:'',lote:'',validade:'',obs:''};}
   var _data=useState(todayStr());var data=_data[0];var setData=_data[1];
@@ -8384,7 +8573,7 @@ function TabRecebimento(props){
       </div>
 
       {aba==='conciliacao'&&<ConciliacaoFiscal user={user} medications={medications}/>}
-      {aba==='divergencias'&&<PainelDivergencias user={user}/>}
+      {aba==='divergencias'&&<PainelDivergencias user={user} stock={stock}/>}
       {aba==='relatorios'&&<RelatoriosRecebimento user={user}/>}
 
       {aba==='fisico'&&<div>
@@ -9073,7 +9262,7 @@ return(
         {tab==='previsao'&&(user.role==='gestor'||user.role==='tecnico')&&<ErrBoundary><TabPrevisao user={user} entries={entries} medications={meds} stock={stock} db={db}/></ErrBoundary>}
         {tab==='histcontas'&&can(user.role,'log')&&<TabHistContas/>}
         {tab==='antibiotico'&&<TabAntibiotico user={user} medications={meds} stock={stock} allUsers={allUsers}/>}
-        {tab==='recebimento'&&<ErrBoundary><TabRecebimento user={user} medications={meds} onSave={addEntry}/></ErrBoundary>}
+        {tab==='recebimento'&&<ErrBoundary><TabRecebimento user={user} medications={meds} onSave={addEntry} stock={stock}/></ErrBoundary>}
         {tab==='pacientes'&&<ErrBoundary><TabPacientes user={user} entries={entries}/></ErrBoundary>}
         {tab==='leites'&&<ErrBoundary><TabLeites user={user} medications={meds} stock={stock} onSave={addEntry} confirm2={confirm2} alert2={alert2}/></ErrBoundary>}
         {tab==='admin'&&user.role==='tecnico'&&<TabAdmin user={user} entries={entries} medications={meds} db={db}/>}
