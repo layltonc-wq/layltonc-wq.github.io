@@ -7554,10 +7554,59 @@ function TourEngine(props){
 // ===== Módulo de Recebimento e Conciliação Fiscal =====
 var _recSeq=0;var _nfSeq=0;var _pdfItSeq=0;
 
-// Extrai número/data/valor da nota e as linhas de item (descrição+qtd+unidade) do texto de um PDF de NF.
-// Mesma técnica já usada em TabNotas (pdf.js + regex) — função própria e independente pra não acoplar
-// as duas telas (Conciliação Fiscal x Conferência de Notas continuam evoluindo sem se atrapalhar).
-function _parsearPDFNotaConciliacao(texto){
+// Reconstrói as linhas VISUAIS de um PDF a partir do texto posicional do pdf.js. O pdf.js não devolve
+// quebras de linha — cada página vira um monte de fragmentos de texto com coordenadas (transform[4]=x,
+// transform[5]=y). Sem isso, uma tabela inteira virava UM parágrafo só e o regex de item nunca casava
+// (era a causa raiz de "não lista os medicamentos"). Agrupamos por Y (mesma linha visual, tolerância de
+// poucos pontos) e ordenamos por X dentro da linha (ordem de leitura esquerda→direita).
+async function _extrairLinhasPDF(pdf){
+  var linhas=[];
+  for(var pg=1;pg<=pdf.numPages;pg++){
+    var page=await pdf.getPage(pg);
+    var tc=await page.getTextContent();
+    var grupos=[];
+    tc.items.forEach(function(it){
+      var y=Math.round((it.transform&&it.transform[5])||0);
+      var g=null;
+      for(var gi=0;gi<grupos.length;gi++){if(Math.abs(grupos[gi].y-y)<=2){g=grupos[gi];break;}}
+      if(!g){g={y:y,itens:[]};grupos.push(g);}
+      g.itens.push({x:(it.transform&&it.transform[4])||0,str:it.str});
+    });
+    grupos.sort(function(a,b){return b.y-a.y;});
+    grupos.forEach(function(g){
+      g.itens.sort(function(a,b){return a.x-b.x;});
+      var linha=g.itens.map(function(i){return i.str;}).join(' ').replace(/\s+/g,' ').trim();
+      if(linha)linhas.push(linha);
+    });
+  }
+  return linhas;
+}
+
+// Fallback para PDF de nota escaneada (imagem, sem texto embutido): renderiza cada página num canvas e
+// lê com Tesseract.js — mesma biblioteca de OCR já usada em outras telas do app (Conferência de Notas,
+// leitor de documento). Só é chamado quando a extração de texto normal vem vazia/curta demais.
+async function _ocrPaginasPDF(pdf,onProgresso){
+  var Tesseract=window.Tesseract;
+  if(!Tesseract)return[];
+  var linhas=[];
+  for(var pg=1;pg<=pdf.numPages;pg++){
+    if(onProgresso)onProgresso('OCR: página '+pg+'/'+pdf.numPages+'...');
+    var page=await pdf.getPage(pg);
+    var viewport=page.getViewport({scale:2});
+    var canvas=document.createElement('canvas');
+    canvas.width=viewport.width;canvas.height=viewport.height;
+    var ctx=canvas.getContext('2d');
+    await page.render({canvasContext:ctx,viewport:viewport}).promise;
+    var result=await Tesseract.recognize(canvas,['por','eng']);
+    (result&&result.data&&result.data.text||'').split('\n').forEach(function(l){if(l.trim())linhas.push(l.trim());});
+  }
+  return linhas;
+}
+
+// Extrai número/data/valor da nota (do texto completo) e os itens — descrição, quantidade, unidade,
+// CEAN/EAN (se houver) e valor unitário — a partir das linhas já reconstruídas (visão de tabela real).
+function _parsearPDFNotaConciliacao(linhas){
+  var texto=linhas.join('\n');
   var nNFm=texto.match(/N[uU][mM][eE][rR][oO]\s*:?\s*(\d{1,9})/)||texto.match(/NF[\s\-e]*n?[\s\.]*[oO°]?[\s\.]*:?\s*(\d{6,9})/i)||texto.match(/\b(\d{6,9})\b/);
   var nNF=nNFm?nNFm[1]:'';
   var dtm=texto.match(/emiss[ao][oa][:\s]*(\d{2}[\/\-]\d{2}[\/\-]\d{4})/i)||texto.match(/(\d{2}\/\d{2}\/\d{4})/);
@@ -7566,20 +7615,28 @@ function _parsearPDFNotaConciliacao(texto){
   var vtm=texto.match(/VALOR\s*TOTAL\s*[:\s]*(R\$\s*)?([\d.,]+)/i)||texto.match(/TOTAL\s*[:\s]*(R\$\s*)?([\d.,]+)/i);
   var valorTotal=vtm?(vtm[2]||vtm[1]||'').replace(/[R$\s]/g,'').replace('.','').replace(',','.').trim():'';
   var itens=[];
-  var unidades='UN|UNID|AMP|AMPOLA|FR|FRASCO|CX|CAIXA|CP|COMP|ML|KG|G|VD|PC|PCT|BIS|CAP|SER|BCA|FAR|SAC|TB|TUBO';
-  var linhas=texto.split('\n');
-  for(var i=0;i<linhas.length;i++){
-    var l=linhas[i].trim();
-    if(!l||l.length<5)continue;
-    var m1=l.match(new RegExp('(.{4,60}?)\\s+(\\d+(?:[.,]\\d+)?)\\s+('+unidades+')\\b','i'));
-    if(m1){
-      var desc=m1[1].replace(/^\d+\s+/,'').trim();
-      var qtd=parseFloat(m1[2].replace(',','.'));
-      if(desc.length>=4&&qtd>0&&qtd<100000&&!/^(TOTAL|VALOR|PESO|FRETE|DESCONTO)/i.test(desc)){
-        itens.push({descricao:desc.toUpperCase(),qtd:qtd,unidade:m1[3].toUpperCase()});
-      }
-    }
-  }
+  var unidades='UN|UNID|AMP|AMPOLA|FR|FRASCO|CX|CAIXA|CP|CPR|COMP|ML|KG|G|VD|PC|PCT|BIS|CAP|SER|BCA|FAR|SAC|TB|TUBO|BLISTER|BL';
+  linhas.forEach(function(lRaw){
+    var l=(lRaw||'').trim();
+    if(!l||l.length<5)return;
+    if(/^(item|descri|produto|c[oó]digo|quant|unidade|valor|total|cest|cean|ncm)\b/i.test(l))return; // linha de cabeçalho da tabela
+    // CEAN/EAN: sequência de 12-14 dígitos (código de barras); retira da linha antes de procurar qtd/unidade
+    // pra não confundir o código com a quantidade.
+    var ceanM=l.match(/\b(\d{12,14})\b/);
+    var cean=ceanM?ceanM[1]:'';
+    var lBusca=cean?l.replace(cean,' '):l;
+    var m1=lBusca.match(new RegExp('(.{4,70}?)\\s+(\\d+(?:[.,]\\d+)?)\\s*('+unidades+')\\b','i'));
+    if(!m1)return;
+    var desc=m1[1].replace(/^\d+\s+/,'').replace(/\s{2,}/g,' ').trim();
+    var qtd=parseFloat(m1[2].replace(',','.'));
+    if(desc.length<4||!(qtd>0)||qtd>=1000000)return;
+    if(/^(TOTAL|VALOR|PESO|FRETE|DESCONTO|SUBTOTAL)/i.test(desc))return;
+    // Valor unitário: primeiro valor em formato monetário (com centavos) DEPOIS da qtd/unidade na linha.
+    var resto=lBusca.slice(m1.index+m1[0].length);
+    var vM=resto.match(/\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2}/);
+    var vUnit=vM?parseFloat(vM[0].replace(/\./g,'').replace(',','.')):0;
+    itens.push({descricao:desc.toUpperCase(),qtd:qtd,unidade:m1[3].toUpperCase(),cean:cean,vUnit:vUnit||0});
+  });
   return{nNF:nNF,dataEmissao:dataEmissao,valorTotal:valorTotal,itens:itens};
 }
 
@@ -7804,6 +7861,7 @@ function ConciliacaoFiscal(props){
   var _pdfEmissao=useState('');var pdfEmissao=_pdfEmissao[0];var setPdfEmissao=_pdfEmissao[1];
   var _pdfForn=useState('');var pdfForn=_pdfForn[0];var setPdfForn=_pdfForn[1];
   var _pdfValor=useState('');var pdfValor=_pdfValor[0];var setPdfValor=_pdfValor[1];
+  var _pdfProgresso=useState('');var pdfProgresso=_pdfProgresso[0];var setPdfProgresso=_pdfProgresso[1];
 
   useEffect(function(){
     var u1=db.collection('recebimentos').orderBy('criadoEm','desc').limit(200).onSnapshot(function(sn){setRecs(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));},function(){});
@@ -7822,34 +7880,46 @@ function ConciliacaoFiscal(props){
   // ---- Importação de PDF da nota fiscal ----
   function setPdfItem(key,patch){setPdfItens(function(arr){return arr.map(function(it){return it.key===key?Object.assign({},it,patch):it;});});}
   function delPdfItem(key){setPdfItens(function(arr){return arr.filter(function(it){return it.key!==key;});});}
-  function escolherMedPdf(key,m){setPdfItem(key,{medId:m.id,medNome:m.nome,busca:''});setPdfFoco(null);}
+  function escolherMedPdf(key,m){setPdfItem(key,{medId:m.id,medNome:m.nome,busca:'',sugestoes:[]});setPdfFoco(null);}
   function toggleConciliadoPdf(key){setPdfItem(key,{conciliado:!pdfItens.find(function(it){return it.key===key;}).conciliado});}
 
   async function importarPDFNota(e){
     var file=e.target.files&&e.target.files[0];if(!file)return;
     if(!file.name.toLowerCase().endsWith('.pdf')){setPdfErro('Selecione um arquivo .pdf da nota fiscal.');e.target.value='';return;}
-    setPdfErro('');setPdfOk('');setPdfProcessando(true);
+    setPdfErro('');setPdfOk('');setPdfProcessando(true);setPdfProgresso('Lendo o PDF...');
     var pdfLib=window.pdfjsLib;
-    if(!pdfLib){setPdfErro('Biblioteca de leitura de PDF não carregada. Recarregue a página.');setPdfProcessando(false);return;}
+    if(!pdfLib){setPdfErro('Biblioteca de leitura de PDF não carregada. Recarregue a página.');setPdfProcessando(false);setPdfProgresso('');return;}
     pdfLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     try{
       var buf=await file.arrayBuffer();
       var pdf=await pdfLib.getDocument({data:buf}).promise;
-      var texto='';
-      for(var pg=1;pg<=pdf.numPages;pg++){var page=await pdf.getPage(pg);var tc=await page.getTextContent();texto+=tc.items.map(function(i){return i.str;}).join(' ')+'\n';}
-      var parsed=_parsearPDFNotaConciliacao(texto);
-      if(parsed.itens.length===0){setPdfErro('Não foi possível identificar medicamentos no PDF. Confira o arquivo — você ainda pode conferir manualmente na seção acima.');setPdfProcessando(false);e.target.value='';return;}
+      var linhas=await _extrairLinhasPDF(pdf);
+      // Nota escaneada (imagem, sem texto embutido): o pdf.js não extrai nada útil — cai pro OCR.
+      var textoExtraido=linhas.join(' ').trim();
+      if(textoExtraido.length<30){
+        if(!window.Tesseract){setPdfErro('Este PDF parece ser uma imagem escaneada e a biblioteca de OCR não carregou. Recarregue a página e tente de novo.');setPdfProcessando(false);setPdfProgresso('');e.target.value='';return;}
+        setPdfProgresso('PDF sem texto — lendo por OCR (pode demorar um pouco)...');
+        linhas=await _ocrPaginasPDF(pdf,setPdfProgresso);
+      }
+      setPdfProgresso('Identificando medicamentos...');
+      var parsed=_parsearPDFNotaConciliacao(linhas);
+      if(parsed.itens.length===0){setPdfErro('Não foi possível identificar medicamentos no PDF. Confira o arquivo — você ainda pode conferir manualmente na seção acima.');setPdfProcessando(false);setPdfProgresso('');e.target.value='';return;}
       setPdfNumero(parsed.nNF);setPdfEmissao(parsed.dataEmissao);setPdfValor(parsed.valorTotal);
       setPdfItens(parsed.itens.map(function(it){
-        var sug=_fuzzyMeds(it.descricao,medications,1)[0];
-        var med=(sug&&sug.score>=60)?sug.m:null;
+        // Mesmo matcher usado em Gerenciar Atas/Comparação (siglas + concentração, mais robusto que
+        // busca simples): sugere os candidatos do cadastro mais parecidos com a descrição da nota.
+        var candidatos=_matchItemMeds(it.descricao,medications,5);
+        var top=candidatos[0];
+        var med=(top&&top.score>=80)?top.m:null; // só auto-vincula com confiança alta; o resto fica pra revisão
         _pdfItSeq++;
-        return{key:'pdfit'+_pdfItSeq,xProd:it.descricao,qtd:String(Math.round(it.qtd)),unidade:it.unidade,medId:med?med.id:'',medNome:med?med.nome:'',busca:'',lote:'',validade:'',conciliado:false};
+        return{key:'pdfit'+_pdfItSeq,xProd:it.descricao,qtd:String(Math.round(it.qtd)),unidade:it.unidade,cean:it.cean||'',vUnit:it.vUnit||0,
+          medId:med?med.id:'',medNome:med?med.nome:'',busca:'',lote:'',validade:'',conciliado:false,
+          sugestoes:med?[]:candidatos.filter(function(x){return !med||x.m.id!==med.id;})};
       }));
       setPdfOk(parsed.itens.length+' item(ns) identificado(s) no PDF! Confira os vínculos, marque os conciliados e registre.');
       setTimeout(function(){setPdfOk('');},5000);
     }catch(ex){setPdfErro('Erro ao ler o PDF: '+((ex&&ex.message)?ex.message:ex));}
-    setPdfProcessando(false);e.target.value='';
+    setPdfProcessando(false);setPdfProgresso('');e.target.value='';
   }
 
   // Registra a nota importada: TODOS os itens vinculados a um medicamento entram no estoque (batch
@@ -7868,11 +7938,11 @@ function ConciliacaoFiscal(props){
         batch.set(entryRef,{
           criadoEm:now,date:pdfEmissao||todayStr(),autorId:user.uid||'',autorNome:user.name||'',autorCargo:user.role||'',autorColor:user.color||B,
           tipo:'entrada',medicamentoId:it.medId,medicamentoNome:it.medNome,quantidade:qtdNum,
-          lote:(it.lote||'').trim(),validade:_normValidade((it.validade||'').trim()),
+          lote:(it.lote||'').trim(),validade:_normValidade((it.validade||'').trim()),ean:it.cean||'',
           observacao:'Nota Fiscal '+(pdfNumero||'(a verificar)')+' — importação PDF'+(it.conciliado?'':' (divergência: não conciliado na conferência)'),
           origemConciliacaoPDF:true
         });
-        return{medicamentoId:it.medId,medicamentoNome:it.medNome,qtdRecebida:qtdNum,qtdFaturada:qtdNum,status:it.conciliado?'conciliado':'divergente',lote:(it.lote||'').trim(),justificativa:'',acaoTomada:'',origemPdf:true};
+        return{medicamentoId:it.medId,medicamentoNome:it.medNome,qtdRecebida:qtdNum,qtdFaturada:qtdNum,vUnit:it.vUnit||0,cean:it.cean||'',status:it.conciliado?'conciliado':'divergente',lote:(it.lote||'').trim(),justificativa:'',acaoTomada:'',origemPdf:true};
       });
       var concRef=db.collection('conciliacoes').doc();
       var statusGeral=_concStatusGeral(rows);
@@ -7972,6 +8042,7 @@ function ConciliacaoFiscal(props){
           </div>
           <input type="file" accept=".pdf" disabled={pdfProcessando} onChange={importarPDFNota} style={{display:'none'}}/>
         </label>
+        {pdfProcessando&&pdfProgresso&&<div style={{background:'#EFF6FF',border:'1px solid #BFDBFE',borderRadius:10,padding:'10px 12px',fontSize:12,color:B,fontWeight:600,marginBottom:8}}>⏳ {pdfProgresso}</div>}
         {pdfOk&&<div style={{background:'#DCFCE7',border:'1px solid #86EFAC',borderRadius:10,padding:'10px 12px',fontSize:13,color:'#059669',fontWeight:600,marginBottom:8}}>{pdfOk}</div>}
         {pdfErro&&<div style={{background:'#FEE2E2',border:'1px solid #FCA5A5',borderRadius:10,padding:'10px 12px',fontSize:13,color:'#DC2626',fontWeight:600,marginBottom:8}}>{pdfErro}</div>}
 
@@ -7988,22 +8059,36 @@ function ConciliacaoFiscal(props){
           <div style={{display:'flex',flexDirection:'column',gap:10}}>
             {pdfItens.map(function(it){
               var sug=(!it.medId&&it.busca.trim())?_fuzzyMeds(it.busca,medications,8):[];
+              var statusBadge=it.medId?(it.conciliado?{txt:'✅ Conciliado',cor:'#059669',bg:'#DCFCE7'}:{txt:'⚠️ Não conciliado',cor:'#B45309',bg:'#FEF3C7'}):{txt:'❌ Sem vínculo',cor:'#DC2626',bg:'#FEE2E2'};
               return(<div key={it.key} style={{background:it.conciliado?'#F0FDF4':'#FFFBEB',borderRadius:12,padding:12,border:'1px solid '+(it.conciliado?'#BBF7D0':'#FDE68A')}}>
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:8,gap:8}}>
-                  <div style={{fontSize:12,color:'#475569'}}>Nota diz: <strong>{it.xProd}</strong> · {it.qtd} {it.unidade}</div>
+                  <div style={{fontSize:12,color:'#475569'}}>
+                    <div>Medicamento (nota): <strong>{it.xProd}</strong></div>
+                    <div style={{marginTop:2}}>Quantidade: <strong>{it.qtd} {it.unidade}</strong>{it.cean?<span> · CEAN: <strong>{it.cean}</strong></span>:null}{it.vUnit>0?<span> · V.Unit: <strong>R$ {it.vUnit.toFixed(2).replace('.',',')}</strong></span>:null}</div>
+                  </div>
                   <button onClick={function(){delPdfItem(it.key);}} style={{background:'#FEE2E2',border:'none',borderRadius:8,width:28,height:28,cursor:'pointer',fontSize:13,color:'#DC2626',flexShrink:0}}>✕</button>
                 </div>
+                <div style={{marginBottom:8}}><span style={{display:'inline-block',fontSize:11,fontWeight:800,color:statusBadge.cor,background:statusBadge.bg,borderRadius:6,padding:'2px 8px'}}>{statusBadge.txt}</span></div>
                 {it.medId?
                   <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,background:'#EFF6FF',border:'1.5px solid #BFDBFE',borderRadius:10,padding:'9px 12px',marginBottom:8}}>
                     <div style={{fontWeight:700,fontSize:13,color:B}}>💊 {it.medNome}</div>
                     <button onClick={function(){setPdfItem(it.key,{medId:'',medNome:'',busca:''});setPdfFoco(it.key);}} style={{background:'#fff',border:'1px solid #BFDBFE',borderRadius:8,padding:'4px 10px',fontSize:11,color:B,cursor:'pointer',fontWeight:600}}>Trocar</button>
                   </div>
-                  :<div style={{position:'relative',marginBottom:8}}>
-                    <input value={it.busca} onChange={function(e){setPdfItem(it.key,{busca:e.target.value});setPdfFoco(it.key);}} onFocus={function(){setPdfFoco(it.key);}} placeholder="Vincular a medicamento do cadastro..." style={inp}/>
-                    {pdfFoco===it.key&&sug.length>0&&<div style={{position:'absolute',top:'100%',left:0,right:0,background:'#fff',border:'1.5px solid #E2E8F0',borderRadius:10,marginTop:4,zIndex:20,maxHeight:200,overflowY:'auto',boxShadow:'0 8px 24px rgba(0,0,0,.12)'}}>
-                      {sug.map(function(x){var m=x.m;return<button key={m.id} onClick={function(){escolherMedPdf(it.key,m);}} style={{width:'100%',textAlign:'left',padding:'10px 12px',border:'none',borderBottom:'1px solid #F1F5F9',background:'#fff',cursor:'pointer',fontSize:13,color:'#1E293B'}}>{m.nome}</button>;})}
+                  :<div style={{marginBottom:8}}>
+                    {/* Sugestões automáticas (mesmo matcher de siglas+concentração usado em Gerenciar Atas/Comparação de Pedido) */}
+                    {it.sugestoes&&it.sugestoes.length>0&&<div style={{marginBottom:8}}>
+                      <div style={{fontSize:11,color:'#64748B',marginBottom:4}}>🔎 Parecidos no cadastro:</div>
+                      <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+                        {it.sugestoes.slice(0,4).map(function(x){return(<button key={x.m.id} onClick={function(){escolherMedPdf(it.key,x.m);}} style={{background:'#EFF6FF',border:'1px solid #BFDBFE',borderRadius:7,padding:'5px 10px',fontSize:11,color:B,fontWeight:600,cursor:'pointer'}}>{x.m.nome}</button>);})}
+                      </div>
                     </div>}
-                    {pdfFoco===it.key&&it.busca.trim()&&sug.length===0&&<div style={{fontSize:11,color:'#94A3B8',marginTop:4}}>Nenhum medicamento encontrado no cadastro.</div>}
+                    <div style={{position:'relative'}}>
+                      <input value={it.busca} onChange={function(e){setPdfItem(it.key,{busca:e.target.value});setPdfFoco(it.key);}} onFocus={function(){setPdfFoco(it.key);}} placeholder="Ou busque manualmente no cadastro..." style={inp}/>
+                      {pdfFoco===it.key&&sug.length>0&&<div style={{position:'absolute',top:'100%',left:0,right:0,background:'#fff',border:'1.5px solid #E2E8F0',borderRadius:10,marginTop:4,zIndex:20,maxHeight:200,overflowY:'auto',boxShadow:'0 8px 24px rgba(0,0,0,.12)'}}>
+                        {sug.map(function(x){var m=x.m;return<button key={m.id} onClick={function(){escolherMedPdf(it.key,m);}} style={{width:'100%',textAlign:'left',padding:'10px 12px',border:'none',borderBottom:'1px solid #F1F5F9',background:'#fff',cursor:'pointer',fontSize:13,color:'#1E293B'}}>{m.nome}</button>;})}
+                      </div>}
+                      {pdfFoco===it.key&&it.busca.trim()&&sug.length===0&&<div style={{fontSize:11,color:'#94A3B8',marginTop:4}}>Nenhum medicamento encontrado no cadastro.</div>}
+                    </div>
                   </div>}
                 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:8}}>
                   <div><label style={lbl}>Qtd</label><input type="number" min="1" inputMode="numeric" value={it.qtd} onChange={function(e){setPdfItem(it.key,{qtd:e.target.value.replace(/[^0-9]/g,'')});}} style={inp}/></div>
