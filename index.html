@@ -7613,22 +7613,40 @@ function _parsearPDFNotaConciliacao(linhas){
   var dataEmissao='';
   if(dtm){var pts=dtm[1].split(/[\/\-]/);dataEmissao=pts[2]+'-'+pts[1]+'-'+pts[0];}
   var vtm=texto.match(/VALOR\s*TOTAL\s*[:\s]*(R\$\s*)?([\d.,]+)/i)||texto.match(/TOTAL\s*[:\s]*(R\$\s*)?([\d.,]+)/i);
-  var valorTotal=vtm?(vtm[2]||vtm[1]||'').replace(/[R$\s]/g,'').replace('.','').replace(',','.').trim():'';
+  var valorTotal=vtm?String(_numBR(vtm[2]||vtm[1]||'')||''):'';
   var itens=[];
   var unidadesArr=['UN','UNID','AMP','AMPOLA','FR','FRASCO','CX','CAIXA','CP','CPR','COMP','ML','KG','G','VD','PC','PCT','BIS','CAP','SER','BCA','FAR','SAC','TB','TUBO','BLISTER','BL'];
   var unidadesSet={};unidadesArr.forEach(function(u){unidadesSet[u]=true;});
   var unidades=unidadesArr.join('|');
+  // Número em formato brasileiro: vírgula = separador decimal, ponto = separador de milhar (nunca o
+  // contrário). Sem isso, "15.000" (quinze mil) virava 15 — o ponto era lido como ponto decimal.
+  // Só quando NÃO há vírgula e o padrão é claramente milhar (grupos de 3 dígitos, ex. "15.000",
+  // "1.234.567") os pontos são removidos; um único ponto com 1-2 dígitos (ex. "15.5") continua decimal.
+  function _numBR(tok){
+    var t=String(tok||'').trim();
+    if(t.indexOf(',')>=0)return parseFloat(t.replace(/\./g,'').replace(',','.'))||0;
+    if(/^\d{1,3}(?:\.\d{3})+$/.test(t))return parseFloat(t.replace(/\./g,''))||0;
+    return parseFloat(t)||0;
+  }
+  var NUM_BR_RE='\\d{1,3}(?:\\.\\d{3})*(?:,\\d+)?|\\d+(?:[.,]\\d+)?';
   // DANFE às vezes traz o valor unitário com até 10 casas decimais (campo vUnCom da NF-e) — não só 2.
-  function achaValorMonetario(toks){for(var j=0;j<toks.length;j++){if(/^\d{1,3}(?:\.\d{3})*,\d{2,10}$|^\d+,\d{2,10}$/.test(toks[j]))return parseFloat(toks[j].replace(/\./g,'').replace(',','.'));}return 0;}
+  function achaValorMonetario(toks){for(var j=0;j<toks.length;j++){if(new RegExp('^(?:'+NUM_BR_RE+')$').test(toks[j])&&/[.,]/.test(toks[j]))return _numBR(toks[j]);}return 0;}
   // Lote/validade: nem sempre estão na mesma linha da tabela — em muitas DANFEs vêm em "Dados Adicionais
   // do Produto" logo abaixo do item (rastreabilidade ANVISA). Procura primeiro na própria linha do item,
   // senão espia a linha seguinte (best-effort — o campo continua editável na tela se não achar nada).
+  // Aceita as abreviações comuns de validade/vencimento (VAL/VENC/VENCTO/VENCIMENTO/VALIDADE) — \b nos dois
+  // lados evita casar "VAL" dentro de "VALOR". Aceita MM/AAAA (guarda direto) ou DD/MM/AAAA (descarta o dia).
   function achaLoteValidade(linhaAtual,linhaSeguinte){
     var alvo=linhaAtual+' '+(linhaSeguinte||'');
-    var loteM=alvo.match(/LOTE[:\s]*([A-Z0-9][A-Z0-9\-\.\/]{1,19})/i);
-    var validM=alvo.match(/VALID(?:ADE)?[:\s]*(\d{2}[\/\-]\d{2,4})/i);
+    var loteM=alvo.match(/LOTE[:\s]*([A-Z0-9][A-Z0-9\-\.]{1,19})/i);
+    var rotulo='\\b(?:VALIDADE|VENCIMENTO|VENCTO|VENC|VAL)\\b[.:\\s]*';
+    // Tenta DD/MM/AAAA primeiro (3 grupos, ano com 4 dígitos); só cai pra MM/AAAA ou MM/AA (2 grupos) se
+    // não achar — testar os dois juntos numa regex só era ambíguo e cortava o ano de "08/2027" ao meio.
+    var validDMA=alvo.match(new RegExp(rotulo+'(\\d{2})[\\/\\-](\\d{2})[\\/\\-](\\d{4})\\b','i'));
+    var validMA=!validDMA&&alvo.match(new RegExp(rotulo+'(\\d{2})[\\/\\-](\\d{2,4})\\b','i'));
     var validade='';
-    if(validM){var pv=validM[1].split(/[\/\-]/);validade=pv[0]+'/'+pv[1];}
+    if(validDMA)validade=validDMA[2]+'/'+validDMA[3];
+    else if(validMA)validade=validMA[1]+'/'+validMA[2];
     return{lote:loteM?loteM[1]:'',validade:validade};
   }
   for(var li=0;li<linhas.length;li++){
@@ -7650,7 +7668,7 @@ function _parsearPDFNotaConciliacao(linhas){
     for(var i=0;i<toks.length-1;i++){
       var tUp=toks[i].toUpperCase().replace(/[^A-Z]/g,'');
       if(unidadesSet[tUp]&&/^\d+(?:[.,]\d+)?$/.test(toks[i+1])){
-        var q1=parseFloat(toks[i+1].replace(',','.'));
+        var q1=_numBR(toks[i+1]);
         if(!(q1>0)||q1>=1000000)continue;
         var descToks=toks.slice(0,i);
         while(descToks.length>1&&/^\d{1,8}$/.test(descToks[descToks.length-1]))descToks.pop(); // descarta código/NCM/CST/CFOP colados antes da unidade
@@ -7664,7 +7682,7 @@ function _parsearPDFNotaConciliacao(linhas){
       var m1=lBusca.match(new RegExp('(.{4,70}?)\\s+(\\d+(?:[.,]\\d+)?)\\s*('+unidades+')\\b','i'));
       if(m1){
         var d2=m1[1].replace(/^\d+\s+/,'').replace(/\s{2,}/g,' ').trim();
-        var q2=parseFloat(m1[2].replace(',','.'));
+        var q2=_numBR(m1[2]);
         if(d2.length>=4&&q2>0&&q2<1000000&&!/^(TOTAL|VALOR|PESO|FRETE|DESCONTO|SUBTOTAL)/i.test(d2)){
           desc=d2;qtd=q2;unidade=m1[3].toUpperCase();
           vUnit=achaValorMonetario(lBusca.slice(m1.index+m1[0].length).split(/\s+/).filter(Boolean));
