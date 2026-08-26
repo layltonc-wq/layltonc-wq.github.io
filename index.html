@@ -5982,9 +5982,10 @@ function TabPrevisao(props){
       var saldo=item?(item.qtdTeto-((item.pedidoAcumulado)||0)):'-';
       var vU=x.vUnit;
       var vT=x.vTotal;
-      var descCell=x.desc+(x.naoVinculado?' <span style="color:#B45309;font-weight:700;font-size:10px;white-space:nowrap">⚠️ MEDICAMENTO NÃO VINCULADO</span>':'');
-      return '<tr'+(x.naoVinculado?' style="background:#FFFBEB"':'')+'><td style="padding:6px 8px;border:1px solid #ddd">'+(x.num||'')+
-        '</td><td style="padding:6px 8px;border:1px solid #ddd">'+descCell+
+      // Mudança 4: o aviso "NÃO VINCULADO" fica só na tela (Gerenciar Atas) — o PDF é documento oficial
+      // e não precisa expor esse detalhe interno de cadastro.
+      return '<tr><td style="padding:6px 8px;border:1px solid #ddd">'+(x.num||'')+
+        '</td><td style="padding:6px 8px;border:1px solid #ddd">'+x.desc+
         '</td><td style="padding:6px 8px;border:1px solid #ddd;text-align:center">'+x.unidade+
         '</td><td style="padding:6px 8px;border:1px solid #ddd;text-align:center">'+qtd+
         '</td><td style="padding:6px 8px;border:1px solid #ddd;text-align:center">'+saldo+
@@ -6070,9 +6071,10 @@ function TabPrevisao(props){
       html+='<div class="section-title">'+sec.titulo+'</div>';
       html+='<table><thead><tr><th style="width:90px">QUANT</th><th>DISCRIMINAÇÃO</th><th style="width:80px">V.UNIT</th><th style="width:90px">V.TOTAL</th></tr></thead><tbody>';
       sec.itens.forEach(function(it){
-        html+='<tr'+(it.naoVinculado?' style="background:#FFFBEB"':'')+'>';
+        // Mudança 4: aviso "NÃO VINCULADO" só na tela — não aparece no PDF oficial.
+        html+='<tr>';
         html+='<td class="num">'+it.qtd+' '+(it.unidade||'UN')+'</td>';
-        html+='<td>'+it.desc+(it.naoVinculado?' <span style="color:#B45309;font-weight:700;font-size:10px;white-space:nowrap">⚠️ MEDICAMENTO NÃO VINCULADO</span>':'')+'</td>';
+        html+='<td>'+it.desc+'</td>';
         html+='<td class="vunit">'+(it.vUnit>0?'R$ '+it.vUnit.toFixed(2).replace('.',','):'—')+'</td>';
         html+='<td class="vtotal">'+(it.vTotal>0?'R$ '+it.vTotal.toFixed(2).replace('.',','):'—')+'</td>';
         html+='</tr>';
