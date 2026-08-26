@@ -5478,6 +5478,7 @@ function TabPrevisao(props){
   var _diasPrev=useState(30);var diasPrev=_diasPrev[0];var setDiasPrev=_diasPrev[1];
   var _ajustes=useState({});var ajustes=_ajustes[0];var setAjustes=_ajustes[1];
   var _precos=useState({});var precos=_precos[0];var setPrecos=_precos[1];// valor unitário manual por medicamento (string)
+  var _vincItemLoading=useState(null);var vincItemLoading=_vincItemLoading[0];var setVincItemLoading=_vincItemLoading[1];// item de ATA sendo vinculado automaticamente (Mudança 4)
   var _ataAberta=useState(null);var ataAberta=_ataAberta[0];var setAtaAberta=_ataAberta[1];
   var _msg=useState('');var msg=_msg[0];var setMsg=_msg[1];
   // estados de cadastro de ata
@@ -5668,14 +5669,30 @@ function TabPrevisao(props){
   function linhasPedidoAta(ata){
     var itensPorMed={};
     if(ata&&ata.itens)ata.itens.forEach(function(it){if(it.medicamentoId)itensPorMed[it.medicamentoId]=it;});
-    return medsDaAta(ata.id).map(function(med){
+    var linhas=medsDaAta(ata.id).map(function(med){
       var item=itensPorMed[med.id]||null;
       var qtd=valorPedido(med);
       var vU=valorUnit(med.id,item);
       return {med:med,item:item,qtd:qtd,vUnit:vU,vTotal:qtd*vU,
-              desc:(item&&item.descricao)||med.nome,unidade:(item&&item.unidade)||'UN',num:(item&&item.num)||''};
+              desc:(item&&item.descricao)||med.nome,unidade:(item&&item.unidade)||'UN',num:(item&&item.num)||'',naoVinculado:false};
     }).filter(function(x){return x.qtd>0;});
+    // Mudança 4: itens da ATA SEM medicamento vinculado (sem medicamentoId ou vínculo órfão) também entram
+    // no pedido, usando o nome registrado na própria ATA. Quantidade/valor via ajuste manual (chave sintética).
+    if(ata&&ata.itens)ata.itens.forEach(function(it,idx){
+      var med=it.medicamentoId?medications.find(function(m){return m.id===it.medicamentoId;}):null;
+      if(med)return; // já contabilizado acima
+      var uKey=itemAtaKey(ata.id,idx);
+      var aj=ajustes[uKey];
+      var qtd=aj!==undefined?(parseInt(aj)||0):0;
+      if(qtd<=0)return;
+      var pm=precos[uKey];var vU=(pm!==undefined&&pm!=='')?(parseFloat(String(pm).replace(',','.'))||0):(it.vUnit||0);
+      linhas.push({med:null,item:it,qtd:qtd,vUnit:vU,vTotal:qtd*vU,
+        desc:it.descricao||'(sem descrição)',unidade:it.unidade||'UN',num:it.num||'',naoVinculado:true});
+    });
+    return linhas;
   }
+  // Chave sintética para ajuste manual de item de ATA ainda sem medicamento vinculado (Mudança 4).
+  function itemAtaKey(ataId,idx){return 'ITEM__'+ataId+'__'+idx;}
 
   // ── AÇÕES ────────────────────────────────────────────────────
   function importarAtaDocx(file){
@@ -5773,6 +5790,25 @@ function TabPrevisao(props){
       }
     }
     return Promise.all(p);
+  }
+  // Mudança 4: vincula automaticamente um item de ATA sem medicamento — cria um cadastro novo usando
+  // EXATAMENTE o nome que consta na ATA (descricao) e já vincula o item a ele.
+  function vincularItemAutomatico(ata,idx){
+    var it=(ata.itens||[])[idx];if(!it)return;
+    var nome=(it.descricao||'').trim();
+    if(!nome){setMsg('e:Item sem descrição — não é possível cadastrar.');setTimeout(function(){setMsg('');},2800);return;}
+    var uKey=itemAtaKey(ata.id,idx);
+    setVincItemLoading(uKey);
+    db.collection('medicamentos').add({nome:nome,categoria:ata.categoria||'medicamento',ean:'',minEstoque:0,ataId:ata.id,criadoEm:new Date().toISOString(),criadoPor:user.name||''})
+      .then(function(ref){
+        return atualizarItemAta(ata.id,ata.itens,{medicamentoId:ref.id},idx).then(function(){
+          // Preserva a quantidade/valor digitados na chave sintética, migrando para a chave do novo med.
+          var ajV=ajustes[uKey];var prV=precos[uKey];
+          if(ajV!==undefined)setAjustes(function(pp){var n=Object.assign({},pp);n[ref.id]=ajV;delete n[uKey];return n;});
+          if(prV!==undefined)setPrecos(function(pp){var n=Object.assign({},pp);n[ref.id]=prV;delete n[uKey];return n;});
+          setVincItemLoading(null);setMsg('ok:"'+nome+'" cadastrado e vinculado!');setTimeout(function(){setMsg('');},2800);
+        });
+      }).catch(function(e){setVincItemLoading(null);setMsg('e:'+((e&&e.message)||e));setTimeout(function(){setMsg('');},3000);});
   }
   function criarAta(){
     if(!novaAta.trim())return;
@@ -5888,9 +5924,14 @@ function TabPrevisao(props){
     var grandTotal=0;
     listaAtas.forEach(function(ata){
       linhasPedidoAta(ata).forEach(function(x){
-        var p=calcularPrevisao(x.med);
         grandTotal+=x.vTotal;
-        dadosGeral.push([ata.nome,LBL[ata.categoria]||ata.categoria,x.med.nome,stock[x.med.id]||0,x.med.minEstoque||0,x.qtd,x.vUnit>0?x.vUnit:'',x.vTotal>0?x.vTotal:'',p.metodo]);
+        if(x.naoVinculado){
+          // Item da ATA sem medicamento vinculado (Mudança 4): nome da ATA + aviso, sem estoque/método.
+          dadosGeral.push([ata.nome,LBL[ata.categoria]||ata.categoria,x.desc+' ⚠️ NÃO VINCULADO','','',x.qtd,x.vUnit>0?x.vUnit:'',x.vTotal>0?x.vTotal:'','não vinculado']);
+        }else{
+          var p=calcularPrevisao(x.med);
+          dadosGeral.push([ata.nome,LBL[ata.categoria]||ata.categoria,x.med.nome,stock[x.med.id]||0,x.med.minEstoque||0,x.qtd,x.vUnit>0?x.vUnit:'',x.vTotal>0?x.vTotal:'',p.metodo]);
+        }
       });
     });
     if(!filtrando)medsSemAta.forEach(function(m){
@@ -5941,8 +5982,9 @@ function TabPrevisao(props){
       var saldo=item?(item.qtdTeto-((item.pedidoAcumulado)||0)):'-';
       var vU=x.vUnit;
       var vT=x.vTotal;
-      return '<tr><td style="padding:6px 8px;border:1px solid #ddd">'+(x.num||'')+
-        '</td><td style="padding:6px 8px;border:1px solid #ddd">'+x.desc+
+      var descCell=x.desc+(x.naoVinculado?' <span style="color:#B45309;font-weight:700;font-size:10px;white-space:nowrap">⚠️ MEDICAMENTO NÃO VINCULADO</span>':'');
+      return '<tr'+(x.naoVinculado?' style="background:#FFFBEB"':'')+'><td style="padding:6px 8px;border:1px solid #ddd">'+(x.num||'')+
+        '</td><td style="padding:6px 8px;border:1px solid #ddd">'+descCell+
         '</td><td style="padding:6px 8px;border:1px solid #ddd;text-align:center">'+x.unidade+
         '</td><td style="padding:6px 8px;border:1px solid #ddd;text-align:center">'+qtd+
         '</td><td style="padding:6px 8px;border:1px solid #ddd;text-align:center">'+saldo+
@@ -5987,7 +6029,7 @@ function TabPrevisao(props){
     // Construir seções por ATA — fonte única linhasPedidoAta (TODOS os meds vinculados, qtd manual+auto).
     var secoes=[];
     listaAtas.forEach(function(ata){
-      var itensPedido=linhasPedidoAta(ata).map(function(x){return {desc:x.desc,unidade:x.unidade,qtd:x.qtd,vUnit:x.vUnit,vTotal:x.vTotal};});
+      var itensPedido=linhasPedidoAta(ata).map(function(x){return {desc:x.desc,unidade:x.unidade,qtd:x.qtd,vUnit:x.vUnit,vTotal:x.vTotal,naoVinculado:x.naoVinculado};});
       if(itensPedido.length>0)secoes.push({titulo:ata.nome.toUpperCase(),itens:itensPedido,cor:COR[ata.categoria]||'#1351B4'});
     });
     // Medicamentos sem ata não entram no PDF oficial
@@ -6028,9 +6070,9 @@ function TabPrevisao(props){
       html+='<div class="section-title">'+sec.titulo+'</div>';
       html+='<table><thead><tr><th style="width:90px">QUANT</th><th>DISCRIMINAÇÃO</th><th style="width:80px">V.UNIT</th><th style="width:90px">V.TOTAL</th></tr></thead><tbody>';
       sec.itens.forEach(function(it){
-        html+='<tr>';
+        html+='<tr'+(it.naoVinculado?' style="background:#FFFBEB"':'')+'>';
         html+='<td class="num">'+it.qtd+' '+(it.unidade||'UN')+'</td>';
-        html+='<td>'+it.desc+'</td>';
+        html+='<td>'+it.desc+(it.naoVinculado?' <span style="color:#B45309;font-weight:700;font-size:10px;white-space:nowrap">⚠️ MEDICAMENTO NÃO VINCULADO</span>':'')+'</td>';
         html+='<td class="vunit">'+(it.vUnit>0?'R$ '+it.vUnit.toFixed(2).replace('.',','):'—')+'</td>';
         html+='<td class="vtotal">'+(it.vTotal>0?'R$ '+it.vTotal.toFixed(2).replace('.',','):'—')+'</td>';
         html+='</tr>';
@@ -6408,9 +6450,11 @@ function TabPrevisao(props){
               </div>);
             })()}
             {/* Definir quantidades/valores do pedido DIRETO na Gerenciar Atas (mesmo estado do consolidado) */}
-            {editAta!==ata.id&&meds.length>0&&(function(){
+            {editAta!==ata.id&&(meds.length>0||(ata.itens&&ata.itens.length>0))&&(function(){
               var itensPorMed={};if(ata.itens)ata.itens.forEach(function(it){if(it.medicamentoId)itensPorMed[it.medicamentoId]=it;});
-              var totalAtaPedido=meds.reduce(function(s,m){return s+valorPedido(m)*valorUnit(m.id,itensPorMed[m.id]||null);},0);
+              // Itens da ATA SEM medicamento vinculado (Mudança 4): sem medicamentoId ou vínculo órfão.
+              var naoVinc=[];if(ata.itens)ata.itens.forEach(function(it,idx){var m=it.medicamentoId?medications.find(function(x){return x.id===it.medicamentoId;}):null;if(!m)naoVinc.push({it:it,idx:idx});});
+              var totalAtaPedido=linhasPedidoAta(ata).reduce(function(s,x){return s+x.vTotal;},0);
               return(<div style={{marginTop:10,background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:10,padding:'10px'}}>
                 <div style={{fontSize:11,fontWeight:700,color:'#475569',marginBottom:8,textTransform:'uppercase',letterSpacing:'.03em'}}>Definir pedido desta ata</div>
                 {meds.slice().sort(function(a,b){return (a.nome||'').localeCompare(b.nome||'');}).map(function(m){
@@ -6432,6 +6476,30 @@ function TabPrevisao(props){
                       <span style={{fontSize:9,color:'#94A3B8',fontWeight:600}}>V.UNIT</span>
                       <input type="text" inputMode="decimal" value={vUnitStr} onChange={function(e){var v=e.target.value;setPrecos(function(pr){var n=Object.assign({},pr);n[m.id]=v;return n;});}} placeholder="R$" style={{width:64,padding:'6px 4px',border:'1.5px solid #CBD5E1',borderRadius:8,fontSize:12,fontWeight:700,textAlign:'center',outline:'none'}}/>
                     </div>
+                  </div>);
+                })}
+                {/* Mudança 4: itens da ATA ainda SEM medicamento vinculado — usa o nome da própria ATA */}
+                {naoVinc.map(function(o){
+                  var it=o.it;var uKey=itemAtaKey(ata.id,o.idx);
+                  var val=ajustes[uKey]!==undefined?ajustes[uKey]:'';var edu=ajustes[uKey]!==undefined;
+                  var vUnitStr=precos[uKey]!==undefined?precos[uKey]:(it.vUnit?String(it.vUnit).replace('.',','):'');
+                  var carregando=vincItemLoading===uKey;
+                  return(<div key={uKey} style={{padding:'8px 0',borderTop:'1px solid #EEF2F8'}}>
+                    <div style={{display:'flex',alignItems:'center',gap:8}}>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:12,fontWeight:600,color:'#1E293B',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{it.descricao||'(sem descrição)'}</div>
+                        <div style={{marginTop:2}}><span style={{display:'inline-block',fontSize:9,fontWeight:800,color:'#B45309',background:'#FEF3C7',border:'1px solid #FCD34D',borderRadius:6,padding:'1px 6px'}}>⚠️ NÃO VINCULADO</span></div>
+                      </div>
+                      <div style={{display:'flex',flexDirection:'column',alignItems:'center'}}>
+                        <span style={{fontSize:9,color:'#94A3B8',fontWeight:600}}>PEDIR</span>
+                        <input type="number" min="0" value={val} onChange={function(e){var v=e.target.value;setAjustes(function(pr){var n=Object.assign({},pr);n[uKey]=v;return n;});}} placeholder="0" style={{width:64,padding:'6px 4px',border:'2px solid '+(edu?'#F59E0B':'#CBD5E1'),borderRadius:8,fontSize:14,fontWeight:800,textAlign:'center',outline:'none',background:edu?'#FFFBEB':'#fff'}}/>
+                      </div>
+                      <div style={{display:'flex',flexDirection:'column',alignItems:'center'}}>
+                        <span style={{fontSize:9,color:'#94A3B8',fontWeight:600}}>V.UNIT</span>
+                        <input type="text" inputMode="decimal" value={vUnitStr} onChange={function(e){var v=e.target.value;setPrecos(function(pr){var n=Object.assign({},pr);n[uKey]=v;return n;});}} placeholder="R$" style={{width:64,padding:'6px 4px',border:'1.5px solid #CBD5E1',borderRadius:8,fontSize:12,fontWeight:700,textAlign:'center',outline:'none'}}/>
+                      </div>
+                    </div>
+                    <button onClick={function(){vincularItemAutomatico(ata,o.idx);}} disabled={carregando} style={{marginTop:6,width:'100%',padding:'7px',background:carregando?'#CBD5E1':'#0C6B3E',border:'none',borderRadius:8,color:'#fff',fontWeight:700,fontSize:11,cursor:carregando?'default':'pointer'}}>{carregando?'Cadastrando...':'🔗 Vincular automaticamente (cadastra com o nome da ATA)'}</button>
                   </div>);
                 })}
                 {totalAtaPedido>0&&<div style={{marginTop:8,paddingTop:8,borderTop:'1px solid #E2E8F0',textAlign:'right',fontSize:12,fontWeight:800,color:cor}}>Total do pedido: R$ {totalAtaPedido.toFixed(2).replace('.',',')}</div>}
