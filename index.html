@@ -177,11 +177,24 @@ select.inp{cursor:pointer}
 </head>
 <body>
 <script>
-  var env = localStorage.getItem('farmacontrol_env') || 'prod';
-  if(env === 'dev') {
+  // ===== Detecção automática de ambiente por HOSTNAME (produção x teste) =====
+  // Regra: SÓ os domínios oficiais de produção usam o Firebase de produção.
+  // Qualquer outro host (previews da Vercel, branch testing, localhost) usa o Firebase de teste.
+  // Não existe process.env no navegador — a decisão é feita 100% pelo window.location.hostname.
+  window.__fcIsProducao = (function(){
+    var h = (window.location && window.location.hostname) || '';
+    return h === 'www.farmacontrol.app.br' || h === 'farmacontrol.app.br';
+  })();
+  // Ambiente efetivo: por padrão segue o hostname. Um override manual opcional em localStorage
+  // ('farmacontrol_env' = 'prod' | 'dev') mantém funcionando o seletor de ambiente do Técnico.
+  window.__fcEnv = (function(){
+    try{ var ov = localStorage.getItem('farmacontrol_env'); if(ov === 'prod' || ov === 'dev') return ov; }catch(e){}
+    return window.__fcIsProducao ? 'prod' : 'dev';
+  })();
+  if(window.__fcEnv === 'dev') {
     var banner = document.createElement('div');
     banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#F59E0B;color:#78350F;padding:12px 16px;font-weight:bold;font-size:13px;z-index:9999;text-align:center;box-shadow:0 2px 10px rgba(0,0,0,0.1)';
-    banner.innerHTML = '🧪 AMBIENTE DE TESTES (DEV) — Dados ficam separados de PRODUÇÃO';
+    banner.innerHTML = '🧪 AMBIENTE DE TESTE — Dados ficam separados de PRODUÇÃO';
     document.body.appendChild(banner);
   }
 </script>
@@ -306,13 +319,13 @@ function _imprimirDoc(html){
     return false;
   }
 }
+// Seleção da config do Firebase por AMBIENTE (definido pelo hostname — ver window.__fcEnv no <head>).
+// configProducao = projeto real; configTeste = projeto isolado de teste (dados separados).
 function loadCfg(){
-  var env=localStorage.getItem('farmacontrol_env')||'prod';
-  var cfgs={
-    prod:{apiKey:"AIzaSyC1gOlrcw5Cn_TPABn_1zma1nZ_37bNtR8",authDomain:"app-farma-b21e2.firebaseapp.com",projectId:"app-farma-b21e2",storageBucket:"app-farma-b21e2.firebasestorage.app",messagingSenderId:"501312120209",appId:"1:501312120209:web:61ef69faf3daa028562630"},
-    dev:{apiKey:"AIzaSyAqk11M7PhixenCDYnG0INfIElivLmdJyw",authDomain:"farmacontrol-dev-6a3e3.firebaseapp.com",projectId:"farmacontrol-dev-6a3e3",storageBucket:"farmacontrol-dev-6a3e3.firebasestorage.app",messagingSenderId:"553772145358",appId:"1:553772145358:web:06da405d58d0385c7d4e9f"}
-  };
-  return cfgs[env];
+  var configProducao={apiKey:"AIzaSyC1gOlrcw5Cn_TPABn_1zma1nZ_37bNtR8",authDomain:"app-farma-b21e2.firebaseapp.com",projectId:"app-farma-b21e2",storageBucket:"app-farma-b21e2.firebasestorage.app",messagingSenderId:"501312120209",appId:"1:501312120209:web:61ef69faf3daa028562630",measurementId:"G-70EPVH53G9"};
+  var configTeste={apiKey:"AIzaSyAqk11M7PhixenCDYnG0INfIElivLmdJyw",authDomain:"farmacontrol-dev-6a3e3.firebaseapp.com",projectId:"farmacontrol-dev-6a3e3",storageBucket:"farmacontrol-dev-6a3e3.firebasestorage.app",messagingSenderId:"553772145358",appId:"1:553772145358:web:06da405d58d0385c7d4e9f"};
+  var isProducao=(window.__fcEnv||'prod')==='prod';
+  return isProducao?configProducao:configTeste;
 }
 function saveCfg(c){localStorage.setItem(CFG_KEY,JSON.stringify(c));}
 // ===== CPF / CNS: máscara, validação de dígito verificador e extração a partir de texto de OCR =====
@@ -3085,7 +3098,7 @@ function TabHistContas(){var _logs=useState([]);var logs=_logs[0];var setLogs=_l
 function SeletorAmbiente({user}){
   var _open=useState(false);var open=_open[0];var setOpen=_open[1];
   if(!user||user.role!=='tecnico')return null;
-  var env=localStorage.getItem('farmacontrol_env')||'prod';
+  var env=(typeof window!=='undefined'&&window.__fcEnv)||'prod';
   var isDev=env==='dev';
   return (
     <div style={{position:'fixed',bottom:76,right:16,zIndex:999}}>
@@ -3787,7 +3800,7 @@ function TabLeites(props){
   </div>);
 }
 function TabPerfil(props){var user=props.user;var onUpdate=props.onUpdate;var onLogout=props.onLogout;var entries=props.entries;var medications=props.medications;var stock=props.stock;
-  var _amb=useState(localStorage.getItem('farmacontrol_env')||'prod');var amb=_amb[0];var setAmb=_amb[1];
+  var _amb=useState((typeof window!=='undefined'&&window.__fcEnv)||'prod');var amb=_amb[0];var setAmb=_amb[1];
   var _showAmbSelector=useState(false);var showAmbSelector=_showAmbSelector[0];var setShowAmbSelector=_showAmbSelector[1];
   var _darkMode=useState(localStorage.getItem('fc_theme')==='dark');var darkMode=_darkMode[0];var setDarkMode=_darkMode[1];var _showLogoutConfirm=useState(false);var showLogoutConfirm=_showLogoutConfirm[0];var setShowLogoutConfirm=_showLogoutConfirm[1];
   function trocarAmbiente(novoAmb){localStorage.setItem('farmacontrol_env',novoAmb);setAmb(novoAmb);setShowAmbSelector(false);setTimeout(function(){window.location.reload();},500);}
