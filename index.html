@@ -235,15 +235,14 @@ var TOURS=[
     {seletor:'[data-tour="conf-lote"]',texto:'Pode cadastrar lote e validade durante a conferência.',posicao:'acima'},
     {seletor:'[data-tour="conf-finalizar"]',texto:'Finalize cada categoria separadamente quando terminar.',posicao:'acima'}
   ]},
-  {id:'tour_recebimento',titulo:'Novo módulo: Recebimento e Conciliação Fiscal',passos:[
+  {id:'tour_recebimento',titulo:'Novo módulo: Recebimento e Conciliação',passos:[
     {acao:{tipo:'aba',aba:'recebimento'},seletor:'[data-tour="tab-content"]',texto:'Nova aba! Aqui você registra a mercadoria que chegou e depois concilia com a nota fiscal.',posicao:'abaixo'},
-    {seletor:'[data-tour="receb-subabas"]',texto:'4 seções: Recebimento Físico, Conciliação Fiscal, Divergências e Relatórios.',posicao:'abaixo'},
-    {seletor:'[data-tour="receb-form"]',texto:'Preencha o fornecedor e adicione os medicamentos recebidos — com quantidade, lote e validade.',posicao:'abaixo'},
-    {seletor:'[data-tour="receb-finalizar"]',texto:'Ao finalizar, o estoque já atualiza na hora e o recebimento fica "Pendente de Conciliação Fiscal" — aguardando a nota chegar.',posicao:'acima'},
-    {acao:{tipo:'clicar',seletor:'[data-tour="receb-sub-conciliacao"]'},seletor:'[data-tour="conc-selecionar-receb"]',texto:'Quando a nota fiscal chegar, cadastre os dados dela aqui e escolha o recebimento pendente pra vincular.',posicao:'abaixo'},
-    {seletor:'[data-tour="conc-conciliar"]',texto:'O sistema compara automaticamente cada medicamento recebido × faturado e aponta as divergências. Regra de ouro: a nota NUNCA altera o estoque — ela é só documental.',posicao:'acima'},
-    {acao:{tipo:'clicar',seletor:'[data-tour="receb-sub-divergencias"]'},seletor:'[data-tour="div-painel"]',texto:'Todas as divergências ficam listadas aqui, com filtros — do "Pendente de Conciliação" até "Resolvido".',posicao:'abaixo'},
-    {acao:{tipo:'clicar',seletor:'[data-tour="receb-sub-relatorios"]'},seletor:'[data-tour="rel-painel"]',texto:'E aqui os relatórios prontos (pendências, divergências por fornecedor/produto/período, notas conciliadas...) — exporte em Excel ou PDF quando precisar.',posicao:'abaixo'}
+    {seletor:'[data-tour="receb-subabas"]',texto:'3 seções: Recebimento (entrada rápida), Importar Notas e Divergências.',posicao:'abaixo'},
+    {seletor:'[data-tour="receb-form"]',texto:'Entrada rápida: escolha o medicamento e a quantidade recebida.',posicao:'abaixo'},
+    {seletor:'[data-tour="receb-finalizar"]',texto:'Ao finalizar, o estoque já atualiza na hora e o recebimento fica pendente de conciliação — aguardando a nota chegar.',posicao:'acima'},
+    {acao:{tipo:'clicar',seletor:'[data-tour="receb-sub-notas"]'},seletor:'[data-tour="notas-import"]',texto:'Quando as notas chegarem, importe uma ou várias de uma vez aqui — o app lê os medicamentos do PDF sozinho.',posicao:'abaixo'},
+    {seletor:'[data-tour="notas-matching-btn"]',texto:'Depois de importar, o sistema já casa automaticamente cada medicamento recebido × faturado. Só o que não bater vira divergência — o resto é conciliado sozinho.',posicao:'acima'},
+    {acao:{tipo:'clicar',seletor:'[data-tour="receb-sub-divergencias"]'},seletor:'[data-tour="div-painel"]',texto:'Só os problemas aparecem aqui: quantidade diferente ou item da nota sem recebimento. Confirme manualmente, ou dá saída normal do medicamento — quando o estoque zerar, a divergência some sozinha.',posicao:'abaixo'}
   ]}
 ];
 function todayStr(){return new Date().toISOString().slice(0,10);}
@@ -7889,6 +7888,297 @@ function exportRelatorioPDF(titulo,colunas,linhas){
   _imprimirDoc(html);
 }
 
+// ===== Novo fluxo de Recebimento + Conciliação (redesenho) =====
+// Motor de matching — função PURA e testável (sem Firestore): agrega a quantidade FÍSICA pendente de
+// conciliação (por medicamento, somando todos os recebimentos ainda não conciliados) e a quantidade que
+// aparece nas notas fiscais importadas (por medicamento, casando a descrição da nota ao cadastro via
+// _matchItemMeds quando o item ainda não tem medId resolvido), e classifica cada medicamento em:
+//  - conciliado: recebido bate exatamente com a nota
+//  - divergência de quantidade: recebido e nota são do mesmo medicamento mas quantidades diferentes
+//  - não encontrado: a nota cita um medicamento que não tem NENHUM recebimento pendente correspondente
+// Medicamentos recebidos que ainda não têm nenhuma nota (aguardando a nota chegar) NÃO entram em nenhuma
+// lista — continuam simplesmente pendentes, sem gerar "divergência" — só se torna um problema quando as
+// DUAS pontas existem e não batem, ou quando a nota aponta algo que nunca foi recebido.
+function _matchNotasRecebimentos(recebimentosPendentes,notasPendentes,medications){
+  var recebidoPorMed={};
+  (recebimentosPendentes||[]).forEach(function(rec){
+    (rec.itens||[]).forEach(function(it,idx){
+      if(!it.medicamentoId||it.conciliado)return;
+      var q=parseInt(it.quantidade)||0;if(q<=0)return;
+      if(!recebidoPorMed[it.medicamentoId])recebidoPorMed[it.medicamentoId]={qtd:0,nome:it.medicamentoNome||'',fontes:[]};
+      recebidoPorMed[it.medicamentoId].qtd+=q;
+      recebidoPorMed[it.medicamentoId].fontes.push({recId:rec.id,itemIdx:idx});
+    });
+  });
+  var notaPorMed={};
+  (notasPendentes||[]).forEach(function(nota){
+    (nota.itens||[]).forEach(function(it,idx){
+      if(it.status==='conciliado'||it.status==='divergencia'||it.status==='nao_encontrado')return;
+      var medId=it.medId;
+      if(!medId){var cand=_matchItemMeds(it.descricao,medications,1)[0];if(cand&&cand.score>=45)medId=cand.m.id;}
+      var q=Math.round(it.qtd)||0;if(q<=0)return;
+      if(!medId){notaPorMed['__semmatch_'+nota.id+'_'+idx]={qtd:q,nome:it.descricao,semMatch:true,fontes:[{notaId:nota.id,itemIdx:idx}]};return;}
+      if(!notaPorMed[medId])notaPorMed[medId]={qtd:0,nome:it.descricao,fontes:[]};
+      notaPorMed[medId].qtd+=q;
+      notaPorMed[medId].fontes.push({notaId:nota.id,itemIdx:idx,medId:medId});
+    });
+  });
+  var conciliados=[],divergencias=[],naoEncontrados=[];
+  var medIds={};
+  Object.keys(recebidoPorMed).forEach(function(k){medIds[k]=true;});
+  Object.keys(notaPorMed).forEach(function(k){if(k.indexOf('__semmatch_')!==0)medIds[k]=true;});
+  Object.keys(medIds).forEach(function(medId){
+    var rec=recebidoPorMed[medId],nf=notaPorMed[medId];
+    var qtdRecebida=rec?rec.qtd:0,qtdNota=nf?nf.qtd:0;
+    var nome=(rec&&rec.nome)||(nf&&nf.nome)||'';
+    if(qtdRecebida>0&&qtdNota>0){
+      if(qtdRecebida===qtdNota)conciliados.push({medicamentoId:medId,medicamentoNome:nome,qtd:qtdRecebida,recFontes:rec.fontes,notaFontes:nf.fontes});
+      else divergencias.push({medicamentoId:medId,medicamentoNome:nome,qtdRecebida:qtdRecebida,qtdNota:qtdNota,diferenca:qtdNota-qtdRecebida,recFontes:rec.fontes,notaFontes:nf.fontes});
+    }else if(qtdRecebida===0&&qtdNota>0){
+      naoEncontrados.push({medicamentoNome:nome,qtdNota:qtdNota,notaFontes:nf.fontes});
+    }
+  });
+  Object.keys(notaPorMed).forEach(function(k){
+    if(k.indexOf('__semmatch_')!==0)return;
+    var x=notaPorMed[k];
+    naoEncontrados.push({medicamentoNome:x.nome,qtdNota:x.qtd,notaFontes:x.fontes});
+  });
+  return{conciliados:conciliados,divergencias:divergencias,naoEncontrados:naoEncontrados};
+}
+
+function ImportarNotas(props){
+  var user=props.user;var medications=props.medications||[];
+  var B='#1351B4';
+  var _notas=useState([]);var notas=_notas[0];var setNotas=_notas[1];
+  var _recs=useState([]);var recs=_recs[0];var setRecs=_recs[1];
+  var _processando=useState(false);var processando=_processando[0];var setProcessando=_processando[1];
+  var _progresso=useState('');var progresso=_progresso[0];var setProgresso=_progresso[1];
+  var _erro=useState('');var erro=_erro[0];var setErro=_erro[1];
+  var _resumo=useState(null);var resumo=_resumo[0];var setResumo=_resumo[1];// último resultado do matching (Passo 4)
+  var _rodandoMatch=useState(false);var rodandoMatch=_rodandoMatch[0];var setRodandoMatch=_rodandoMatch[1];
+
+  useEffect(function(){
+    var u1=db.collection('notas_fiscais').orderBy('criadoEm','desc').limit(100).onSnapshot(function(sn){setNotas(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));},function(){});
+    var u2=db.collection('recebimentos').orderBy('criadoEm','desc').limit(200).onSnapshot(function(sn){setRecs(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));},function(){});
+    return function(){try{u1();}catch(e){}try{u2();}catch(e){}};
+  },[]);
+
+  function logAcao(acao,det){try{db.collection('logs_acesso').add({uid:user.uid||'',nome:user.name||'',cargo:user.role||'',acao:acao,detalhe:det||'',criadoEm:new Date().toISOString()}).catch(function(){});}catch(_){}}
+
+  async function processarUmPDF(file){
+    var pdfLib=window.pdfjsLib;
+    if(!pdfLib)throw new Error('Biblioteca de leitura de PDF não carregada. Recarregue a página.');
+    pdfLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    var buf=await file.arrayBuffer();
+    var pdf=await pdfLib.getDocument({data:buf}).promise;
+    var linhas=await _extrairLinhasPDF(pdf);
+    var textoExtraido=linhas.join(' ').trim();
+    if(textoExtraido.length<30){
+      if(!window.Tesseract)throw new Error('"'+file.name+'": parece uma nota escaneada e o OCR não carregou.');
+      setProgresso('"'+file.name+'": sem texto — lendo por OCR...');
+      linhas=await _ocrPaginasPDF(pdf,function(p){setProgresso('"'+file.name+'": '+p);});
+    }
+    var parsed=_parsearPDFNotaConciliacao(linhas);
+    if(parsed.itens.length===0)throw new Error('"'+file.name+'": nenhum medicamento identificado.');
+    var itensComMatch=parsed.itens.map(function(it){
+      var cand=_matchItemMeds(it.descricao,medications,1)[0];
+      var med=(cand&&cand.score>=80)?cand.m:null;
+      return{descricao:it.descricao,qtd:it.qtd,unidade:it.unidade,cean:it.cean||'',vUnit:it.vUnit||0,lote:it.lote||'',validade:it.validade||'',medId:med?med.id:'',medNome:med?med.nome:'',status:'pendente'};
+    });
+    return{nfNumero:parsed.nNF,dataEmissao:parsed.dataEmissao,valorTotal:parsed.valorTotal,itens:itensComMatch,nomeArquivo:file.name,status:'pendente',criadoEm:new Date().toISOString(),criadoPor:user.name||'',criadoPorId:user.uid||''};
+  }
+
+  async function importarPDFs(e){
+    var files=Array.from((e.target.files)||[]);
+    if(!files.length)return;
+    setErro('');setResumo(null);setProcessando(true);
+    var novasNotas=[];var falhas=[];
+    for(var i=0;i<files.length;i++){
+      var f=files[i];
+      setProgresso('Lendo '+(i+1)+'/'+files.length+': '+f.name+'...');
+      try{novasNotas.push(await processarUmPDF(f));}catch(ex){falhas.push((ex&&ex.message)||String(ex));}
+    }
+    var notasComId=[];
+    if(novasNotas.length){
+      setProgresso('Salvando '+novasNotas.length+' nota(s)...');
+      var batch=db.batch();
+      novasNotas.forEach(function(n){var ref=db.collection('notas_fiscais').doc();batch.set(ref,n);notasComId.push(Object.assign({id:ref.id},n));});
+      await batch.commit();
+      logAcao('notas_importadas_lote',novasNotas.length+' nota(s) importada(s) em lote'+(falhas.length?(' — '+falhas.length+' falha(s)'):''));
+    }
+    if(falhas.length)setErro(falhas.length+' arquivo(s) não importado(s): '+falhas.join(' · '));
+    setProgresso('');setProcessando(false);e.target.value='';
+    // Passa as notas recém-criadas direto (não espera o listener do Firestore atualizar o estado —
+    // rodar o matching aqui embaixo veria a lista velha, sem as notas que acabaram de ser salvas).
+    if(notasComId.length)await executarMatching(notasComId);
+  }
+
+  // Passo 3+4: roda o matching automático contra TODOS os recebimentos/notas ainda pendentes (não só os
+  // recém-importados — permite reprocessar depois que uma divergência antiga foi corrigida, por exemplo).
+  // notasExtras: notas recém-importadas nesta mesma chamada, que ainda não chegaram pelo listener.
+  async function executarMatching(notasExtras){
+    setRodandoMatch(true);setErro('');
+    try{
+      var todasNotas=notas.concat(notasExtras||[]);
+      var recebimentosPendentes=recs.filter(function(r){return (r.status||'pendente')!=='conciliado';});
+      var notasPendentes=todasNotas.filter(function(n){return (n.status||'pendente')!=='processada';});
+      var resultado=_matchNotasRecebimentos(recebimentosPendentes,notasPendentes,medications);
+      var now=new Date().toISOString();
+      var batch=db.batch();
+      var recPatches={};// recId -> {itemIdx: 'conciliado'|'divergencia'} — o TIPO de resultado, não só "processado"
+      var notaPatches={};// notaId -> {itemIdx: {status,medId,medNome}}
+      function marcarRec(fontes,tipo){fontes.forEach(function(f){if(!recPatches[f.recId])recPatches[f.recId]={};recPatches[f.recId][f.itemIdx]=tipo;});}
+      function marcarNota(fontes,status,medId,medNome){fontes.forEach(function(f){if(!notaPatches[f.notaId])notaPatches[f.notaId]={};notaPatches[f.notaId][f.itemIdx]={status:status,medId:medId||'',medNome:medNome||''};});}
+      resultado.conciliados.forEach(function(c){marcarRec(c.recFontes,'conciliado');marcarNota(c.notaFontes,'conciliado',c.medicamentoId,c.medicamentoNome);});
+      resultado.divergencias.forEach(function(d){
+        marcarRec(d.recFontes,'divergencia');marcarNota(d.notaFontes,'divergencia',d.medicamentoId,d.medicamentoNome);
+        batch.set(db.collection('divergencias').doc(),{medicamentoId:d.medicamentoId,medicamentoNome:d.medicamentoNome,qtdRecebida:d.qtdRecebida,qtdNota:d.qtdNota,diferenca:d.diferenca,tipo:'quantidade',status:'pendente',origem:'matching_notas',criadoEm:now,criadoPor:user.name||''});
+      });
+      resultado.naoEncontrados.forEach(function(x){
+        marcarNota(x.notaFontes,'nao_encontrado','','');
+        batch.set(db.collection('divergencias').doc(),{medicamentoId:'',medicamentoNome:x.medicamentoNome,qtdRecebida:0,qtdNota:x.qtdNota,diferenca:x.qtdNota,tipo:'nao_encontrado',status:'pendente',origem:'matching_notas',criadoEm:now,criadoPor:user.name||''});
+      });
+      // conciliado=true no item só quer dizer "já processado nesta ou numa rodada anterior" (evita
+      // reprocessar) — o TIPO do resultado (resultadoMatching) é que decide o status do recebimento; uma
+      // única divergência no meio de vários itens não pode virar "conciliado" só porque todos foram processados.
+      Object.keys(recPatches).forEach(function(recId){
+        var rec=recs.find(function(r){return r.id===recId;});if(!rec)return;
+        var novosItens=(rec.itens||[]).map(function(it,idx){var tipo=recPatches[recId][idx];return tipo?Object.assign({},it,{conciliado:true,resultadoMatching:tipo}):it;});
+        var temDivergencia=novosItens.some(function(it){return it.resultadoMatching==='divergencia';});
+        var todosProcessados=novosItens.length>0&&novosItens.every(function(it){return it.conciliado;});
+        var statusNovo=temDivergencia?'divergencia':(todosProcessados?'conciliado':(rec.status||'pendente'));
+        batch.update(db.collection('recebimentos').doc(recId),{itens:novosItens,status:statusNovo,statusLabel:temDivergencia?'Divergência Aberta':(todosProcessados?'Conciliado':(rec.statusLabel||'Pendente de Conciliação Fiscal'))});
+      });
+      Object.keys(notaPatches).forEach(function(notaId){
+        var nota=todasNotas.find(function(n){return n.id===notaId;});if(!nota)return;
+        var novosItens=(nota.itens||[]).map(function(it,idx){var p=notaPatches[notaId][idx];return p?Object.assign({},it,{status:p.status,medId:p.medId||it.medId,medNome:p.medNome||it.medNome}):it;});
+        var todosProcessados=novosItens.length>0&&novosItens.every(function(it){return it.status&&it.status!=='pendente';});
+        batch.update(db.collection('notas_fiscais').doc(notaId),{itens:novosItens,status:todosProcessados?'processada':(nota.status||'pendente')});
+      });
+      await batch.commit();
+      setResumo(resultado);
+      logAcao('matching_executado','Matching: '+resultado.conciliados.length+' conciliado(s), '+resultado.divergencias.length+' divergência(s), '+resultado.naoEncontrados.length+' não encontrado(s)');
+    }catch(e){setErro('Erro ao rodar matching: '+((e&&e.message)?e.message:e));}
+    setRodandoMatch(false);
+  }
+
+  var inp={width:'100%',padding:'11px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:14,boxSizing:'border-box'};
+  function fD(d){if(!d)return'';var p=String(d).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
+  function statusNota(n){var st=(n.itens||[]).map(function(it){return it.status||'pendente';});var nConc=st.filter(function(s){return s==='conciliado';}).length;var nDiv=st.filter(function(s){return s==='divergencia'||s==='nao_encontrado';}).length;var nPend=st.length-nConc-nDiv;return{nConc:nConc,nDiv:nDiv,nPend:nPend,total:st.length};}
+
+  return(<div>
+    <div data-tour="notas-import" style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9',marginBottom:16}}>
+      <div style={{fontWeight:800,fontSize:15,color:'#1E293B',marginBottom:4}}>📥 Importar Notas Fiscais</div>
+      <div style={{fontSize:11,color:'#94A3B8',marginBottom:14}}>Envie um ou vários PDFs de uma vez. O app lê os itens e casa automaticamente com o que já foi recebido — só o que não bater vira divergência.</div>
+      <label style={{display:'block',cursor:processando?'default':'pointer'}}>
+        <div style={{border:'2px dashed #1351B4',borderRadius:10,padding:'16px',textAlign:'center',background:'#EFF6FF',marginBottom:8,opacity:processando?0.6:1}}>
+          <div style={{fontSize:28,marginBottom:4}}>📂</div>
+          <div style={{fontWeight:700,fontSize:13,color:B,marginBottom:2}}>{processando?'Processando...':'Clique para selecionar um ou vários PDFs'}</div>
+          <div style={{fontSize:11,color:'#64748B'}}>Você pode selecionar várias notas de uma vez</div>
+        </div>
+        <input type="file" accept=".pdf" multiple disabled={processando} onChange={importarPDFs} style={{display:'none'}}/>
+      </label>
+      {processando&&progresso&&<div style={{background:'#EFF6FF',border:'1px solid #BFDBFE',borderRadius:10,padding:'10px 12px',fontSize:12,color:B,fontWeight:600,marginBottom:8}}>⏳ {progresso}</div>}
+      {erro&&<div style={{background:'#FEE2E2',border:'1px solid #FCA5A5',borderRadius:10,padding:'10px 12px',fontSize:13,color:'#DC2626',fontWeight:600,marginBottom:8,whiteSpace:'pre-wrap'}}>{erro}</div>}
+      <button data-tour="notas-matching-btn" onClick={executarMatching} disabled={rodandoMatch||processando} style={{width:'100%',padding:'11px',background:rodandoMatch?'#94A3B8':'#F1F5F9',border:'none',borderRadius:10,color:rodandoMatch?'#fff':'#334155',fontWeight:700,fontSize:12,cursor:rodandoMatch?'default':'pointer'}}>{rodandoMatch?'Rodando...':'🔄 Rodar matching de novo'}</button>
+    </div>
+
+    {/* PASSO 4: relatório visual do último matching */}
+    {resumo&&<div style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9',marginBottom:16}}>
+      <div style={{fontWeight:800,fontSize:15,color:'#1E293B',marginBottom:10}}>Resultado do matching</div>
+      <div style={{background:'#DCFCE7',border:'1px solid #86EFAC',borderRadius:10,padding:'10px 12px',fontSize:13,color:'#059669',fontWeight:700,marginBottom:8}}>✅ {resumo.conciliados.length} item(ns) conciliado(s) automaticamente</div>
+      {resumo.divergencias.length>0&&<div style={{background:'#FEF3C7',border:'1px solid #FDE68A',borderRadius:10,padding:'10px 12px',marginBottom:8}}>
+        <div style={{fontSize:13,color:'#B45309',fontWeight:700,marginBottom:6}}>⚠️ {resumo.divergencias.length} item(ns) com DIVERGÊNCIA DE QUANTIDADE</div>
+        {resumo.divergencias.map(function(d,i){return(<div key={i} style={{fontSize:12,color:'#92400E',marginBottom:2}}>{d.medicamentoNome}: recebeu {d.qtdRecebida}, nota diz {d.qtdNota} (divergência: {d.diferenca>0?'+':''}{d.diferenca})</div>);})}
+      </div>}
+      {resumo.naoEncontrados.length>0&&<div style={{background:'#FEE2E2',border:'1px solid #FCA5A5',borderRadius:10,padding:'10px 12px'}}>
+        <div style={{fontSize:13,color:'#DC2626',fontWeight:700,marginBottom:6}}>❌ {resumo.naoEncontrados.length} item(ns) na nota sem recebimento encontrado</div>
+        {resumo.naoEncontrados.map(function(x,i){return(<div key={i} style={{fontSize:12,color:'#991B1B',marginBottom:2}}>{x.medicamentoNome} (qtd nota: {x.qtdNota})</div>);})}
+      </div>}
+    </div>}
+
+    <div style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9'}}>
+      <div style={{fontWeight:700,fontSize:14,color:'#334155',marginBottom:10}}>Notas importadas ({notas.length})</div>
+      {notas.length===0?<div style={{textAlign:'center',color:'#94A3B8',padding:24,fontSize:13}}>Nenhuma nota importada ainda.</div>:
+      <div style={{display:'flex',flexDirection:'column',gap:8}}>
+        {notas.map(function(n){var st=statusNota(n);return(
+          <div key={n.id} style={{border:'1px solid #E2E8F0',borderRadius:10,padding:'10px 12px'}}>
+            <div style={{display:'flex',justifyContent:'space-between',gap:8,flexWrap:'wrap'}}>
+              <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>NF {n.nfNumero||'(sem número)'} {n.fornecedor?'· '+n.fornecedor:''}</div>
+              <div style={{fontSize:11,color:'#94A3B8'}}>{fD(n.dataEmissao)}</div>
+            </div>
+            <div style={{fontSize:11,color:'#64748B',marginTop:4}}>{n.nomeArquivo} · {st.total} item(ns)</div>
+            <div style={{display:'flex',gap:6,marginTop:6,flexWrap:'wrap'}}>
+              {st.nConc>0&&<span style={{fontSize:10,fontWeight:700,color:'#059669',background:'#DCFCE7',borderRadius:6,padding:'2px 7px'}}>✅ {st.nConc} conciliado(s)</span>}
+              {st.nDiv>0&&<span style={{fontSize:10,fontWeight:700,color:'#DC2626',background:'#FEE2E2',borderRadius:6,padding:'2px 7px'}}>⚠️ {st.nDiv} problema(s)</span>}
+              {st.nPend>0&&<span style={{fontSize:10,fontWeight:700,color:'#B45309',background:'#FEF3C7',borderRadius:6,padding:'2px 7px'}}>⏳ {st.nPend} pendente(s)</span>}
+            </div>
+          </div>
+        );})}
+      </div>}
+    </div>
+  </div>);
+}
+
+// Passo 5: Divergências — lista simples do que sobrou de problema no matching (coleção 'divergencias'),
+// com resolução manual (checkbox "Confirmar") ou automática (some sozinha quando o estoque do medicamento
+// chega a zero, mesmo mecanismo já usado na importação de PDF anterior).
+function PainelDivergenciasV2(props){
+  var user=props.user;var stock=props.stock||{};
+  var _divs=useState([]);var divs=_divs[0];var setDivs=_divs[1];
+  var _resolvendo=useState(null);var resolvendo=_resolvendo[0];var setResolvendo=_resolvendo[1];
+  var _lastAuto=useRef({});
+
+  useEffect(function(){
+    return db.collection('divergencias').where('status','==','pendente').orderBy('criadoEm','desc').limit(200).onSnapshot(function(sn){
+      setDivs(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));
+    },function(){
+      // fallback sem índice composto (where+orderBy pode exigir índice): busca tudo e filtra local.
+      db.collection('divergencias').orderBy('criadoEm','desc').limit(200).onSnapshot(function(sn){
+        setDivs(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}).filter(function(d){return (d.status||'pendente')==='pendente';}));
+      });
+    });
+  },[]);
+
+  // Auto-clear: quando o estoque do medicamento chega a zero, a divergência de quantidade some sozinha
+  // (a de "não encontrado" não tem medicamentoId — só resolve manual).
+  useEffect(function(){
+    divs.forEach(function(d){
+      if(!d.medicamentoId)return;
+      if((stock[d.medicamentoId]||0)>0)return;
+      var last=_lastAuto.current[d.id]||0;
+      if(Date.now()-last<4000)return;
+      _lastAuto.current[d.id]=Date.now();
+      db.collection('divergencias').doc(d.id).update({status:'resolvido',resolvidoEm:new Date().toISOString(),resolvidoPor:'auto (estoque zerado)'}).catch(function(){});
+    });
+  },[divs,stock]);
+
+  function confirmar(d){
+    setResolvendo(d.id);
+    db.collection('divergencias').doc(d.id).update({status:'resolvido',resolvidoEm:new Date().toISOString(),resolvidoPor:user.name||''})
+      .then(function(){setResolvendo(null);}).catch(function(e){alert('Erro: '+((e&&e.message)||e));setResolvendo(null);});
+  }
+
+  return(<div>
+    <div data-tour="div-painel" style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9'}}>
+      <div style={{fontWeight:800,fontSize:15,color:'#1E293B',marginBottom:4}}>🚨 Divergências</div>
+      <div style={{fontSize:11,color:'#94A3B8',marginBottom:14}}>Some sozinha quando o estoque do medicamento zerar, ou confirme manualmente abaixo.</div>
+      {divs.length===0?<div style={{textAlign:'center',color:'#94A3B8',padding:24,fontSize:13}}><div style={{fontSize:36,marginBottom:6}}>✅</div>Nenhuma divergência pendente.</div>:
+      <div style={{display:'flex',flexDirection:'column',gap:10}}>
+        {divs.map(function(d){var naoEncontrado=d.tipo==='nao_encontrado';return(
+          <div key={d.id} style={{border:'1px solid '+(naoEncontrado?'#FCA5A5':'#FDE68A'),background:naoEncontrado?'#FEF2F2':'#FFFBEB',borderRadius:12,padding:'10px 12px'}}>
+            <div style={{fontWeight:700,fontSize:13,color:'#1E293B',marginBottom:4}}>{naoEncontrado?'❌':'⚠️'} {d.medicamentoNome}</div>
+            {naoEncontrado?
+              <div style={{fontSize:12,color:'#991B1B'}}>Na nota, sem recebimento correspondente · qtd nota: {d.qtdNota}</div>
+              :<div style={{fontSize:12,color:'#92400E'}}>Recebeu {d.qtdRecebida}, nota diz {d.qtdNota} (divergência: {d.diferenca>0?'+':''}{d.diferenca})</div>}
+            <button onClick={function(){confirmar(d);}} disabled={resolvendo===d.id} style={{marginTop:8,padding:'7px 14px',background:resolvendo===d.id?'#94A3B8':'#0C6B3E',border:'none',borderRadius:8,color:'#fff',fontWeight:700,fontSize:12,cursor:resolvendo===d.id?'default':'pointer'}}>{resolvendo===d.id?'Confirmando...':'✅ Confirmar'}</button>
+          </div>
+        );})}
+      </div>}
+    </div>
+  </div>);
+}
+
 function ConciliacaoFiscal(props){
   var user=props.user;var medications=props.medications||[];var B='#1351B4';
   function blankNfItem(){_nfSeq++;return{key:'nf'+_nfSeq,medId:'',medNome:'',busca:'',qtd:'',lote:'',validade:''};}
@@ -8530,14 +8820,12 @@ function TabRecebimento(props){
   // Confirmação antes de finalizar (Mudança 3): valida e abre o modal; só finaliza no "Confirmar".
   function pedirConfirmacaoFinalizar(){
     var validos=itens.filter(function(it){return it.medId&&(parseInt(it.qtd)||0)>0;});
-    if(!fornecedor.trim()){alert('Informe o fornecedor.');return;}
     if(validos.length===0){alert('Adicione ao menos um medicamento com quantidade.');return;}
     setConfirmFin(true);
   }
 
   async function finalizar(){
     var validos=itens.filter(function(it){return it.medId&&(parseInt(it.qtd)||0)>0;});
-    if(!fornecedor.trim()){alert('Informe o fornecedor.');return;}
     if(validos.length===0){alert('Adicione ao menos um medicamento com quantidade.');return;}
     setSaving(true);
     console.group('%c📦 finalizar() Recebimento','background:#1351B4;color:#fff;padding:3px 8px;border-radius:4px;font-weight:bold');
@@ -8709,14 +8997,13 @@ function TabRecebimento(props){
 
       {/* SUB-ABAS */}
       <div data-tour="receb-subabas" style={{display:'flex',gap:8,marginBottom:16,overflowX:'auto'}}>
-        {[['fisico','📦 Recebimento Físico'],['conciliacao','📋 Conciliação Fiscal'],['divergencias','🚨 Divergências'],['relatorios','📑 Relatórios']].map(function(t){return(
+        {[['fisico','📦 Recebimento'],['notas','📥 Importar Notas'],['divergencias','🚨 Divergências']].map(function(t){return(
           <button key={t[0]} data-tour={'receb-sub-'+t[0]} onClick={function(){setAba(t[0]);}} style={{flexShrink:0,padding:'11px 14px',borderRadius:12,border:'none',background:aba===t[0]?B:'#F1F5F9',color:aba===t[0]?'#fff':'#64748B',fontWeight:700,fontSize:13,cursor:'pointer',whiteSpace:'nowrap'}}>{t[1]}</button>
         );})}
       </div>
 
-      {aba==='conciliacao'&&<ConciliacaoFiscal user={user} medications={medications}/>}
-      {aba==='divergencias'&&<PainelDivergencias user={user} stock={stock}/>}
-      {aba==='relatorios'&&<RelatoriosRecebimento user={user}/>}
+      {aba==='notas'&&<ImportarNotas user={user} medications={medications} stock={stock}/>}
+      {aba==='divergencias'&&<PainelDivergenciasV2 user={user} stock={stock}/>}
 
       {aba==='fisico'&&<div>
       {/* FORMULÁRIO */}
@@ -8724,7 +9011,7 @@ function TabRecebimento(props){
         <div style={{fontWeight:800,fontSize:15,color:'#1E293B',marginBottom:12}}>Novo recebimento</div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:12}}>
           <div><label style={lbl}>📅 Data do recebimento</label><input type="date" value={data} max={todayStr()} onChange={function(e){setData(e.target.value);}} style={inp}/></div>
-          <div><label style={lbl}>Fornecedor *</label><input value={fornecedor} onChange={function(e){setFornecedor(e.target.value);}} placeholder="Nome do fornecedor" style={inp}/></div>
+          <div><label style={lbl}>Fornecedor (opcional)</label><input value={fornecedor} onChange={function(e){setFornecedor(e.target.value);}} placeholder="Nome do fornecedor" style={inp}/></div>
         </div>
         <div style={{marginBottom:14}}><label style={lbl}>Responsável pelo recebimento</label><input value={responsavel} onChange={function(e){setResponsavel(e.target.value);}} placeholder="Quem recebeu" style={inp}/></div>
 
