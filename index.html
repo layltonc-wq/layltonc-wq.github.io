@@ -464,6 +464,8 @@ function computeVencimentos(medications,entries,stock){
 }
 // Normaliza texto (minúsculas, sem acentos) — usado na detecção de saídas não-reais
 function _norm(s){return (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');}
+// Controle rigoroso de controlados (por enquanto só Morfina e Tramal) — saída exige paciente/médico/CRM.
+function _ehMedControlado(nome){var n=_norm(nome||'');return n.indexOf('morfina')>=0||n.indexOf('tramal')>=0;}
 // Pontuação fuzzy de um alvo contra uma busca (0 = sem relação; maior = melhor).
 // Tolera ordem de palavras (tokens) e erros de digitação (subsequência de caracteres).
 // Ex.: "ringer" casa "Soro Ringer", "Soro Fisiológico Ringer"; "rnger" ainda casa por subsequência.
@@ -1459,10 +1461,106 @@ function TabComparacaoPedido(props){
   </div>);
 }
 
+// ===== Controle rigoroso de controlados (Morfina/Tramal): popup obrigatório na saída =====
+// Paciente + médico + CRM (sem validação de formato) + observação. Observação vira obrigatória quando já
+// existe saída do MESMO medicamento pro MESMO paciente HOJE (checagem via saidas_controladas).
+function ModalSaidaControlada(props){
+  var data=props.data;var user=props.user;var onConfirm=props.onConfirm;var onClose=props.onClose;
+  var _pacientes=useState([]);var pacientes=_pacientes[0];var setPacientes=_pacientes[1];
+  var _busca=useState('');var busca=_busca[0];var setBusca=_busca[1];
+  var _pacSel=useState(null);var pacSel=_pacSel[0];var setPacSel=_pacSel[1];
+  var _novoPacSaving=useState(false);var novoPacSaving=_novoPacSaving[0];var setNovoPacSaving=_novoPacSaving[1];
+  var _medico=useState('');var medico=_medico[0];var setMedico=_medico[1];
+  var _crm=useState('');var crm=_crm[0];var setCrm=_crm[1];
+  var _obs=useState('');var obs=_obs[0];var setObs=_obs[1];
+  var _obsObrigatoria=useState(false);var obsObrigatoria=_obsObrigatoria[0];var setObsObrigatoria=_obsObrigatoria[1];
+  var _checando=useState(false);var checando=_checando[0];var setChecando=_checando[1];
+  var _erro=useState('');var erro=_erro[0];var setErro=_erro[1];
+  var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];
+
+  useEffect(function(){
+    return db.collection('pacientes_controlados').onSnapshot(function(sn){
+      setPacientes(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}).sort(function(a,b){return (a.nome||'').localeCompare(b.nome||'');}));
+    },function(){});
+  },[]);
+
+  // Já existe saída do MESMO medicamento pro MESMO paciente HOJE? Busca só por pacienteId (sem índice
+  // composto) e filtra medicamento+data no cliente — evita depender de índice composto no Firestore.
+  useEffect(function(){
+    if(!pacSel){setObsObrigatoria(false);return;}
+    setChecando(true);
+    db.collection('saidas_controladas').where('pacienteId','==',pacSel.id).get().then(function(sn){
+      var hoje=todayStr();
+      var jaTemHoje=sn.docs.some(function(d){var x=d.data();return x.medicamentoId===data.medicamentoId&&x.dataSaida===hoje;});
+      setObsObrigatoria(jaTemHoje);setChecando(false);
+    }).catch(function(){setChecando(false);});
+  },[pacSel,data.medicamentoId]);
+
+  var buscaTrim=busca.trim();
+  var sugestoes=(!pacSel&&buscaTrim)?pacientes.filter(function(p){return (p.nome||'').toLowerCase().indexOf(buscaTrim.toLowerCase())>=0;}).slice(0,8):[];
+  var jaExisteExato=pacientes.some(function(p){return (p.nome||'').trim().toLowerCase()===buscaTrim.toLowerCase();});
+
+  function cadastrarNovoPaciente(){
+    if(!buscaTrim)return;
+    setNovoPacSaving(true);
+    db.collection('pacientes_controlados').add({nome:buscaTrim,criadoEm:new Date().toISOString(),criadoPor:user.name||''})
+      .then(function(ref){setPacSel({id:ref.id,nome:buscaTrim});setBusca('');setNovoPacSaving(false);})
+      .catch(function(e){setErro('Erro ao cadastrar paciente: '+((e&&e.message)||e));setNovoPacSaving(false);});
+  }
+
+  function confirmar(){
+    if(!pacSel){setErro('Selecione ou cadastre o paciente.');return;}
+    if(!medico.trim()){setErro('Informe o nome do médico.');return;}
+    if(!crm.trim()){setErro('Informe o CRM do médico.');return;}
+    if(obsObrigatoria&&!obs.trim()){setErro('Já existe saída de '+data.medicamentoNome+' para '+pacSel.nome+' hoje — a observação é obrigatória.');return;}
+    setErro('');setSaving(true);
+    var payload={pacienteId:pacSel.id,pacienteNome:pacSel.nome,medicamentoId:data.medicamentoId,medicamentoNome:data.medicamentoNome,quantidade:data.quantidade,medicoNome:medico.trim(),medicoCrm:crm.trim(),observacao:obs.trim(),liberadoPorUid:user.uid||'',liberadoPorNome:user.name||'',dataSaida:todayStr(),criadoEm:new Date().toISOString()};
+    onConfirm(payload).then(function(){setSaving(false);}).catch(function(e){setErro('Erro: '+((e&&e.message)||e));setSaving(false);});
+  }
+
+  return(<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.6)',zIndex:9500,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+    <div style={{background:'#fff',borderRadius:20,padding:20,maxWidth:460,width:'100%',maxHeight:'92vh',overflowY:'auto'}}>
+      <div style={{fontWeight:800,fontSize:16,color:'#7C2D12',marginBottom:2}}>🔒 Controle de Controlado</div>
+      <div style={{fontSize:12,color:'#92400E',marginBottom:14}}>{data.medicamentoNome} — {data.quantidade} un. Preencha os dados obrigatórios antes de liberar a saída.</div>
+
+      <Lbl c="Paciente *"/>
+      {pacSel?
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,background:'#F0FDF4',border:'1.5px solid #86EFAC',borderRadius:10,padding:'9px 12px',marginBottom:12}}>
+          <div style={{fontWeight:700,fontSize:13,color:'#0C6B3E'}}>👤 {pacSel.nome}</div>
+          <button onClick={function(){setPacSel(null);}} style={{background:'#fff',border:'1px solid #86EFAC',borderRadius:8,padding:'4px 10px',fontSize:11,color:'#0C6B3E',cursor:'pointer',fontWeight:600}}>Trocar</button>
+        </div>
+        :<div style={{position:'relative',marginBottom:12}}>
+          <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="Buscar paciente cadastrado..." className="inp" style={{marginBottom:0}} autoFocus/>
+          {buscaTrim&&<div style={{background:'#fff',border:'1.5px solid #E2E8F0',borderRadius:10,marginTop:4,maxHeight:180,overflowY:'auto',boxShadow:'0 8px 24px rgba(0,0,0,.12)'}}>
+            {sugestoes.map(function(p){return(<button key={p.id} onClick={function(){setPacSel(p);setBusca('');}} style={{width:'100%',textAlign:'left',padding:'10px 12px',border:'none',borderBottom:'1px solid #F1F5F9',background:'#fff',cursor:'pointer',fontSize:13,color:'#1E293B'}}>{p.nome}</button>);})}
+            {!jaExisteExato&&<button onClick={cadastrarNovoPaciente} disabled={novoPacSaving} style={{width:'100%',textAlign:'left',padding:'10px 12px',border:'none',background:'#F0FDF4',cursor:'pointer',fontSize:13,color:'#0C6B3E',fontWeight:700}}>{novoPacSaving?'Cadastrando...':'+ Cadastrar "'+buscaTrim+'" como novo paciente'}</button>}
+            {sugestoes.length===0&&jaExisteExato&&<div style={{padding:'8px 12px',fontSize:11,color:'#94A3B8'}}>Paciente já cadastrado — selecione acima.</div>}
+          </div>}
+        </div>}
+
+      <Lbl c="Nome do médico *"/>
+      <input value={medico} onChange={function(e){setMedico(e.target.value);}} placeholder="Nome do médico responsável" className="inp"/>
+      <Lbl c="CRM do médico *"/>
+      <input value={crm} onChange={function(e){setCrm(e.target.value);}} placeholder="Ex: 12345-PE" className="inp"/>
+      <Lbl c={obsObrigatoria?'Observação * (obrigatória — já houve saída hoje)':'Observação'}/>
+      <textarea value={obs} onChange={function(e){setObs(e.target.value);}} rows={3} className="inp" placeholder={obsObrigatoria?'Justifique a nova saída do mesmo medicamento pro mesmo paciente hoje...':'Observações (opcional)'} style={{resize:'vertical',lineHeight:1.6,border:(obsObrigatoria&&!obs.trim())?'1.5px solid #FCA5A5':undefined}}/>
+      {checando&&<div style={{fontSize:11,color:'#94A3B8',marginTop:4}}>Verificando histórico do paciente...</div>}
+      {erro&&<div className="er" style={{marginTop:8}}>{erro}</div>}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginTop:14}}>
+        <button onClick={onClose} disabled={saving} style={{padding:'13px',background:'#F1F5F9',border:'none',borderRadius:12,color:'#475569',fontWeight:700,fontSize:14,cursor:saving?'default':'pointer'}}>Cancelar</button>
+        <button onClick={confirmar} disabled={saving||checando} style={{padding:'13px',background:(saving||checando)?'#94A3B8':'#DC2626',border:'none',borderRadius:12,color:'#fff',fontWeight:800,fontSize:14,cursor:(saving||checando)?'default':'pointer'}}>{saving?'Liberando...':'🔒 Liberar Saída'}</button>
+      </div>
+    </div>
+  </div>);
+}
+
 function TabSaida(props){var user=props.user;var medications=props.medications;var stock=props.stock;var entries=props.entries;var onSave=props.onSave;var latest=props.latest||{};var isGuest=props.isGuest||false;var canMove=props.canMove!==false;var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};var alert2=props.alert2||function(m){window.alert(m);};var _search=useState('');var search=_search[0];var setSearch=_search[1];var _sel=useState(null);var sel=_sel[0];var setSel=_sel[1];var _qty=useState('');var qty=_qty[0];var setQty=_qty[1];var _lote=useState('');var lote=_lote[0];var setLote=_lote[1];var _val=useState('');var val=_val[0];var setVal=_val[1];var _obs=useState('');var obs=_obs[0];var setObs=_obs[1];var _err=useState('');var err=_err[0];var setErr=_err[1];var _warn=useState('');var warn=_warn[0];var setWarn=_warn[1];var _ok=useState('');var ok=_ok[0];var setOk=_ok[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];var _carrinho=useState([]);var carrinho=_carrinho[0];var setCarrinho=_carrinho[1];var _showCarrinho=useState(false);var showCarrinho=_showCarrinho[0];var setShowCarrinho=_showCarrinho[1];
+var _showControlado=useState(false);var showControlado=_showControlado[0];var setShowControlado=_showControlado[1];
+var _controladoData=useState(null);var controladoData=_controladoData[0];var setControladoData=_controladoData[1];
 var inStock=medications.filter(function(m){return (stock[m.id]||0)>0;});var filtered=[];if(search.trim()){var s=search.toLowerCase();filtered=inStock.filter(function(m){return m.nome.toLowerCase().indexOf(s)>=0;}).slice(0,8);}var cur=sel?(stock[sel.id]||0):0;
 function adicionarCarrinho(){
     if(!sel){setErr('Selecione um medicamento.');return;}
+    if(_ehMedControlado(sel.nome)){setErr('🔒 '+sel.nome+' é controlado (Morfina/Tramal) — retire individualmente em "Registrar Saída", não pelo carrinho.');return;}
     var q=parseInt(qty);if(!q||q<=0){setErr('Quantidade inválida.');return;}
     if(cur<=0){setErr('Estoque zerado! Saída bloqueada — não há unidades disponíveis de '+sel.nome+'.');return;}
     if(q>cur){setErr('Quantidade ('+q+') maior que o estoque disponível ('+cur+' un.). Máximo permitido: '+cur+' un.');return;}
@@ -1506,8 +1604,26 @@ function adicionarCarrinho(){
     }
     next();
   }
-  async function save(){if(!sel){setErr('Selecione um medicamento.');return;}var q=parseInt(qty);if(!q||q<=0){setErr('Quantidade inválida.');return;}if(cur<=0){setErr('Estoque zerado! Saída bloqueada — não há unidades disponíveis de '+sel.nome+'.');return;}if(q>cur){setErr('Quantidade ('+q+') maior que o estoque disponível ('+cur+' un.). Máximo permitido: '+cur+' un.');return;}if(q>=500&&!obs.trim()){setErr('⚠️ Saída de '+q+' un. (500 ou mais) exige justificativa. Preencha o campo de observação antes de continuar.');return;}if(q>cur*0.7&&!warn){setWarn('Saida alta: '+q+' de '+cur+' un. disponivel. Confirme clicando novamente.');return;}setSaving(true);setErr('');setWarn('');var lt=lote||(latest[sel.id]?latest[sel.id].lote:'')||'';var vl=val||(latest[sel.id]?latest[sel.id].validade:'')||'';var data={medicamentoId:sel.id,medicamentoNome:sel.nome,ean:sel.ean||'',tipo:'saida',quantidade:q,lote:lt.trim(),validade:vl.trim(),observacao:obs.trim()};if(q>=500)data.saidaGrande=true;
+  async function save(){if(!sel){setErr('Selecione um medicamento.');return;}var q=parseInt(qty);if(!q||q<=0){setErr('Quantidade inválida.');return;}if(cur<=0){setErr('Estoque zerado! Saída bloqueada — não há unidades disponíveis de '+sel.nome+'.');return;}if(q>cur){setErr('Quantidade ('+q+') maior que o estoque disponível ('+cur+' un.). Máximo permitido: '+cur+' un.');return;}if(q>=500&&!obs.trim()){setErr('⚠️ Saída de '+q+' un. (500 ou mais) exige justificativa. Preencha o campo de observação antes de continuar.');return;}if(q>cur*0.7&&!warn){setWarn('Saida alta: '+q+' de '+cur+' un. disponivel. Confirme clicando novamente.');return;}var lt=lote||(latest[sel.id]?latest[sel.id].lote:'')||'';var vl=val||(latest[sel.id]?latest[sel.id].validade:'')||'';var data={medicamentoId:sel.id,medicamentoNome:sel.nome,ean:sel.ean||'',tipo:'saida',quantidade:q,lote:lt.trim(),validade:vl.trim(),observacao:obs.trim()};if(q>=500)data.saidaGrande=true;
+    // Controlados (Morfina/Tramal): abre o popup obrigatório de paciente/médico/CRM ANTES de salvar —
+    // a saída só é registrada depois que o popup confirmar (ver confirmarSaidaControlada).
+    if(_ehMedControlado(sel.nome)){setErr('');setWarn('');setControladoData(data);setShowControlado(true);return;}
+    setSaving(true);setErr('');setWarn('');
     var saveFn=(!canMove&&isGuest&&props.onSolicitar)?props.onSolicitar:onSave;saveFn(data).then(function(){if(q>500)db.collection('alertas').add({tipo:'saida_excessiva',medicamentoNome:sel.nome,quantidade:q,estoqueAntes:cur,autorNome:user.name,justificativa:obs.trim(),criadoEm:new Date().toISOString(),lido:false}).catch(function(){});playSound('success');setOk((!canMove&&isGuest)?'Solicitação enviada!':'Saida de '+q+'x '+sel.nome+' registrada!');setQty('');setLote('');setVal('');setObs('');setWarn('');setTimeout(function(){setOk('');},4000);setSaving(false);}).catch(function(e){setErr('Erro: '+(e.message||'tente novamente'));setSaving(false);});}
+  // Confirma a saída de controlado: grava a entry normal (afeta estoque) + o registro de auditoria em
+  // saidas_controladas. Só chega aqui depois do popup validar paciente/médico/CRM/observação.
+  function confirmarSaidaControlada(payload){
+    var saveFn=(!canMove&&isGuest&&props.onSolicitar)?props.onSolicitar:onSave;
+    return saveFn(controladoData).then(function(){
+      return db.collection('saidas_controladas').add(payload);
+    }).then(function(){
+      playSound('success');
+      setShowControlado(false);setControladoData(null);
+      setQty('');setLote('');setVal('');setObs('');setWarn('');setSel(null);setSearch('');
+      setOk((!canMove&&isGuest)?'Solicitação enviada!':'Saida controlada de '+controladoData.quantidade+'x '+controladoData.medicamentoNome+' registrada!');
+      setTimeout(function(){setOk('');},4500);
+    });
+  }
 var last10=entries.filter(function(e){return e.tipo==='saida'&&!_ehSaidaNaoReal(e);}).slice(-10).reverse();
 return(
 <div style={{maxWidth:600,margin:'0 auto',padding:'16px 14px'}}>
@@ -1621,6 +1737,7 @@ return(
     </div>
   )}
 
+  {showControlado&&controladoData&&<ModalSaidaControlada data={controladoData} user={user} onConfirm={confirmarSaidaControlada} onClose={function(){setShowControlado(false);setControladoData(null);}}/>}
 </div>);}
 
 function TabEntrada(props){var user=props.user;var medications=props.medications;var entries=props.entries||[];var onSave=props.onSave;var isGuest=props.isGuest||false;var canMove=props.canMove!==false;var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};var alert2=props.alert2||function(m){window.alert(m);};var _modo=useState('individual');var modo=_modo[0];var setModo=_modo[1];var _search=useState('');var search=_search[0];var setSearch=_search[1];var _sel=useState(null);var sel=_sel[0];var setSel=_sel[1];var _newNome=useState('');var newNome=_newNome[0];var setNewNome=_newNome[1];var _newEan=useState('');var newEan=_newEan[0];var setNewEan=_newEan[1];var _creating=useState(false);var creating=_creating[0];var setCreating=_creating[1];var _showList=useState(false);var showList=_showList[0];var setShowList=_showList[1];var _qty=useState('');var qty=_qty[0];var setQty=_qty[1];var _lote=useState('');var lote=_lote[0];var setLote=_lote[1];var _val=useState('');var val=_val[0];var setVal=_val[1];var _obs=useState('');var obs=_obs[0];var setObs=_obs[1];var _err=useState('');var err=_err[0];var setErr=_err[1];var _ok=useState('');var ok=_ok[0];var setOk=_ok[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];var _filtEntrada=useState('todos');var filtEntrada=_filtEntrada[0];var setFiltEntrada=_filtEntrada[1];var _loteNota=useState('');var loteNota=_loteNota[0];var setLoteNota=_loteNota[1];var _valNota=useState('');var valNota=_valNota[0];var setValNota=_valNota[1];var _obsNota=useState('');var obsNota=_obsNota[0];var setObsNota=_obsNota[1];var _loteNotaReal=useState('');var loteNotaReal=_loteNotaReal[0];var setLoteNotaReal=_loteNotaReal[1];var _valNotaReal=useState('');var valNotaReal=_valNotaReal[0];var setValNotaReal=_valNotaReal[1];var _qtds=useState({});var qtds=_qtds[0];var setQtds=_qtds[1];var _salvandoNota=useState(false);var salvandoNota=_salvandoNota[0];var setSalvandoNota=_salvandoNota[1];
@@ -8881,81 +8998,114 @@ function TabRecebimento(props){
 
 // ===== Aba de Pacientes (controlados): lista + busca + histórico de saídas vinculadas =====
 function TabPacientes(props){
-  var user=props.user;var entries=props.entries||[];
+  var user=props.user;
   var _pacientes=useState([]);var pacientes=_pacientes[0];var setPacientes=_pacientes[1];
+  var _saidas=useState([]);var saidas=_saidas[0];var setSaidas=_saidas[1];
   var _busca=useState('');var busca=_busca[0];var setBusca=_busca[1];
+  var _fDe=useState('');var fDe=_fDe[0];var setFDe=_fDe[1];
+  var _fAte=useState('');var fAte=_fAte[0];var setFAte=_fAte[1];
   var _sel=useState(null);var sel=_sel[0];var setSel=_sel[1];
+  var _showNovo=useState(false);var showNovo=_showNovo[0];var setShowNovo=_showNovo[1];
+  var _novoNome=useState('');var novoNome=_novoNome[0];var setNovoNome=_novoNome[1];
+  var _novoSaving=useState(false);var novoSaving=_novoSaving[0];var setNovoSaving=_novoSaving[1];
+  var _novoErro=useState('');var novoErro=_novoErro[0];var setNovoErro=_novoErro[1];
 
   useEffect(function(){
-    var unsub=db.collection('pacientes_controlados').onSnapshot(function(snap){
+    var u1=db.collection('pacientes_controlados').onSnapshot(function(snap){
       var arr=[];snap.forEach(function(d){arr.push(Object.assign({id:d.id},d.data()));});
       arr.sort(function(a,b){return (a.nome||'').localeCompare(b.nome||'');});
       setPacientes(arr);
     },function(){});
-    return function(){try{unsub();}catch(e){}};
+    var u2=db.collection('saidas_controladas').orderBy('criadoEm','desc').limit(1000).onSnapshot(function(snap){
+      setSaidas(snap.docs.map(function(d){return Object.assign({id:d.id},d.data());}));
+    },function(){});
+    return function(){try{u1();}catch(e){}try{u2();}catch(e){}};
   },[]);
 
-  var q=busca.trim().toLowerCase();
-  var qDigitos=busca.replace(/\D/g,'');
-  var listaFiltrada=pacientes.filter(function(p){
-    if(!q)return true;
-    if((p.nome||'').toLowerCase().indexOf(q)>=0)return true;
-    if(qDigitos&&((p.cpf||'').indexOf(qDigitos)>=0||(p.cns||'').indexOf(qDigitos)>=0))return true;
-    return false;
-  });
-
-  function historicoDe(p){
-    return entries.filter(function(e){return e.tipo==='saida'&&e.pacienteId===p.id;})
-      .sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});
+  function saidasDe(pacienteId){
+    return saidas.filter(function(s){
+      if(s.pacienteId!==pacienteId)return false;
+      if(fDe&&(s.dataSaida||'')<fDe)return false;
+      if(fAte&&(s.dataSaida||'')>fAte)return false;
+      return true;
+    }).sort(function(a,b){return (b.dataSaida||'').localeCompare(a.dataSaida||'')||(b.criadoEm||'').localeCompare(a.criadoEm||'');});
   }
+
+  // Só entram pacientes que JÁ TIVERAM alguma saída de controlado (Morfina/Tramal) — cadastro em si não basta.
+  var q=busca.trim().toLowerCase();
+  var comHistorico=pacientes
+    .map(function(p){return{p:p,hist:saidasDe(p.id)};})
+    .filter(function(x){return x.hist.length>0;})
+    .filter(function(x){return !q||(x.p.nome||'').toLowerCase().indexOf(q)>=0;})
+    .sort(function(a,b){return (b.hist[0]?b.hist[0].dataSaida:'').localeCompare(a.hist[0]?a.hist[0].dataSaida:'');});
+
+  function cadastrarPaciente(){
+    var nome=novoNome.trim();if(!nome){setNovoErro('Informe o nome do paciente.');return;}
+    setNovoSaving(true);setNovoErro('');
+    db.collection('pacientes_controlados').add({nome:nome,criadoEm:new Date().toISOString(),criadoPor:user.name||''})
+      .then(function(){setShowNovo(false);setNovoNome('');setNovoSaving(false);})
+      .catch(function(e){setNovoErro('Erro: '+((e&&e.message)||e));setNovoSaving(false);});
+  }
+
+  function fD(d){if(!d)return'';var p=String(d).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
 
   return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
     <div className="card" style={{marginBottom:14}}>
-      <div className="ch"><div className="ch-title"><div style={{width:3,height:16,background:'#7C3AED',borderRadius:2,flexShrink:0}}/><span>👤 Pacientes</span></div><span style={{fontSize:12,color:'#94A3B8',fontWeight:500}}>{pacientes.length} cadastrado(s)</span></div>
+      <div className="ch"><div className="ch-title"><div style={{width:3,height:16,background:'#7C3AED',borderRadius:2,flexShrink:0}}/><span>🔒 Pacientes — Controlados</span></div><span style={{fontSize:12,color:'#94A3B8',fontWeight:500}}>{comHistorico.length} com histórico</span></div>
       <div style={{padding:'12px 16px 16px'}}>
-        <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="Buscar por nome, CPF ou CNS..." className="inp" style={{marginBottom:0}}/>
+        <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="Buscar por nome do paciente..." className="inp"/>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
+          <div><label style={{fontSize:11,fontWeight:700,color:'#475569',display:'block',marginBottom:4}}>De</label><input type="date" value={fDe} onChange={function(e){setFDe(e.target.value);}} className="inp" style={{marginBottom:0}}/></div>
+          <div><label style={{fontSize:11,fontWeight:700,color:'#475569',display:'block',marginBottom:4}}>Até</label><input type="date" value={fAte} onChange={function(e){setFAte(e.target.value);}} className="inp" style={{marginBottom:0}}/></div>
+        </div>
+        <button onClick={function(){setShowNovo(true);}} style={{width:'100%',padding:'11px',background:'#F5F3FF',border:'1.5px dashed #C4B5FD',borderRadius:10,color:'#7C3AED',fontWeight:700,fontSize:13,cursor:'pointer'}}>+ Novo Paciente</button>
       </div>
     </div>
-    {listaFiltrada.length===0
+    {comHistorico.length===0
       ?<div className="card" style={{padding:40,textAlign:'center',color:'#94A3B8'}}>
         <div style={{fontSize:40,marginBottom:8}}>👤</div>
-        <div style={{fontWeight:600}}>{pacientes.length===0?'Nenhum paciente cadastrado ainda':'Nenhum paciente encontrado'}</div>
-        <div style={{fontSize:12,marginTop:4}}>Pacientes são vinculados automaticamente ao dar saída de medicamentos Controlados.</div>
+        <div style={{fontWeight:600}}>Nenhum paciente com saída de Morfina/Tramal ainda</div>
+        <div style={{fontSize:12,marginTop:4}}>Pacientes aparecem aqui após a primeira saída de um controlado (Morfina ou Tramal).</div>
       </div>
       :<div style={{display:'flex',flexDirection:'column',gap:10}}>
-        {listaFiltrada.map(function(p){var hist=historicoDe(p);return(
+        {comHistorico.map(function(x){var p=x.p,hist=x.hist;return(
           <div key={p.id} className="card" style={{padding:14,cursor:'pointer'}} onClick={function(){setSel(p);}}>
             <div style={{fontWeight:700,fontSize:15,color:'#1E293B'}}>{p.nome}</div>
-            {p.cpf&&<div style={{fontSize:11,color:'#94A3B8',marginTop:2}}>CPF: {cpfExibicaoMascarada(p.cpf)}</div>}
-            <div style={{fontSize:12,color:'#7C3AED',fontWeight:600,marginTop:4}}>🔒 {hist.length} retirada{hist.length!==1?'s':''} de controlado{hist.length!==1?'s':''}</div>
+            <div style={{fontSize:12,color:'#7C3AED',fontWeight:600,marginTop:4}}>🔒 {hist.length} saída{hist.length!==1?'s':''} · última em {fD(hist[0].dataSaida)}</div>
           </div>
         );})}
       </div>
     }
-    {sel&&(function(){var hist=historicoDe(sel);return(
+
+    {showNovo&&<Modal onClose={function(){if(!novoSaving)setShowNovo(false);}} title="Novo Paciente">
+      <Lbl c="Nome do paciente"/>
+      <input value={novoNome} onChange={function(e){setNovoNome(e.target.value);}} placeholder="Nome completo" className="inp" autoFocus/>
+      {novoErro&&<div className="er" style={{marginBottom:10}}>{novoErro}</div>}
+      <button onClick={cadastrarPaciente} disabled={novoSaving} className="bp" style={{opacity:novoSaving?0.7:1}}>{novoSaving?'Salvando...':'Salvar'}</button>
+    </Modal>}
+
+    {sel&&(function(){var hist=saidasDe(sel.id);return(
       <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={function(){setSel(null);}}>
         <div style={{background:'#fff',borderRadius:20,padding:20,maxWidth:520,width:'100%',maxHeight:'92vh',overflowY:'auto'}} onClick={function(e){e.stopPropagation();}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:14}}>
             <div>
               <div style={{fontWeight:800,fontSize:17,color:'#1E293B'}}>{sel.nome}</div>
-              {sel.cpf&&<div style={{fontSize:12,color:'#64748B',marginTop:2}}>CPF: {mascaraCPF(sel.cpf)}</div>}
-              {sel.cns&&<div style={{fontSize:12,color:'#64748B',marginTop:1}}>CNS: {mascaraCNS(sel.cns)}</div>}
-              <div style={{fontSize:11,color:'#94A3B8',marginTop:2}}>Cadastrado em {fmtD(sel.criadoEm)}{sel.criadoPor?' por '+sel.criadoPor:''}</div>
+              <div style={{fontSize:11,color:'#94A3B8',marginTop:2}}>Cadastrado em {fD((sel.criadoEm||'').slice(0,10))}{sel.criadoPor?' por '+sel.criadoPor:''}</div>
             </div>
             <button onClick={function(){setSel(null);}} style={{background:'#F1F5F9',border:'none',borderRadius:10,width:36,height:36,cursor:'pointer',fontSize:18}}>✕</button>
           </div>
-          <div style={{fontWeight:700,fontSize:13,color:'#334155',marginBottom:10}}>🔒 Histórico de medicamentos Controlados</div>
+          <div style={{fontWeight:700,fontSize:13,color:'#334155',marginBottom:10}}>🔒 Histórico de saídas de controlados</div>
           {hist.length===0
-            ?<div style={{textAlign:'center',color:'#94A3B8',padding:24,fontSize:13}}>Nenhuma retirada registrada ainda.</div>
+            ?<div style={{textAlign:'center',color:'#94A3B8',padding:24,fontSize:13}}>Nenhuma saída no período filtrado.</div>
             :<div style={{display:'flex',flexDirection:'column',gap:8}}>
-              {hist.map(function(e){return(<div key={e.id} style={{background:'#F8FAFC',borderRadius:10,padding:'10px 12px',border:'1px solid #E2E8F0'}}>
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
-                  <div>
-                    <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>{e.medicamentoNome}</div>
-                    <div style={{fontSize:11,color:'#64748B',marginTop:2}}>{fmtD(e.criadoEm)} · Responsável: {e.autorNome||'—'}</div>
-                  </div>
-                  <div style={{fontWeight:800,fontSize:14,color:'#DC2626'}}>−{e.quantidade}</div>
+              {hist.map(function(s){return(<div key={s.id} style={{background:'#F8FAFC',borderRadius:10,padding:'10px 12px',border:'1px solid #E2E8F0'}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8,marginBottom:4}}>
+                  <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>{s.medicamentoNome}</div>
+                  <div style={{fontWeight:800,fontSize:14,color:'#DC2626'}}>−{s.quantidade}</div>
                 </div>
+                <div style={{fontSize:11,color:'#64748B',marginBottom:2}}>{fD(s.dataSaida)} · Médico: {s.medicoNome||'—'}{s.medicoCrm?' (CRM '+s.medicoCrm+')':''}</div>
+                {s.observacao&&<div style={{fontSize:11,color:'#475569',marginBottom:2}}>Obs: {s.observacao}</div>}
+                <div style={{fontSize:11,color:'#94A3B8'}}>Liberado por: {s.liberadoPorNome||'—'}</div>
               </div>);})}
             </div>
           }
@@ -9392,6 +9542,7 @@ return(
               {id:'comparapedido',icon:'🔍',label:'Comparação de Pedido',show:true},
               {id:'estoque',icon:'📦',label:'Estoque',show:true},
               {id:'recebimento',icon:'🚚',label:'Recebimento',show:true},
+              {id:'pacientes',icon:'🔒',label:'Pacientes (Controlados)',show:true},
               {id:'conferencia',icon:'🧾',label:'Conferência',show:true},
               {id:'leites',icon:'🍼',label:'Leites',show:true},
               {id:'relatorio',icon:'📊',label:'Relatório',show:true},
