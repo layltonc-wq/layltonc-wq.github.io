@@ -243,6 +243,13 @@ var TOURS=[
     {acao:{tipo:'clicar',seletor:'[data-tour="receb-sub-notas"]'},seletor:'[data-tour="notas-import"]',texto:'Quando as notas chegarem, importe uma ou várias de uma vez aqui — o app lê os medicamentos do PDF sozinho.',posicao:'abaixo'},
     {seletor:'[data-tour="notas-matching-btn"]',texto:'Depois de importar, o sistema já casa automaticamente cada medicamento recebido × faturado. Só o que não bater vira divergência — o resto é conciliado sozinho.',posicao:'acima'},
     {acao:{tipo:'clicar',seletor:'[data-tour="receb-sub-divergencias"]'},seletor:'[data-tour="div-painel"]',texto:'Só os problemas aparecem aqui: quantidade diferente ou item da nota sem recebimento. Confirme manualmente, ou dá saída normal do medicamento — quando o estoque zerar, a divergência some sozinha.',posicao:'abaixo'}
+  ]},
+  {id:'tour_controlados',titulo:'Novidade: Controle de Morfina e Tramal',passos:[
+    {acao:{tipo:'menu'},seletor:'[data-tour="nav-pacientes"]',texto:'Novidade! A nova aba "Pacientes (Controlados)" reúne tudo sobre saídas de Morfina e Tramal — clique aqui para abrir.',posicao:'acima'},
+    {acao:{tipo:'aba',aba:'pacientes'},seletor:'[data-tour="tab-content"]',texto:'Aqui aparecem TODOS os pacientes cadastrados: quem já recebeu Morfina ou Tramal aparece primeiro, com o histórico completo de saídas. Quem ainda não recebeu nada também aparece na lista, mais abaixo.',posicao:'abaixo'},
+    {seletor:'[data-tour="pac-novo"]',texto:'Cadastre um novo paciente aqui a qualquer momento — ou cadastre na hora, direto no popup de saída. Gestores e técnicos também podem excluir cadastros errados ou duplicados nesta lista.',posicao:'acima'},
+    {acao:{tipo:'aba',aba:'saida'},seletor:'[data-tour="nav-saida"]',texto:'A partir de agora, toda saída de Morfina ou Tramal (mesmo pelo nome genérico Tramadol, ou pela marca Dimorf) abre um formulário obrigatório antes de liberar.',posicao:'acima'},
+    {seletor:'[data-tour="tab-content"]',texto:'No formulário você informa: paciente (com busca automática), nome e CRM do médico, a data da saída (dá pra registrar retroativo se achar uma receita atrasada) e uma observação — que vira obrigatória se já saiu o mesmo remédio pro mesmo paciente naquele dia.',posicao:'abaixo'}
   ]}
 ];
 function todayStr(){return new Date().toISOString().slice(0,10);}
@@ -9425,7 +9432,7 @@ function TabPacientes(props){
           <div><label style={{fontSize:11,fontWeight:700,color:'#475569',display:'block',marginBottom:4}}>De</label><input type="date" value={fDe} onChange={function(e){setFDe(e.target.value);}} className="inp" style={{marginBottom:0}}/></div>
           <div><label style={{fontSize:11,fontWeight:700,color:'#475569',display:'block',marginBottom:4}}>Até</label><input type="date" value={fAte} onChange={function(e){setFAte(e.target.value);}} className="inp" style={{marginBottom:0}}/></div>
         </div>
-        <button onClick={function(){setShowNovo(true);}} style={{width:'100%',padding:'11px',background:'#F5F3FF',border:'1.5px dashed #C4B5FD',borderRadius:10,color:'#7C3AED',fontWeight:700,fontSize:13,cursor:'pointer'}}>+ Novo Paciente</button>
+        <button data-tour="pac-novo" onClick={function(){setShowNovo(true);}} style={{width:'100%',padding:'11px',background:'#F5F3FF',border:'1.5px dashed #C4B5FD',borderRadius:10,color:'#7C3AED',fontWeight:700,fontSize:13,cursor:'pointer'}}>+ Novo Paciente</button>
       </div>
     </div>
     {listaPacientes.length===0
