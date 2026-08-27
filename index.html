@@ -1530,7 +1530,7 @@ function ModalSaidaControlada(props){
   }
 
   return(<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.6)',zIndex:9500,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
-    <div style={{background:'#fff',borderRadius:20,padding:20,maxWidth:460,width:'100%',maxHeight:'92vh',overflowY:'auto'}}>
+    <div data-tour="ctrl-popup" style={{background:'#fff',borderRadius:20,padding:20,maxWidth:460,width:'100%',maxHeight:'92vh',overflowY:'auto'}}>
       <div style={{fontWeight:800,fontSize:16,color:'#7C2D12',marginBottom:2}}>🔒 Controle de Controlado</div>
       <div style={{fontSize:12,color:'#92400E',marginBottom:14}}>{data.medicamentoNome} — {data.quantidade} un. Preencha os dados obrigatórios antes de liberar a saída.</div>
 
@@ -1571,6 +1571,7 @@ function ModalSaidaControlada(props){
 function TabSaida(props){var user=props.user;var medications=props.medications;var stock=props.stock;var entries=props.entries;var onSave=props.onSave;var latest=props.latest||{};var isGuest=props.isGuest||false;var canMove=props.canMove!==false;var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};var alert2=props.alert2||function(m){window.alert(m);};var _search=useState('');var search=_search[0];var setSearch=_search[1];var _sel=useState(null);var sel=_sel[0];var setSel=_sel[1];var _qty=useState('');var qty=_qty[0];var setQty=_qty[1];var _lote=useState('');var lote=_lote[0];var setLote=_lote[1];var _val=useState('');var val=_val[0];var setVal=_val[1];var _obs=useState('');var obs=_obs[0];var setObs=_obs[1];var _err=useState('');var err=_err[0];var setErr=_err[1];var _warn=useState('');var warn=_warn[0];var setWarn=_warn[1];var _ok=useState('');var ok=_ok[0];var setOk=_ok[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];var _carrinho=useState([]);var carrinho=_carrinho[0];var setCarrinho=_carrinho[1];var _showCarrinho=useState(false);var showCarrinho=_showCarrinho[0];var setShowCarrinho=_showCarrinho[1];
 var _showControlado=useState(false);var showControlado=_showControlado[0];var setShowControlado=_showControlado[1];
 var _controladoData=useState(null);var controladoData=_controladoData[0];var setControladoData=_controladoData[1];
+var _demoControlado=useState(false);var demoControlado=_demoControlado[0];var setDemoControlado=_demoControlado[1];
 var inStock=medications.filter(function(m){return (stock[m.id]||0)>0;});var filtered=[];if(search.trim()){var s=search.toLowerCase();filtered=inStock.filter(function(m){return m.nome.toLowerCase().indexOf(s)>=0;}).slice(0,8);}var cur=sel?(stock[sel.id]||0):0;
 function adicionarCarrinho(){
     if(!sel){setErr('Selecione um medicamento.');return;}
@@ -1636,6 +1637,23 @@ function adicionarCarrinho(){
       setQty('');setLote('');setVal('');setObs('');setWarn('');setSel(null);setSearch('');
       setOk((!canMove&&isGuest)?'Solicitação enviada!':'Saida controlada de '+controladoData.quantidade+'x '+controladoData.medicamentoNome+' registrada!');
       setTimeout(function(){setOk('');},4500);
+    });
+  }
+  // Gatilho oculto (só clicado programaticamente pelo tutorial guiado) que abre o MESMO popup real de
+  // controlados, com dados de exemplo — sem depender de ter Morfina/Tramal em estoque de verdade pra
+  // demonstrar. O onConfirm vira um no-op (demoConfirmControlado) pra garantir que nada é gravado
+  // mesmo se alguém completar e clicar em "Liberar Saída" durante a demonstração do tour.
+  function abrirDemoControlado(){
+    setControladoData({medicamentoId:'',medicamentoNome:'Morfina 10mg (exemplo do tutorial)',quantidade:1});
+    setDemoControlado(true);setShowControlado(true);
+  }
+  function demoConfirmControlado(){
+    return new Promise(function(resolve){
+      setTimeout(function(){
+        setShowControlado(false);setControladoData(null);setDemoControlado(false);
+        alert2('Isso foi só uma demonstração do tutorial — nenhuma saída foi registrada de verdade.');
+        resolve();
+      },300);
     });
   }
 var last10=entries.filter(function(e){return e.tipo==='saida'&&!_ehSaidaNaoReal(e);}).slice(-10).reverse();
@@ -1751,7 +1769,8 @@ return(
     </div>
   )}
 
-  {showControlado&&controladoData&&<ModalSaidaControlada data={controladoData} user={user} onConfirm={confirmarSaidaControlada} onClose={function(){setShowControlado(false);setControladoData(null);}}/>}
+  <button data-tour="saida-demo-controlado" aria-hidden="true" tabIndex={-1} onClick={abrirDemoControlado} style={{position:'fixed',width:1,height:1,opacity:0,pointerEvents:'none',overflow:'hidden'}}/>
+  {showControlado&&controladoData&&<ModalSaidaControlada data={controladoData} user={user} onConfirm={demoControlado?demoConfirmControlado:confirmarSaidaControlada} onClose={function(){setShowControlado(false);setControladoData(null);setDemoControlado(false);}}/>}
 </div>);}
 
 function TabEntrada(props){var user=props.user;var medications=props.medications;var entries=props.entries||[];var onSave=props.onSave;var isGuest=props.isGuest||false;var canMove=props.canMove!==false;var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};var alert2=props.alert2||function(m){window.alert(m);};var _modo=useState('individual');var modo=_modo[0];var setModo=_modo[1];var _search=useState('');var search=_search[0];var setSearch=_search[1];var _sel=useState(null);var sel=_sel[0];var setSel=_sel[1];var _newNome=useState('');var newNome=_newNome[0];var setNewNome=_newNome[1];var _newEan=useState('');var newEan=_newEan[0];var setNewEan=_newEan[1];var _creating=useState(false);var creating=_creating[0];var setCreating=_creating[1];var _showList=useState(false);var showList=_showList[0];var setShowList=_showList[1];var _qty=useState('');var qty=_qty[0];var setQty=_qty[1];var _lote=useState('');var lote=_lote[0];var setLote=_lote[1];var _val=useState('');var val=_val[0];var setVal=_val[1];var _obs=useState('');var obs=_obs[0];var setObs=_obs[1];var _err=useState('');var err=_err[0];var setErr=_err[1];var _ok=useState('');var ok=_ok[0];var setOk=_ok[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];var _filtEntrada=useState('todos');var filtEntrada=_filtEntrada[0];var setFiltEntrada=_filtEntrada[1];var _loteNota=useState('');var loteNota=_loteNota[0];var setLoteNota=_loteNota[1];var _valNota=useState('');var valNota=_valNota[0];var setValNota=_valNota[1];var _obsNota=useState('');var obsNota=_obsNota[0];var setObsNota=_obsNota[1];var _loteNotaReal=useState('');var loteNotaReal=_loteNotaReal[0];var setLoteNotaReal=_loteNotaReal[1];var _valNotaReal=useState('');var valNotaReal=_valNotaReal[0];var setValNotaReal=_valNotaReal[1];var _qtds=useState({});var qtds=_qtds[0];var setQtds=_qtds[1];var _salvandoNota=useState(false);var salvandoNota=_salvandoNota[0];var setSalvandoNota=_salvandoNota[1];
