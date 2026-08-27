@@ -9350,6 +9350,7 @@ function TabRecebimento(props){
 // ===== Aba de Pacientes (controlados): lista + busca + histórico de saídas vinculadas =====
 function TabPacientes(props){
   var user=props.user;
+  var podeExcluir=user.role==='tecnico'||user.role==='gestor';
   var _pacientes=useState([]);var pacientes=_pacientes[0];var setPacientes=_pacientes[1];
   var _saidas=useState([]);var saidas=_saidas[0];var setSaidas=_saidas[1];
   var _busca=useState('');var busca=_busca[0];var setBusca=_busca[1];
@@ -9400,6 +9401,16 @@ function TabPacientes(props){
 
   function fD(d){if(!d)return'';var p=String(d).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
 
+  function excluirPaciente(p){
+    if(!podeExcluir)return;
+    var temHist=saidasDe(p.id).length>0;
+    var msg='Excluir o cadastro de "'+p.nome+'"?'+(temHist?' O histórico de saídas já registrado continua salvo no sistema (auditoria), só deixa de aparecer nesta lista.':'');
+    if(!window.confirm(msg))return;
+    db.collection('pacientes_controlados').doc(p.id).delete()
+      .then(function(){if(sel&&sel.id===p.id)setSel(null);})
+      .catch(function(e){window.alert('Erro ao excluir: '+((e&&e.message)||e));});
+  }
+
   return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
     <div className="card" style={{marginBottom:14}}>
       <div className="ch"><div className="ch-title"><div style={{width:3,height:16,background:'#7C3AED',borderRadius:2,flexShrink:0}}/><span>🔒 Pacientes — Controlados</span></div><span style={{fontSize:12,color:'#94A3B8',fontWeight:500}}>{comHistorico.length} com histórico</span></div>
@@ -9420,9 +9431,12 @@ function TabPacientes(props){
       </div>
       :<div style={{display:'flex',flexDirection:'column',gap:10}}>
         {comHistorico.map(function(x){var p=x.p,hist=x.hist;return(
-          <div key={p.id} className="card" style={{padding:14,cursor:'pointer'}} onClick={function(){setSel(p);}}>
-            <div style={{fontWeight:700,fontSize:15,color:'#1E293B'}}>{p.nome}</div>
-            <div style={{fontSize:12,color:'#7C3AED',fontWeight:600,marginTop:4}}>🔒 {hist.length} saída{hist.length!==1?'s':''} · última em {fD(hist[0].dataSaida)}</div>
+          <div key={p.id} className="card" style={{padding:14,cursor:'pointer',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}} onClick={function(){setSel(p);}}>
+            <div>
+              <div style={{fontWeight:700,fontSize:15,color:'#1E293B'}}>{p.nome}</div>
+              <div style={{fontSize:12,color:'#7C3AED',fontWeight:600,marginTop:4}}>🔒 {hist.length} saída{hist.length!==1?'s':''} · última em {fD(hist[0].dataSaida)}</div>
+            </div>
+            {podeExcluir&&<button onClick={function(e){e.stopPropagation();excluirPaciente(p);}} title="Excluir paciente" style={{background:'#FEF2F2',border:'1px solid #FECACA',borderRadius:8,width:34,height:34,flexShrink:0,cursor:'pointer',fontSize:14,color:'#DC2626'}}>🗑️</button>}
           </div>
         );})}
       </div>
@@ -9443,7 +9457,10 @@ function TabPacientes(props){
               <div style={{fontWeight:800,fontSize:17,color:'#1E293B'}}>{sel.nome}</div>
               <div style={{fontSize:11,color:'#94A3B8',marginTop:2}}>Cadastrado em {fD((sel.criadoEm||'').slice(0,10))}{sel.criadoPor?' por '+sel.criadoPor:''}</div>
             </div>
-            <button onClick={function(){setSel(null);}} style={{background:'#F1F5F9',border:'none',borderRadius:10,width:36,height:36,cursor:'pointer',fontSize:18}}>✕</button>
+            <div style={{display:'flex',gap:6,flexShrink:0}}>
+              {podeExcluir&&<button onClick={function(){excluirPaciente(sel);}} title="Excluir paciente" style={{background:'#FEF2F2',border:'1px solid #FECACA',borderRadius:10,width:36,height:36,cursor:'pointer',fontSize:15,color:'#DC2626'}}>🗑️</button>}
+              <button onClick={function(){setSel(null);}} style={{background:'#F1F5F9',border:'none',borderRadius:10,width:36,height:36,cursor:'pointer',fontSize:18}}>✕</button>
+            </div>
           </div>
           <div style={{fontWeight:700,fontSize:13,color:'#334155',marginBottom:10}}>🔒 Histórico de saídas de controlados</div>
           {hist.length===0
@@ -9941,7 +9958,7 @@ return(
             <div style={{fontSize:11,color:'rgba(255,255,255,0.5)',marginTop:2}}>{ROLES[user.role]||user.role}</div>
           </div>
           <div style={{flex:1,overflowY:'auto',padding:'8px 0'}}>
-            {[{id:'estoque',icon:'📦',label:'Estoque'},{id:'recebimento',icon:'🚚',label:'Recebimento'},{id:'conferencia',icon:'🧾',label:'Conferência'},{id:'leites',icon:'🍼',label:'Leites'},{id:'relatorio',icon:'📊',label:'Relatório'}].map(function(t){return(
+            {[{id:'estoque',icon:'📦',label:'Estoque'},{id:'recebimento',icon:'🚚',label:'Recebimento'},{id:'pacientes',icon:'🔒',label:'Pacientes (Controlados)'},{id:'conferencia',icon:'🧾',label:'Conferência'},{id:'leites',icon:'🍼',label:'Leites'},{id:'relatorio',icon:'📊',label:'Relatório'}].map(function(t){return(
               <button key={t.id} data-tour={'nav-'+t.id} onClick={function(){setTab(t.id);setMenuAberto(false);}} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'13px 20px',border:'none',background:tab===t.id?'#EFF6FF':'transparent',cursor:'pointer',borderLeft:tab===t.id?'3px solid #1351B4':'3px solid transparent'}}>
                 <span style={{fontSize:20}}>{t.icon}</span>
                 <span style={{fontSize:14,fontWeight:tab===t.id?700:500,color:tab===t.id?'#1351B4':'#1E293B'}}>{t.label}</span>
