@@ -1466,6 +1466,7 @@ function TabComparacaoPedido(props){
 // existe saída do MESMO medicamento pro MESMO paciente HOJE (checagem via saidas_controladas).
 function ModalSaidaControlada(props){
   var data=props.data;var user=props.user;var onConfirm=props.onConfirm;var onClose=props.onClose;
+  function fD(d){if(!d)return'';var p=String(d).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
   var _pacientes=useState([]);var pacientes=_pacientes[0];var setPacientes=_pacientes[1];
   var _busca=useState('');var busca=_busca[0];var setBusca=_busca[1];
   var _pacSel=useState(null);var pacSel=_pacSel[0];var setPacSel=_pacSel[1];
@@ -1473,6 +1474,7 @@ function ModalSaidaControlada(props){
   var _medico=useState('');var medico=_medico[0];var setMedico=_medico[1];
   var _crm=useState('');var crm=_crm[0];var setCrm=_crm[1];
   var _obs=useState('');var obs=_obs[0];var setObs=_obs[1];
+  var _dataSaida=useState(todayStr());var dataSaida=_dataSaida[0];var setDataSaida=_dataSaida[1];
   var _obsObrigatoria=useState(false);var obsObrigatoria=_obsObrigatoria[0];var setObsObrigatoria=_obsObrigatoria[1];
   var _checando=useState(false);var checando=_checando[0];var setChecando=_checando[1];
   var _erro=useState('');var erro=_erro[0];var setErro=_erro[1];
@@ -1484,17 +1486,16 @@ function ModalSaidaControlada(props){
     },function(){});
   },[]);
 
-  // Já existe saída do MESMO medicamento pro MESMO paciente HOJE? Busca só por pacienteId (sem índice
-  // composto) e filtra medicamento+data no cliente — evita depender de índice composto no Firestore.
+  // Já existe saída do MESMO medicamento pro MESMO paciente NA DATA ESCOLHIDA? Busca só por pacienteId
+  // (sem índice composto) e filtra medicamento+data no cliente — evita depender de índice composto no Firestore.
   useEffect(function(){
     if(!pacSel){setObsObrigatoria(false);return;}
     setChecando(true);
     db.collection('saidas_controladas').where('pacienteId','==',pacSel.id).get().then(function(sn){
-      var hoje=todayStr();
-      var jaTemHoje=sn.docs.some(function(d){var x=d.data();return x.medicamentoId===data.medicamentoId&&x.dataSaida===hoje;});
-      setObsObrigatoria(jaTemHoje);setChecando(false);
+      var jaTemNaData=sn.docs.some(function(d){var x=d.data();return x.medicamentoId===data.medicamentoId&&x.dataSaida===dataSaida;});
+      setObsObrigatoria(jaTemNaData);setChecando(false);
     }).catch(function(){setChecando(false);});
-  },[pacSel,data.medicamentoId]);
+  },[pacSel,data.medicamentoId,dataSaida]);
 
   var buscaTrim=busca.trim();
   var sugestoes=(!pacSel&&buscaTrim)?pacientes.filter(function(p){return (p.nome||'').toLowerCase().indexOf(buscaTrim.toLowerCase())>=0;}).slice(0,8):[];
@@ -1512,9 +1513,11 @@ function ModalSaidaControlada(props){
     if(!pacSel){setErro('Selecione ou cadastre o paciente.');return;}
     if(!medico.trim()){setErro('Informe o nome do médico.');return;}
     if(!crm.trim()){setErro('Informe o CRM do médico.');return;}
-    if(obsObrigatoria&&!obs.trim()){setErro('Já existe saída de '+data.medicamentoNome+' para '+pacSel.nome+' hoje — a observação é obrigatória.');return;}
+    if(!dataSaida){setErro('Informe a data da saída.');return;}
+    if(dataSaida>todayStr()){setErro('A data da saída não pode ser no futuro.');return;}
+    if(obsObrigatoria&&!obs.trim()){setErro('Já existe saída de '+data.medicamentoNome+' para '+pacSel.nome+' em '+fD(dataSaida)+' — a observação é obrigatória.');return;}
     setErro('');setSaving(true);
-    var payload={pacienteId:pacSel.id,pacienteNome:pacSel.nome,medicamentoId:data.medicamentoId,medicamentoNome:data.medicamentoNome,quantidade:data.quantidade,medicoNome:medico.trim(),medicoCrm:crm.trim(),observacao:obs.trim(),liberadoPorUid:user.uid||'',liberadoPorNome:user.name||'',dataSaida:todayStr(),criadoEm:new Date().toISOString()};
+    var payload={pacienteId:pacSel.id,pacienteNome:pacSel.nome,medicamentoId:data.medicamentoId,medicamentoNome:data.medicamentoNome,quantidade:data.quantidade,medicoNome:medico.trim(),medicoCrm:crm.trim(),observacao:obs.trim(),liberadoPorUid:user.uid||'',liberadoPorNome:user.name||'',dataSaida:dataSaida,criadoEm:new Date().toISOString()};
     onConfirm(payload).then(function(){setSaving(false);}).catch(function(e){setErro('Erro: '+((e&&e.message)||e));setSaving(false);});
   }
 
@@ -1542,7 +1545,10 @@ function ModalSaidaControlada(props){
       <input value={medico} onChange={function(e){setMedico(e.target.value);}} placeholder="Nome do médico responsável" className="inp"/>
       <Lbl c="CRM do médico *"/>
       <input value={crm} onChange={function(e){setCrm(e.target.value);}} placeholder="Ex: 12345-PE" className="inp"/>
-      <Lbl c={obsObrigatoria?'Observação * (obrigatória — já houve saída hoje)':'Observação'}/>
+      <Lbl c="Data da saída *"/>
+      <input type="date" value={dataSaida} max={todayStr()} onChange={function(e){setDataSaida(e.target.value);}} className="inp"/>
+      {dataSaida&&dataSaida<todayStr()&&<div style={{fontSize:11,color:'#B45309',marginTop:-6,marginBottom:10}}>📅 Retroativa — use quando a receita/retirada foi encontrada de um dia anterior.</div>}
+      <Lbl c={obsObrigatoria?'Observação * (obrigatória — já houve saída nessa data)':'Observação'}/>
       <textarea value={obs} onChange={function(e){setObs(e.target.value);}} rows={3} className="inp" placeholder={obsObrigatoria?'Justifique a nova saída do mesmo medicamento pro mesmo paciente hoje...':'Observações (opcional)'} style={{resize:'vertical',lineHeight:1.6,border:(obsObrigatoria&&!obs.trim())?'1.5px solid #FCA5A5':undefined}}/>
       {checando&&<div style={{fontSize:11,color:'#94A3B8',marginTop:4}}>Verificando histórico do paciente...</div>}
       {erro&&<div className="er" style={{marginTop:8}}>{erro}</div>}
