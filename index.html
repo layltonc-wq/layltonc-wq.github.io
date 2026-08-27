@@ -3164,8 +3164,22 @@ function TabDivergenciasPainel(props){
 
 function TabGestao(props){var currentUser=props.currentUser;var _users=useState([]);var users=_users[0];var setUsers=_users[1];var _alertas=useState([]);var alertas=_alertas[0];var setAlertas=_alertas[1];var _solicitList=useState([]);var solicitList=_solicitList[0];var setSolicitList=_solicitList[1];var _sub=useState('pending');var sub=_sub[0];var setSub=_sub[1];
 var _toursAtivos=useState({});var toursAtivos=_toursAtivos[0];var setToursAtivos=_toursAtivos[1];
-useEffect(function(){var ut=db.collection('config').doc('tours').onSnapshot(function(s){var d=s.exists?s.data():{};setToursAtivos(d.ativos||{});},function(){});return ut;},[]);
-function toggleTour(id,val){var novo=Object.assign({},toursAtivos);novo[id]=val;setToursAtivos(novo);db.collection('config').doc('tours').set({ativos:novo,atualizadoEm:new Date().toISOString(),atualizadoPor:currentUser.name},{merge:true}).catch(function(e){alert('Não foi possível salvar: '+(e&&e.message?e.message:'verifique as permissões do Firestore.'));});}
+var _toursErro=useState('');var toursErro=_toursErro[0];var setToursErro=_toursErro[1];
+// O callback de erro do onSnapshot ficava vazio (function(){}) — se a LEITURA de config/tours falhasse
+// (ex: regra do Firestore ausente/errada), o estado ficava travado no {} inicial pra sempre, SEM nenhum
+// aviso, e todo tour aparecia "Desativado" mesmo que a gravação tivesse funcionado. Agora mostra o erro.
+useEffect(function(){var ut=db.collection('config').doc('tours').onSnapshot(function(s){var d=s.exists?s.data():{};setToursAtivos(d.ativos||{});setToursErro('');},function(e){setToursErro('Erro ao LER as configurações de tutoriais: '+((e&&e.message)||e)+' — as regras do Firestore podem estar faltando para a coleção "config".');});return ut;},[]);
+function toggleTour(id,val){
+  var anterior=toursAtivos;
+  var novo=Object.assign({},toursAtivos);novo[id]=val;
+  setToursAtivos(novo);setToursErro(''); // otimista — desfeito abaixo se a gravação falhar
+  db.collection('config').doc('tours').set({ativos:novo,atualizadoEm:new Date().toISOString(),atualizadoPor:(currentUser&&currentUser.name)||''},{merge:true})
+    .catch(function(e){
+      setToursAtivos(anterior); // desfaz o toggle visual — sem isso a tela mentia "Ativo" mesmo sem salvar
+      var msg='Não foi possível salvar: '+((e&&e.message)||'verifique as permissões do Firestore.');
+      setToursErro(msg);alert(msg);
+    });
+}
 function resetarTour(id,titulo){
   if(!confirm('Resetar visualizações de "'+titulo+'"?\n\nTodos os usuários que já viram voltarão a ver este tutorial (se ele estiver ativo).'))return;
   var alvo=users.filter(function(u){return (u.tutoriaisVistos||[]).indexOf(id)>=0;});
@@ -3196,6 +3210,7 @@ return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
     <div style={{fontSize:13,fontWeight:700,color:'#1351B4',marginBottom:4}}>📚 Tutoriais guiados</div>
     <div style={{fontSize:12,color:'#475569',lineHeight:1.5}}>Ative um tutorial para que ele apareça automaticamente aos usuários que ainda não o viram. Quando o usuário conclui (ou pula), ele não vê mais aquele tutorial.</div>
   </div>
+  {toursErro&&<div className="er">⚠️ {toursErro}</div>}
   {TOURS.map(function(t){
     var ativo=!!toursAtivos[t.id];
     var vistoPor=approved.filter(function(u){return (u.tutoriaisVistos||[]).indexOf(t.id)>=0;}).length;
