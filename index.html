@@ -464,8 +464,9 @@ function computeVencimentos(medications,entries,stock){
 }
 // Normaliza texto (minúsculas, sem acentos) — usado na detecção de saídas não-reais
 function _norm(s){return (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');}
-// Controle rigoroso de controlados (por enquanto só Morfina e Tramal) — saída exige paciente/médico/CRM.
-function _ehMedControlado(nome){var n=_norm(nome||'');return n.indexOf('morfina')>=0||n.indexOf('tramal')>=0;}
+// Controle rigoroso de controlados (por enquanto só Morfina e Tramal/Tramadol) — saída exige paciente/médico/CRM.
+// Cobre nome de marca e nome genérico, já que "tramadol" NÃO contém a substring "tramal" (e vice-versa).
+function _ehMedControlado(nome){var n=_norm(nome||'');return n.indexOf('morfina')>=0||n.indexOf('dimorf')>=0||n.indexOf('tramal')>=0||n.indexOf('tramadol')>=0;}
 // Pontuação fuzzy de um alvo contra uma busca (0 = sem relação; maior = melhor).
 // Tolera ordem de palavras (tokens) e erros de digitação (subsequência de caracteres).
 // Ex.: "ringer" casa "Soro Ringer", "Soro Fisiológico Ringer"; "rnger" ainda casa por subsequência.
