@@ -9039,13 +9039,18 @@ function TabPacientes(props){
     }).sort(function(a,b){return (b.dataSaida||'').localeCompare(a.dataSaida||'')||(b.criadoEm||'').localeCompare(a.criadoEm||'');});
   }
 
-  // Só entram pacientes que JÁ TIVERAM alguma saída de controlado (Morfina/Tramal) — cadastro em si não basta.
+  // Mostra TODOS os pacientes cadastrados — com histórico de saída primeiro (mais recente primeiro),
+  // depois os sem nenhuma saída ainda (ordem alfabética).
   var q=busca.trim().toLowerCase();
-  var comHistorico=pacientes
+  var listaPacientes=pacientes
     .map(function(p){return{p:p,hist:saidasDe(p.id)};})
-    .filter(function(x){return x.hist.length>0;})
     .filter(function(x){return !q||(x.p.nome||'').toLowerCase().indexOf(q)>=0;})
-    .sort(function(a,b){return (b.hist[0]?b.hist[0].dataSaida:'').localeCompare(a.hist[0]?a.hist[0].dataSaida:'');});
+    .sort(function(a,b){
+      if(a.hist.length&&!b.hist.length)return -1;
+      if(!a.hist.length&&b.hist.length)return 1;
+      if(a.hist.length&&b.hist.length)return (b.hist[0].dataSaida||'').localeCompare(a.hist[0].dataSaida||'');
+      return (a.p.nome||'').localeCompare(b.p.nome||'');
+    });
 
   function cadastrarPaciente(){
     var nome=novoNome.trim();if(!nome){setNovoErro('Informe o nome do paciente.');return;}
@@ -9069,7 +9074,7 @@ function TabPacientes(props){
 
   return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
     <div className="card" style={{marginBottom:14}}>
-      <div className="ch"><div className="ch-title"><div style={{width:3,height:16,background:'#7C3AED',borderRadius:2,flexShrink:0}}/><span>🔒 Pacientes — Controlados</span></div><span style={{fontSize:12,color:'#94A3B8',fontWeight:500}}>{comHistorico.length} com histórico</span></div>
+      <div className="ch"><div className="ch-title"><div style={{width:3,height:16,background:'#7C3AED',borderRadius:2,flexShrink:0}}/><span>🔒 Pacientes — Controlados</span></div><span style={{fontSize:12,color:'#94A3B8',fontWeight:500}}>{listaPacientes.length} cadastrado{listaPacientes.length!==1?'s':''}</span></div>
       <div style={{padding:'12px 16px 16px'}}>
         <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="Buscar por nome do paciente..." className="inp"/>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
@@ -9079,18 +9084,20 @@ function TabPacientes(props){
         <button onClick={function(){setShowNovo(true);}} style={{width:'100%',padding:'11px',background:'#F5F3FF',border:'1.5px dashed #C4B5FD',borderRadius:10,color:'#7C3AED',fontWeight:700,fontSize:13,cursor:'pointer'}}>+ Novo Paciente</button>
       </div>
     </div>
-    {comHistorico.length===0
+    {listaPacientes.length===0
       ?<div className="card" style={{padding:40,textAlign:'center',color:'#94A3B8'}}>
         <div style={{fontSize:40,marginBottom:8}}>👤</div>
-        <div style={{fontWeight:600}}>Nenhum paciente com saída de Morfina/Tramal ainda</div>
-        <div style={{fontSize:12,marginTop:4}}>Pacientes aparecem aqui após a primeira saída de um controlado (Morfina ou Tramal).</div>
+        <div style={{fontWeight:600}}>{q?'Nenhum paciente encontrado':'Nenhum paciente cadastrado ainda'}</div>
+        <div style={{fontSize:12,marginTop:4}}>{q?'Tente buscar por outro nome.':'Use "+ Novo Paciente" acima, ou cadastre direto no popup de saída de um controlado.'}</div>
       </div>
       :<div style={{display:'flex',flexDirection:'column',gap:10}}>
-        {comHistorico.map(function(x){var p=x.p,hist=x.hist;return(
+        {listaPacientes.map(function(x){var p=x.p,hist=x.hist;return(
           <div key={p.id} className="card" style={{padding:14,cursor:'pointer',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}} onClick={function(){setSel(p);}}>
             <div>
               <div style={{fontWeight:700,fontSize:15,color:'#1E293B'}}>{p.nome}</div>
-              <div style={{fontSize:12,color:'#7C3AED',fontWeight:600,marginTop:4}}>🔒 {hist.length} saída{hist.length!==1?'s':''} · última em {fD(hist[0].dataSaida)}</div>
+              {hist.length>0
+                ?<div style={{fontSize:12,color:'#7C3AED',fontWeight:600,marginTop:4}}>🔒 {hist.length} saída{hist.length!==1?'s':''} · última em {fD(hist[0].dataSaida)}</div>
+                :<div style={{fontSize:12,color:'#94A3B8',fontWeight:500,marginTop:4}}>Nenhuma saída registrada ainda</div>}
             </div>
             {podeExcluir&&<button onClick={function(e){e.stopPropagation();excluirPaciente(p);}} title="Excluir paciente" style={{background:'#FEF2F2',border:'1px solid #FECACA',borderRadius:8,width:34,height:34,flexShrink:0,cursor:'pointer',fontSize:14,color:'#DC2626'}}>🗑️</button>}
           </div>
