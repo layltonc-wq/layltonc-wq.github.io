@@ -9461,16 +9461,12 @@ function addEntry(data){try{var obj={criadoEm:new Date().toISOString(),date:toda
   return promise;
 }catch(e){console.error('addEntry erro:',e);return Promise.reject(e);}}
 function logout(){if(!confirm('Sair do sistema?'))return;db.collection('logs_acesso').add({uid:user.uid,nome:user.name,cargo:user.role,acao:'logout',criadoEm:new Date().toISOString()}).catch(function(){});auth.signOut().catch(function(){});localStorage.removeItem('fc_user');localStorage.removeItem('fc_last_act');setUser(null);setShiftChecked(false);setShowShift(false);setPlantao(null);setIsGuest(false);}
-if(!ready)return <Setup onDone={function(){setReady(true);}}/>;
-if(!user)return <Auth onLogin={function(u){setUser(u);}}/>;
-if(showShift||showShiftModal)return <ShiftScreen user={user} allUsers={allUsers} onDone={handleShiftDone}/>;
-if(pendingInvite)return <InviteScreen invite={pendingInvite} onConfirm={handleConfirmInvite} onDeny={handleDenyInvite}/>;
-var isManagerRole=(user.role==='gestor'||user.role==='tecnico');
-var canMove=isManagerRole||!isGuest;
-var badge=pending+alertCount+solicitCount;
 // Referências estáveis (useStableFn) pros handlers passados a components memoizados (React.memo) —
 // sem isso, TabDashboard/TabEstoque re-renderizariam a cada render do App mesmo memoizados, já que
 // receberiam uma função NOVA em toda passada (quebrando a comparação rasa do React.memo).
+// PRECISA ficar aqui, ANTES dos returns condicionais abaixo (!ready/!user/showShift/pendingInvite) —
+// hooks não podem ser chamados condicionalmente (Rules of Hooks), senão o React quebra com
+// "Rendered more hooks than during the previous render" assim que o segundo desses vira verdadeiro.
 var addEntryStable=useStableFn(addEntry);
 var addSolicitacaoStable=useStableFn(addSolicitacao);
 var encerrarPlantaoStable=useStableFn(encerrarPlantao);
@@ -9478,6 +9474,13 @@ var sairDoPlantaoStable=useStableFn(sairDoPlantao);
 var solicitarEntradaPlantaoStable=useStableFn(solicitarEntradaPlantao);
 var abrirSolicitarStable=useCallback(function(){setShowSolicit(true);},[]);
 var abrirIniciarTurnoStable=useCallback(function(){setShowShiftModal(true);},[]);
+if(!ready)return <Setup onDone={function(){setReady(true);}}/>;
+if(!user)return <Auth onLogin={function(u){setUser(u);}}/>;
+if(showShift||showShiftModal)return <ShiftScreen user={user} allUsers={allUsers} onDone={handleShiftDone}/>;
+if(pendingInvite)return <InviteScreen invite={pendingInvite} onConfirm={handleConfirmInvite} onDeny={handleDenyInvite}/>;
+var isManagerRole=(user.role==='gestor'||user.role==='tecnico');
+var canMove=isManagerRole||!isGuest;
+var badge=pending+alertCount+solicitCount;
 return(
 <div style={{minHeight:'100vh',background:'#EEF2F7',position:'relative',overflow:'hidden'}}>
   {/* MARCA D'ÁGUA BACKGROUND */}
