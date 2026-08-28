@@ -9548,6 +9548,7 @@ TabDashboard=React.memo(TabDashboard);
 TabEstoque=React.memo(TabEstoque);
 TabAntibiotico=React.memo(TabAntibiotico);
 TabLeites=React.memo(TabLeites);
+TabSaida=React.memo(TabSaida);
 
 function App(){
 var {confirm2,alert2,ModalRender,modal}=useModal();
@@ -9815,6 +9816,7 @@ var badge=pending+alertCount+solicitCount;
 // sem isso, TabDashboard/TabEstoque re-renderizariam a cada render do App mesmo memoizados, já que
 // receberiam uma função NOVA em toda passada (quebrando a comparação rasa do React.memo).
 var addEntryStable=useStableFn(addEntry);
+var addSolicitacaoStable=useStableFn(addSolicitacao);
 var encerrarPlantaoStable=useStableFn(encerrarPlantao);
 var sairDoPlantaoStable=useStableFn(sairDoPlantao);
 var solicitarEntradaPlantaoStable=useStableFn(solicitarEntradaPlantao);
@@ -9928,7 +9930,7 @@ return(
         {tab==='dashboard'&&<TabDashboard entries={entries} medications={meds} stock={stock} user={user} plantao={plantao} isGuest={isGuest} onSolicitar={abrirSolicitarStable} onEncerrar={encerrarPlantaoStable} onSair={sairDoPlantaoStable} onSolicitarEntrada={solicitarEntradaPlantaoStable} shiftId={shiftId} onIniciar={abrirIniciarTurnoStable}/>}
         {tab==='visaogeral'&&isManagerRole&&<TabVisaoGeral entries={entries} medications={meds} stock={stock} user={user}/>}
         {tab==='comparapedido'&&isManagerRole&&<ErrBoundary><TabComparacaoPedido/></ErrBoundary>}
-        {tab==='saida'&&<TabSaida user={user} medications={meds} stock={stock} entries={entries} onSave={addEntry} onSolicitar={addSolicitacao} latest={latest} isGuest={isGuest} canMove={canMove} confirm2={confirm2} alert2={alert2}/>}
+        {tab==='saida'&&<TabSaida user={user} medications={meds} stock={stock} entries={entries} onSave={addEntryStable} onSolicitar={addSolicitacaoStable} latest={latest} isGuest={isGuest} canMove={canMove} confirm2={confirm2} alert2={alert2}/>}
         {tab==='entrada'&&<TabEntrada user={user} medications={meds} entries={entries} onSave={addEntry} onSolicitar={addSolicitacao} isGuest={isGuest} canMove={canMove} confirm2={confirm2} alert2={alert2}/>}
         {tab==='estoque'&&<TabEstoque user={user} medications={meds} entries={entries} stock={stock} onSave={addEntryStable} confirm2={confirm2} alert2={alert2}/>}
         {tab==='conferencia'&&<ErrBoundary><TabConferencia user={user} medications={meds} entries={entries} stock={stock}/></ErrBoundary>}
