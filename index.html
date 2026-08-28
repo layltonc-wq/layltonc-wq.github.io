@@ -200,7 +200,7 @@ select.inp{cursor:pointer}
 </script>
 <div id="root"></div>
 <script type="text/babel" data-presets="react">
-var useState=React.useState,useEffect=React.useEffect,useRef=React.useRef,useMemo=React.useMemo;
+var useState=React.useState,useEffect=React.useEffect,useRef=React.useRef,useMemo=React.useMemo,useCallback=React.useCallback;
 var B='#1351B4',CFG_KEY='mt_firebase_cfg_permanent',db=null,auth=null,skipAuthCheck=false;
 var ROLES={gestor:'Gestor',farmaceutico:'Farmacêutico',auxiliar:'Auxiliar',tecnico:'Técnico',diarista:'Diarista'};
 var ROLE_ICON={gestor:'🏥',farmaceutico:'⚗️',tecnico:'🔧',auxiliar:'💊',diarista:'📋'};
@@ -5449,14 +5449,24 @@ function ModalAlert({titulo,msg,onClose,tipo}){
   );
 }
 
+// Devolve uma função com IDENTIDADE ESTÁVEL (nunca muda de referência entre renders) que sempre chama
+// a versão MAIS RECENTE de fn — evita ter que auditar manualmente as dependências de cada handler pra
+// usar useCallback com segurança. Usado só pra permitir React.memo() em components pesados (Dashboard,
+// Estoque, ATB, Leites) sem quebrar o comportamento: a função por trás continua a mesma, só a referência
+// passada como prop fica estável.
+function useStableFn(fn){
+  var ref=React.useRef(fn);
+  React.useEffect(function(){ref.current=fn;});
+  return React.useCallback(function(){return ref.current.apply(null,arguments);},[]);
+}
 function useModal(){
   var _modal=React.useState(null);var modal=_modal[0];var setModal=_modal[1];
-  function confirm2(titulo,msg,onConfirm,tipo,confirmTxt){
+  var confirm2=React.useCallback(function(titulo,msg,onConfirm,tipo,confirmTxt){
     setModal({type:'confirm',titulo:titulo,msg:msg,onConfirm:function(){setModal(null);onConfirm();},onCancel:function(){setModal(null);},tipo:tipo,confirmTxt:confirmTxt});
-  }
-  function alert2(msg,titulo,tipo){
+  },[]);
+  var alert2=React.useCallback(function(msg,titulo,tipo){
     setModal({type:'alert',titulo:titulo||'Atenção',msg:msg,onClose:function(){setModal(null);},tipo:tipo||'warning'});
-  }
+  },[]);
   function ModalRender(){
     if(!modal)return null;
     if(modal.type==='confirm')return React.createElement(ModalConfirm,modal);
@@ -9531,6 +9541,14 @@ function TabPacientes(props){
   </div>);
 }
 
+// React.memo nos components pesados/mais acessados: evita re-renderizar Dashboard/Estoque/ATB/Leites
+// quando o App re-renderiza por causa de um estado que não afeta essas props (ex: abrir o menu, um
+// contador de alerta mudando) — só re-renderiza de fato quando as props recebidas realmente mudam.
+TabDashboard=React.memo(TabDashboard);
+TabEstoque=React.memo(TabEstoque);
+TabAntibiotico=React.memo(TabAntibiotico);
+TabLeites=React.memo(TabLeites);
+
 function App(){
 var {confirm2,alert2,ModalRender,modal}=useModal();
 var _ready=useState(false);var ready=_ready[0];var setReady=_ready[1];var _user=useState(null);var user=_user[0];var setUser=_user[1];var _histEntries=useState([]);var histEntries=_histEntries[0];var setHistEntries=_histEntries[1];var _recentEntries=useState([]);var recentEntries=_recentEntries[0];var setRecentEntries=_recentEntries[1];var _fcWinStart=useRef(null);if(!_fcWinStart.current){var _w0=new Date();_w0.setDate(_w0.getDate()-3);_fcWinStart.current=_w0.toISOString();}var _meds=useState([]);var meds=_meds[0];var setMeds=_meds[1];var _loading=useState(true);var loading=_loading[0];var setLoading=_loading[1];var _tab=useState('dashboard');var tab=_tab[0];var setTab=_tab[1];var _menuAberto=useState(false);var menuAberto=_menuAberto[0];var setMenuAberto=_menuAberto[1];var _showSairModal=useState(false);var showSairModal=_showSairModal[0];var setShowSairModal=_showSairModal[1];var _pending=useState(0);var pending=_pending[0];var setPending=_pending[1];var _alertCount=useState(0);var alertCount=_alertCount[0];var setAlertCount=_alertCount[1];
@@ -9793,6 +9811,15 @@ if(pendingInvite)return <InviteScreen invite={pendingInvite} onConfirm={handleCo
 var isManagerRole=(user.role==='gestor'||user.role==='tecnico');
 var canMove=isManagerRole||!isGuest;
 var badge=pending+alertCount+solicitCount;
+// Referências estáveis (useStableFn) pros handlers passados a components memoizados (React.memo) —
+// sem isso, TabDashboard/TabEstoque re-renderizariam a cada render do App mesmo memoizados, já que
+// receberiam uma função NOVA em toda passada (quebrando a comparação rasa do React.memo).
+var addEntryStable=useStableFn(addEntry);
+var encerrarPlantaoStable=useStableFn(encerrarPlantao);
+var sairDoPlantaoStable=useStableFn(sairDoPlantao);
+var solicitarEntradaPlantaoStable=useStableFn(solicitarEntradaPlantao);
+var abrirSolicitarStable=useCallback(function(){setShowSolicit(true);},[]);
+var abrirIniciarTurnoStable=useCallback(function(){setShowShiftModal(true);},[]);
 return(
 <div style={{minHeight:'100vh',background:'#EEF2F7',position:'relative',overflow:'hidden'}}>
   {/* MARCA D'ÁGUA BACKGROUND */}
@@ -9898,12 +9925,12 @@ return(
       </div>
     ):(
       <div>
-        {tab==='dashboard'&&<TabDashboard entries={entries} medications={meds} stock={stock} user={user} plantao={plantao} isGuest={isGuest} onSolicitar={function(){setShowSolicit(true);}} onEncerrar={encerrarPlantao} onSair={sairDoPlantao} onSolicitarEntrada={solicitarEntradaPlantao} shiftId={shiftId} onIniciar={function(){setShowShiftModal(true);}}/>}
+        {tab==='dashboard'&&<TabDashboard entries={entries} medications={meds} stock={stock} user={user} plantao={plantao} isGuest={isGuest} onSolicitar={abrirSolicitarStable} onEncerrar={encerrarPlantaoStable} onSair={sairDoPlantaoStable} onSolicitarEntrada={solicitarEntradaPlantaoStable} shiftId={shiftId} onIniciar={abrirIniciarTurnoStable}/>}
         {tab==='visaogeral'&&isManagerRole&&<TabVisaoGeral entries={entries} medications={meds} stock={stock} user={user}/>}
         {tab==='comparapedido'&&isManagerRole&&<ErrBoundary><TabComparacaoPedido/></ErrBoundary>}
         {tab==='saida'&&<TabSaida user={user} medications={meds} stock={stock} entries={entries} onSave={addEntry} onSolicitar={addSolicitacao} latest={latest} isGuest={isGuest} canMove={canMove} confirm2={confirm2} alert2={alert2}/>}
         {tab==='entrada'&&<TabEntrada user={user} medications={meds} entries={entries} onSave={addEntry} onSolicitar={addSolicitacao} isGuest={isGuest} canMove={canMove} confirm2={confirm2} alert2={alert2}/>}
-        {tab==='estoque'&&<TabEstoque user={user} medications={meds} entries={entries} stock={stock} onSave={addEntry} confirm2={confirm2} alert2={alert2}/>}
+        {tab==='estoque'&&<TabEstoque user={user} medications={meds} entries={entries} stock={stock} onSave={addEntryStable} confirm2={confirm2} alert2={alert2}/>}
         {tab==='conferencia'&&<ErrBoundary><TabConferencia user={user} medications={meds} entries={entries} stock={stock}/></ErrBoundary>}
         {tab==='relatorio'&&<TabRelatorio entries={entries} medications={meds} db={db} user={user}/>}
         {tab==='gestao'&&can(user.role,'gestao')&&<TabGestao currentUser={user} entries={entries}/>}
