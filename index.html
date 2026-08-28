@@ -1489,7 +1489,7 @@ function ModalSaidaControlada(props){
   var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];
 
   useEffect(function(){
-    return db.collection('pacientes_controlados').onSnapshot(function(sn){
+    return db.collection('pacientes_controlados').limit(2000).onSnapshot(function(sn){
       setPacientes(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}).sort(function(a,b){return (a.nome||'').localeCompare(b.nome||'');}));
     },function(){});
   },[]);
@@ -3558,7 +3558,7 @@ function TabLeites(props){
       arr.sort(function(a,b){return (a.nome||'').localeCompare(b.nome||'');});
       setPacientes(arr);
     },function(){});
-    var unsub2=db.collection('retiradas_leite').onSnapshot(function(snap){
+    var unsub2=db.collection('retiradas_leite').orderBy('criadoEm','desc').limit(2000).onSnapshot(function(snap){
       var arr=[];snap.forEach(function(d){arr.push(Object.assign({id:d.id},d.data()));});
       arr.sort(function(a,b){return (b.data||'').localeCompare(a.data||'');});
       setRetiradas(arr);
@@ -4748,7 +4748,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
   var canManage=user.role==='gestor'||user.role==='tecnico';
 
   ef(function(){
-    var u=db.collection('tratamentos_atb').orderBy('criadoEm','desc').onSnapshot(function(sn){
+    var u=db.collection('tratamentos_atb').orderBy('criadoEm','desc').limit(1000).onSnapshot(function(sn){
       setTratamentos(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));
       setLoading(false);
     });
@@ -9060,7 +9060,7 @@ function TabPacientes(props){
   var _novoErro=useState('');var novoErro=_novoErro[0];var setNovoErro=_novoErro[1];
 
   useEffect(function(){
-    var u1=db.collection('pacientes_controlados').onSnapshot(function(snap){
+    var u1=db.collection('pacientes_controlados').limit(2000).onSnapshot(function(snap){
       var arr=[];snap.forEach(function(d){arr.push(Object.assign({id:d.id},d.data()));});
       arr.sort(function(a,b){return (a.nome||'').localeCompare(b.nome||'');});
       setPacientes(arr);
@@ -9449,7 +9449,6 @@ if(pendingInvite)return <InviteScreen invite={pendingInvite} onConfirm={handleCo
 var isManagerRole=(user.role==='gestor'||user.role==='tecnico');
 var canMove=isManagerRole||!isGuest;
 var badge=pending+alertCount+solicitCount;
-var navTabs=[{id:'dashboard',icon:'🏠',label:'Início',show:true},{id:'visaogeral',icon:'📈',label:'Visão Geral',show:isManagerRole},{id:'comparapedido',icon:'🔍',label:'Comparação de Pedido',show:isManagerRole},{id:'saida',icon:'💊',label:'Saída',show:true},{id:'entrada',icon:'📥',label:'Entrada',show:true},{id:'estoque',icon:'📦',label:'Estoque',show:true},{id:'antibiotico',icon:'🧬',label:'ATB',show:true},{id:'relatorio',icon:'📊',label:'Relatório',show:true},{id:'gestao',icon:'👥',label:'Gestão',show:can(user.role,'gestao'),badge:badge},{id:'log',icon:'🔐',label:'Log',show:can(user.role,'log')},{id:'histcontas',icon:'📋',label:'Contas',show:can(user.role,'log')},{id:'admin',icon:'🔧',label:'Admin',show:user.role==='tecnico'},{id:'perfil',icon:'👤',label:'Perfil',show:true}].filter(function(t){return t.show;});
 return(
 <div style={{minHeight:'100vh',background:'#EEF2F7',position:'relative',overflow:'hidden'}}>
   {/* MARCA D'ÁGUA BACKGROUND */}
