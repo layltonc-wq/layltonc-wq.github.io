@@ -7936,6 +7936,7 @@ function _matchNotasRecebimentos(recebimentosPendentes,notasPendentes,medication
 function ImportarNotas(props){
   var user=props.user;var medications=props.medications||[];
   var B='#1351B4';
+  var podeExcluirNota=user.role==='tecnico'||user.role==='gestor';
   var _notas=useState([]);var notas=_notas[0];var setNotas=_notas[1];
   var _recs=useState([]);var recs=_recs[0];var setRecs=_recs[1];
   var _processando=useState(false);var processando=_processando[0];var setProcessando=_processando[1];
@@ -7943,6 +7944,7 @@ function ImportarNotas(props){
   var _erro=useState('');var erro=_erro[0];var setErro=_erro[1];
   var _resumo=useState(null);var resumo=_resumo[0];var setResumo=_resumo[1];// último resultado do matching (Passo 4)
   var _rodandoMatch=useState(false);var rodandoMatch=_rodandoMatch[0];var setRodandoMatch=_rodandoMatch[1];
+  var _buscaVinculo=useState({});var buscaVinculo=_buscaVinculo[0];var setBuscaVinculo=_buscaVinculo[1];// key notaId|idx -> texto digitado (busca manual)
 
   useEffect(function(){
     var u1=db.collection('notas_fiscais').orderBy('criadoEm','desc').limit(100).onSnapshot(function(sn){setNotas(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));},function(){});
@@ -8054,7 +8056,7 @@ function ImportarNotas(props){
   // possam ser o mesmo produto — mesmo com nome ou quantidade diferentes (o auto só liga por medId+qtd
   // exatos; aqui é o usuário decidindo "isso aqui é a mesma coisa", igual a sugestão de vínculo da
   // Previsão/Pedido). Calculado uma vez por (notas, recebimentos) — não recomputa a cada tecla.
-  var sugestoesVinculo=useMemo(function(){
+  var candidatosVinculo=useMemo(function(){
     var candidatos=[];
     recs.forEach(function(r){
       if((r.status||'pendente')==='conciliado')return;
@@ -8063,18 +8065,21 @@ function ImportarNotas(props){
         candidatos.push({id:r.id+'|'+idx,nome:it.medicamentoNome,recId:r.id,itemIdx:idx,fornecedor:r.fornecedor,data:r.data,quantidade:it.quantidade});
       });
     });
-    if(!candidatos.length)return {};
+    return candidatos;
+  },[recs]);
+  var sugestoesVinculo=useMemo(function(){
+    if(!candidatosVinculo.length)return {};
     var out={};
     notas.forEach(function(n){
       if((n.status||'pendente')==='processada')return;
       (n.itens||[]).forEach(function(it,idx){
-        if(it.status==='conciliado')return;
-        var cands=_matchItemMeds(it.descricao,candidatos,4);
+        if(it.status==='conciliado'||it.status==='cancelado')return;
+        var cands=_matchItemMeds(it.descricao,candidatosVinculo,4);
         if(cands.length)out[n.id+'|'+idx]=cands;
       });
     });
     return out;
-  },[notas,recs]);
+  },[notas,candidatosVinculo]);
 
   var _vinculando=useState(null);var vinculando=_vinculando[0];var setVinculando=_vinculando[1];// notaId+'|'+idx em andamento
   // Confirma o vínculo manual escolhido pelo usuário: liga o item da nota ao item do recebimento
@@ -8109,9 +8114,32 @@ function ImportarNotas(props){
     }).catch(function(e){setErro('Erro ao vincular: '+((e&&e.message)?e.message:e));setVinculando(null);});
   }
 
+  // Cancela um item da nota que na verdade NÃO é medicamento (o parser do PDF às vezes pega linha de
+  // cabeçalho/imposto/observação como se fosse item). Só remove esse item da conciliação — não mexe em
+  // estoque nem em recebimento nenhum, já que um item cancelado nunca chegou a ser vinculado a nada.
+  function cancelarItemNota(notaId,itemIdx){
+    var nota=notas.find(function(n){return n.id===notaId;});if(!nota)return;
+    var it=(nota.itens||[])[itemIdx];if(!it)return;
+    if(!confirm('Marcar "'+(it.descricao||'este item')+'" como "não é medicamento"? Ele deixa de aparecer na conciliação.'))return;
+    var novosItens=(nota.itens||[]).map(function(x,i){return i===itemIdx?Object.assign({},x,{status:'cancelado'}):x;});
+    var todosProc=novosItens.length>0&&novosItens.every(function(x){return x.status&&x.status!=='pendente';});
+    db.collection('notas_fiscais').doc(notaId).update({itens:novosItens,status:todosProc?'processada':(nota.status||'pendente')})
+      .then(function(){logAcao('item_nota_cancelado','Item cancelado (não é medicamento): "'+(it.descricao||'')+'" — nota '+notaId);})
+      .catch(function(e){setErro('Erro ao cancelar item: '+((e&&e.message)?e.message:e));});
+  }
+  // Exclusão permanente da nota fiscal (só gestor/técnico) — remove só o documento importado, nunca
+  // mexeu em estoque (isso só acontece no Recebimento físico), então não tem nada pra reverter.
+  function excluirNota(nota){
+    if(!podeExcluirNota||!nota)return;
+    if(!confirm('EXCLUIR PERMANENTEMENTE a nota NF '+(nota.nfNumero||'(sem número)')+'? Isso não pode ser desfeito!'))return;
+    db.collection('notas_fiscais').doc(nota.id).delete()
+      .then(function(){logAcao('nota_excluida','Nota excluída permanentemente — NF '+(nota.nfNumero||'')+' — '+(nota.nomeArquivo||''));if(expandida===nota.id)setExpandida(null);})
+      .catch(function(e){setErro('Erro ao excluir nota: '+((e&&e.message)?e.message:e));});
+  }
+
   var inp={width:'100%',padding:'11px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:14,boxSizing:'border-box'};
   function fD(d){if(!d)return'';var p=String(d).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
-  function statusNota(n){var st=(n.itens||[]).map(function(it){return it.status||'pendente';});var nConc=st.filter(function(s){return s==='conciliado';}).length;var nDiv=st.filter(function(s){return s==='divergencia'||s==='nao_encontrado';}).length;var nPend=st.length-nConc-nDiv;return{nConc:nConc,nDiv:nDiv,nPend:nPend,total:st.length};}
+  function statusNota(n){var st=(n.itens||[]).map(function(it){return it.status||'pendente';});var nConc=st.filter(function(s){return s==='conciliado';}).length;var nDiv=st.filter(function(s){return s==='divergencia'||s==='nao_encontrado';}).length;var nCancel=st.filter(function(s){return s==='cancelado';}).length;var nPend=st.length-nConc-nDiv-nCancel;return{nConc:nConc,nDiv:nDiv,nCancel:nCancel,nPend:nPend,total:st.length};}
   var _expandida=useState(null);var expandida=_expandida[0];var setExpandida=_expandida[1];// id da nota expandida
 
   return(<div>
@@ -8151,32 +8179,44 @@ function ImportarNotas(props){
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
         {notas.map(function(n){var st=statusNota(n);var aberta=expandida===n.id;return(
           <div key={n.id} style={{border:'1px solid #E2E8F0',borderRadius:10,padding:'10px 12px'}}>
-            <div style={{cursor:'pointer'}} onClick={function(){setExpandida(aberta?null:n.id);}}>
-              <div style={{display:'flex',justifyContent:'space-between',gap:8,flexWrap:'wrap'}}>
-                <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>NF {n.nfNumero||'(sem número)'} {n.fornecedor?'· '+n.fornecedor:''}</div>
-                <div style={{fontSize:11,color:'#94A3B8'}}>{fD(n.dataEmissao)}</div>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
+              <div style={{flex:1,minWidth:0,cursor:'pointer'}} onClick={function(){setExpandida(aberta?null:n.id);}}>
+                <div style={{display:'flex',justifyContent:'space-between',gap:8,flexWrap:'wrap'}}>
+                  <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>NF {n.nfNumero||'(sem número)'} {n.fornecedor?'· '+n.fornecedor:''}</div>
+                  <div style={{fontSize:11,color:'#94A3B8'}}>{fD(n.dataEmissao)}</div>
+                </div>
+                <div style={{fontSize:11,color:'#64748B',marginTop:4}}>{n.nomeArquivo} · {st.total} item(ns) · {aberta?'▲ ocultar itens':'▼ ver itens'}</div>
+                <div style={{display:'flex',gap:6,marginTop:6,flexWrap:'wrap'}}>
+                  {st.nConc>0&&<span style={{fontSize:10,fontWeight:700,color:'#059669',background:'#DCFCE7',borderRadius:6,padding:'2px 7px'}}>✅ {st.nConc} conciliado(s)</span>}
+                  {st.nDiv>0&&<span style={{fontSize:10,fontWeight:700,color:'#DC2626',background:'#FEE2E2',borderRadius:6,padding:'2px 7px'}}>⚠️ {st.nDiv} problema(s)</span>}
+                  {st.nPend>0&&<span style={{fontSize:10,fontWeight:700,color:'#B45309',background:'#FEF3C7',borderRadius:6,padding:'2px 7px'}}>⏳ {st.nPend} pendente(s)</span>}
+                  {st.nCancel>0&&<span style={{fontSize:10,fontWeight:700,color:'#64748B',background:'#F1F5F9',borderRadius:6,padding:'2px 7px'}}>🚫 {st.nCancel} ignorado(s)</span>}
+                </div>
               </div>
-              <div style={{fontSize:11,color:'#64748B',marginTop:4}}>{n.nomeArquivo} · {st.total} item(ns) · {aberta?'▲ ocultar itens':'▼ ver itens'}</div>
-              <div style={{display:'flex',gap:6,marginTop:6,flexWrap:'wrap'}}>
-                {st.nConc>0&&<span style={{fontSize:10,fontWeight:700,color:'#059669',background:'#DCFCE7',borderRadius:6,padding:'2px 7px'}}>✅ {st.nConc} conciliado(s)</span>}
-                {st.nDiv>0&&<span style={{fontSize:10,fontWeight:700,color:'#DC2626',background:'#FEE2E2',borderRadius:6,padding:'2px 7px'}}>⚠️ {st.nDiv} problema(s)</span>}
-                {st.nPend>0&&<span style={{fontSize:10,fontWeight:700,color:'#B45309',background:'#FEF3C7',borderRadius:6,padding:'2px 7px'}}>⏳ {st.nPend} pendente(s)</span>}
-              </div>
+              {podeExcluirNota&&<button onClick={function(e){e.stopPropagation();excluirNota(n);}} title="Excluir nota permanentemente" style={{flexShrink:0,background:'#FEF2F2',border:'1px solid #FECACA',borderRadius:8,width:30,height:30,cursor:'pointer',fontSize:13,color:'#DC2626'}}>🗑️</button>}
             </div>
             {aberta&&<div style={{marginTop:10,paddingTop:10,borderTop:'1px solid #F1F5F9',display:'flex',flexDirection:'column',gap:8}}>
               {(n.itens||[]).map(function(it,idx){
                 var key=n.id+'|'+idx;
                 var cands=sugestoesVinculo[key]||[];
                 var jaVinculado=it.status==='conciliado'||it.status==='divergencia';
-                return(<div key={idx} style={{background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:8,padding:'8px 10px'}}>
-                  <div style={{fontSize:12,fontWeight:700,color:'#1E293B'}}>{it.descricao}</div>
+                var cancelado=it.status==='cancelado';
+                var buscaTxt=(buscaVinculo[key]||'').trim();
+                var candsBusca=(!jaVinculado&&!cancelado&&buscaTxt)?candidatosVinculo.filter(function(c){return (c.nome||'').toLowerCase().indexOf(buscaTxt.toLowerCase())>=0;}).slice(0,8):[];
+                return(<div key={idx} style={{background:cancelado?'#F8FAFC':'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:8,padding:'8px 10px',opacity:cancelado?0.6:1}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
+                    <div style={{fontSize:12,fontWeight:700,color:'#1E293B'}}>{it.descricao}</div>
+                    {!jaVinculado&&!cancelado&&<button onClick={function(){cancelarItemNota(n.id,idx);}} title="Não é medicamento — cancelar item" style={{flexShrink:0,background:'none',border:'1px solid #E2E8F0',borderRadius:6,padding:'2px 8px',fontSize:10,color:'#94A3B8',cursor:'pointer',whiteSpace:'nowrap'}}>❌ não é remédio</button>}
+                  </div>
                   <div style={{fontSize:11,color:'#64748B',marginTop:2}}>Qtd na nota: {it.qtd}{it.lote?' · Lote: '+it.lote:''}{it.validade?' · Val: '+it.validade:''}</div>
-                  {jaVinculado
-                    ?<div style={{fontSize:11,marginTop:4,fontWeight:700,color:it.status==='conciliado'?'#059669':'#B45309'}}>{it.status==='conciliado'?'✅':'⚠️'} Vinculado a {it.medNome||'—'}</div>
-                    :it.status==='nao_encontrado'
-                      ?<div style={{fontSize:11,color:'#991B1B',marginTop:4,fontWeight:600}}>❌ Sem recebimento correspondente encontrado automaticamente</div>
-                      :<div style={{fontSize:11,color:'#B45309',marginTop:4,fontWeight:600}}>⏳ Ainda não conciliado</div>}
-                  {!jaVinculado&&cands.length>0&&<div style={{marginTop:6}}>
+                  {cancelado
+                    ?<div style={{fontSize:11,marginTop:4,fontWeight:600,color:'#64748B'}}>🚫 Cancelado — não é medicamento</div>
+                    :jaVinculado
+                      ?<div style={{fontSize:11,marginTop:4,fontWeight:700,color:it.status==='conciliado'?'#059669':'#B45309'}}>{it.status==='conciliado'?'✅':'⚠️'} Vinculado a {it.medNome||'—'}</div>
+                      :it.status==='nao_encontrado'
+                        ?<div style={{fontSize:11,color:'#991B1B',marginTop:4,fontWeight:600}}>❌ Sem recebimento correspondente encontrado automaticamente</div>
+                        :<div style={{fontSize:11,color:'#B45309',marginTop:4,fontWeight:600}}>⏳ Ainda não conciliado</div>}
+                  {!jaVinculado&&!cancelado&&cands.length>0&&<div style={{marginTop:6}}>
                     <div style={{fontSize:10,color:'#64748B',marginBottom:4}}>💡 Sugestões de vínculo (recebido, pendente de conciliação):</div>
                     <div style={{display:'flex',flexDirection:'column',gap:4}}>
                       {cands.map(function(c){var vinc=vinculando===key;var qtdBate=(parseInt(c.m.quantidade)||0)===(Math.round(it.qtd)||0);return(
@@ -8186,6 +8226,19 @@ function ImportarNotas(props){
                         </button>
                       );})}
                     </div>
+                  </div>}
+                  {!jaVinculado&&!cancelado&&<div style={{marginTop:8}}>
+                    <div style={{fontSize:10,color:'#64748B',marginBottom:4}}>🔍 Ou busque manualmente entre os recebimentos pendentes:</div>
+                    <input value={buscaVinculo[key]||''} onChange={function(e){var v=e.target.value;setBuscaVinculo(function(p){var n2=Object.assign({},p);n2[key]=v;return n2;});}} placeholder="Digite o nome do medicamento recebido..." style={{width:'100%',padding:'7px 9px',borderRadius:7,border:'1.5px solid #E2E8F0',fontSize:11,boxSizing:'border-box'}}/>
+                    {buscaTxt&&<div style={{display:'flex',flexDirection:'column',gap:4,marginTop:4}}>
+                      {candsBusca.length===0&&<div style={{fontSize:10,color:'#94A3B8',padding:'4px 2px'}}>Nenhum recebimento pendente com esse nome.</div>}
+                      {candsBusca.map(function(c){var vinc=vinculando===key;var qtdBate=(parseInt(c.quantidade)||0)===(Math.round(it.qtd)||0);return(
+                        <button key={c.id} disabled={!!vinculando} onClick={function(){confirmarVinculoManual(n.id,idx,c);}} style={{textAlign:'left',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,background:'#fff',border:'1px solid #E2E8F0',borderRadius:7,padding:'6px 10px',cursor:vinculando?'default':'pointer',opacity:vinculando&&!vinc?0.5:1}}>
+                          <span style={{fontSize:11,color:'#1351B4',fontWeight:600}}>{c.nome} <span style={{color:'#94A3B8',fontWeight:400}}>(recebeu {c.quantidade}{c.fornecedor?' · '+c.fornecedor:''})</span></span>
+                          <span style={{fontSize:10,fontWeight:800,color:'#fff',background:qtdBate?'#0C6B3E':'#D97706',borderRadius:6,padding:'3px 8px',whiteSpace:'nowrap'}}>{vinc?'Vinculando...':'🔗 Vincular'}</span>
+                        </button>
+                      );})}
+                    </div>}
                   </div>}
                 </div>);
               })}
