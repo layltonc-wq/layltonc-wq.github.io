@@ -5508,6 +5508,25 @@ function TabHistoricoNotas(props){
   var _eg=useState(null);var editGrupo=_eg[0];var setEditGrupo=_eg[1];
   var _egf=useState({});var editGF=_egf[0];var setEditGF=_egf[1];
   var _svG=useState(false);var savingG=_svG[0];var setSavingG=_svG[1];
+  // Notas fiscais importadas em lote (aba Importar Notas) e marcadas como "Entrada conferida" — mecanismo
+  // à parte de notas_fiscais (não mistura com as entries agrupadas por nfNumero acima).
+  var _notasConf=useState([]);var notasConf=_notasConf[0];var setNotasConf=_notasConf[1];
+  var _ncAberta=useState(null);var ncAberta=_ncAberta[0];var setNcAberta=_ncAberta[1];
+  var _confirmDesarquivar=useState(null);var confirmDesarquivar=_confirmDesarquivar[0];var setConfirmDesarquivar=_confirmDesarquivar[1];
+  useEffect(function(){
+    if(!db)return;
+    var u=db.collection('notas_fiscais').where('arquivadaHistorico','==',true).orderBy('arquivadaEm','desc').limit(150).onSnapshot(function(sn){
+      setNotasConf(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));
+    },function(){
+      // fallback sem índice composto: busca tudo e filtra/ordena local.
+      db.collection('notas_fiscais').limit(300).onSnapshot(function(sn){
+        var arr=sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}).filter(function(n){return n.arquivadaHistorico;});
+        arr.sort(function(a,b){return (b.arquivadaEm||'').localeCompare(a.arquivadaEm||'');});
+        setNotasConf(arr);
+      },function(){});
+    });
+    return u;
+  },[db]);
   var COR={medicamento:'#1351B4',controlado:'#DC2626',injetavel:'#7C3AED',leite:'#D97706',penso:'#0C6B3E'};
   var ICO={medicamento:'💊',controlado:'🔒',injetavel:'💉',leite:'🍼',penso:'🩹'};
   var LBL={medicamento:'Farm. Básica',controlado:'Controlado',injetavel:'Injetável',leite:'Leite',penso:'Penso'};
@@ -5548,6 +5567,36 @@ function TabHistoricoNotas(props){
     <div style={{maxWidth:700,margin:'0 auto',padding:'16px 12px 90px'}}>
       <div style={{fontWeight:800,fontSize:22,color:'#1E293B',marginBottom:4}}>🗂️ Histórico de Notas</div>
       <div style={{fontSize:13,color:'#64748B',marginBottom:14}}>Entradas agrupadas por nota fiscal</div>
+
+      {notasConf.length>0&&<div style={{marginBottom:18,border:'1.5px solid #86EFAC',borderRadius:16,overflow:'hidden'}}>
+        <div style={{background:'#F0FDF4',padding:'12px 14px'}}>
+          <div style={{fontWeight:800,fontSize:14,color:'#0C6B3E'}}>📁 Notas fiscais conferidas ({notasConf.length})</div>
+          <div style={{fontSize:11,color:'#166534',marginTop:2}}>Notas importadas em lote (aba Recebimento → Importar Notas) marcadas como "Entrada conferida".</div>
+        </div>
+        <div style={{padding:'10px 14px',display:'flex',flexDirection:'column',gap:8}}>
+          {notasConf.map(function(n){
+            var ab=ncAberta===n.id;
+            var dtEmi=n.dataEmissao?new Date(n.dataEmissao+'T12:00:00').toLocaleDateString('pt-BR'):'';
+            var dtArq=n.arquivadaEm?new Date(n.arquivadaEm).toLocaleDateString('pt-BR'):'';
+            return(<div key={n.id} style={{border:'1px solid #E2E8F0',borderRadius:12,overflow:'hidden'}}>
+              <button onClick={function(){setNcAberta(ab?null:n.id);}} style={{width:'100%',background:'#fff',border:'none',padding:'10px 12px',cursor:'pointer',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,textAlign:'left'}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>NF {n.nfNumero||'(sem número)'}{n.fornecedor?' · '+n.fornecedor:''}</div>
+                  <div style={{fontSize:11,color:'#64748B',marginTop:2}}>{(n.itens||[]).length} item(ns){dtEmi?' · emitida '+dtEmi:''}{dtArq?' · conferida '+dtArq:''}</div>
+                </div>
+                <span style={{fontSize:14,color:'#94A3B8'}}>{ab?'▲':'▼'}</span>
+              </button>
+              {ab&&<div style={{borderTop:'1px solid #F1F5F9',padding:'10px 12px',background:'#F8FAFC'}}>
+                <div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:isMan?10:0}}>
+                  {(n.itens||[]).map(function(it,i){return(<div key={i} style={{fontSize:12,color:'#334155'}}>• {it.descricao||it.medNome||'—'} <span style={{color:'#94A3B8'}}>(qtd {it.qtd})</span></div>);})}
+                </div>
+                {isMan&&<button onClick={function(){setConfirmDesarquivar(n);}} style={{fontSize:11,color:'#94A3B8',background:'#fff',border:'1px solid #E2E8F0',borderRadius:7,padding:'5px 10px',cursor:'pointer'}}>↩️ Desfazer — voltar para Importar Notas</button>}
+              </div>}
+            </div>);
+          })}
+        </div>
+      </div>}
+
       <input value={search} onChange={function(e){setSearch(e.target.value);}} placeholder="🔍 Buscar NF, fornecedor ou medicamento..." className="inp" style={{marginBottom:14}}/>
       {msg==='ok'&&<div className="ok" style={{marginBottom:10}}>✅ Salvo com sucesso!</div>}
       {msg.indexOf('e:')===0&&<div className="er" style={{marginBottom:10}}>❌ {msg.slice(2)}</div>}
@@ -5644,6 +5693,7 @@ function TabHistoricoNotas(props){
           </div>}
         </div>);
       })}
+      {confirmDesarquivar&&<ModalConfirm titulo="Desfazer entrada conferida" msg={'Voltar a NF '+(confirmDesarquivar.nfNumero||'(sem número)')+' para a aba Importar Notas?'} tipo="warning" confirmTxt="Desfazer" onConfirm={function(){var n=confirmDesarquivar;setConfirmDesarquivar(null);if(n)db.collection('notas_fiscais').doc(n.id).update({arquivadaHistorico:false}).catch(function(){});}} onCancel={function(){setConfirmDesarquivar(null);}}/>}
     </div>
   );
 }
@@ -8181,11 +8231,24 @@ function ImportarNotas(props){
       .then(function(){logAcao('nota_excluida','Nota excluída permanentemente — NF '+(nota.nfNumero||'')+' — '+(nota.nomeArquivo||''));if(expandida===nota.id)setExpandida(null);})
       .catch(function(e){setErro('Erro ao excluir nota: '+((e&&e.message)?e.message:e));});
   }
+  // "Entrada conferida": depois que TODOS os itens da nota já foram processados (status vira 'processada'
+  // automaticamente), o usuário pode encaminhar a nota para o "Histórico de Notas" — ela some daqui e
+  // passa a aparecer lá, numa seção própria. Não mexe em estoque nem em recebimento; só marca a nota.
+  var _confirmArquivarNota=useState(null);var confirmArquivarNota=_confirmArquivarNota[0];var setConfirmArquivarNota=_confirmArquivarNota[1];
+  function pedirArquivarNota(nota){if(!nota)return;setConfirmArquivarNota(nota);}
+  function executarArquivarNota(){
+    var nota=confirmArquivarNota;setConfirmArquivarNota(null);
+    if(!nota)return;
+    db.collection('notas_fiscais').doc(nota.id).update({arquivadaHistorico:true,arquivadaEm:new Date().toISOString(),arquivadaPor:user.name||''})
+      .then(function(){logAcao('nota_arquivada_historico','Nota encaminhada para Histórico de Notas — NF '+(nota.nfNumero||'')+' — '+(nota.nomeArquivo||''));if(expandida===nota.id)setExpandida(null);})
+      .catch(function(e){setErro('Erro ao encaminhar nota para o histórico: '+((e&&e.message)?e.message:e));});
+  }
 
   var inp={width:'100%',padding:'11px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:14,boxSizing:'border-box'};
   function fD(d){if(!d)return'';var p=String(d).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
   function statusNota(n){var st=(n.itens||[]).map(function(it){return it.status||'pendente';});var nConc=st.filter(function(s){return s==='conciliado';}).length;var nDiv=st.filter(function(s){return s==='divergencia'||s==='nao_encontrado';}).length;var nCancel=st.filter(function(s){return s==='cancelado';}).length;var nPend=st.length-nConc-nDiv-nCancel;return{nConc:nConc,nDiv:nDiv,nCancel:nCancel,nPend:nPend,total:st.length};}
   var _expandida=useState(null);var expandida=_expandida[0];var setExpandida=_expandida[1];// id da nota expandida
+  var notasAtivas=useMemo(function(){return notas.filter(function(n){return !n.arquivadaHistorico;});},[notas]);
 
   return(<div>
     <div data-tour="notas-import" style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9',marginBottom:16}}>
@@ -8219,10 +8282,11 @@ function ImportarNotas(props){
     </div>}
 
     <div style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9'}}>
-      <div style={{fontWeight:700,fontSize:14,color:'#334155',marginBottom:10}}>Notas importadas ({notas.length})</div>
-      {notas.length===0?<div style={{textAlign:'center',color:'#94A3B8',padding:24,fontSize:13}}>Nenhuma nota importada ainda.</div>:
+      <div style={{fontWeight:700,fontSize:14,color:'#334155',marginBottom:10}}>Notas importadas ({notasAtivas.length})</div>
+      <div style={{fontSize:11,color:'#94A3B8',marginBottom:10}}>Notas com "Entrada conferida" saem daqui e ficam em 🗂️ Histórico de Notas.</div>
+      {notasAtivas.length===0?<div style={{textAlign:'center',color:'#94A3B8',padding:24,fontSize:13}}>Nenhuma nota importada ainda.</div>:
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
-        {notas.map(function(n){var st=statusNota(n);var aberta=expandida===n.id;return(
+        {notasAtivas.map(function(n){var st=statusNota(n);var aberta=expandida===n.id;var totalmenteConferida=st.total>0&&st.nPend===0;return(
           <div key={n.id} style={{border:'1px solid #E2E8F0',borderRadius:10,padding:'10px 12px'}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
               <div style={{flex:1,minWidth:0,cursor:'pointer'}} onClick={function(){setExpandida(aberta?null:n.id);}}>
@@ -8238,7 +8302,10 @@ function ImportarNotas(props){
                   {st.nCancel>0&&<span style={{fontSize:10,fontWeight:700,color:'#64748B',background:'#F1F5F9',borderRadius:6,padding:'2px 7px'}}>🚫 {st.nCancel} ignorado(s)</span>}
                 </div>
               </div>
-              {podeExcluirNota&&<button onClick={function(e){e.stopPropagation();pedirExcluirNota(n);}} title="Excluir nota permanentemente" style={{flexShrink:0,background:'#FEF2F2',border:'1px solid #FECACA',borderRadius:8,width:30,height:30,cursor:'pointer',fontSize:13,color:'#DC2626'}}>🗑️</button>}
+              <div style={{flexShrink:0,display:'flex',gap:6}}>
+                {totalmenteConferida&&<button onClick={function(e){e.stopPropagation();pedirArquivarNota(n);}} title="Entrada conferida — enviar para o Histórico de Notas" style={{background:'#DCFCE7',border:'1px solid #86EFAC',borderRadius:8,padding:'0 10px',height:30,cursor:'pointer',fontSize:11,fontWeight:700,color:'#0C6B3E',whiteSpace:'nowrap'}}>📁 Entrada conferida</button>}
+                {podeExcluirNota&&<button onClick={function(e){e.stopPropagation();pedirExcluirNota(n);}} title="Excluir nota permanentemente" style={{background:'#FEF2F2',border:'1px solid #FECACA',borderRadius:8,width:30,height:30,cursor:'pointer',fontSize:13,color:'#DC2626'}}>🗑️</button>}
+              </div>
             </div>
             {aberta&&<div style={{marginTop:10,paddingTop:10,borderTop:'1px solid #F1F5F9',display:'flex',flexDirection:'column',gap:8}}>
               {(n.itens||[]).map(function(it,idx){
@@ -8297,6 +8364,7 @@ function ImportarNotas(props){
     </div>
     {confirmCancelarItem&&<ModalConfirm titulo="Não é medicamento" msg={'Marcar "'+confirmCancelarItem.descricao+'" como "não é medicamento"? Ele deixa de aparecer na conciliação.'} tipo="warning" confirmTxt="Cancelar item" onConfirm={executarCancelarItemNota} onCancel={function(){setConfirmCancelarItem(null);}}/>}
     {confirmExcluirNota&&<ModalConfirm titulo="Excluir nota permanentemente" msg={'Excluir a nota NF '+(confirmExcluirNota.nfNumero||'(sem número)')+'? Isso não pode ser desfeito.'} tipo="danger" confirmTxt="Excluir" onConfirm={executarExcluirNota} onCancel={function(){setConfirmExcluirNota(null);}}/>}
+    {confirmArquivarNota&&<ModalConfirm titulo="Entrada conferida" msg={'Marcar a NF '+(confirmArquivarNota.nfNumero||'(sem número)')+' como totalmente conferida? Ela sai desta lista e passa a aparecer em 🗂️ Histórico de Notas.'} tipo="success" confirmTxt="Entrada conferida" onConfirm={executarArquivarNota} onCancel={function(){setConfirmArquivarNota(null);}}/>}
   </div>);
 }
 
@@ -8393,6 +8461,8 @@ function TabRecebimento(props){
   var _nmSaving=useState(false);var nmSaving=_nmSaving[0];var setNmSaving=_nmSaving[1];
   // Confirmação ao finalizar recebimento (Mudança 3)
   var _confirmFin=useState(false);var confirmFin=_confirmFin[0];var setConfirmFin=_confirmFin[1];
+  // Marcar como conferido manualmente — recebimento certo, sem precisar vincular a nenhuma nota fiscal.
+  var _confirmConferido=useState(null);var confirmConferido=_confirmConferido[0];var setConfirmConferido=_confirmConferido[1];
 
   useEffect(function(){
     var u=db.collection('recebimentos').orderBy('criadoEm','desc').limit(200).onSnapshot(function(sn){
@@ -8533,6 +8603,18 @@ function TabRecebimento(props){
   // Exclusão permanente (só gestor/técnico, só depois de já cancelado — o estorno de estoque do
   // cancelamento já aconteceu e ficou registrado nas entries; isso só apaga o documento/papelada do
   // recebimento em si, não mexe em estoque nem nas entries já criadas).
+  // Marcar como conferido manualmente: o usuário conferiu fisicamente que o recebimento está certo e não
+  // precisa ficar esperando a nota fiscal ser importada pra sumir da lista de pendentes — a nota, quando
+  // chegar, é que vira o registro fiscal oficial. Só muda o status (não apaga nada, nem mexe em estoque).
+  function pedirMarcarConferido(rec){if(!rec||(rec.status||'pendente')!=='pendente')return;setConfirmConferido(rec);}
+  function executarMarcarConferido(){
+    var rec=confirmConferido;setConfirmConferido(null);
+    if(!rec)return;
+    var now=new Date().toISOString();
+    db.collection('recebimentos').doc(rec.id).update({status:'conciliado',statusLabel:'Conferido manualmente',conferidoManualmente:true,conferidoEm:now,conferidoPor:user.name||''})
+      .then(function(){logAcao('recebimento_conferido_manual','Recebimento '+rec.id+' marcado como conferido manualmente — forn: '+(rec.fornecedor||''),rec.status||'pendente','conciliado');setDetalhe(null);})
+      .catch(function(e){alert('Erro ao marcar como conferido: '+((e&&e.message)?e.message:e));});
+  }
   function excluirPermanentemente(rec){
     if(!podeExcluirReceb||!rec||rec.status!=='cancelado')return;
     if(!confirm('EXCLUIR PERMANENTEMENTE o recebimento de '+(rec.fornecedor||'(sem fornecedor)')+' de '+fD(rec.data)+'? Isso não pode ser desfeito!'))return;
@@ -8739,7 +8821,7 @@ function TabRecebimento(props){
                   <div style={{fontWeight:700,fontSize:14,color:'#1E293B'}}>{r.fornecedor||'—'}</div>
                   <div style={{fontSize:12,color:'#64748B',marginTop:2}}>📅 {fD(r.data)} · {r.totalItens||(r.itens||[]).length} item(ns){r.responsavel?' · '+r.responsavel:''}</div>
                 </div>
-                <span style={{background:st.bg,color:st.cor,fontSize:10,fontWeight:800,padding:'4px 9px',borderRadius:20,whiteSpace:'nowrap'}}>{r.status==='pendente'||!r.status?'Pendente':st.label}</span>
+                <span style={{background:st.bg,color:st.cor,fontSize:10,fontWeight:800,padding:'4px 9px',borderRadius:20,whiteSpace:'nowrap'}}>{r.status==='pendente'||!r.status?'Pendente':(r.statusLabel||st.label)}</span>
               </div>
             </div>
             <div style={{marginTop:8,paddingTop:8,borderTop:'1px solid #F1F5F9',display:'flex',gap:6,justifyContent:'flex-end'}}>
@@ -8761,7 +8843,7 @@ function TabRecebimento(props){
               </div>
               <button onClick={function(){setDetalhe(null);}} style={{background:'#F1F5F9',border:'none',borderRadius:10,width:36,height:36,cursor:'pointer',fontSize:18}}>✕</button>
             </div>
-            <div style={{display:'inline-block',background:st.bg,color:st.cor,fontSize:12,fontWeight:800,padding:'6px 12px',borderRadius:20,marginBottom:14}}>{st.label}</div>
+            <div style={{display:'inline-block',background:st.bg,color:st.cor,fontSize:12,fontWeight:800,padding:'6px 12px',borderRadius:20,marginBottom:14}}>{r.statusLabel||st.label}</div>
             <div style={{fontWeight:700,fontSize:13,color:'#334155',marginBottom:8}}>Itens recebidos</div>
             <div style={{display:'flex',flexDirection:'column',gap:8,marginBottom:16}}>
               {(r.itens||[]).map(function(it,i){return(<div key={i} style={{background:'#F8FAFC',borderRadius:10,padding:'10px 12px',border:'1px solid #E2E8F0'}}>
@@ -8777,6 +8859,8 @@ function TabRecebimento(props){
             <div style={{borderTop:'1px solid #F1F5F9',paddingTop:14,display:'flex',flexDirection:'column',gap:8}}>
               <button onClick={function(){duplicar(r);}} style={{width:'100%',padding:'12px',background:'#EFF6FF',border:'1.5px solid #BFDBFE',borderRadius:12,color:B,fontWeight:700,fontSize:14,cursor:'pointer'}}>📋 Duplicar recebimento</button>
               {(r.status==='pendente'||!r.status)&&<div>
+                <div style={{fontSize:12,color:'#94A3B8',marginBottom:8}}>Já conferiu que esse recebimento está certo? Marque como conferido — ele sai da lista de pendentes sem precisar vincular a nenhuma nota (a nota fiscal, quando importada, é que vira o registro oficial).</div>
+                <button onClick={function(){pedirMarcarConferido(r);}} style={{width:'100%',padding:'12px',background:'#DCFCE7',border:'1.5px solid #86EFAC',borderRadius:12,color:'#0C6B3E',fontWeight:700,fontSize:14,cursor:'pointer',marginBottom:12}}>✅ Marcar como conferido</button>
                 <div style={{fontSize:12,color:'#94A3B8',marginBottom:8}}>Ao cancelar, o estoque é estornado (saída de ajuste) e o status muda para Cancelado{podeExcluirReceb?' — depois de cancelado, dá pra excluir permanentemente.':'.'}</div>
                 <button onClick={function(){setCancelRec(r);setCancelJust('');}} style={{width:'100%',padding:'12px',background:'#FEE2E2',border:'1.5px solid #FECACA',borderRadius:12,color:'#DC2626',fontWeight:700,fontSize:14,cursor:'pointer'}}>🚫 Cancelar recebimento</button>
               </div>}
@@ -8787,6 +8871,8 @@ function TabRecebimento(props){
             </div>
           </div>
         </div>);})()}
+
+      {confirmConferido&&<ModalConfirm titulo="Marcar como conferido" msg={'Marcar o recebimento de '+(confirmConferido.fornecedor||'(sem fornecedor)')+' de '+fD(confirmConferido.data)+' como conferido? Ele sai da lista de pendentes de conciliação fiscal.'} tipo="success" confirmTxt="Marcar como conferido" onConfirm={executarMarcarConferido} onCancel={function(){setConfirmConferido(null);}}/>}
 
       {/* CANCELAR (justificativa obrigatória) */}
       {cancelRec&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.6)',zIndex:1100,display:'flex',alignItems:'center',justifyContent:'center',padding:18}} onClick={function(){if(!cancelSaving){setCancelRec(null);setCancelJust('');}}}>
