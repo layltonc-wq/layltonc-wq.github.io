@@ -8001,6 +8001,11 @@ function ImportarNotas(props){
   var _resumo=useState(null);var resumo=_resumo[0];var setResumo=_resumo[1];// último resultado do matching (Passo 4)
   var _rodandoMatch=useState(false);var rodandoMatch=_rodandoMatch[0];var setRodandoMatch=_rodandoMatch[1];
   var _buscaVinculo=useState({});var buscaVinculo=_buscaVinculo[0];var setBuscaVinculo=_buscaVinculo[1];// key notaId|idx -> texto digitado (busca manual)
+  // Editar dados da nota (número, fornecedor, data): o parser do PDF só acha o número com confiança —
+  // fornecedor quase nunca vem certo e a data às vezes falha, então dá pra corrigir/completar na mão.
+  var _editandoNota=useState(null);var editandoNota=_editandoNota[0];var setEditandoNota=_editandoNota[1];// id da nota em edição, ou null
+  var _editNotaForm=useState({});var editNotaForm=_editNotaForm[0];var setEditNotaForm=_editNotaForm[1];
+  var _salvandoEditNota=useState(false);var salvandoEditNota=_salvandoEditNota[0];var setSalvandoEditNota=_salvandoEditNota[1];
 
   useEffect(function(){
     var u1=db.collection('notas_fiscais').orderBy('criadoEm','desc').limit(100).onSnapshot(function(sn){setNotas(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));},function(){});
@@ -8249,6 +8254,17 @@ function ImportarNotas(props){
       .then(function(){logAcao('nota_arquivada_historico','Nota encaminhada para Histórico de Notas — NF '+(nota.nfNumero||'')+' — '+(nota.nomeArquivo||''));if(expandida===nota.id)setExpandida(null);})
       .catch(function(e){setErro('Erro ao encaminhar nota para o histórico: '+((e&&e.message)?e.message:e));});
   }
+  // Editar dados da nota: o parser do PDF só extrai o número com confiança — fornecedor nunca é lido
+  // (o parser não tenta) e a data às vezes falha — então dá pra corrigir/completar na mão a qualquer hora.
+  function abrirEditarNota(n){setEditandoNota(n.id);setEditNotaForm({numero:n.nfNumero||'',fornecedor:n.fornecedor||'',data:n.dataEmissao||''});}
+  function fecharEditarNota(){setEditandoNota(null);setEditNotaForm({});}
+  function salvarEditNota(){
+    var notaId=editandoNota;if(!notaId||salvandoEditNota)return;
+    setSalvandoEditNota(true);
+    db.collection('notas_fiscais').doc(notaId).update({nfNumero:(editNotaForm.numero||'').trim(),fornecedor:(editNotaForm.fornecedor||'').trim(),dataEmissao:editNotaForm.data||''})
+      .then(function(){logAcao('nota_editada','Dados da nota '+notaId+' editados manualmente — NF '+(editNotaForm.numero||'')+' — '+(editNotaForm.fornecedor||''));setSalvandoEditNota(false);fecharEditarNota();})
+      .catch(function(e){setSalvandoEditNota(false);setErro('Erro ao salvar dados da nota: '+((e&&e.message)?e.message:e));});
+  }
 
   var inp={width:'100%',padding:'11px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:14,boxSizing:'border-box'};
   function fD(d){if(!d)return'';var p=String(d).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
@@ -8310,9 +8326,22 @@ function ImportarNotas(props){
               </div>
               <div style={{flexShrink:0,display:'flex',gap:6}}>
                 {totalmenteConferida&&<button onClick={function(e){e.stopPropagation();pedirArquivarNota(n);}} title="Entrada conferida — enviar para o Histórico de Notas" style={{background:'#DCFCE7',border:'1px solid #86EFAC',borderRadius:8,padding:'0 10px',height:30,cursor:'pointer',fontSize:11,fontWeight:700,color:'#0C6B3E',whiteSpace:'nowrap'}}>📁 Entrada conferida</button>}
+                <button onClick={function(e){e.stopPropagation();editandoNota===n.id?fecharEditarNota():abrirEditarNota(n);}} title="Editar número, fornecedor e data da nota" style={{background:'#EFF6FF',border:'1px solid #BFDBFE',borderRadius:8,width:30,height:30,cursor:'pointer',fontSize:13,color:B}}>✏️</button>
                 {podeExcluirNota&&<button onClick={function(e){e.stopPropagation();pedirExcluirNota(n);}} title="Excluir nota permanentemente" style={{background:'#FEF2F2',border:'1px solid #FECACA',borderRadius:8,width:30,height:30,cursor:'pointer',fontSize:13,color:'#DC2626'}}>🗑️</button>}
               </div>
             </div>
+            {editandoNota===n.id&&<div onClick={function(e){e.stopPropagation();}} style={{marginTop:10,paddingTop:10,borderTop:'1px solid #F1F5F9',background:'#F8FAFC',borderRadius:8,padding:10}}>
+              <div style={{fontWeight:700,fontSize:12,color:'#334155',marginBottom:8}}>✏️ Editar dados da nota</div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+                <div><div style={{fontSize:10,fontWeight:600,color:'#64748B',marginBottom:3}}>Nº DA NOTA</div><input value={editNotaForm.numero||''} onChange={function(e){var v=e.target.value;setEditNotaForm(function(p){return Object.assign({},p,{numero:v});});}} className="inp" style={{marginBottom:0,fontSize:13}} placeholder="Ex: 12345"/></div>
+                <div><div style={{fontSize:10,fontWeight:600,color:'#64748B',marginBottom:3}}>FORNECEDOR</div><input value={editNotaForm.fornecedor||''} onChange={function(e){var v=e.target.value;setEditNotaForm(function(p){return Object.assign({},p,{fornecedor:v});});}} className="inp" style={{marginBottom:0,fontSize:13}} placeholder="Nome do fornecedor"/></div>
+              </div>
+              <div style={{marginBottom:10}}><div style={{fontSize:10,fontWeight:600,color:'#64748B',marginBottom:3}}>DATA DA NOTA</div><input type="date" value={editNotaForm.data||''} onChange={function(e){var v=e.target.value;setEditNotaForm(function(p){return Object.assign({},p,{data:v});});}} className="inp" style={{marginBottom:0,fontSize:13}}/></div>
+              <div style={{display:'flex',gap:8}}>
+                <button onClick={fecharEditarNota} disabled={salvandoEditNota} className="bs" style={{flex:1,padding:'9px 0',fontSize:12}}>Cancelar</button>
+                <button onClick={salvarEditNota} disabled={salvandoEditNota} className="bg" style={{flex:2,padding:'9px 0',fontSize:12}}>{salvandoEditNota?'Salvando...':'✅ Salvar'}</button>
+              </div>
+            </div>}
             {aberta&&<div style={{marginTop:10,paddingTop:10,borderTop:'1px solid #F1F5F9',display:'flex',flexDirection:'column',gap:8}}>
               {(n.itens||[]).map(function(it,idx){
                 var key=n.id+'|'+idx;
