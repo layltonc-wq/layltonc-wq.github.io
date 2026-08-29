@@ -8097,7 +8097,10 @@ function ImportarNotas(props){
     var bate=qtdRecebida===qtdNota;
     var now=new Date().toISOString();
     var batch=db.batch();
-    var novosItensNota=(nota.itens||[]).map(function(x,i){return i===itemIdx?Object.assign({},x,{status:bate?'conciliado':'divergencia',medId:itRec.medicamentoId||'',medNome:itRec.medicamentoNome||''}):x;});
+    // Gera a referência da divergência ANTES (se precisar) pra já gravar o id dela no item da nota —
+    // permite apagar essa divergência específica de forma precisa se o usuário desvincular depois.
+    var divRef=bate?null:db.collection('divergencias').doc();
+    var novosItensNota=(nota.itens||[]).map(function(x,i){return i===itemIdx?Object.assign({},x,{status:bate?'conciliado':'divergencia',medId:itRec.medicamentoId||'',medNome:itRec.medicamentoNome||'',vinculadoRecId:rec.id,vinculadoItemIdx:cand.itemIdx,divergenciaId:divRef?divRef.id:''}):x;});
     var todosProcNota=novosItensNota.length>0&&novosItensNota.every(function(x){return x.status&&x.status!=='pendente';});
     batch.update(db.collection('notas_fiscais').doc(notaId),{itens:novosItensNota,status:todosProcNota?'processada':(nota.status||'pendente')});
     var novosItensRec=(rec.itens||[]).map(function(x,i){return i===cand.itemIdx?Object.assign({},x,{conciliado:true,resultadoMatching:bate?'conciliado':'divergencia'}):x;});
@@ -8105,8 +8108,8 @@ function ImportarNotas(props){
     var todosProcRec=novosItensRec.length>0&&novosItensRec.every(function(x){return x.conciliado;});
     var statusNovoRec=temDivRec?'divergencia':(todosProcRec?'conciliado':(rec.status||'pendente'));
     batch.update(db.collection('recebimentos').doc(rec.id),{itens:novosItensRec,status:statusNovoRec,statusLabel:temDivRec?'Divergência Aberta':(todosProcRec?'Conciliado':(rec.statusLabel||'Pendente de Conciliação Fiscal'))});
-    if(!bate){
-      batch.set(db.collection('divergencias').doc(),{medicamentoId:itRec.medicamentoId||'',medicamentoNome:itRec.medicamentoNome||'',qtdRecebida:qtdRecebida,qtdNota:qtdNota,diferenca:qtdNota-qtdRecebida,tipo:'quantidade',status:'pendente',origem:'vinculo_manual',criadoEm:now,criadoPor:user.name||''});
+    if(divRef){
+      batch.set(divRef,{medicamentoId:itRec.medicamentoId||'',medicamentoNome:itRec.medicamentoNome||'',qtdRecebida:qtdRecebida,qtdNota:qtdNota,diferenca:qtdNota-qtdRecebida,tipo:'quantidade',status:'pendente',origem:'vinculo_manual',criadoEm:now,criadoPor:user.name||''});
     }
     batch.commit().then(function(){
       logAcao('vinculo_manual_notas','Vínculo manual: "'+(itNota.descricao||'')+'" (nota) → "'+(itRec.medicamentoNome||'')+'" (recebimento) — '+(bate?'conciliado':'divergência de quantidade'));
@@ -8117,21 +8120,63 @@ function ImportarNotas(props){
   // Cancela um item da nota que na verdade NÃO é medicamento (o parser do PDF às vezes pega linha de
   // cabeçalho/imposto/observação como se fosse item). Só remove esse item da conciliação — não mexe em
   // estoque nem em recebimento nenhum, já que um item cancelado nunca chegou a ser vinculado a nada.
-  function cancelarItemNota(notaId,itemIdx){
+  // Confirmação por modal bonito (ModalConfirm) em vez de confirm() nativo do navegador.
+  var _confirmCancelarItem=useState(null);var confirmCancelarItem=_confirmCancelarItem[0];var setConfirmCancelarItem=_confirmCancelarItem[1];// {notaId,itemIdx,descricao}
+  function pedirCancelarItemNota(notaId,itemIdx){
     var nota=notas.find(function(n){return n.id===notaId;});if(!nota)return;
     var it=(nota.itens||[])[itemIdx];if(!it)return;
-    if(!confirm('Marcar "'+(it.descricao||'este item')+'" como "não é medicamento"? Ele deixa de aparecer na conciliação.'))return;
+    setConfirmCancelarItem({notaId:notaId,itemIdx:itemIdx,descricao:it.descricao||'este item'});
+  }
+  function executarCancelarItemNota(){
+    if(!confirmCancelarItem)return;
+    var notaId=confirmCancelarItem.notaId,itemIdx=confirmCancelarItem.itemIdx;
+    var nota=notas.find(function(n){return n.id===notaId;});
+    var it=nota&&(nota.itens||[])[itemIdx];
+    setConfirmCancelarItem(null);
+    if(!nota||!it)return;
     var novosItens=(nota.itens||[]).map(function(x,i){return i===itemIdx?Object.assign({},x,{status:'cancelado'}):x;});
     var todosProc=novosItens.length>0&&novosItens.every(function(x){return x.status&&x.status!=='pendente';});
     db.collection('notas_fiscais').doc(notaId).update({itens:novosItens,status:todosProc?'processada':(nota.status||'pendente')})
       .then(function(){logAcao('item_nota_cancelado','Item cancelado (não é medicamento): "'+(it.descricao||'')+'" — nota '+notaId);})
       .catch(function(e){setErro('Erro ao cancelar item: '+((e&&e.message)?e.message:e));});
   }
+  // Desvincula um item já conciliado/divergência — pode ter vinculado errado. Desfaz os dois lados do
+  // vínculo (nota volta pra pendente; item do recebimento volta a ficar disponível pra novo vínculo) e
+  // remove a divergência de quantidade que esse vínculo específico tinha criado, se houver.
+  function desvincularItem(notaId,itemIdx){
+    var nota=notas.find(function(n){return n.id===notaId;});if(!nota)return;
+    var it=(nota.itens||[])[itemIdx];if(!it||!it.medId)return;
+    // Prefere o vínculo GRAVADO (recId+itemIdx exatos, guardado no momento do vínculo manual) — só cai
+    // pro "achar por medicamentoId" (menos preciso, pode existir mais de um recebimento pendente do
+    // mesmo remédio) quando o vínculo veio do matching automático antigo, que não grava essa referência.
+    var rec=it.vinculadoRecId?recs.find(function(r){return r.id===it.vinculadoRecId;}):recs.find(function(r){return (r.itens||[]).some(function(x){return x.medicamentoId===it.medId&&x.conciliado;});});
+    var batch=db.batch();
+    var novosItensNota=(nota.itens||[]).map(function(x,i){return i===itemIdx?Object.assign({},x,{status:'pendente',medId:'',medNome:'',vinculadoRecId:'',vinculadoItemIdx:-1,divergenciaId:''}):x;});
+    batch.update(db.collection('notas_fiscais').doc(notaId),{itens:novosItensNota,status:'pendente'});
+    // A divergência de quantidade criada por ESTE vínculo específico não faz mais sentido — o vínculo
+    // que a originou foi desfeito. Apaga só ela (não mexe em nenhuma outra divergência).
+    if(it.divergenciaId)batch.delete(db.collection('divergencias').doc(it.divergenciaId));
+    if(rec){
+      var recItemIdx=(typeof it.vinculadoItemIdx==='number'&&it.vinculadoItemIdx>=0)?it.vinculadoItemIdx:(rec.itens||[]).findIndex(function(x){return x.medicamentoId===it.medId&&x.conciliado;});
+      if(recItemIdx>=0){
+        var novosItensRec=(rec.itens||[]).map(function(x,i){return i===recItemIdx?Object.assign({},x,{conciliado:false,resultadoMatching:''}):x;});
+        var temDivRec=novosItensRec.some(function(x){return x.resultadoMatching==='divergencia';});
+        var todosProcRec=novosItensRec.length>0&&novosItensRec.every(function(x){return x.conciliado;});
+        var statusNovoRec=temDivRec?'divergencia':(todosProcRec?'conciliado':'pendente');
+        batch.update(db.collection('recebimentos').doc(rec.id),{itens:novosItensRec,status:statusNovoRec,statusLabel:temDivRec?'Divergência Aberta':(todosProcRec?'Conciliado':'Pendente de Conciliação Fiscal')});
+      }
+    }
+    batch.commit().then(function(){
+      logAcao('vinculo_desfeito','Desvínculo manual: "'+(it.descricao||'')+'" (nota '+notaId+') deixou de estar ligado a "'+(it.medNome||'')+'"');
+    }).catch(function(e){setErro('Erro ao desvincular: '+((e&&e.message)?e.message:e));});
+  }
   // Exclusão permanente da nota fiscal (só gestor/técnico) — remove só o documento importado, nunca
   // mexeu em estoque (isso só acontece no Recebimento físico), então não tem nada pra reverter.
-  function excluirNota(nota){
+  var _confirmExcluirNota=useState(null);var confirmExcluirNota=_confirmExcluirNota[0];var setConfirmExcluirNota=_confirmExcluirNota[1];// nota inteira ou null
+  function pedirExcluirNota(nota){if(!podeExcluirNota||!nota)return;setConfirmExcluirNota(nota);}
+  function executarExcluirNota(){
+    var nota=confirmExcluirNota;setConfirmExcluirNota(null);
     if(!podeExcluirNota||!nota)return;
-    if(!confirm('EXCLUIR PERMANENTEMENTE a nota NF '+(nota.nfNumero||'(sem número)')+'? Isso não pode ser desfeito!'))return;
     db.collection('notas_fiscais').doc(nota.id).delete()
       .then(function(){logAcao('nota_excluida','Nota excluída permanentemente — NF '+(nota.nfNumero||'')+' — '+(nota.nomeArquivo||''));if(expandida===nota.id)setExpandida(null);})
       .catch(function(e){setErro('Erro ao excluir nota: '+((e&&e.message)?e.message:e));});
@@ -8193,7 +8238,7 @@ function ImportarNotas(props){
                   {st.nCancel>0&&<span style={{fontSize:10,fontWeight:700,color:'#64748B',background:'#F1F5F9',borderRadius:6,padding:'2px 7px'}}>🚫 {st.nCancel} ignorado(s)</span>}
                 </div>
               </div>
-              {podeExcluirNota&&<button onClick={function(e){e.stopPropagation();excluirNota(n);}} title="Excluir nota permanentemente" style={{flexShrink:0,background:'#FEF2F2',border:'1px solid #FECACA',borderRadius:8,width:30,height:30,cursor:'pointer',fontSize:13,color:'#DC2626'}}>🗑️</button>}
+              {podeExcluirNota&&<button onClick={function(e){e.stopPropagation();pedirExcluirNota(n);}} title="Excluir nota permanentemente" style={{flexShrink:0,background:'#FEF2F2',border:'1px solid #FECACA',borderRadius:8,width:30,height:30,cursor:'pointer',fontSize:13,color:'#DC2626'}}>🗑️</button>}
             </div>
             {aberta&&<div style={{marginTop:10,paddingTop:10,borderTop:'1px solid #F1F5F9',display:'flex',flexDirection:'column',gap:8}}>
               {(n.itens||[]).map(function(it,idx){
@@ -8206,13 +8251,16 @@ function ImportarNotas(props){
                 return(<div key={idx} style={{background:cancelado?'#F8FAFC':'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:8,padding:'8px 10px',opacity:cancelado?0.6:1}}>
                   <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
                     <div style={{fontSize:12,fontWeight:700,color:'#1E293B'}}>{it.descricao}</div>
-                    {!jaVinculado&&!cancelado&&<button onClick={function(){cancelarItemNota(n.id,idx);}} title="Não é medicamento — cancelar item" style={{flexShrink:0,background:'none',border:'1px solid #E2E8F0',borderRadius:6,padding:'2px 8px',fontSize:10,color:'#94A3B8',cursor:'pointer',whiteSpace:'nowrap'}}>❌ não é remédio</button>}
+                    {!jaVinculado&&!cancelado&&<button onClick={function(){pedirCancelarItemNota(n.id,idx);}} title="Não é medicamento — cancelar item" style={{flexShrink:0,background:'none',border:'1px solid #E2E8F0',borderRadius:6,padding:'2px 8px',fontSize:10,color:'#94A3B8',cursor:'pointer',whiteSpace:'nowrap'}}>❌ não é remédio</button>}
                   </div>
                   <div style={{fontSize:11,color:'#64748B',marginTop:2}}>Qtd na nota: {it.qtd}{it.lote?' · Lote: '+it.lote:''}{it.validade?' · Val: '+it.validade:''}</div>
                   {cancelado
                     ?<div style={{fontSize:11,marginTop:4,fontWeight:600,color:'#64748B'}}>🚫 Cancelado — não é medicamento</div>
                     :jaVinculado
-                      ?<div style={{fontSize:11,marginTop:4,fontWeight:700,color:it.status==='conciliado'?'#059669':'#B45309'}}>{it.status==='conciliado'?'✅':'⚠️'} Vinculado a {it.medNome||'—'}</div>
+                      ?<div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,marginTop:4,flexWrap:'wrap'}}>
+                        <span style={{fontSize:11,fontWeight:700,color:it.status==='conciliado'?'#059669':'#B45309'}}>{it.status==='conciliado'?'✅':'⚠️'} Vinculado a {it.medNome||'—'}</span>
+                        <button onClick={function(){desvincularItem(n.id,idx);}} style={{fontSize:10,color:'#94A3B8',background:'none',border:'1px solid #E2E8F0',borderRadius:6,padding:'2px 8px',cursor:'pointer',whiteSpace:'nowrap'}}>↩️ desvincular</button>
+                      </div>
                       :it.status==='nao_encontrado'
                         ?<div style={{fontSize:11,color:'#991B1B',marginTop:4,fontWeight:600}}>❌ Sem recebimento correspondente encontrado automaticamente</div>
                         :<div style={{fontSize:11,color:'#B45309',marginTop:4,fontWeight:600}}>⏳ Ainda não conciliado</div>}
@@ -8247,6 +8295,8 @@ function ImportarNotas(props){
         );})}
       </div>}
     </div>
+    {confirmCancelarItem&&<ModalConfirm titulo="Não é medicamento" msg={'Marcar "'+confirmCancelarItem.descricao+'" como "não é medicamento"? Ele deixa de aparecer na conciliação.'} tipo="warning" confirmTxt="Cancelar item" onConfirm={executarCancelarItemNota} onCancel={function(){setConfirmCancelarItem(null);}}/>}
+    {confirmExcluirNota&&<ModalConfirm titulo="Excluir nota permanentemente" msg={'Excluir a nota NF '+(confirmExcluirNota.nfNumero||'(sem número)')+'? Isso não pode ser desfeito.'} tipo="danger" confirmTxt="Excluir" onConfirm={executarExcluirNota} onCancel={function(){setConfirmExcluirNota(null);}}/>}
   </div>);
 }
 
