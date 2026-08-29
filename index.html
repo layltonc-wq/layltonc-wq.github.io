@@ -235,15 +235,14 @@ var TOURS=[
     {seletor:'[data-tour="conf-lote"]',texto:'Pode cadastrar lote e validade durante a conferência.',posicao:'acima'},
     {seletor:'[data-tour="conf-finalizar"]',texto:'Finalize cada categoria separadamente quando terminar.',posicao:'acima'}
   ]},
-  {id:'tour_recebimento',titulo:'Novo módulo: Recebimento e Conciliação Fiscal',passos:[
+  {id:'tour_recebimento',titulo:'Novo módulo: Recebimento e Conciliação',passos:[
     {acao:{tipo:'aba',aba:'recebimento'},seletor:'[data-tour="tab-content"]',texto:'Nova aba! Aqui você registra a mercadoria que chegou e depois concilia com a nota fiscal.',posicao:'abaixo'},
-    {seletor:'[data-tour="receb-subabas"]',texto:'4 seções: Recebimento Físico, Conciliação Fiscal, Divergências e Relatórios.',posicao:'abaixo'},
-    {seletor:'[data-tour="receb-form"]',texto:'Preencha o fornecedor e adicione os medicamentos recebidos — com quantidade, lote e validade.',posicao:'abaixo'},
-    {seletor:'[data-tour="receb-finalizar"]',texto:'Ao finalizar, o estoque já atualiza na hora e o recebimento fica "Pendente de Conciliação Fiscal" — aguardando a nota chegar.',posicao:'acima'},
-    {acao:{tipo:'clicar',seletor:'[data-tour="receb-sub-conciliacao"]'},seletor:'[data-tour="conc-selecionar-receb"]',texto:'Quando a nota fiscal chegar, cadastre os dados dela aqui e escolha o recebimento pendente pra vincular.',posicao:'abaixo'},
-    {seletor:'[data-tour="conc-conciliar"]',texto:'O sistema compara automaticamente cada medicamento recebido × faturado e aponta as divergências. Regra de ouro: a nota NUNCA altera o estoque — ela é só documental.',posicao:'acima'},
-    {acao:{tipo:'clicar',seletor:'[data-tour="receb-sub-divergencias"]'},seletor:'[data-tour="div-painel"]',texto:'Todas as divergências ficam listadas aqui, com filtros — do "Pendente de Conciliação" até "Resolvido".',posicao:'abaixo'},
-    {acao:{tipo:'clicar',seletor:'[data-tour="receb-sub-relatorios"]'},seletor:'[data-tour="rel-painel"]',texto:'E aqui os relatórios prontos (pendências, divergências por fornecedor/produto/período, notas conciliadas...) — exporte em Excel ou PDF quando precisar.',posicao:'abaixo'}
+    {seletor:'[data-tour="receb-subabas"]',texto:'3 seções: Recebimento (entrada rápida), Importar Notas e Divergências.',posicao:'abaixo'},
+    {seletor:'[data-tour="receb-form"]',texto:'Entrada rápida: escolha o medicamento e a quantidade recebida.',posicao:'abaixo'},
+    {seletor:'[data-tour="receb-finalizar"]',texto:'Ao finalizar, o estoque já atualiza na hora e o recebimento fica pendente de conciliação — aguardando a nota chegar.',posicao:'acima'},
+    {acao:{tipo:'clicar',seletor:'[data-tour="receb-sub-notas"]'},seletor:'[data-tour="notas-import"]',texto:'Quando as notas chegarem, importe uma ou várias de uma vez aqui — o app lê os medicamentos do PDF sozinho.',posicao:'abaixo'},
+    {seletor:'[data-tour="notas-matching-btn"]',texto:'Depois de importar, o sistema já casa automaticamente cada medicamento recebido × faturado. Só o que não bater vira divergência — o resto é conciliado sozinho.',posicao:'acima'},
+    {acao:{tipo:'clicar',seletor:'[data-tour="receb-sub-divergencias"]'},seletor:'[data-tour="div-painel"]',texto:'Só os problemas aparecem aqui: quantidade diferente ou item da nota sem recebimento. Confirme manualmente, ou dá saída normal do medicamento — quando o estoque zerar, a divergência some sozinha.',posicao:'abaixo'}
   ]},
   {id:'tour_controlados',titulo:'Novidade: Controle de Morfina e Tramal',passos:[
     {acao:{tipo:'menu'},seletor:'[data-tour="nav-pacientes"]',texto:'Novidade! A nova aba "Pacientes (Controlados)" reúne tudo sobre saídas de Morfina e Tramal — clique aqui para abrir.',posicao:'acima'},
@@ -307,6 +306,7 @@ function _bumpEntriesVersion(){try{if(db)db.collection('_meta').doc('entries_ver
 // principal (o app "congela") e ainda esbarra em bloqueador de pop-up. O iframe imprime só o seu
 // próprio conteúdo, sem pop-up, sem travar o app; é removido depois. Fallback para window.open se
 // o iframe falhar. Retorna false se nada funcionou (para o chamador avisar o usuário).
+function _escHtml(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function _imprimirDoc(html){
   try{
     var f=document.createElement('iframe');
@@ -428,6 +428,9 @@ function calcLatest(entries){var info={};var sorted=[];for(var i=0;i<entries.len
 function _anoVal(y){var n=parseInt(y,10);if(isNaN(n))return NaN;if(n<100)return n<=50?2000+n:1900+n;return n;}
 // Normaliza uma validade "MM/AA" ou "MM/AAAA" para "MM/AAAA" (mês com 2 dígitos). Devolve o valor original (aparado) se não for parseável.
 function _normValidade(val){if(!val)return '';var s=String(val).trim();var p=s.split('/');if(p.length!==2)return s;var mes=parseInt(p[0],10),ano=_anoVal(p[1]);if(isNaN(mes)||isNaN(ano))return s;return (mes<10?'0'+mes:''+mes)+'/'+ano;}
+// Máscara ao digitar: insere "/" sozinho depois dos 2 dígitos do mês (ex: digita "032027" -> mostra "03/2027").
+// Baseado só nos dígitos já digitados — funciona bem mesmo apagando/editando no meio.
+function _maskValidade(v){var d=(v||'').replace(/\D/g,'').slice(0,6);return d.length<=2?d:d.slice(0,2)+'/'+d.slice(2);}
 // Data do ÚLTIMO dia do mês de uma validade "MM/AA" ou "MM/AAAA". null se inválida. Fonte única de parsing de validade.
 function _dataValidade(val){if(!val)return null;var p=String(val).trim().split('/');if(p.length!==2)return null;var mes=parseInt(p[0],10),ano=_anoVal(p[1]);if(isNaN(mes)||isNaN(ano))return null;return new Date(ano,mes,0);}
 function getDiasVal(val,hoje){var d=_dataValidade(val);if(!d)return null;return Math.ceil((d-(hoje||new Date()))/86400000);}
@@ -629,7 +632,9 @@ function ShiftCard(props){
   var onSolicitar=props.onSolicitarEntrada;var onSair=props.onSair;var db=props.db;
   var _showGestao=useState(false);var showGestao=_showGestao[0];var setShowGestao=_showGestao[1];
   var _allUsers=useState([]);var allUsers=_allUsers[0];var setAllUsers=_allUsers[1];
-  var isManager=user&&(user.role==='gestor'||user.role==='tecnico');
+  // Gerenciar equipe (adicionar/remover mesmo com o plantão já aberto) e abrir/encerrar o plantão são
+  // liberados pra gestor, técnico E qualquer farmacêutico — não só quem abriu o plantão (o "líder").
+  var isManager=user&&(user.role==='gestor'||user.role==='tecnico'||user.role==='farmaceutico');
 
   useEffect(function(){
     if(!isManager||!db||!plantao)return;
@@ -665,7 +670,10 @@ function ShiftCard(props){
   }
 
   if(!plantao){
-    if(!user||user.role!=='farmaceutico'||!isShiftTime())return null;
+    // Farmacêutico só abre dentro do horário de plantão; gestor/técnico podem abrir a qualquer hora
+    // (eles já operam sem precisar de plantão, mas também podem formalizar/abrir um se quiserem).
+    if(!user||!(user.role==='farmaceutico'||user.role==='gestor'||user.role==='tecnico'))return null;
+    if(user.role==='farmaceutico'&&!isShiftTime())return null;
     return(<div style={{background:'#EFF6FF',border:'1.5px dashed #BFDBFE',borderRadius:16,padding:'16px 18px',marginBottom:14,textAlign:'center'}}>
       <div style={{fontSize:13,color:'#64748B',marginBottom:10}}>Nenhum plantão ativo hoje</div>
       <button onClick={onIniciar} style={{background:B,border:'none',borderRadius:10,padding:'10px 24px',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer'}}>Abrir Plantão</button>
@@ -673,8 +681,9 @@ function ShiftCard(props){
   }
 
   var equipe=plantao.equipe||[];
-  var isFarmaLeader=user&&user.role==='farmaceutico'&&plantao.iniciadoPor===user.uid;
-  var canEncerrar=(isFarmaLeader||isManager)&&onEncerrar&&shiftId;
+  // Encerrar não depende mais de ser o "líder" (quem abriu) — gestor, técnico e qualquer farmacêutico
+  // podem encerrar o plantão de hoje, independente de quem esteja com ele aberto no momento.
+  var canEncerrar=isManager&&onEncerrar&&shiftId;
   var inTeam=equipe.some(function(m){return m.id===user.uid&&m.status!=='saiu';});
   var canSolicitar=isGuest&&onSolicitar&&user&&(user.role==='auxiliar'||user.role==='diarista');
   var canSair=!isGuest&&onSair&&user&&(user.role==='auxiliar'||user.role==='diarista')&&inTeam;
@@ -5505,6 +5514,25 @@ function TabHistoricoNotas(props){
   var _eg=useState(null);var editGrupo=_eg[0];var setEditGrupo=_eg[1];
   var _egf=useState({});var editGF=_egf[0];var setEditGF=_egf[1];
   var _svG=useState(false);var savingG=_svG[0];var setSavingG=_svG[1];
+  // Notas fiscais importadas em lote (aba Importar Notas) e marcadas como "Entrada conferida" — mecanismo
+  // à parte de notas_fiscais (não mistura com as entries agrupadas por nfNumero acima).
+  var _notasConf=useState([]);var notasConf=_notasConf[0];var setNotasConf=_notasConf[1];
+  var _ncAberta=useState(null);var ncAberta=_ncAberta[0];var setNcAberta=_ncAberta[1];
+  var _confirmDesarquivar=useState(null);var confirmDesarquivar=_confirmDesarquivar[0];var setConfirmDesarquivar=_confirmDesarquivar[1];
+  useEffect(function(){
+    if(!db)return;
+    var u=db.collection('notas_fiscais').where('arquivadaHistorico','==',true).orderBy('arquivadaEm','desc').limit(150).onSnapshot(function(sn){
+      setNotasConf(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));
+    },function(){
+      // fallback sem índice composto: busca tudo e filtra/ordena local.
+      db.collection('notas_fiscais').limit(300).onSnapshot(function(sn){
+        var arr=sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}).filter(function(n){return n.arquivadaHistorico;});
+        arr.sort(function(a,b){return (b.arquivadaEm||'').localeCompare(a.arquivadaEm||'');});
+        setNotasConf(arr);
+      },function(){});
+    });
+    return u;
+  },[db]);
   var COR={medicamento:'#1351B4',controlado:'#DC2626',injetavel:'#7C3AED',leite:'#D97706',penso:'#0C6B3E'};
   var ICO={medicamento:'💊',controlado:'🔒',injetavel:'💉',leite:'🍼',penso:'🩹'};
   var LBL={medicamento:'Farm. Básica',controlado:'Controlado',injetavel:'Injetável',leite:'Leite',penso:'Penso'};
@@ -5545,6 +5573,36 @@ function TabHistoricoNotas(props){
     <div style={{maxWidth:700,margin:'0 auto',padding:'16px 12px 90px'}}>
       <div style={{fontWeight:800,fontSize:22,color:'#1E293B',marginBottom:4}}>🗂️ Histórico de Notas</div>
       <div style={{fontSize:13,color:'#64748B',marginBottom:14}}>Entradas agrupadas por nota fiscal</div>
+
+      {notasConf.length>0&&<div style={{marginBottom:18,border:'1.5px solid #86EFAC',borderRadius:16,overflow:'hidden'}}>
+        <div style={{background:'#F0FDF4',padding:'12px 14px'}}>
+          <div style={{fontWeight:800,fontSize:14,color:'#0C6B3E'}}>📁 Notas fiscais conferidas ({notasConf.length})</div>
+          <div style={{fontSize:11,color:'#166534',marginTop:2}}>Notas importadas em lote (aba Recebimento → Importar Notas) marcadas como "Entrada conferida".</div>
+        </div>
+        <div style={{padding:'10px 14px',display:'flex',flexDirection:'column',gap:8}}>
+          {notasConf.map(function(n){
+            var ab=ncAberta===n.id;
+            var dtEmi=n.dataEmissao?new Date(n.dataEmissao+'T12:00:00').toLocaleDateString('pt-BR'):'';
+            var dtArq=n.arquivadaEm?new Date(n.arquivadaEm).toLocaleDateString('pt-BR'):'';
+            return(<div key={n.id} style={{border:'1px solid #E2E8F0',borderRadius:12,overflow:'hidden'}}>
+              <button onClick={function(){setNcAberta(ab?null:n.id);}} style={{width:'100%',background:'#fff',border:'none',padding:'10px 12px',cursor:'pointer',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,textAlign:'left'}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>NF {n.nfNumero||'(sem número)'}{n.fornecedor?' · '+n.fornecedor:''}</div>
+                  <div style={{fontSize:11,color:'#64748B',marginTop:2}}>{(n.itens||[]).length} item(ns){dtEmi?' · emitida '+dtEmi:''}{dtArq?' · conferida '+dtArq:''}</div>
+                </div>
+                <span style={{fontSize:14,color:'#94A3B8'}}>{ab?'▲':'▼'}</span>
+              </button>
+              {ab&&<div style={{borderTop:'1px solid #F1F5F9',padding:'10px 12px',background:'#F8FAFC'}}>
+                <div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:isMan?10:0}}>
+                  {(n.itens||[]).map(function(it,i){return(<div key={i} style={{fontSize:12,color:'#334155'}}>• {it.descricao||it.medNome||'—'} <span style={{color:'#94A3B8'}}>(qtd {it.qtd})</span></div>);})}
+                </div>
+                {isMan&&<button onClick={function(){setConfirmDesarquivar(n);}} style={{fontSize:11,color:'#94A3B8',background:'#fff',border:'1px solid #E2E8F0',borderRadius:7,padding:'5px 10px',cursor:'pointer'}}>↩️ Desfazer — voltar para Importar Notas</button>}
+              </div>}
+            </div>);
+          })}
+        </div>
+      </div>}
+
       <input value={search} onChange={function(e){setSearch(e.target.value);}} placeholder="🔍 Buscar NF, fornecedor ou medicamento..." className="inp" style={{marginBottom:14}}/>
       {msg==='ok'&&<div className="ok" style={{marginBottom:10}}>✅ Salvo com sucesso!</div>}
       {msg.indexOf('e:')===0&&<div className="er" style={{marginBottom:10}}>❌ {msg.slice(2)}</div>}
@@ -5641,6 +5699,7 @@ function TabHistoricoNotas(props){
           </div>}
         </div>);
       })}
+      {confirmDesarquivar&&<ModalConfirm titulo="Desfazer entrada conferida" msg={'Voltar a NF '+(confirmDesarquivar.nfNumero||'(sem número)')+' para a aba Importar Notas?'} tipo="warning" confirmTxt="Desfazer" onConfirm={function(){var n=confirmDesarquivar;setConfirmDesarquivar(null);if(n)db.collection('notas_fiscais').doc(n.id).update({arquivadaHistorico:false}).catch(function(){});}} onCancel={function(){setConfirmDesarquivar(null);}}/>}
     </div>
   );
 }
@@ -7788,788 +7847,588 @@ function _parsearPDFNotaConciliacao(linhas){
   var dataEmissao='';
   if(dtm){var pts=dtm[1].split(/[\/\-]/);dataEmissao=pts[2]+'-'+pts[1]+'-'+pts[0];}
   var vtm=texto.match(/VALOR\s*TOTAL\s*[:\s]*(R\$\s*)?([\d.,]+)/i)||texto.match(/TOTAL\s*[:\s]*(R\$\s*)?([\d.,]+)/i);
-  var valorTotal=vtm?(vtm[2]||vtm[1]||'').replace(/[R$\s]/g,'').replace('.','').replace(',','.').trim():'';
+  var valorTotal=vtm?String(_numBR(vtm[2]||vtm[1]||'')||''):'';
   var itens=[];
-  var unidades='UN|UNID|AMP|AMPOLA|FR|FRASCO|CX|CAIXA|CP|CPR|COMP|ML|KG|G|VD|PC|PCT|BIS|CAP|SER|BCA|FAR|SAC|TB|TUBO|BLISTER|BL';
-  linhas.forEach(function(lRaw){
+  var unidadesArr=['UN','UNID','AMP','AMPOLA','FR','FRASCO','CX','CAIXA','CP','CPR','COMP','ML','KG','G','VD','PC','PCT','BIS','CAP','SER','BCA','FAR','SAC','TB','TUBO','BLISTER','BL'];
+  var unidadesSet={};unidadesArr.forEach(function(u){unidadesSet[u]=true;});
+  var unidades=unidadesArr.join('|');
+  // Número em formato brasileiro: vírgula = separador decimal, ponto = separador de milhar (nunca o
+  // contrário). Sem isso, "15.000" (quinze mil) virava 15 — o ponto era lido como ponto decimal.
+  // Só quando NÃO há vírgula e o padrão é claramente milhar (grupos de 3 dígitos, ex. "15.000",
+  // "1.234.567") os pontos são removidos; um único ponto com 1-2 dígitos (ex. "15.5") continua decimal.
+  function _numBR(tok){
+    var t=String(tok||'').trim();
+    if(t.indexOf(',')>=0)return parseFloat(t.replace(/\./g,'').replace(',','.'))||0;
+    if(/^\d{1,3}(?:\.\d{3})+$/.test(t))return parseFloat(t.replace(/\./g,''))||0;
+    return parseFloat(t)||0;
+  }
+  var NUM_BR_RE='\\d{1,3}(?:\\.\\d{3})*(?:,\\d+)?|\\d+(?:[.,]\\d+)?';
+  // DANFE às vezes traz o valor unitário com até 10 casas decimais (campo vUnCom da NF-e) — não só 2.
+  function achaValorMonetario(toks){for(var j=0;j<toks.length;j++){if(new RegExp('^(?:'+NUM_BR_RE+')$').test(toks[j])&&/[.,]/.test(toks[j]))return _numBR(toks[j]);}return 0;}
+  // Lote/validade: nem sempre estão na mesma linha da tabela — em muitas DANFEs vêm em "Dados Adicionais
+  // do Produto" logo abaixo do item (rastreabilidade ANVISA). Procura primeiro na própria linha do item,
+  // senão espia a linha seguinte (best-effort — o campo continua editável na tela se não achar nada).
+  // Aceita as abreviações comuns de validade/vencimento (VAL/VENC/VENCTO/VENCIMENTO/VALIDADE) — \b nos dois
+  // lados evita casar "VAL" dentro de "VALOR". Aceita MM/AAAA (guarda direto) ou DD/MM/AAAA (descarta o dia).
+  function achaLoteValidade(linhaAtual,linhaSeguinte){
+    var alvo=linhaAtual+' '+(linhaSeguinte||'');
+    var loteM=alvo.match(/LOTE[:\s]*([A-Z0-9][A-Z0-9\-\.]{1,19})/i);
+    var rotulo='\\b(?:VALIDADE|VENCIMENTO|VENCTO|VENC|VAL)\\b[.:\\s]*';
+    // Tenta DD/MM/AAAA primeiro (3 grupos, ano com 4 dígitos); só cai pra MM/AAAA ou MM/AA (2 grupos) se
+    // não achar — testar os dois juntos numa regex só era ambíguo e cortava o ano de "08/2027" ao meio.
+    var validDMA=alvo.match(new RegExp(rotulo+'(\\d{2})[\\/\\-](\\d{2})[\\/\\-](\\d{4})\\b','i'));
+    var validMA=!validDMA&&alvo.match(new RegExp(rotulo+'(\\d{2})[\\/\\-](\\d{2,4})\\b','i'));
+    var validade='';
+    if(validDMA)validade=validDMA[2]+'/'+validDMA[3];
+    else if(validMA)validade=validMA[1]+'/'+validMA[2];
+    return{lote:loteM?loteM[1]:'',validade:validade};
+  }
+  for(var li=0;li<linhas.length;li++){
+    var lRaw=linhas[li];
     var l=(lRaw||'').trim();
-    if(!l||l.length<5)return;
-    if(/^(item|descri|produto|c[oó]digo|quant|unidade|valor|total|cest|cean|ncm)\b/i.test(l))return; // linha de cabeçalho da tabela
+    if(!l||l.length<5)continue;
+    if(/^(item|descri|produto|c[oó]digo|quant|unidade|valor|total|cest|cean|ncm)\b/i.test(l))continue; // linha de cabeçalho da tabela
     // CEAN/EAN: sequência de 12-14 dígitos (código de barras); retira da linha antes de procurar qtd/unidade
     // pra não confundir o código com a quantidade.
     var ceanM=l.match(/\b(\d{12,14})\b/);
     var cean=ceanM?ceanM[1]:'';
     var lBusca=cean?l.replace(cean,' '):l;
-    var m1=lBusca.match(new RegExp('(.{4,70}?)\\s+(\\d+(?:[.,]\\d+)?)\\s*('+unidades+')\\b','i'));
-    if(!m1)return;
-    var desc=m1[1].replace(/^\d+\s+/,'').replace(/\s{2,}/g,' ').trim();
-    var qtd=parseFloat(m1[2].replace(',','.'));
-    if(desc.length<4||!(qtd>0)||qtd>=1000000)return;
-    if(/^(TOTAL|VALOR|PESO|FRETE|DESCONTO|SUBTOTAL)/i.test(desc))return;
-    // Valor unitário: primeiro valor em formato monetário (com centavos) DEPOIS da qtd/unidade na linha.
-    var resto=lBusca.slice(m1.index+m1[0].length);
-    var vM=resto.match(/\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2}/);
-    var vUnit=vM?parseFloat(vM[0].replace(/\./g,'').replace(',','.')):0;
-    itens.push({descricao:desc.toUpperCase(),qtd:qtd,unidade:m1[3].toUpperCase(),cean:cean,vUnit:vUnit||0});
-  });
+    var desc='',qtd=0,unidade='',vUnit=0,achou=false;
+    // TENTATIVA 1 (preferida): ordem real da DANFE — CÓDIGO/DESCRIÇÃO/NCM/CST/CFOP/UNID/QUANT/V.UNIT/V.TOTAL.
+    // Busca o token de UNIDADE (bate com a lista conhecida) seguido de um NÚMERO — como CFOP/NCM vêm
+    // ANTES da unidade (nunca depois), isso evita ler o CFOP como se fosse a quantidade (bug reportado:
+    // quantidade sempre saindo como um CFOP comum, ex. "5102").
+    var toks=lBusca.split(/\s+/).filter(Boolean);
+    for(var i=0;i<toks.length-1;i++){
+      var tUp=toks[i].toUpperCase().replace(/[^A-Z]/g,'');
+      if(unidadesSet[tUp]&&/^\d+(?:[.,]\d+)?$/.test(toks[i+1])){
+        var q1=_numBR(toks[i+1]);
+        if(!(q1>0)||q1>=1000000)continue;
+        var descToks=toks.slice(0,i);
+        while(descToks.length>1&&/^\d{1,8}$/.test(descToks[descToks.length-1]))descToks.pop(); // descarta código/NCM/CST/CFOP colados antes da unidade
+        var d1=descToks.join(' ').trim();
+        if(d1.length<4||/^(TOTAL|VALOR|PESO|FRETE|DESCONTO|SUBTOTAL)/i.test(d1))continue;
+        desc=d1;qtd=q1;unidade=tUp;vUnit=achaValorMonetario(toks.slice(i+2));achou=true;break;
+      }
+    }
+    // TENTATIVA 2 (fallback): layouts simples sem códigos fiscais — "descrição qtd unidade" (ordem antiga).
+    if(!achou){
+      var m1=lBusca.match(new RegExp('(.{4,70}?)\\s+(\\d+(?:[.,]\\d+)?)\\s*('+unidades+')\\b','i'));
+      if(m1){
+        var d2=m1[1].replace(/^\d+\s+/,'').replace(/\s{2,}/g,' ').trim();
+        var q2=_numBR(m1[2]);
+        if(d2.length>=4&&q2>0&&q2<1000000&&!/^(TOTAL|VALOR|PESO|FRETE|DESCONTO|SUBTOTAL)/i.test(d2)){
+          desc=d2;qtd=q2;unidade=m1[3].toUpperCase();
+          vUnit=achaValorMonetario(lBusca.slice(m1.index+m1[0].length).split(/\s+/).filter(Boolean));
+          achou=true;
+        }
+      }
+    }
+    if(!achou)continue;
+    var lv=achaLoteValidade(l,linhas[li+1]);
+    itens.push({descricao:desc.toUpperCase(),qtd:qtd,unidade:unidade,cean:cean,vUnit:vUnit||0,lote:lv.lote,validade:lv.validade});
+  }
   return{nNF:nNF,dataEmissao:dataEmissao,valorTotal:valorTotal,itens:itens};
 }
 
-// ---- Parte 2: comparação automática recebimento × nota fiscal (pura, testável) ----
-// Ao conciliar, o estoque passa a refletir a quantidade da NOTA FISCAL.
-// A diferença (divergência) fica registrada como pendente — só rastreia, não bloqueia.
-function conciliarRecebimentoNota(recebidos,faturados){
-  function agg(list){var m={};(list||[]).forEach(function(it){var id=it.medicamentoId;if(!id)return;if(!m[id])m[id]={medicamentoId:id,medicamentoNome:it.medicamentoNome||'',qtd:0,lote:it.lote||''};m[id].qtd+=parseInt(it.quantidade)||0;if(!m[id].lote&&it.lote)m[id].lote=it.lote;});return m;}
-  var R=agg(recebidos),F=agg(faturados);var rows=[];
-  // 1) medicamentos presentes nos dois -> comparação de quantidade (cenários 1,2,3)
-  Object.keys(R).forEach(function(id){
-    if(F[id]){var qr=R[id].qtd,qf=F[id].qtd;var st=qr===qf?'conciliado':(qf>qr?'fiscal_superior':'recebido_superior');
-      rows.push({medicamentoId:id,medicamentoNome:R[id].medicamentoNome,notaMedicamentoNome:F[id].medicamentoNome,qtdRecebida:qr,qtdFaturada:qf,status:st,lote:R[id].lote||'',justificativa:'',acaoTomada:''});}
-  });
-  var soRec=Object.keys(R).filter(function(id){return !F[id];});
-  var soFat=Object.keys(F).filter(function(id){return !R[id];});
-  var fatRest=soFat.slice();
-  // 2) sobra recebida: pareia por LOTE com sobra faturada -> Produto Divergente (cenário 6); senão Não Faturado (cenário 5)
-  soRec.forEach(function(rid){
-    var lote=R[rid].lote;
-    var par=lote?fatRest.find(function(fid){return F[fid].lote&&F[fid].lote===lote;}):null;
-    if(par){rows.push({medicamentoId:rid,medicamentoNome:R[rid].medicamentoNome,notaMedicamentoId:par,notaMedicamentoNome:F[par].medicamentoNome,qtdRecebida:R[rid].qtd,qtdFaturada:F[par].qtd,status:'divergente',lote:lote,justificativa:'',acaoTomada:''});
-      fatRest=fatRest.filter(function(fid){return fid!==par;});}
-    else{rows.push({medicamentoId:rid,medicamentoNome:R[rid].medicamentoNome,notaMedicamentoNome:'',qtdRecebida:R[rid].qtd,qtdFaturada:0,status:'nao_faturado',lote:R[rid].lote||'',justificativa:'',acaoTomada:''});}
-  });
-  // 3) sobra faturada restante: Produto Faturado Não Recebido (cenário 4)
-  fatRest.forEach(function(fid){rows.push({medicamentoId:fid,medicamentoNome:F[fid].medicamentoNome,notaMedicamentoNome:F[fid].medicamentoNome,qtdRecebida:0,qtdFaturada:F[fid].qtd,status:'nao_recebido',lote:F[fid].lote||'',justificativa:'',acaoTomada:''});});
-  return rows;
-}
-function _concStatusGeral(rows){
-  var divs=(rows||[]).filter(function(r){return r.status!=='conciliado';});
-  if(divs.length===0)return'conciliado';
-  return divs.every(function(r){return r.acaoTomada&&r.acaoTomada!=='';})?'resolvido':'divergencia_aberta';
-}
-function _concItemInfo(s){
-  if(s==='conciliado')return{label:'Conciliado',ico:'✅',cor:'#059669',bg:'#DCFCE7'};
-  if(s==='fiscal_superior')return{label:'Qtd Fiscal Superior ao Recebimento',ico:'⚠️',cor:'#B45309',bg:'#FEF3C7'};
-  if(s==='recebido_superior')return{label:'Qtd Recebida Superior à Faturada',ico:'⚠️',cor:'#B45309',bg:'#FEF3C7'};
-  if(s==='nao_recebido')return{label:'Produto Faturado Não Recebido',ico:'⚠️',cor:'#DC2626',bg:'#FEE2E2'};
-  if(s==='nao_faturado')return{label:'Produto Recebido Não Faturado',ico:'⚠️',cor:'#B45309',bg:'#FEF3C7'};
-  if(s==='divergente')return{label:'Produto Divergente',ico:'🚨',cor:'#DC2626',bg:'#FEE2E2'};
-  return{label:s,ico:'',cor:'#64748B',bg:'#F1F5F9'};
-}
-function _concAcoes(s){
-  var esp=[];
-  if(s==='fiscal_superior')esp=['Aguardar entrega complementar','Solicitar correção','Registrar justificativa'];
-  else if(s==='recebido_superior')esp=['Solicitar correção','Solicitar faturamento complementar','Registrar justificativa'];
-  else if(s==='nao_recebido')esp=['Aguardar entrega','Solicitar correção','Cancelar item'];
-  else if(s==='nao_faturado')esp=['Solicitar nota complementar','Registrar justificativa'];
-  else if(s==='divergente')esp=['Solicitar correção','Registrar devolução','Registrar justificativa'];
-  if(esp.length===0)return[];
-  return['Marcar em análise'].concat(esp);// disponível em toda divergência — mantém aberta p/ investigação, sem resolver ainda
-}
-function _concGeralInfo(s){
-  if(s==='conciliado')return{label:'Conciliado',cor:'#059669',bg:'#DCFCE7'};
-  if(s==='resolvido')return{label:'Resolvido',cor:'#2563EB',bg:'#DBEAFE'};
-  if(s==='em_analise')return{label:'Em análise',cor:'#B45309',bg:'#FEF3C7'};
-  return{label:'Divergência Aberta',cor:'#DC2626',bg:'#FEE2E2'};
-}
-// ---- Parte 3: status de fluxo por item (auditoria/painel) — vocabulário completo do módulo ----
-var _ACAO_STATUS_FLUXO={
-  'Aguardar entrega complementar':'aguardando_entrega_complementar',
-  'Aguardar entrega':'aguardando_entrega_complementar',
-  'Solicitar correção':'aguardando_correcao',
-  'Solicitar faturamento complementar':'aguardando_correcao',
-  'Solicitar nota complementar':'aguardando_correcao',
-  'Registrar justificativa':'resolvido',
-  'Registrar devolução':'resolvido',
-  'Cancelar item':'cancelado'
-};
-function _concItemStatusFluxo(item){
-  if(!item)return'divergencia_aberta';
-  if(item.status==='conciliado')return'conciliado';
-  if(item.acaoTomada)return _ACAO_STATUS_FLUXO[item.acaoTomada]||'resolvido';
-  if(item.emAnalise)return'em_analise';
-  return'divergencia_aberta';
-}
-function _statusFluxoInfo(s){
-  if(s==='pendente_conciliacao')return{label:'Pendente de Conciliação',cor:'#DC2626',bg:'#FEE2E2'};
-  if(s==='conciliado')return{label:'Conciliado',cor:'#059669',bg:'#DCFCE7'};
-  if(s==='divergencia_aberta')return{label:'Divergência Aberta',cor:'#DC2626',bg:'#FEE2E2'};
-  if(s==='em_analise')return{label:'Em Análise',cor:'#7C3AED',bg:'#EDE9FE'};
-  if(s==='aguardando_correcao')return{label:'Aguardando Correção',cor:'#B45309',bg:'#FEF3C7'};
-  if(s==='aguardando_entrega_complementar')return{label:'Aguardando Entrega Complementar',cor:'#B45309',bg:'#FEF3C7'};
-  if(s==='resolvido')return{label:'Resolvido',cor:'#2563EB',bg:'#DBEAFE'};
-  if(s==='cancelado')return{label:'Cancelado',cor:'#64748B',bg:'#F1F5F9'};
-  return{label:s||'—',cor:'#64748B',bg:'#F1F5F9'};
-}
-var STATUS_FLUXO_TODOS=['pendente_conciliacao','conciliado','divergencia_aberta','em_analise','aguardando_correcao','aguardando_entrega_complementar','resolvido','cancelado'];
-
-function _fDsimples(d){if(!d)return'';var p=String(d).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
-
-// ---- Parte 3: Painel de Divergências — linhas puras (pendentes de conciliação + itens de todas as conciliações) ----
-function _buildLinhasDivergencias(recs,concs){
-  var linhas=[];
-  (recs||[]).filter(function(r){return (r.status||'pendente')==='pendente';}).forEach(function(r){
-    (r.itens||[]).forEach(function(it,i){
-      linhas.push({key:'rec_'+r.id+'_'+i,data:r.data||'',fornecedor:r.fornecedor||'',notaFiscal:'',produto:it.medicamentoNome||'',tipo:'—',responsavel:r.responsavel||r.criadoPor||'',statusFluxo:'pendente_conciliacao'});
+// ===== Novo fluxo de Recebimento + Conciliação (redesenho) =====
+// Motor de matching — função PURA e testável (sem Firestore): agrega a quantidade FÍSICA pendente de
+// conciliação (por medicamento, somando todos os recebimentos ainda não conciliados) e a quantidade que
+// aparece nas notas fiscais importadas (por medicamento, casando a descrição da nota ao cadastro via
+// _matchItemMeds quando o item ainda não tem medId resolvido), e classifica cada medicamento em:
+//  - conciliado: recebido bate exatamente com a nota
+//  - divergência de quantidade: recebido e nota são do mesmo medicamento mas quantidades diferentes
+//  - não encontrado: a nota cita um medicamento que não tem NENHUM recebimento pendente correspondente
+// Medicamentos recebidos que ainda não têm nenhuma nota (aguardando a nota chegar) NÃO entram em nenhuma
+// lista — continuam simplesmente pendentes, sem gerar "divergência" — só se torna um problema quando as
+// DUAS pontas existem e não batem, ou quando a nota aponta algo que nunca foi recebido.
+function _matchNotasRecebimentos(recebimentosPendentes,notasPendentes,medications){
+  var recebidoPorMed={};
+  (recebimentosPendentes||[]).forEach(function(rec){
+    (rec.itens||[]).forEach(function(it,idx){
+      if(!it.medicamentoId||it.conciliado)return;
+      var q=parseInt(it.quantidade)||0;if(q<=0)return;
+      if(!recebidoPorMed[it.medicamentoId])recebidoPorMed[it.medicamentoId]={qtd:0,nome:it.medicamentoNome||'',fontes:[]};
+      recebidoPorMed[it.medicamentoId].qtd+=q;
+      recebidoPorMed[it.medicamentoId].fontes.push({recId:rec.id,itemIdx:idx});
     });
   });
-  (concs||[]).forEach(function(cc){
-    (cc.itens||[]).forEach(function(it,i){
-      linhas.push({key:'conc_'+cc.id+'_'+i,data:cc.notaDataEmissao||(cc.criadoEm||'').slice(0,10),fornecedor:cc.fornecedor||'',notaFiscal:cc.notaNumero||'',produto:it.medicamentoNome||it.notaMedicamentoNome||'',tipo:_concItemInfo(it.status).label,responsavel:cc.criadoPor||'',statusFluxo:_concItemStatusFluxo(it)});
+  var notaPorMed={};
+  (notasPendentes||[]).forEach(function(nota){
+    (nota.itens||[]).forEach(function(it,idx){
+      if(it.status==='conciliado'||it.status==='divergencia'||it.status==='nao_encontrado')return;
+      var medId=it.medId;
+      if(!medId){var cand=_matchItemMeds(it.descricao,medications,1)[0];if(cand&&cand.score>=45)medId=cand.m.id;}
+      var q=Math.round(it.qtd)||0;if(q<=0)return;
+      if(!medId){notaPorMed['__semmatch_'+nota.id+'_'+idx]={qtd:q,nome:it.descricao,semMatch:true,fontes:[{notaId:nota.id,itemIdx:idx}]};return;}
+      if(!notaPorMed[medId])notaPorMed[medId]={qtd:0,nome:it.descricao,fontes:[]};
+      notaPorMed[medId].qtd+=q;
+      notaPorMed[medId].fontes.push({notaId:nota.id,itemIdx:idx,medId:medId});
     });
   });
-  return linhas;
-}
-function _filtrarDivergencias(linhas,f){
-  f=f||{};
-  return (linhas||[]).filter(function(l){
-    if(f.de&&(l.data||'')<f.de)return false;
-    if(f.ate&&(l.data||'')>f.ate)return false;
-    if(f.fornecedor&&(l.fornecedor||'').toLowerCase().indexOf(f.fornecedor.toLowerCase())<0)return false;
-    if(f.produto&&(l.produto||'').toLowerCase().indexOf(f.produto.toLowerCase())<0)return false;
-    if(f.status&&f.status!=='todos'&&l.statusFluxo!==f.status)return false;
-    return true;
+  var conciliados=[],divergencias=[],naoEncontrados=[];
+  var medIds={};
+  Object.keys(recebidoPorMed).forEach(function(k){medIds[k]=true;});
+  Object.keys(notaPorMed).forEach(function(k){if(k.indexOf('__semmatch_')!==0)medIds[k]=true;});
+  Object.keys(medIds).forEach(function(medId){
+    var rec=recebidoPorMed[medId],nf=notaPorMed[medId];
+    var qtdRecebida=rec?rec.qtd:0,qtdNota=nf?nf.qtd:0;
+    var nome=(rec&&rec.nome)||(nf&&nf.nome)||'';
+    if(qtdRecebida>0&&qtdNota>0){
+      if(qtdRecebida===qtdNota)conciliados.push({medicamentoId:medId,medicamentoNome:nome,qtd:qtdRecebida,recFontes:rec.fontes,notaFontes:nf.fontes});
+      else divergencias.push({medicamentoId:medId,medicamentoNome:nome,qtdRecebida:qtdRecebida,qtdNota:qtdNota,diferenca:qtdNota-qtdRecebida,recFontes:rec.fontes,notaFontes:nf.fontes});
+    }else if(qtdRecebida===0&&qtdNota>0){
+      naoEncontrados.push({medicamentoNome:nome,qtdNota:qtdNota,notaFontes:nf.fontes});
+    }
   });
+  Object.keys(notaPorMed).forEach(function(k){
+    if(k.indexOf('__semmatch_')!==0)return;
+    var x=notaPorMed[k];
+    naoEncontrados.push({medicamentoNome:x.nome,qtdNota:x.qtd,notaFontes:x.fontes});
+  });
+  return{conciliados:conciliados,divergencias:divergencias,naoEncontrados:naoEncontrados};
 }
 
-// ---- Parte 3: Relatórios — filtro comum (período/fornecedor/produto) + 7 construtores de linhas (puros) ----
-function _filtrarRecsConcs(recs,concs,f){
-  f=f||{};
-  var recsF=(recs||[]).filter(function(r){
-    if(f.de&&(r.data||'')<f.de)return false;
-    if(f.ate&&(r.data||'')>f.ate)return false;
-    if(f.fornecedor&&(r.fornecedor||'').toLowerCase().indexOf(f.fornecedor.toLowerCase())<0)return false;
-    return true;
-  });
-  var concsF=(concs||[]).filter(function(cc){
-    var d=cc.notaDataEmissao||(cc.criadoEm||'').slice(0,10);
-    if(f.de&&(d||'')<f.de)return false;
-    if(f.ate&&(d||'')>f.ate)return false;
-    if(f.fornecedor&&(cc.fornecedor||'').toLowerCase().indexOf(f.fornecedor.toLowerCase())<0)return false;
-    return true;
-  });
-  if(f.produto){
-    var pl=f.produto.toLowerCase();
-    recsF=recsF.map(function(r){return Object.assign({},r,{itens:(r.itens||[]).filter(function(it){return (it.medicamentoNome||'').toLowerCase().indexOf(pl)>=0;})});}).filter(function(r){return r.itens.length>0;});
-    concsF=concsF.map(function(cc){return Object.assign({},cc,{itens:(cc.itens||[]).filter(function(it){return (it.medicamentoNome||it.notaMedicamentoNome||'').toLowerCase().indexOf(pl)>=0;})});}).filter(function(cc){return cc.itens.length>0;});
-  }
-  return{recs:recsF,concs:concsF};
-}
-function relRecebimentosPendentes(recs){
-  return (recs||[]).filter(function(r){return (r.status||'pendente')==='pendente';}).map(function(r){return{data:r.data||'',fornecedor:r.fornecedor||'',responsavel:r.responsavel||r.criadoPor||'',itens:(r.itens||[]).length};});
-}
-function relDivergenciasPorFornecedor(concs){
-  var m={};(concs||[]).forEach(function(cc){(cc.itens||[]).forEach(function(it){if(it.status==='conciliado')return;var f=cc.fornecedor||'—';m[f]=(m[f]||0)+1;});});
-  return Object.keys(m).map(function(f){return{fornecedor:f,divergencias:m[f]};}).sort(function(a,b){return b.divergencias-a.divergencias;});
-}
-function relDivergenciasPorPeriodo(concs){
-  var m={};(concs||[]).forEach(function(cc){(cc.itens||[]).forEach(function(it){if(it.status==='conciliado')return;var mes=(cc.notaDataEmissao||cc.criadoEm||'').slice(0,7)||'—';m[mes]=(m[mes]||0)+1;});});
-  return Object.keys(m).sort().map(function(mes){return{periodo:mes,divergencias:m[mes]};});
-}
-function relDivergenciasPorProduto(concs){
-  var m={};(concs||[]).forEach(function(cc){(cc.itens||[]).forEach(function(it){if(it.status==='conciliado')return;var p=it.medicamentoNome||it.notaMedicamentoNome||'—';m[p]=(m[p]||0)+1;});});
-  return Object.keys(m).map(function(p){return{produto:p,divergencias:m[p]};}).sort(function(a,b){return b.divergencias-a.divergencias;});
-}
-function relEntregasComplementares(concs){
-  var rows=[];(concs||[]).forEach(function(cc){(cc.itens||[]).forEach(function(it){if(_concItemStatusFluxo(it)==='aguardando_entrega_complementar')rows.push({notaNumero:cc.notaNumero||'',fornecedor:cc.fornecedor||'',produto:it.medicamentoNome||it.notaMedicamentoNome||'',recebido:it.qtdRecebida||0,faturado:it.qtdFaturada||0});});});
-  return rows;
-}
-function relNotasConciliadas(concs){
-  return (concs||[]).filter(function(cc){return cc.statusGeral==='conciliado';}).map(function(cc){return{notaNumero:cc.notaNumero||'',fornecedor:cc.fornecedor||'',emissao:cc.notaDataEmissao||'',itens:(cc.itens||[]).length};});
-}
-function relNotasPendentes(concs){
-  return (concs||[]).filter(function(cc){return cc.statusGeral==='divergencia_aberta'||cc.statusGeral==='em_analise';}).map(function(cc){return{notaNumero:cc.notaNumero||'',fornecedor:cc.fornecedor||'',emissao:cc.notaDataEmissao||'',status:_concGeralInfo(cc.statusGeral).label};});
-}
-var RELATORIOS_RECEBIMENTO=[
-  {id:'pendentes',label:'Recebimentos pendentes de conciliação',colunas:['Data','Fornecedor','Responsável','Itens'],build:function(recs,concs){return relRecebimentosPendentes(recs).map(function(r){return[_fDsimples(r.data),r.fornecedor,r.responsavel,r.itens];});}},
-  {id:'div_forn',label:'Divergências por fornecedor',colunas:['Fornecedor','Divergências'],build:function(recs,concs){return relDivergenciasPorFornecedor(concs).map(function(r){return[r.fornecedor,r.divergencias];});}},
-  {id:'div_periodo',label:'Divergências por período',colunas:['Período (mês)','Divergências'],build:function(recs,concs){return relDivergenciasPorPeriodo(concs).map(function(r){return[r.periodo,r.divergencias];});}},
-  {id:'div_produto',label:'Divergências por produto',colunas:['Produto','Divergências'],build:function(recs,concs){return relDivergenciasPorProduto(concs).map(function(r){return[r.produto,r.divergencias];});}},
-  {id:'entregas_compl',label:'Entregas complementares',colunas:['Nota Fiscal','Fornecedor','Produto','Recebido','Faturado'],build:function(recs,concs){return relEntregasComplementares(concs).map(function(r){return[r.notaNumero,r.fornecedor,r.produto,r.recebido,r.faturado];});}},
-  {id:'notas_conc',label:'Notas conciliadas',colunas:['Nota Fiscal','Fornecedor','Emissão','Itens'],build:function(recs,concs){return relNotasConciliadas(concs).map(function(r){return[r.notaNumero,r.fornecedor,_fDsimples(r.emissao),r.itens];});}},
-  {id:'notas_pend',label:'Notas pendentes',colunas:['Nota Fiscal','Fornecedor','Emissão','Status'],build:function(recs,concs){return relNotasPendentes(concs).map(function(r){return[r.notaNumero,r.fornecedor,_fDsimples(r.emissao),r.status];});}}
-];
-
-// ---- Parte 3: exportação genérica de relatório (Excel via XLSX; PDF via impressão do navegador) ----
-function exportRelatorioXL(titulo,colunas,linhas,arquivoSlug){
-  var rows=[colunas].concat(linhas);
-  var wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),titulo.slice(0,31));
-  XLSX.writeFile(wb,arquivoSlug+'_'+todayStr()+'.xlsx');
-}
-function _escHtml(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-function exportRelatorioPDF(titulo,colunas,linhas){
-  var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+_escHtml(titulo)+'</title><style>body{font-family:Arial,sans-serif;padding:20px;color:#1E293B}h2{color:#1351B4;margin-bottom:2px}table{width:100%;border-collapse:collapse;font-size:12px;margin-top:12px}th,td{border:1px solid #CBD5E1;padding:6px 8px;text-align:left}th{background:#EFF6FF}</style></head><body>';
-  html+='<h2>'+_escHtml(titulo)+'</h2><p>Gerado em '+new Date().toLocaleDateString('pt-BR')+'</p><table><thead><tr>';
-  colunas.forEach(function(c){html+='<th>'+_escHtml(c)+'</th>';});
-  html+='</tr></thead><tbody>';
-  linhas.forEach(function(l){html+='<tr>';l.forEach(function(v){html+='<td>'+_escHtml(v)+'</td>';});html+='</tr>';});
-  html+='</tbody></table></body></html>';
-  _imprimirDoc(html);
-}
-
-function ConciliacaoFiscal(props){
-  var user=props.user;var medications=props.medications||[];var B='#1351B4';
-  function blankNfItem(){_nfSeq++;return{key:'nf'+_nfSeq,medId:'',medNome:'',busca:'',qtd:'',lote:'',validade:''};}
-  var _num=useState('');var notaNumero=_num[0];var setNotaNumero=_num[1];
-  var _serie=useState('');var notaSerie=_serie[0];var setNotaSerie=_serie[1];
-  var _emis=useState('');var notaEmissao=_emis[0];var setNotaEmissao=_emis[1];
-  var _forn=useState('');var fornecedor=_forn[0];var setFornecedor=_forn[1];
-  var _valor=useState('');var valorTotal=_valor[0];var setValorTotal=_valor[1];
-  var _anexo=useState('');var anexo=_anexo[0];var setAnexo=_anexo[1];
-  var _recSel=useState('');var recSel=_recSel[0];var setRecSel=_recSel[1];
-  var _nfItens=useState([blankNfItem()]);var nfItens=_nfItens[0];var setNfItens=_nfItens[1];
-  var _foco=useState(null);var focoItem=_foco[0];var setFocoItem=_foco[1];
-  var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];
+function ImportarNotas(props){
+  var user=props.user;var medications=props.medications||[];
+  var B='#1351B4';
+  var podeExcluirNota=user.role==='tecnico'||user.role==='gestor';
+  var _notas=useState([]);var notas=_notas[0];var setNotas=_notas[1];
   var _recs=useState([]);var recs=_recs[0];var setRecs=_recs[1];
-  var _concs=useState([]);var concs=_concs[0];var setConcs=_concs[1];
-  var _concAtual=useState(null);var concAtual=_concAtual[0];var setConcAtual=_concAtual[1];// {id, itens, statusGeral,...}
-  var _det=useState(null);var detalhe=_det[0];var setDetalhe=_det[1];
-  // Importação de PDF da nota fiscal — fluxo independente do "Conciliar" manual acima: registra a nota
-  // direto (soma ao estoque), sem depender de já existir um Recebimento Físico pendente pra vincular.
-  var _pdfItens=useState([]);var pdfItens=_pdfItens[0];var setPdfItens=_pdfItens[1];
-  var _pdfFoco=useState(null);var pdfFoco=_pdfFoco[0];var setPdfFoco=_pdfFoco[1];
-  var _pdfProcessando=useState(false);var pdfProcessando=_pdfProcessando[0];var setPdfProcessando=_pdfProcessando[1];
-  var _pdfSaving=useState(false);var pdfSaving=_pdfSaving[0];var setPdfSaving=_pdfSaving[1];
-  var _pdfErro=useState('');var pdfErro=_pdfErro[0];var setPdfErro=_pdfErro[1];
-  var _pdfOk=useState('');var pdfOk=_pdfOk[0];var setPdfOk=_pdfOk[1];
-  var _pdfNumero=useState('');var pdfNumero=_pdfNumero[0];var setPdfNumero=_pdfNumero[1];
-  var _pdfEmissao=useState('');var pdfEmissao=_pdfEmissao[0];var setPdfEmissao=_pdfEmissao[1];
-  var _pdfForn=useState('');var pdfForn=_pdfForn[0];var setPdfForn=_pdfForn[1];
-  var _pdfValor=useState('');var pdfValor=_pdfValor[0];var setPdfValor=_pdfValor[1];
-  var _pdfProgresso=useState('');var pdfProgresso=_pdfProgresso[0];var setPdfProgresso=_pdfProgresso[1];
+  var _processando=useState(false);var processando=_processando[0];var setProcessando=_processando[1];
+  var _progresso=useState('');var progresso=_progresso[0];var setProgresso=_progresso[1];
+  var _erro=useState('');var erro=_erro[0];var setErro=_erro[1];
+  var _resumo=useState(null);var resumo=_resumo[0];var setResumo=_resumo[1];// último resultado do matching (Passo 4)
+  var _rodandoMatch=useState(false);var rodandoMatch=_rodandoMatch[0];var setRodandoMatch=_rodandoMatch[1];
+  var _buscaVinculo=useState({});var buscaVinculo=_buscaVinculo[0];var setBuscaVinculo=_buscaVinculo[1];// key notaId|idx -> texto digitado (busca manual)
 
   useEffect(function(){
-    var u1=db.collection('recebimentos').orderBy('criadoEm','desc').limit(200).onSnapshot(function(sn){setRecs(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));},function(){});
-    var u2=db.collection('conciliacoes').orderBy('criadoEm','desc').limit(200).onSnapshot(function(sn){setConcs(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));},function(){});
+    var u1=db.collection('notas_fiscais').orderBy('criadoEm','desc').limit(100).onSnapshot(function(sn){setNotas(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));},function(){});
+    var u2=db.collection('recebimentos').orderBy('criadoEm','desc').limit(200).onSnapshot(function(sn){setRecs(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));},function(){});
     return function(){try{u1();}catch(e){}try{u2();}catch(e){}};
   },[]);
 
-  function fD(d){if(!d)return'';var p=String(d).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
-  // Auditoria: toda ação loga usuário/data/hora/ação + valor anterior/novo. Logs em logs_acesso NUNCA são apagados (sem UI de exclusão).
-  function logAcao(acao,det,valorAnterior,valorNovo){try{db.collection('logs_acesso').add({uid:user.uid||'',nome:user.name||'',cargo:user.role||'',acao:acao,detalhe:det||'',valorAnterior:(valorAnterior===undefined?null:valorAnterior),valorNovo:(valorNovo===undefined?null:valorNovo),criadoEm:new Date().toISOString()}).catch(function(){});}catch(_){}}
-  function setNf(key,patch){setNfItens(function(arr){return arr.map(function(it){return it.key===key?Object.assign({},it,patch):it;});});}
-  function addNf(){setNfItens(function(arr){return arr.concat([blankNfItem()]);});}
-  function delNf(key){setNfItens(function(arr){return arr.length<=1?arr:arr.filter(function(it){return it.key!==key;});});}
-  function escolherMed(key,m){setNf(key,{medId:m.id,medNome:m.nome,busca:''});setFocoItem(null);}
+  function logAcao(acao,det){try{db.collection('logs_acesso').add({uid:user.uid||'',nome:user.name||'',cargo:user.role||'',acao:acao,detalhe:det||'',criadoEm:new Date().toISOString()}).catch(function(){});}catch(_){}}
 
-  // ---- Importação de PDF da nota fiscal ----
-  function setPdfItem(key,patch){setPdfItens(function(arr){return arr.map(function(it){return it.key===key?Object.assign({},it,patch):it;});});}
-  function delPdfItem(key){setPdfItens(function(arr){return arr.filter(function(it){return it.key!==key;});});}
-  function escolherMedPdf(key,m){setPdfItem(key,{medId:m.id,medNome:m.nome,busca:'',sugestoes:[]});setPdfFoco(null);}
-  function toggleConciliadoPdf(key){setPdfItem(key,{conciliado:!pdfItens.find(function(it){return it.key===key;}).conciliado});}
-
-  async function importarPDFNota(e){
-    var file=e.target.files&&e.target.files[0];if(!file)return;
-    if(!file.name.toLowerCase().endsWith('.pdf')){setPdfErro('Selecione um arquivo .pdf da nota fiscal.');e.target.value='';return;}
-    setPdfErro('');setPdfOk('');setPdfProcessando(true);setPdfProgresso('Lendo o PDF...');
+  async function processarUmPDF(file){
     var pdfLib=window.pdfjsLib;
-    if(!pdfLib){setPdfErro('Biblioteca de leitura de PDF não carregada. Recarregue a página.');setPdfProcessando(false);setPdfProgresso('');return;}
+    if(!pdfLib)throw new Error('Biblioteca de leitura de PDF não carregada. Recarregue a página.');
     pdfLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    try{
-      var buf=await file.arrayBuffer();
-      var pdf=await pdfLib.getDocument({data:buf}).promise;
-      var linhas=await _extrairLinhasPDF(pdf);
-      // Nota escaneada (imagem, sem texto embutido): o pdf.js não extrai nada útil — cai pro OCR.
-      var textoExtraido=linhas.join(' ').trim();
-      if(textoExtraido.length<30){
-        if(!window.Tesseract){setPdfErro('Este PDF parece ser uma imagem escaneada e a biblioteca de OCR não carregou. Recarregue a página e tente de novo.');setPdfProcessando(false);setPdfProgresso('');e.target.value='';return;}
-        setPdfProgresso('PDF sem texto — lendo por OCR (pode demorar um pouco)...');
-        linhas=await _ocrPaginasPDF(pdf,setPdfProgresso);
-      }
-      setPdfProgresso('Identificando medicamentos...');
-      var parsed=_parsearPDFNotaConciliacao(linhas);
-      if(parsed.itens.length===0){setPdfErro('Não foi possível identificar medicamentos no PDF. Confira o arquivo — você ainda pode conferir manualmente na seção acima.');setPdfProcessando(false);setPdfProgresso('');e.target.value='';return;}
-      setPdfNumero(parsed.nNF);setPdfEmissao(parsed.dataEmissao);setPdfValor(parsed.valorTotal);
-      setPdfItens(parsed.itens.map(function(it){
-        // Mesmo matcher usado em Gerenciar Atas/Comparação (siglas + concentração, mais robusto que
-        // busca simples): sugere os candidatos do cadastro mais parecidos com a descrição da nota.
-        var candidatos=_matchItemMeds(it.descricao,medications,5);
-        var top=candidatos[0];
-        var med=(top&&top.score>=80)?top.m:null; // só auto-vincula com confiança alta; o resto fica pra revisão
-        _pdfItSeq++;
-        return{key:'pdfit'+_pdfItSeq,xProd:it.descricao,qtd:String(Math.round(it.qtd)),unidade:it.unidade,cean:it.cean||'',vUnit:it.vUnit||0,
-          medId:med?med.id:'',medNome:med?med.nome:'',busca:'',lote:'',validade:'',conciliado:false,
-          sugestoes:med?[]:candidatos.filter(function(x){return !med||x.m.id!==med.id;})};
-      }));
-      setPdfOk(parsed.itens.length+' item(ns) identificado(s) no PDF! Confira os vínculos, marque os conciliados e registre.');
-      setTimeout(function(){setPdfOk('');},5000);
-    }catch(ex){setPdfErro('Erro ao ler o PDF: '+((ex&&ex.message)?ex.message:ex));}
-    setPdfProcessando(false);setPdfProgresso('');e.target.value='';
+    var buf=await file.arrayBuffer();
+    var pdf=await pdfLib.getDocument({data:buf}).promise;
+    var linhas=await _extrairLinhasPDF(pdf);
+    var textoExtraido=linhas.join(' ').trim();
+    if(textoExtraido.length<30){
+      if(!window.Tesseract)throw new Error('"'+file.name+'": parece uma nota escaneada e o OCR não carregou.');
+      setProgresso('"'+file.name+'": sem texto — lendo por OCR...');
+      linhas=await _ocrPaginasPDF(pdf,function(p){setProgresso('"'+file.name+'": '+p);});
+    }
+    var parsed=_parsearPDFNotaConciliacao(linhas);
+    if(parsed.itens.length===0)throw new Error('"'+file.name+'": nenhum medicamento identificado.');
+    var itensComMatch=parsed.itens.map(function(it){
+      var cand=_matchItemMeds(it.descricao,medications,1)[0];
+      var med=(cand&&cand.score>=80)?cand.m:null;
+      return{descricao:it.descricao,qtd:it.qtd,unidade:it.unidade,cean:it.cean||'',vUnit:it.vUnit||0,lote:it.lote||'',validade:it.validade||'',medId:med?med.id:'',medNome:med?med.nome:'',status:'pendente'};
+    });
+    return{nfNumero:parsed.nNF,dataEmissao:parsed.dataEmissao,valorTotal:parsed.valorTotal,itens:itensComMatch,nomeArquivo:file.name,status:'pendente',criadoEm:new Date().toISOString(),criadoPor:user.name||'',criadoPorId:user.uid||''};
   }
 
-  // Registra a nota importada: TODOS os itens vinculados a um medicamento entram no estoque (batch
-  // atômico, mesmo padrão do Recebimento Físico); os marcados "conciliado" ficam OK, os demais viram
-  // divergência (aparecem no Painel de Divergências) e desaparecem sozinhos quando o estoque zerar.
-  async function registrarNotaImportada(){
-    var validos=pdfItens.filter(function(it){return it.medId&&(parseFloat(it.qtd)||0)>0;});
-    if(validos.length===0){setPdfErro('Vincule ao menos um item a um medicamento do cadastro antes de registrar.');return;}
-    setPdfSaving(true);
+  async function importarPDFs(e){
+    var files=Array.from((e.target.files)||[]);
+    if(!files.length)return;
+    setErro('');setResumo(null);setProcessando(true);
+    var novasNotas=[];var falhas=[];
+    for(var i=0;i<files.length;i++){
+      var f=files[i];
+      setProgresso('Lendo '+(i+1)+'/'+files.length+': '+f.name+'...');
+      try{novasNotas.push(await processarUmPDF(f));}catch(ex){falhas.push((ex&&ex.message)||String(ex));}
+    }
+    var notasComId=[];
+    if(novasNotas.length){
+      setProgresso('Salvando '+novasNotas.length+' nota(s)...');
+      var batch=db.batch();
+      novasNotas.forEach(function(n){var ref=db.collection('notas_fiscais').doc();batch.set(ref,n);notasComId.push(Object.assign({id:ref.id},n));});
+      await batch.commit();
+      logAcao('notas_importadas_lote',novasNotas.length+' nota(s) importada(s) em lote'+(falhas.length?(' — '+falhas.length+' falha(s)'):''));
+    }
+    if(falhas.length)setErro(falhas.length+' arquivo(s) não importado(s): '+falhas.join(' · '));
+    setProgresso('');setProcessando(false);e.target.value='';
+    // Passa as notas recém-criadas direto (não espera o listener do Firestore atualizar o estado —
+    // rodar o matching aqui embaixo veria a lista velha, sem as notas que acabaram de ser salvas).
+    if(notasComId.length)await executarMatching(notasComId);
+  }
+
+  // Passo 3+4: roda o matching automático contra TODOS os recebimentos/notas ainda pendentes (não só os
+  // recém-importados — permite reprocessar depois que uma divergência antiga foi corrigida, por exemplo).
+  // notasExtras: notas recém-importadas nesta mesma chamada, que ainda não chegaram pelo listener.
+  async function executarMatching(notasExtras){
+    setRodandoMatch(true);setErro('');
     try{
+      var todasNotas=notas.concat(notasExtras||[]);
+      var recebimentosPendentes=recs.filter(function(r){return (r.status||'pendente')!=='conciliado';});
+      var notasPendentes=todasNotas.filter(function(n){return (n.status||'pendente')!=='processada';});
+      var resultado=_matchNotasRecebimentos(recebimentosPendentes,notasPendentes,medications);
       var now=new Date().toISOString();
       var batch=db.batch();
-      var rows=validos.map(function(it){
-        var qtdNum=Math.round(parseFloat(it.qtd))||0;
-        var entryRef=db.collection('entries').doc();
-        batch.set(entryRef,{
-          criadoEm:now,date:pdfEmissao||todayStr(),autorId:user.uid||'',autorNome:user.name||'',autorCargo:user.role||'',autorColor:user.color||B,
-          tipo:'entrada',medicamentoId:it.medId,medicamentoNome:it.medNome,quantidade:qtdNum,
-          lote:(it.lote||'').trim(),validade:_normValidade((it.validade||'').trim()),ean:it.cean||'',
-          observacao:'Nota Fiscal '+(pdfNumero||'(a verificar)')+' — importação PDF'+(it.conciliado?'':' (divergência: não conciliado na conferência)'),
-          origemConciliacaoPDF:true
-        });
-        return{medicamentoId:it.medId,medicamentoNome:it.medNome,qtdRecebida:qtdNum,qtdFaturada:qtdNum,vUnit:it.vUnit||0,cean:it.cean||'',status:it.conciliado?'conciliado':'divergente',lote:(it.lote||'').trim(),justificativa:'',acaoTomada:'',origemPdf:true};
+      var recPatches={};// recId -> {itemIdx: 'conciliado'|'divergencia'} — o TIPO de resultado, não só "processado"
+      var notaPatches={};// notaId -> {itemIdx: {status,medId,medNome}}
+      function marcarRec(fontes,tipo){fontes.forEach(function(f){if(!recPatches[f.recId])recPatches[f.recId]={};recPatches[f.recId][f.itemIdx]=tipo;});}
+      function marcarNota(fontes,status,medId,medNome){fontes.forEach(function(f){if(!notaPatches[f.notaId])notaPatches[f.notaId]={};notaPatches[f.notaId][f.itemIdx]={status:status,medId:medId||'',medNome:medNome||''};});}
+      resultado.conciliados.forEach(function(c){marcarRec(c.recFontes,'conciliado');marcarNota(c.notaFontes,'conciliado',c.medicamentoId,c.medicamentoNome);});
+      resultado.divergencias.forEach(function(d){
+        marcarRec(d.recFontes,'divergencia');marcarNota(d.notaFontes,'divergencia',d.medicamentoId,d.medicamentoNome);
+        batch.set(db.collection('divergencias').doc(),{medicamentoId:d.medicamentoId,medicamentoNome:d.medicamentoNome,qtdRecebida:d.qtdRecebida,qtdNota:d.qtdNota,diferenca:d.diferenca,tipo:'quantidade',status:'pendente',origem:'matching_notas',criadoEm:now,criadoPor:user.name||''});
       });
-      var concRef=db.collection('conciliacoes').doc();
-      var statusGeral=_concStatusGeral(rows);
-      batch.set(concRef,{recebimentoId:'',origem:'importacao_pdf',notaNumero:(pdfNumero||'').trim(),notaSerie:'',notaDataEmissao:pdfEmissao||'',fornecedor:(pdfForn||'').trim(),valorTotal:parseFloat(String(pdfValor||'').replace(',','.'))||0,anexoURL:'',itens:rows,statusGeral:statusGeral,criadoEm:now,criadoPor:user.name||'',criadoPorId:user.uid||''});
+      resultado.naoEncontrados.forEach(function(x){
+        marcarNota(x.notaFontes,'nao_encontrado','','');
+        batch.set(db.collection('divergencias').doc(),{medicamentoId:'',medicamentoNome:x.medicamentoNome,qtdRecebida:0,qtdNota:x.qtdNota,diferenca:x.qtdNota,tipo:'nao_encontrado',status:'pendente',origem:'matching_notas',criadoEm:now,criadoPor:user.name||''});
+      });
+      // conciliado=true no item só quer dizer "já processado nesta ou numa rodada anterior" (evita
+      // reprocessar) — o TIPO do resultado (resultadoMatching) é que decide o status do recebimento; uma
+      // única divergência no meio de vários itens não pode virar "conciliado" só porque todos foram processados.
+      Object.keys(recPatches).forEach(function(recId){
+        var rec=recs.find(function(r){return r.id===recId;});if(!rec)return;
+        var novosItens=(rec.itens||[]).map(function(it,idx){var tipo=recPatches[recId][idx];return tipo?Object.assign({},it,{conciliado:true,resultadoMatching:tipo}):it;});
+        var temDivergencia=novosItens.some(function(it){return it.resultadoMatching==='divergencia';});
+        var todosProcessados=novosItens.length>0&&novosItens.every(function(it){return it.conciliado;});
+        var statusNovo=temDivergencia?'divergencia':(todosProcessados?'conciliado':(rec.status||'pendente'));
+        batch.update(db.collection('recebimentos').doc(recId),{itens:novosItens,status:statusNovo,statusLabel:temDivergencia?'Divergência Aberta':(todosProcessados?'Conciliado':(rec.statusLabel||'Pendente de Conciliação Fiscal'))});
+      });
+      Object.keys(notaPatches).forEach(function(notaId){
+        var nota=todasNotas.find(function(n){return n.id===notaId;});if(!nota)return;
+        var novosItens=(nota.itens||[]).map(function(it,idx){var p=notaPatches[notaId][idx];return p?Object.assign({},it,{status:p.status,medId:p.medId||it.medId,medNome:p.medNome||it.medNome}):it;});
+        var todosProcessados=novosItens.length>0&&novosItens.every(function(it){return it.status&&it.status!=='pendente';});
+        batch.update(db.collection('notas_fiscais').doc(notaId),{itens:novosItens,status:todosProcessados?'processada':(nota.status||'pendente')});
+      });
       await batch.commit();
-      var nDiv=rows.filter(function(r){return r.status==='divergente';}).length;
-      var puladas=pdfItens.length-validos.length;
-      logAcao('nota_pdf_importada','Nota '+(pdfNumero||'(sem número)')+' importada via PDF — '+rows.length+' item(ns), '+nDiv+' divergência(s)'+(puladas>0?', '+puladas+' sem vínculo':''),null,concRef.id);
-      setPdfOk('✅ Nota importada! '+rows.length+' item(ns) somados ao estoque'+(nDiv>0?' — '+nDiv+' não conciliado(s) em Divergências.':'.')+(puladas>0?' ⚠️ '+puladas+' item(ns) sem medicamento vinculado NÃO foram registrados.':''));
-      setTimeout(function(){setPdfOk('');},6000);
-      setPdfItens([]);setPdfNumero('');setPdfEmissao('');setPdfForn('');setPdfValor('');
-    }catch(e){setPdfErro('Erro ao registrar: '+((e&&e.message)?e.message:e));}
-    setPdfSaving(false);
+      setResumo(resultado);
+      logAcao('matching_executado','Matching: '+resultado.conciliados.length+' conciliado(s), '+resultado.divergencias.length+' divergência(s), '+resultado.naoEncontrados.length+' não encontrado(s)');
+    }catch(e){setErro('Erro ao rodar matching: '+((e&&e.message)?e.message:e));}
+    setRodandoMatch(false);
   }
 
-  var pendentes=recs.filter(function(r){return (r.status||'pendente')==='pendente';});
-
-  async function conciliar(){
-    if(!recSel){alert('Selecione o recebimento a conciliar.');return;}
-    if(!notaNumero.trim()){alert('Informe o número da nota fiscal.');return;}
-    var faturados=nfItens.filter(function(it){return it.medId&&(parseInt(it.qtd)||0)>0;}).map(function(it){return{medicamentoId:it.medId,medicamentoNome:it.medNome,quantidade:parseInt(it.qtd)||0,lote:(it.lote||'').trim(),validade:_normValidade((it.validade||'').trim())};});
-    if(faturados.length===0){alert('Adicione ao menos um item da nota fiscal.');return;}
-    var rec=recs.find(function(r){return r.id===recSel;});if(!rec){alert('Recebimento não encontrado.');return;}
-    setSaving(true);
-    try{
-      var rows=conciliarRecebimentoNota(rec.itens||[],faturados);
-      var statusGeral=_concStatusGeral(rows);
-      var now=new Date().toISOString();
-      // Ajuste de estoque: para cada divergência, cria entry de ajuste (entrada ou saída) com a diferença
-      // entre nota fiscal e recebimento físico, para que o estoque reflita a nota.
-      var ajusteEntries=[];
-      for(var ri=0;ri<rows.length;ri++){
-        var row=rows[ri];if(row.status==='conciliado')continue;
-        var diff=row.qtdFaturada-row.qtdRecebida;// positivo=nota tem mais (precisa entrada), negativo=recebido demais (precisa saída)
-        if(diff===0)continue;
-        var ajObj={criadoEm:now,date:todayStr(),autorId:user.uid||'',autorNome:user.name||'',autorCargo:user.role||'',autorColor:user.color||B,
-          medicamentoId:row.medicamentoId,medicamentoNome:row.medicamentoNome,
-          tipo:diff>0?'entrada':'saida',quantidade:Math.abs(diff),
-          lote:row.lote||'',validade:'',
-          observacao:'Ajuste conciliação NF '+notaNumero.trim()+' — '+(diff>0?'entrada':'saída')+' de '+Math.abs(diff)+' un. (diferença nota × recebimento)',
-          origemConciliacao:true,conciliacaoRef:'pendente'};
-        var ajRef=await db.collection('entries').add(ajObj);
-        ajusteEntries.push({idx:ri,entryId:ajRef.id,tipo:ajObj.tipo,quantidade:ajObj.quantidade});
-        rows[ri].ajusteEntryId=ajRef.id;rows[ri].ajusteTipo=ajObj.tipo;rows[ri].ajusteQtd=ajObj.quantidade;
-        rows[ri].divergenciaPendente=Math.abs(diff);rows[ri].divergenciaConsumida=0;
-      }
-      var concRef=await db.collection('conciliacoes').add({recebimentoId:recSel,notaNumero:notaNumero.trim(),notaSerie:notaSerie.trim(),notaDataEmissao:notaEmissao||'',fornecedor:fornecedor.trim()||rec.fornecedor||'',valorTotal:parseFloat(String(valorTotal).replace(',','.'))||0,anexoURL:anexo.trim(),itens:rows,statusGeral:statusGeral,criadoEm:now,criadoPor:user.name||'',criadoPorId:user.uid||''});
-      // Atualiza os entries de ajuste com o id da conciliação
-      for(var ai=0;ai<ajusteEntries.length;ai++){await db.collection('entries').doc(ajusteEntries[ai].entryId).update({conciliacaoRef:concRef.id}).catch(function(){});}
-      var recStatus=statusGeral==='conciliado'?'conciliado':(statusGeral==='resolvido'?'resolvido':'divergencia');
-      var recLabel=statusGeral==='conciliado'?'Conciliado':(statusGeral==='resolvido'?'Resolvido':'Divergência Aberta');
-      await db.collection('recebimentos').doc(recSel).update({status:recStatus,statusLabel:recLabel,conciliacaoId:concRef.id,conciliadoEm:now,conciliadoPor:user.name||''});
-      logAcao('conciliacao_criada','Conciliação '+concRef.id+' — NF '+notaNumero.trim()+' × receb '+recSel+' — '+rows.length+' item(ns)',rec.status||'pendente',recStatus);
-      setConcAtual({id:concRef.id,recebimentoId:recSel,notaNumero:notaNumero.trim(),itens:rows,statusGeral:statusGeral});
-      // limpa o formulário
-      setNotaNumero('');setNotaSerie('');setNotaEmissao('');setFornecedor('');setValorTotal('');setAnexo('');setRecSel('');setNfItens([blankNfItem()]);setFocoItem(null);
-    }catch(e){alert('Erro ao conciliar: '+((e&&e.message)?e.message:e));}
-    setSaving(false);
-  }
-
-  // Resolver (ou marcar em análise) uma divergência; registra ação/justificativa; se todas resolvidas -> statusGeral 'resolvido'.
-  // Nenhuma divergência é apagada — só recebe uma nova ação (histórico completo fica no item + no log de auditoria).
-  async function resolver(idx,acao,justificativa){
-    if(!concAtual)return;
-    if(acao==='Registrar justificativa'&&!(justificativa||'').trim()){alert('Digite a justificativa antes de registrar.');return;}
-    var antes=concAtual.itens[idx];
-    var statusFluxoAntes=_concItemStatusFluxo(antes);
-    var novos=concAtual.itens.map(function(it,i){
-      if(i!==idx)return it;
-      if(acao==='Marcar em análise')return Object.assign({},it,{emAnalise:true});
-      return Object.assign({},it,{acaoTomada:acao,justificativa:(justificativa||it.justificativa||''),emAnalise:false});
+  // Sugestões de vínculo MANUAL: pra cada item da nota que o matching automático não conciliou (ficou
+  // pendente, virou divergência ou "não encontrado"), sugere itens de recebimentos ainda pendentes que
+  // possam ser o mesmo produto — mesmo com nome ou quantidade diferentes (o auto só liga por medId+qtd
+  // exatos; aqui é o usuário decidindo "isso aqui é a mesma coisa", igual a sugestão de vínculo da
+  // Previsão/Pedido). Calculado uma vez por (notas, recebimentos) — não recomputa a cada tecla.
+  var candidatosVinculo=useMemo(function(){
+    var candidatos=[];
+    recs.forEach(function(r){
+      if((r.status||'pendente')==='conciliado')return;
+      (r.itens||[]).forEach(function(it,idx){
+        if(it.conciliado)return;
+        candidatos.push({id:r.id+'|'+idx,nome:it.medicamentoNome,recId:r.id,itemIdx:idx,fornecedor:r.fornecedor,data:r.data,quantidade:it.quantidade});
+      });
     });
-    var sg=_concStatusGeral(novos);
-    var statusFluxoDepois=_concItemStatusFluxo(novos[idx]);
-    try{
-      await db.collection('conciliacoes').doc(concAtual.id).update({itens:novos,statusGeral:sg});
-      if(sg==='resolvido'){await db.collection('recebimentos').doc(concAtual.recebimentoId).update({status:'resolvido',statusLabel:'Resolvido'});}
-      logAcao('conciliacao_divergencia_resolvida','Conciliação '+concAtual.id+' — item '+(novos[idx].medicamentoNome||'')+' — ação: '+acao+(justificativa?' — just: '+justificativa:''),statusFluxoAntes,statusFluxoDepois);
-      setConcAtual(Object.assign({},concAtual,{itens:novos,statusGeral:sg}));
-    }catch(e){alert('Erro ao registrar: '+((e&&e.message)?e.message:e));}
+    return candidatos;
+  },[recs]);
+  var sugestoesVinculo=useMemo(function(){
+    if(!candidatosVinculo.length)return {};
+    var out={};
+    notas.forEach(function(n){
+      if((n.status||'pendente')==='processada')return;
+      (n.itens||[]).forEach(function(it,idx){
+        if(it.status==='conciliado'||it.status==='cancelado')return;
+        var cands=_matchItemMeds(it.descricao,candidatosVinculo,4);
+        if(cands.length)out[n.id+'|'+idx]=cands;
+      });
+    });
+    return out;
+  },[notas,candidatosVinculo]);
+
+  var _vinculando=useState(null);var vinculando=_vinculando[0];var setVinculando=_vinculando[1];// notaId+'|'+idx em andamento
+  // Confirma o vínculo manual escolhido pelo usuário: liga o item da nota ao item do recebimento
+  // sugerido. Se a quantidade bater, concilia direto; se não bater, cria a mesma divergência de
+  // quantidade que o matching automático criaria — só que agora com a correspondência certa.
+  function confirmarVinculoManual(notaId,itemIdx,cand){
+    var key=notaId+'|'+itemIdx;
+    var nota=notas.find(function(n){return n.id===notaId;});
+    var rec=recs.find(function(r){return r.id===cand.recId;});
+    if(!nota||!rec)return;
+    var itNota=(nota.itens||[])[itemIdx];var itRec=(rec.itens||[])[cand.itemIdx];
+    if(!itNota||!itRec)return;
+    setVinculando(key);
+    var qtdRecebida=parseInt(itRec.quantidade)||0;var qtdNota=Math.round(itNota.qtd)||0;
+    var bate=qtdRecebida===qtdNota;
+    var now=new Date().toISOString();
+    var batch=db.batch();
+    // Gera a referência da divergência ANTES (se precisar) pra já gravar o id dela no item da nota —
+    // permite apagar essa divergência específica de forma precisa se o usuário desvincular depois.
+    var divRef=bate?null:db.collection('divergencias').doc();
+    var novosItensNota=(nota.itens||[]).map(function(x,i){return i===itemIdx?Object.assign({},x,{status:bate?'conciliado':'divergencia',medId:itRec.medicamentoId||'',medNome:itRec.medicamentoNome||'',vinculadoRecId:rec.id,vinculadoItemIdx:cand.itemIdx,divergenciaId:divRef?divRef.id:''}):x;});
+    var todosProcNota=novosItensNota.length>0&&novosItensNota.every(function(x){return x.status&&x.status!=='pendente';});
+    batch.update(db.collection('notas_fiscais').doc(notaId),{itens:novosItensNota,status:todosProcNota?'processada':(nota.status||'pendente')});
+    var novosItensRec=(rec.itens||[]).map(function(x,i){return i===cand.itemIdx?Object.assign({},x,{conciliado:true,resultadoMatching:bate?'conciliado':'divergencia'}):x;});
+    var temDivRec=novosItensRec.some(function(x){return x.resultadoMatching==='divergencia';});
+    var todosProcRec=novosItensRec.length>0&&novosItensRec.every(function(x){return x.conciliado;});
+    var statusNovoRec=temDivRec?'divergencia':(todosProcRec?'conciliado':(rec.status||'pendente'));
+    batch.update(db.collection('recebimentos').doc(rec.id),{itens:novosItensRec,status:statusNovoRec,statusLabel:temDivRec?'Divergência Aberta':(todosProcRec?'Conciliado':(rec.statusLabel||'Pendente de Conciliação Fiscal'))});
+    if(divRef){
+      batch.set(divRef,{medicamentoId:itRec.medicamentoId||'',medicamentoNome:itRec.medicamentoNome||'',qtdRecebida:qtdRecebida,qtdNota:qtdNota,diferenca:qtdNota-qtdRecebida,tipo:'quantidade',status:'pendente',origem:'vinculo_manual',criadoEm:now,criadoPor:user.name||''});
+    }
+    batch.commit().then(function(){
+      logAcao('vinculo_manual_notas','Vínculo manual: "'+(itNota.descricao||'')+'" (nota) → "'+(itRec.medicamentoNome||'')+'" (recebimento) — '+(bate?'conciliado':'divergência de quantidade'));
+      setVinculando(null);
+    }).catch(function(e){setErro('Erro ao vincular: '+((e&&e.message)?e.message:e));setVinculando(null);});
+  }
+
+  // Cancela um item da nota que na verdade NÃO é medicamento (o parser do PDF às vezes pega linha de
+  // cabeçalho/imposto/observação como se fosse item). Só remove esse item da conciliação — não mexe em
+  // estoque nem em recebimento nenhum, já que um item cancelado nunca chegou a ser vinculado a nada.
+  // Confirmação por modal bonito (ModalConfirm) em vez de confirm() nativo do navegador.
+  var _confirmCancelarItem=useState(null);var confirmCancelarItem=_confirmCancelarItem[0];var setConfirmCancelarItem=_confirmCancelarItem[1];// {notaId,itemIdx,descricao}
+  function pedirCancelarItemNota(notaId,itemIdx){
+    var nota=notas.find(function(n){return n.id===notaId;});if(!nota)return;
+    var it=(nota.itens||[])[itemIdx];if(!it)return;
+    setConfirmCancelarItem({notaId:notaId,itemIdx:itemIdx,descricao:it.descricao||'este item'});
+  }
+  function executarCancelarItemNota(){
+    if(!confirmCancelarItem)return;
+    var notaId=confirmCancelarItem.notaId,itemIdx=confirmCancelarItem.itemIdx;
+    var nota=notas.find(function(n){return n.id===notaId;});
+    var it=nota&&(nota.itens||[])[itemIdx];
+    setConfirmCancelarItem(null);
+    if(!nota||!it)return;
+    var novosItens=(nota.itens||[]).map(function(x,i){return i===itemIdx?Object.assign({},x,{status:'cancelado'}):x;});
+    var todosProc=novosItens.length>0&&novosItens.every(function(x){return x.status&&x.status!=='pendente';});
+    db.collection('notas_fiscais').doc(notaId).update({itens:novosItens,status:todosProc?'processada':(nota.status||'pendente')})
+      .then(function(){logAcao('item_nota_cancelado','Item cancelado (não é medicamento): "'+(it.descricao||'')+'" — nota '+notaId);})
+      .catch(function(e){setErro('Erro ao cancelar item: '+((e&&e.message)?e.message:e));});
+  }
+  // Desvincula um item já conciliado/divergência — pode ter vinculado errado. Desfaz os dois lados do
+  // vínculo (nota volta pra pendente; item do recebimento volta a ficar disponível pra novo vínculo) e
+  // remove a divergência de quantidade que esse vínculo específico tinha criado, se houver.
+  function desvincularItem(notaId,itemIdx){
+    var nota=notas.find(function(n){return n.id===notaId;});if(!nota)return;
+    var it=(nota.itens||[])[itemIdx];if(!it||!it.medId)return;
+    // Prefere o vínculo GRAVADO (recId+itemIdx exatos, guardado no momento do vínculo manual) — só cai
+    // pro "achar por medicamentoId" (menos preciso, pode existir mais de um recebimento pendente do
+    // mesmo remédio) quando o vínculo veio do matching automático antigo, que não grava essa referência.
+    var rec=it.vinculadoRecId?recs.find(function(r){return r.id===it.vinculadoRecId;}):recs.find(function(r){return (r.itens||[]).some(function(x){return x.medicamentoId===it.medId&&x.conciliado;});});
+    var batch=db.batch();
+    var novosItensNota=(nota.itens||[]).map(function(x,i){return i===itemIdx?Object.assign({},x,{status:'pendente',medId:'',medNome:'',vinculadoRecId:'',vinculadoItemIdx:-1,divergenciaId:''}):x;});
+    batch.update(db.collection('notas_fiscais').doc(notaId),{itens:novosItensNota,status:'pendente'});
+    // A divergência de quantidade criada por ESTE vínculo específico não faz mais sentido — o vínculo
+    // que a originou foi desfeito. Apaga só ela (não mexe em nenhuma outra divergência).
+    if(it.divergenciaId)batch.delete(db.collection('divergencias').doc(it.divergenciaId));
+    if(rec){
+      var recItemIdx=(typeof it.vinculadoItemIdx==='number'&&it.vinculadoItemIdx>=0)?it.vinculadoItemIdx:(rec.itens||[]).findIndex(function(x){return x.medicamentoId===it.medId&&x.conciliado;});
+      if(recItemIdx>=0){
+        var novosItensRec=(rec.itens||[]).map(function(x,i){return i===recItemIdx?Object.assign({},x,{conciliado:false,resultadoMatching:''}):x;});
+        var temDivRec=novosItensRec.some(function(x){return x.resultadoMatching==='divergencia';});
+        var todosProcRec=novosItensRec.length>0&&novosItensRec.every(function(x){return x.conciliado;});
+        var statusNovoRec=temDivRec?'divergencia':(todosProcRec?'conciliado':'pendente');
+        batch.update(db.collection('recebimentos').doc(rec.id),{itens:novosItensRec,status:statusNovoRec,statusLabel:temDivRec?'Divergência Aberta':(todosProcRec?'Conciliado':'Pendente de Conciliação Fiscal')});
+      }
+    }
+    batch.commit().then(function(){
+      logAcao('vinculo_desfeito','Desvínculo manual: "'+(it.descricao||'')+'" (nota '+notaId+') deixou de estar ligado a "'+(it.medNome||'')+'"');
+    }).catch(function(e){setErro('Erro ao desvincular: '+((e&&e.message)?e.message:e));});
+  }
+  // Exclusão permanente da nota fiscal (só gestor/técnico) — remove só o documento importado, nunca
+  // mexeu em estoque (isso só acontece no Recebimento físico), então não tem nada pra reverter.
+  var _confirmExcluirNota=useState(null);var confirmExcluirNota=_confirmExcluirNota[0];var setConfirmExcluirNota=_confirmExcluirNota[1];// nota inteira ou null
+  function pedirExcluirNota(nota){if(!podeExcluirNota||!nota)return;setConfirmExcluirNota(nota);}
+  function executarExcluirNota(){
+    var nota=confirmExcluirNota;setConfirmExcluirNota(null);
+    if(!podeExcluirNota||!nota)return;
+    db.collection('notas_fiscais').doc(nota.id).delete()
+      .then(function(){logAcao('nota_excluida','Nota excluída permanentemente — NF '+(nota.nfNumero||'')+' — '+(nota.nomeArquivo||''));if(expandida===nota.id)setExpandida(null);})
+      .catch(function(e){setErro('Erro ao excluir nota: '+((e&&e.message)?e.message:e));});
+  }
+  // "Entrada conferida": depois que TODOS os itens da nota já foram processados (status vira 'processada'
+  // automaticamente), o usuário pode encaminhar a nota para o "Histórico de Notas" — ela some daqui e
+  // passa a aparecer lá, numa seção própria. Não mexe em estoque nem em recebimento; só marca a nota.
+  var _confirmArquivarNota=useState(null);var confirmArquivarNota=_confirmArquivarNota[0];var setConfirmArquivarNota=_confirmArquivarNota[1];
+  function pedirArquivarNota(nota){if(!nota)return;setConfirmArquivarNota(nota);}
+  function executarArquivarNota(){
+    var nota=confirmArquivarNota;setConfirmArquivarNota(null);
+    if(!nota)return;
+    db.collection('notas_fiscais').doc(nota.id).update({arquivadaHistorico:true,arquivadaEm:new Date().toISOString(),arquivadaPor:user.name||''})
+      .then(function(){logAcao('nota_arquivada_historico','Nota encaminhada para Histórico de Notas — NF '+(nota.nfNumero||'')+' — '+(nota.nomeArquivo||''));if(expandida===nota.id)setExpandida(null);})
+      .catch(function(e){setErro('Erro ao encaminhar nota para o histórico: '+((e&&e.message)?e.message:e));});
   }
 
   var inp={width:'100%',padding:'11px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:14,boxSizing:'border-box'};
-  var lbl={fontSize:12,fontWeight:700,color:'#475569',display:'block',marginBottom:5};
+  function fD(d){if(!d)return'';var p=String(d).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
+  function statusNota(n){var st=(n.itens||[]).map(function(it){return it.status||'pendente';});var nConc=st.filter(function(s){return s==='conciliado';}).length;var nDiv=st.filter(function(s){return s==='divergencia'||s==='nao_encontrado';}).length;var nCancel=st.filter(function(s){return s==='cancelado';}).length;var nPend=st.length-nConc-nDiv-nCancel;return{nConc:nConc,nDiv:nDiv,nCancel:nCancel,nPend:nPend,total:st.length};}
+  var _expandida=useState(null);var expandida=_expandida[0];var setExpandida=_expandida[1];// id da nota expandida
+  var notasAtivas=useMemo(function(){return notas.filter(function(n){return !n.arquivadaHistorico;});},[notas]);
 
-  return(
-    <div>
-      {/* ===== Importação de PDF da nota fiscal ===== */}
-      <div style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9',marginBottom:16}}>
-        <div style={{fontWeight:800,fontSize:15,color:'#1E293B',marginBottom:4}}>📄 Importar PDF da Nota Fiscal</div>
-        <div style={{fontSize:11,color:'#94A3B8',marginBottom:14}}>O app lê os itens do PDF automaticamente. Marque "Conciliado" nos que conferem — os demais entram no estoque normalmente, mas ficam como divergência no painel ao lado.</div>
-        <label style={{display:'block',cursor:pdfProcessando?'default':'pointer'}}>
-          <div style={{border:'2px dashed #1351B4',borderRadius:10,padding:'16px',textAlign:'center',background:'#EFF6FF',marginBottom:8,opacity:pdfProcessando?0.6:1}}>
-            <div style={{fontSize:28,marginBottom:4}}>📂</div>
-            <div style={{fontWeight:700,fontSize:13,color:B,marginBottom:2}}>{pdfProcessando?'Lendo o PDF...':'Clique aqui para selecionar o PDF da nota fiscal'}</div>
-            <div style={{fontSize:11,color:'#64748B'}}>Arquivo .pdf da nota fiscal do fornecedor</div>
-          </div>
-          <input type="file" accept=".pdf" disabled={pdfProcessando} onChange={importarPDFNota} style={{display:'none'}}/>
-        </label>
-        {pdfProcessando&&pdfProgresso&&<div style={{background:'#EFF6FF',border:'1px solid #BFDBFE',borderRadius:10,padding:'10px 12px',fontSize:12,color:B,fontWeight:600,marginBottom:8}}>⏳ {pdfProgresso}</div>}
-        {pdfOk&&<div style={{background:'#DCFCE7',border:'1px solid #86EFAC',borderRadius:10,padding:'10px 12px',fontSize:13,color:'#059669',fontWeight:600,marginBottom:8}}>{pdfOk}</div>}
-        {pdfErro&&<div style={{background:'#FEE2E2',border:'1px solid #FCA5A5',borderRadius:10,padding:'10px 12px',fontSize:13,color:'#DC2626',fontWeight:600,marginBottom:8}}>{pdfErro}</div>}
+  return(<div>
+    <div data-tour="notas-import" style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9',marginBottom:16}}>
+      <div style={{fontWeight:800,fontSize:15,color:'#1E293B',marginBottom:4}}>📥 Importar Notas Fiscais</div>
+      <div style={{fontSize:11,color:'#94A3B8',marginBottom:14}}>Envie um ou vários PDFs de uma vez. O app lê os itens e casa automaticamente com o que já foi recebido — só o que não bater vira divergência.</div>
+      <label style={{display:'block',cursor:processando?'default':'pointer'}}>
+        <div style={{border:'2px dashed #1351B4',borderRadius:10,padding:'16px',textAlign:'center',background:'#EFF6FF',marginBottom:8,opacity:processando?0.6:1}}>
+          <div style={{fontSize:28,marginBottom:4}}>📂</div>
+          <div style={{fontWeight:700,fontSize:13,color:B,marginBottom:2}}>{processando?'Processando...':'Clique para selecionar um ou vários PDFs'}</div>
+          <div style={{fontSize:11,color:'#64748B'}}>Você pode selecionar várias notas de uma vez</div>
+        </div>
+        <input type="file" accept=".pdf" multiple disabled={processando} onChange={importarPDFs} style={{display:'none'}}/>
+      </label>
+      {processando&&progresso&&<div style={{background:'#EFF6FF',border:'1px solid #BFDBFE',borderRadius:10,padding:'10px 12px',fontSize:12,color:B,fontWeight:600,marginBottom:8}}>⏳ {progresso}</div>}
+      {erro&&<div style={{background:'#FEE2E2',border:'1px solid #FCA5A5',borderRadius:10,padding:'10px 12px',fontSize:13,color:'#DC2626',fontWeight:600,marginBottom:8,whiteSpace:'pre-wrap'}}>{erro}</div>}
+      <button data-tour="notas-matching-btn" onClick={executarMatching} disabled={rodandoMatch||processando} style={{width:'100%',padding:'11px',background:rodandoMatch?'#94A3B8':'#F1F5F9',border:'none',borderRadius:10,color:rodandoMatch?'#fff':'#334155',fontWeight:700,fontSize:12,cursor:rodandoMatch?'default':'pointer'}}>{rodandoMatch?'Rodando...':'🔄 Rodar matching de novo'}</button>
+    </div>
 
-        {pdfItens.length>0&&<div>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
-            <div><label style={lbl}>Número da NF</label><input value={pdfNumero} onChange={function(e){setPdfNumero(e.target.value);}} placeholder="Ex: 12345" style={inp}/></div>
-            <div><label style={lbl}>Data de emissão</label><input type="date" value={pdfEmissao} onChange={function(e){setPdfEmissao(e.target.value);}} style={inp}/></div>
-          </div>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:14}}>
-            <div><label style={lbl}>Fornecedor</label><input value={pdfForn} onChange={function(e){setPdfForn(e.target.value);}} placeholder="Fornecedor da nota" style={inp}/></div>
-            <div><label style={lbl}>Valor total (R$)</label><input value={pdfValor} onChange={function(e){setPdfValor(e.target.value.replace(/[^0-9.,]/g,''));}} inputMode="decimal" placeholder="0,00" style={inp}/></div>
-          </div>
-          <div style={{fontWeight:700,fontSize:13,color:'#334155',marginBottom:8}}>{pdfItens.length} item(ns) do PDF</div>
-          <div style={{display:'flex',flexDirection:'column',gap:10}}>
-            {pdfItens.map(function(it){
-              var sug=(!it.medId&&it.busca.trim())?_fuzzyMeds(it.busca,medications,8):[];
-              var statusBadge=it.medId?(it.conciliado?{txt:'✅ Conciliado',cor:'#059669',bg:'#DCFCE7'}:{txt:'⚠️ Não conciliado',cor:'#B45309',bg:'#FEF3C7'}):{txt:'❌ Sem vínculo',cor:'#DC2626',bg:'#FEE2E2'};
-              return(<div key={it.key} style={{background:it.conciliado?'#F0FDF4':'#FFFBEB',borderRadius:12,padding:12,border:'1px solid '+(it.conciliado?'#BBF7D0':'#FDE68A')}}>
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:8,gap:8}}>
-                  <div style={{fontSize:12,color:'#475569'}}>
-                    <div>Medicamento (nota): <strong>{it.xProd}</strong></div>
-                    <div style={{marginTop:2}}>Quantidade: <strong>{it.qtd} {it.unidade}</strong>{it.cean?<span> · CEAN: <strong>{it.cean}</strong></span>:null}{it.vUnit>0?<span> · V.Unit: <strong>R$ {it.vUnit.toFixed(2).replace('.',',')}</strong></span>:null}</div>
-                  </div>
-                  <button onClick={function(){delPdfItem(it.key);}} style={{background:'#FEE2E2',border:'none',borderRadius:8,width:28,height:28,cursor:'pointer',fontSize:13,color:'#DC2626',flexShrink:0}}>✕</button>
+    {/* PASSO 4: relatório visual do último matching */}
+    {resumo&&<div style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9',marginBottom:16}}>
+      <div style={{fontWeight:800,fontSize:15,color:'#1E293B',marginBottom:10}}>Resultado do matching</div>
+      <div style={{background:'#DCFCE7',border:'1px solid #86EFAC',borderRadius:10,padding:'10px 12px',fontSize:13,color:'#059669',fontWeight:700,marginBottom:8}}>✅ {resumo.conciliados.length} item(ns) conciliado(s) automaticamente</div>
+      {resumo.divergencias.length>0&&<div style={{background:'#FEF3C7',border:'1px solid #FDE68A',borderRadius:10,padding:'10px 12px',marginBottom:8}}>
+        <div style={{fontSize:13,color:'#B45309',fontWeight:700,marginBottom:6}}>⚠️ {resumo.divergencias.length} item(ns) com DIVERGÊNCIA DE QUANTIDADE</div>
+        {resumo.divergencias.map(function(d,i){return(<div key={i} style={{fontSize:12,color:'#92400E',marginBottom:2}}>{d.medicamentoNome}: recebeu {d.qtdRecebida}, nota diz {d.qtdNota} (divergência: {d.diferenca>0?'+':''}{d.diferenca})</div>);})}
+      </div>}
+      {resumo.naoEncontrados.length>0&&<div style={{background:'#FEE2E2',border:'1px solid #FCA5A5',borderRadius:10,padding:'10px 12px'}}>
+        <div style={{fontSize:13,color:'#DC2626',fontWeight:700,marginBottom:6}}>❌ {resumo.naoEncontrados.length} item(ns) na nota sem recebimento encontrado</div>
+        {resumo.naoEncontrados.map(function(x,i){return(<div key={i} style={{fontSize:12,color:'#991B1B',marginBottom:2}}>{x.medicamentoNome} (qtd nota: {x.qtdNota})</div>);})}
+      </div>}
+    </div>}
+
+    <div style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9'}}>
+      <div style={{fontWeight:700,fontSize:14,color:'#334155',marginBottom:10}}>Notas importadas ({notasAtivas.length})</div>
+      <div style={{fontSize:11,color:'#94A3B8',marginBottom:10}}>Notas com "Entrada conferida" saem daqui e ficam em 🗂️ Histórico de Notas.</div>
+      {notasAtivas.length===0?<div style={{textAlign:'center',color:'#94A3B8',padding:24,fontSize:13}}>Nenhuma nota importada ainda.</div>:
+      <div style={{display:'flex',flexDirection:'column',gap:8}}>
+        {notasAtivas.map(function(n){var st=statusNota(n);var aberta=expandida===n.id;var totalmenteConferida=st.total>0&&st.nPend===0;return(
+          <div key={n.id} style={{border:'1px solid #E2E8F0',borderRadius:10,padding:'10px 12px'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
+              <div style={{flex:1,minWidth:0,cursor:'pointer'}} onClick={function(){setExpandida(aberta?null:n.id);}}>
+                <div style={{display:'flex',justifyContent:'space-between',gap:8,flexWrap:'wrap'}}>
+                  <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>NF {n.nfNumero||'(sem número)'} {n.fornecedor?'· '+n.fornecedor:''}</div>
+                  <div style={{fontSize:11,color:'#94A3B8'}}>{fD(n.dataEmissao)}</div>
                 </div>
-                <div style={{marginBottom:8}}><span style={{display:'inline-block',fontSize:11,fontWeight:800,color:statusBadge.cor,background:statusBadge.bg,borderRadius:6,padding:'2px 8px'}}>{statusBadge.txt}</span></div>
-                {it.medId?
-                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,background:'#EFF6FF',border:'1.5px solid #BFDBFE',borderRadius:10,padding:'9px 12px',marginBottom:8}}>
-                    <div style={{fontWeight:700,fontSize:13,color:B}}>💊 {it.medNome}</div>
-                    <button onClick={function(){setPdfItem(it.key,{medId:'',medNome:'',busca:''});setPdfFoco(it.key);}} style={{background:'#fff',border:'1px solid #BFDBFE',borderRadius:8,padding:'4px 10px',fontSize:11,color:B,cursor:'pointer',fontWeight:600}}>Trocar</button>
+                <div style={{fontSize:11,color:'#64748B',marginTop:4}}>{n.nomeArquivo} · {st.total} item(ns) · {aberta?'▲ ocultar itens':'▼ ver itens'}</div>
+                <div style={{display:'flex',gap:6,marginTop:6,flexWrap:'wrap'}}>
+                  {st.nConc>0&&<span style={{fontSize:10,fontWeight:700,color:'#059669',background:'#DCFCE7',borderRadius:6,padding:'2px 7px'}}>✅ {st.nConc} conciliado(s)</span>}
+                  {st.nDiv>0&&<span style={{fontSize:10,fontWeight:700,color:'#DC2626',background:'#FEE2E2',borderRadius:6,padding:'2px 7px'}}>⚠️ {st.nDiv} problema(s)</span>}
+                  {st.nPend>0&&<span style={{fontSize:10,fontWeight:700,color:'#B45309',background:'#FEF3C7',borderRadius:6,padding:'2px 7px'}}>⏳ {st.nPend} pendente(s)</span>}
+                  {st.nCancel>0&&<span style={{fontSize:10,fontWeight:700,color:'#64748B',background:'#F1F5F9',borderRadius:6,padding:'2px 7px'}}>🚫 {st.nCancel} ignorado(s)</span>}
+                </div>
+              </div>
+              <div style={{flexShrink:0,display:'flex',gap:6}}>
+                {totalmenteConferida&&<button onClick={function(e){e.stopPropagation();pedirArquivarNota(n);}} title="Entrada conferida — enviar para o Histórico de Notas" style={{background:'#DCFCE7',border:'1px solid #86EFAC',borderRadius:8,padding:'0 10px',height:30,cursor:'pointer',fontSize:11,fontWeight:700,color:'#0C6B3E',whiteSpace:'nowrap'}}>📁 Entrada conferida</button>}
+                {podeExcluirNota&&<button onClick={function(e){e.stopPropagation();pedirExcluirNota(n);}} title="Excluir nota permanentemente" style={{background:'#FEF2F2',border:'1px solid #FECACA',borderRadius:8,width:30,height:30,cursor:'pointer',fontSize:13,color:'#DC2626'}}>🗑️</button>}
+              </div>
+            </div>
+            {aberta&&<div style={{marginTop:10,paddingTop:10,borderTop:'1px solid #F1F5F9',display:'flex',flexDirection:'column',gap:8}}>
+              {(n.itens||[]).map(function(it,idx){
+                var key=n.id+'|'+idx;
+                var cands=sugestoesVinculo[key]||[];
+                var jaVinculado=it.status==='conciliado'||it.status==='divergencia';
+                var cancelado=it.status==='cancelado';
+                var buscaTxt=(buscaVinculo[key]||'').trim();
+                var candsBusca=(!jaVinculado&&!cancelado&&buscaTxt)?candidatosVinculo.filter(function(c){return (c.nome||'').toLowerCase().indexOf(buscaTxt.toLowerCase())>=0;}).slice(0,8):[];
+                return(<div key={idx} style={{background:cancelado?'#F8FAFC':'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:8,padding:'8px 10px',opacity:cancelado?0.6:1}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
+                    <div style={{fontSize:12,fontWeight:700,color:'#1E293B'}}>{it.descricao}</div>
+                    {!jaVinculado&&!cancelado&&<button onClick={function(){pedirCancelarItemNota(n.id,idx);}} title="Não é medicamento — cancelar item" style={{flexShrink:0,background:'none',border:'1px solid #E2E8F0',borderRadius:6,padding:'2px 8px',fontSize:10,color:'#94A3B8',cursor:'pointer',whiteSpace:'nowrap'}}>❌ não é remédio</button>}
                   </div>
-                  :<div style={{marginBottom:8}}>
-                    {/* Sugestões automáticas (mesmo matcher de siglas+concentração usado em Gerenciar Atas/Comparação de Pedido) */}
-                    {it.sugestoes&&it.sugestoes.length>0&&<div style={{marginBottom:8}}>
-                      <div style={{fontSize:11,color:'#64748B',marginBottom:4}}>🔎 Parecidos no cadastro:</div>
-                      <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
-                        {it.sugestoes.slice(0,4).map(function(x){return(<button key={x.m.id} onClick={function(){escolherMedPdf(it.key,x.m);}} style={{background:'#EFF6FF',border:'1px solid #BFDBFE',borderRadius:7,padding:'5px 10px',fontSize:11,color:B,fontWeight:600,cursor:'pointer'}}>{x.m.nome}</button>);})}
+                  <div style={{fontSize:11,color:'#64748B',marginTop:2}}>Qtd na nota: {it.qtd}{it.lote?' · Lote: '+it.lote:''}{it.validade?' · Val: '+it.validade:''}</div>
+                  {cancelado
+                    ?<div style={{fontSize:11,marginTop:4,fontWeight:600,color:'#64748B'}}>🚫 Cancelado — não é medicamento</div>
+                    :jaVinculado
+                      ?<div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,marginTop:4,flexWrap:'wrap'}}>
+                        <span style={{fontSize:11,fontWeight:700,color:it.status==='conciliado'?'#059669':'#B45309'}}>{it.status==='conciliado'?'✅':'⚠️'} Vinculado a {it.medNome||'—'}</span>
+                        <button onClick={function(){desvincularItem(n.id,idx);}} style={{fontSize:10,color:'#94A3B8',background:'none',border:'1px solid #E2E8F0',borderRadius:6,padding:'2px 8px',cursor:'pointer',whiteSpace:'nowrap'}}>↩️ desvincular</button>
                       </div>
-                    </div>}
-                    <div style={{position:'relative'}}>
-                      <input value={it.busca} onChange={function(e){setPdfItem(it.key,{busca:e.target.value});setPdfFoco(it.key);}} onFocus={function(){setPdfFoco(it.key);}} placeholder="Ou busque manualmente no cadastro..." style={inp}/>
-                      {pdfFoco===it.key&&sug.length>0&&<div style={{position:'absolute',top:'100%',left:0,right:0,background:'#fff',border:'1.5px solid #E2E8F0',borderRadius:10,marginTop:4,zIndex:20,maxHeight:200,overflowY:'auto',boxShadow:'0 8px 24px rgba(0,0,0,.12)'}}>
-                        {sug.map(function(x){var m=x.m;return<button key={m.id} onClick={function(){escolherMedPdf(it.key,m);}} style={{width:'100%',textAlign:'left',padding:'10px 12px',border:'none',borderBottom:'1px solid #F1F5F9',background:'#fff',cursor:'pointer',fontSize:13,color:'#1E293B'}}>{m.nome}</button>;})}
-                      </div>}
-                      {pdfFoco===it.key&&it.busca.trim()&&sug.length===0&&<div style={{fontSize:11,color:'#94A3B8',marginTop:4}}>Nenhum medicamento encontrado no cadastro.</div>}
+                      :it.status==='nao_encontrado'
+                        ?<div style={{fontSize:11,color:'#991B1B',marginTop:4,fontWeight:600}}>❌ Sem recebimento correspondente encontrado automaticamente</div>
+                        :<div style={{fontSize:11,color:'#B45309',marginTop:4,fontWeight:600}}>⏳ Ainda não conciliado</div>}
+                  {!jaVinculado&&!cancelado&&cands.length>0&&<div style={{marginTop:6}}>
+                    <div style={{fontSize:10,color:'#64748B',marginBottom:4}}>💡 Sugestões de vínculo (recebido, pendente de conciliação):</div>
+                    <div style={{display:'flex',flexDirection:'column',gap:4}}>
+                      {cands.map(function(c){var vinc=vinculando===key;var qtdBate=(parseInt(c.m.quantidade)||0)===(Math.round(it.qtd)||0);return(
+                        <button key={c.m.id} disabled={!!vinculando} onClick={function(){confirmarVinculoManual(n.id,idx,c.m);}} style={{textAlign:'left',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,background:'#fff',border:'1px solid #BFDBFE',borderRadius:7,padding:'6px 10px',cursor:vinculando?'default':'pointer',opacity:vinculando&&!vinc?0.5:1}}>
+                          <span style={{fontSize:11,color:'#1351B4',fontWeight:600}}>{c.m.nome} <span style={{color:'#94A3B8',fontWeight:400}}>(recebeu {c.m.quantidade}{c.m.fornecedor?' · '+c.m.fornecedor:''})</span></span>
+                          <span style={{fontSize:10,fontWeight:800,color:'#fff',background:qtdBate?'#0C6B3E':'#D97706',borderRadius:6,padding:'3px 8px',whiteSpace:'nowrap'}}>{vinc?'Vinculando...':'🔗 Vincular'}</span>
+                        </button>
+                      );})}
                     </div>
                   </div>}
-                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:8}}>
-                  <div><label style={lbl}>Qtd</label><input type="number" min="1" inputMode="numeric" value={it.qtd} onChange={function(e){setPdfItem(it.key,{qtd:e.target.value.replace(/[^0-9]/g,'')});}} style={inp}/></div>
-                  <div><label style={lbl}>Lote</label><input value={it.lote} onChange={function(e){setPdfItem(it.key,{lote:e.target.value});}} placeholder="Lote" style={inp}/></div>
-                  <div><label style={lbl}>Validade</label><input value={it.validade} onChange={function(e){setPdfItem(it.key,{validade:e.target.value});}} placeholder="MM/AAAA" inputMode="numeric" style={inp}/></div>
-                </div>
-                <label style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer'}}>
-                  <input type="checkbox" checked={!!it.conciliado} onChange={function(){toggleConciliadoPdf(it.key);}} style={{width:18,height:18}}/>
-                  <span style={{fontSize:13,fontWeight:700,color:it.conciliado?'#059669':'#B45309'}}>{it.conciliado?'✅ Conciliado — confere com a nota':'⚠️ Não conciliado — vai para Divergências'}</span>
-                </label>
-              </div>);
-            })}
-          </div>
-          <button onClick={registrarNotaImportada} disabled={pdfSaving} style={{marginTop:12,width:'100%',padding:'14px',background:pdfSaving?'#94A3B8':'#0C6B3E',border:'none',borderRadius:12,color:'#fff',fontWeight:800,fontSize:15,cursor:pdfSaving?'default':'pointer'}}>{pdfSaving?'Registrando...':'✅ Registrar Nota Importada'}</button>
-        </div>}
-      </div>
-
-      <div style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9',marginBottom:16}}>
-        <div style={{fontWeight:800,fontSize:15,color:'#1E293B',marginBottom:4}}>Nota fiscal</div>
-        <div style={{fontSize:11,color:'#94A3B8',marginBottom:14}}>Ao conciliar, o estoque é ajustado para refletir a nota fiscal. Divergências ficam registradas como pendentes.</div>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
-          <div><label style={lbl}>Número da NF *</label><input value={notaNumero} onChange={function(e){setNotaNumero(e.target.value);}} placeholder="Ex: 12345" style={inp}/></div>
-          <div><label style={lbl}>Série</label><input value={notaSerie} onChange={function(e){setNotaSerie(e.target.value);}} placeholder="Ex: 1" style={inp}/></div>
-        </div>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
-          <div><label style={lbl}>Data de emissão</label><input type="date" value={notaEmissao} onChange={function(e){setNotaEmissao(e.target.value);}} style={inp}/></div>
-          <div><label style={lbl}>Valor total (R$)</label><input value={valorTotal} onChange={function(e){setValorTotal(e.target.value.replace(/[^0-9.,]/g,''));}} inputMode="decimal" placeholder="0,00" style={inp}/></div>
-        </div>
-        <div style={{marginBottom:10}}><label style={lbl}>Fornecedor</label><input value={fornecedor} onChange={function(e){setFornecedor(e.target.value);}} placeholder="Fornecedor da nota" style={inp}/></div>
-        <div style={{marginBottom:10}}><label style={lbl}>Anexo (URL do PDF/XML, opcional)</label><input value={anexo} onChange={function(e){setAnexo(e.target.value);}} placeholder="Cole o link do PDF/XML (opcional)" style={inp}/></div>
-        <div data-tour="conc-selecionar-receb" style={{marginBottom:4}}><label style={lbl}>Recebimento a vincular * <span style={{fontWeight:500,color:'#94A3B8'}}>(só pendentes)</span></label>
-          <select value={recSel} onChange={function(e){setRecSel(e.target.value);}} style={Object.assign({},inp,{background:'#fff'})}>
-            <option value="">Selecione um recebimento pendente...</option>
-            {pendentes.map(function(r){return<option key={r.id} value={r.id}>{fD(r.data)} · {r.fornecedor||'—'} · {(r.itens||[]).length} item(ns)</option>;})}
-          </select>
-          {pendentes.length===0&&<div style={{fontSize:11,color:'#94A3B8',marginTop:4}}>Nenhum recebimento pendente de conciliação.</div>}
-        </div>
-      </div>
-
-      <div style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9',marginBottom:16}}>
-        <div style={{fontWeight:700,fontSize:14,color:'#334155',marginBottom:10}}>Itens da nota fiscal</div>
-        <div style={{display:'flex',flexDirection:'column',gap:10}}>
-          {nfItens.map(function(it,idx){
-            var sug=(!it.medId&&it.busca.trim())?_fuzzyMeds(it.busca,medications,8):[];
-            return(<div key={it.key} style={{background:'#F8FAFC',borderRadius:12,padding:12,border:'1px solid #E2E8F0'}}>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
-                <div style={{fontSize:11,fontWeight:700,color:'#94A3B8'}}>Item {idx+1}</div>
-                {nfItens.length>1&&<button onClick={function(){delNf(it.key);}} style={{background:'#FEE2E2',border:'none',borderRadius:8,width:28,height:28,cursor:'pointer',fontSize:13,color:'#DC2626'}}>✕</button>}
-              </div>
-              {it.medId?
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,background:'#EFF6FF',border:'1.5px solid #BFDBFE',borderRadius:10,padding:'9px 12px',marginBottom:8}}>
-                  <div style={{fontWeight:700,fontSize:13,color:B}}>💊 {it.medNome}</div>
-                  <button onClick={function(){setNf(it.key,{medId:'',medNome:'',busca:''});setFocoItem(it.key);}} style={{background:'#fff',border:'1px solid #BFDBFE',borderRadius:8,padding:'4px 10px',fontSize:11,color:B,cursor:'pointer',fontWeight:600}}>Trocar</button>
-                </div>
-                :<div style={{position:'relative',marginBottom:8}}>
-                  <input value={it.busca} onChange={function(e){setNf(it.key,{busca:e.target.value});setFocoItem(it.key);}} onFocus={function(){setFocoItem(it.key);}} placeholder="Buscar medicamento no cadastro..." style={inp}/>
-                  {focoItem===it.key&&sug.length>0&&<div style={{position:'absolute',top:'100%',left:0,right:0,background:'#fff',border:'1.5px solid #E2E8F0',borderRadius:10,marginTop:4,zIndex:20,maxHeight:200,overflowY:'auto',boxShadow:'0 8px 24px rgba(0,0,0,.12)'}}>
-                    {sug.map(function(x){var m=x.m;return<button key={m.id} onClick={function(){escolherMed(it.key,m);}} style={{width:'100%',textAlign:'left',padding:'10px 12px',border:'none',borderBottom:'1px solid #F1F5F9',background:'#fff',cursor:'pointer',fontSize:13,color:'#1E293B'}}>{m.nome}</button>;})}
+                  {!jaVinculado&&!cancelado&&<div style={{marginTop:8}}>
+                    <div style={{fontSize:10,color:'#64748B',marginBottom:4}}>🔍 Ou busque manualmente entre os recebimentos pendentes:</div>
+                    <input value={buscaVinculo[key]||''} onChange={function(e){var v=e.target.value;setBuscaVinculo(function(p){var n2=Object.assign({},p);n2[key]=v;return n2;});}} placeholder="Digite o nome do medicamento recebido..." style={{width:'100%',padding:'7px 9px',borderRadius:7,border:'1.5px solid #E2E8F0',fontSize:11,boxSizing:'border-box'}}/>
+                    {buscaTxt&&<div style={{display:'flex',flexDirection:'column',gap:4,marginTop:4}}>
+                      {candsBusca.length===0&&<div style={{fontSize:10,color:'#94A3B8',padding:'4px 2px'}}>Nenhum recebimento pendente com esse nome.</div>}
+                      {candsBusca.map(function(c){var vinc=vinculando===key;var qtdBate=(parseInt(c.quantidade)||0)===(Math.round(it.qtd)||0);return(
+                        <button key={c.id} disabled={!!vinculando} onClick={function(){confirmarVinculoManual(n.id,idx,c);}} style={{textAlign:'left',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,background:'#fff',border:'1px solid #E2E8F0',borderRadius:7,padding:'6px 10px',cursor:vinculando?'default':'pointer',opacity:vinculando&&!vinc?0.5:1}}>
+                          <span style={{fontSize:11,color:'#1351B4',fontWeight:600}}>{c.nome} <span style={{color:'#94A3B8',fontWeight:400}}>(recebeu {c.quantidade}{c.fornecedor?' · '+c.fornecedor:''})</span></span>
+                          <span style={{fontSize:10,fontWeight:800,color:'#fff',background:qtdBate?'#0C6B3E':'#D97706',borderRadius:6,padding:'3px 8px',whiteSpace:'nowrap'}}>{vinc?'Vinculando...':'🔗 Vincular'}</span>
+                        </button>
+                      );})}
+                    </div>}
                   </div>}
-                </div>}
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
-                <div><label style={lbl}>Qtd faturada *</label><input type="number" min="1" inputMode="numeric" value={it.qtd} onChange={function(e){setNf(it.key,{qtd:e.target.value.replace(/[^0-9]/g,'')});}} placeholder="0" style={inp}/></div>
-                <div><label style={lbl}>Lote</label><input value={it.lote} onChange={function(e){setNf(it.key,{lote:e.target.value});}} placeholder="Lote" style={inp}/></div>
-                <div><label style={lbl}>Validade</label><input value={it.validade} onChange={function(e){setNf(it.key,{validade:e.target.value});}} placeholder="MM/AAAA" inputMode="numeric" style={inp}/></div>
-              </div>
-            </div>);
-          })}
-        </div>
-        <button onClick={addNf} style={{marginTop:10,width:'100%',padding:'11px',background:'#EFF6FF',border:'1.5px dashed #BFDBFE',borderRadius:10,color:B,fontWeight:700,fontSize:13,cursor:'pointer'}}>+ Adicionar item</button>
-        <button data-tour="conc-conciliar" onClick={conciliar} disabled={saving} style={{marginTop:12,width:'100%',padding:'14px',background:saving?'#94A3B8':B,border:'none',borderRadius:12,color:'#fff',fontWeight:800,fontSize:15,cursor:saving?'default':'pointer'}}>{saving?'Conciliando...':'🔍 Conciliar'}</button>
-      </div>
-
-      {/* RESULTADO DA CONCILIAÇÃO */}
-      {concAtual&&(function(){var gi=_concGeralInfo(concAtual.statusGeral);return(
-        <div style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9',marginBottom:16}}>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4,flexWrap:'wrap',gap:8}}>
-            <div style={{fontWeight:800,fontSize:15,color:'#1E293B'}}>Resultado da conciliação</div>
-            <span style={{background:gi.bg,color:gi.cor,fontSize:12,fontWeight:800,padding:'5px 12px',borderRadius:20}}>{gi.label}</span>
+                </div>);
+              })}
+            </div>}
           </div>
-          <div style={{fontSize:11,color:'#94A3B8',marginBottom:12}}>NF {concAtual.notaNumero} · o estoque não foi alterado pela nota.</div>
-          <div style={{display:'flex',flexDirection:'column',gap:10}}>
-            {concAtual.itens.map(function(row,i){var ci=_concItemInfo(row.status);var acoes=_concAcoes(row.status);var resolvido=row.acaoTomada&&row.acaoTomada!=='';
-              return(<div key={i} style={{border:'1px solid '+(row.status==='conciliado'?'#D1FAE5':ci.bg),borderRadius:12,overflow:'hidden'}}>
-                <div style={{display:'grid',gridTemplateColumns:'1fr auto auto',gap:8,padding:'10px 12px',alignItems:'center',background:ci.bg+'80'}}>
-                  <div>
-                    <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>{row.medicamentoNome||'—'}{row.status==='divergente'&&row.notaMedicamentoNome?<span style={{color:'#DC2626'}}> ⇄ NF: {row.notaMedicamentoNome}</span>:null}</div>
-                    <div style={{fontSize:12,color:ci.cor,fontWeight:700,marginTop:2}}>{ci.ico} {ci.label}</div>
-                  </div>
-                  <div style={{textAlign:'center'}}><div style={{fontSize:10,color:'#94A3B8'}}>Recebido</div><div style={{fontWeight:800,fontSize:14,color:'#1E293B'}}>{row.status==='nao_recebido'?'—':row.qtdRecebida}</div></div>
-                  <div style={{textAlign:'center'}}><div style={{fontSize:10,color:'#94A3B8'}}>Nota</div><div style={{fontWeight:800,fontSize:14,color:'#1E293B'}}>{row.status==='nao_faturado'?'—':row.qtdFaturada}</div></div>
-                </div>
-                {row.status!=='conciliado'&&<div style={{padding:'10px 12px',background:'#fff'}}>
-                  {resolvido?
-                    <div style={{fontSize:12,color:'#059669',fontWeight:700}}>✅ Ação registrada: {row.acaoTomada}{row.justificativa?' — '+row.justificativa:''}</div>
-                    :<RowAcoes acoes={acoes} onAcao={function(acao,just){resolver(i,acao,just);}}/>}
-                </div>}
-              </div>);
-            })}
-          </div>
-          <button onClick={function(){setConcAtual(null);}} style={{marginTop:14,width:'100%',padding:'11px',background:'#F1F5F9',border:'none',borderRadius:10,color:'#64748B',fontWeight:700,fontSize:13,cursor:'pointer'}}>Fechar resultado</button>
-        </div>);
-      })()}
-
-      {/* HISTÓRICO DE CONCILIAÇÕES */}
-      <div style={{fontWeight:800,fontSize:15,color:'#1E293B',marginBottom:10}}>Conciliações</div>
-      <div style={{display:'flex',flexDirection:'column',gap:10}}>
-        {concs.length===0&&<div style={{textAlign:'center',color:'#94A3B8',padding:20,fontSize:13}}>Nenhuma conciliação registrada.</div>}
-        {concs.map(function(cc){var gi=_concGeralInfo(cc.statusGeral);return(
-          <div key={cc.id} onClick={function(){setDetalhe(cc);}} style={{background:'#fff',borderRadius:14,padding:14,boxShadow:'0 2px 10px rgba(0,0,0,.05)',border:'1px solid #F1F5F9',cursor:'pointer'}}>
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
-              <div><div style={{fontWeight:700,fontSize:14,color:'#1E293B'}}>NF {cc.notaNumero||'—'}{cc.notaSerie?' · série '+cc.notaSerie:''}</div>
-                <div style={{fontSize:12,color:'#64748B',marginTop:2}}>{cc.fornecedor||'—'} · {(cc.itens||[]).length} item(ns)</div></div>
-              <span style={{background:gi.bg,color:gi.cor,fontSize:10,fontWeight:800,padding:'4px 9px',borderRadius:20,whiteSpace:'nowrap'}}>{gi.label}</span>
-            </div>
-          </div>);
-        })}
-      </div>
-
-      {/* DETALHE DE CONCILIAÇÃO */}
-      {detalhe&&(function(){var cc=concs.find(function(x){return x.id===detalhe.id;})||detalhe;var gi=_concGeralInfo(cc.statusGeral);return(
-        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:1000,display:'flex',alignItems:'flex-end',justifyContent:'center'}} onClick={function(){setDetalhe(null);}}>
-          <div style={{background:'#fff',borderRadius:'24px 24px 0 0',padding:'22px 18px 40px',width:'100%',maxWidth:560,maxHeight:'90vh',overflowY:'auto'}} onClick={function(e){e.stopPropagation();}}>
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:8}}>
-              <div><div style={{fontWeight:800,fontSize:17,color:'#1E293B'}}>NF {cc.notaNumero||'—'}</div>
-                <div style={{fontSize:12,color:'#64748B',marginTop:2}}>{cc.fornecedor||'—'}{cc.valorTotal?' · R$ '+Number(cc.valorTotal).toFixed(2):''}{cc.notaDataEmissao?' · emissão '+fD(cc.notaDataEmissao):''}</div>
-                {cc.anexoURL?<a href={cc.anexoURL} target="_blank" rel="noopener" style={{fontSize:12,color:B}}>📎 Anexo</a>:null}</div>
-              <button onClick={function(){setDetalhe(null);}} style={{background:'#F1F5F9',border:'none',borderRadius:10,width:36,height:36,cursor:'pointer',fontSize:18}}>✕</button>
-            </div>
-            <div style={{display:'inline-block',background:gi.bg,color:gi.cor,fontSize:12,fontWeight:800,padding:'6px 12px',borderRadius:20,marginBottom:14}}>{gi.label}</div>
-            <div style={{overflowX:'auto'}}>
-              <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
-                <thead><tr style={{color:'#94A3B8',textAlign:'left'}}><th style={{padding:'6px 8px'}}>Medicamento</th><th style={{padding:'6px 8px',textAlign:'center'}}>Receb.</th><th style={{padding:'6px 8px',textAlign:'center'}}>Nota</th><th style={{padding:'6px 8px'}}>Status</th></tr></thead>
-                <tbody>{(cc.itens||[]).map(function(row,i){var ci=_concItemInfo(row.status);return(<tr key={i} style={{borderTop:'1px solid #F1F5F9'}}>
-                  <td style={{padding:'8px'}}>{row.medicamentoNome||'—'}{row.status==='divergente'&&row.notaMedicamentoNome?' ⇄ '+row.notaMedicamentoNome:''}</td>
-                  <td style={{padding:'8px',textAlign:'center'}}>{row.status==='nao_recebido'?'—':row.qtdRecebida}</td>
-                  <td style={{padding:'8px',textAlign:'center'}}>{row.status==='nao_faturado'?'—':row.qtdFaturada}</td>
-                  <td style={{padding:'8px',color:ci.cor,fontWeight:700}}>{ci.ico} {ci.label}{row.acaoTomada?' · '+row.acaoTomada:''}</td>
-                </tr>);})}</tbody>
-              </table>
-            </div>
-          </div>
-        </div>);
-      })()}
-    </div>
-  );
-}
-
-// Botões de ação de uma divergência (com justificativa quando aplicável).
-function RowAcoes(props){
-  var acoes=props.acoes||[];var onAcao=props.onAcao;
-  var _j=useState('');var just=_j[0];var setJust=_j[1];
-  var precisaJust=acoes.indexOf('Registrar justificativa')>=0;
-  return(<div>
-    <div style={{display:'flex',flexWrap:'wrap',gap:6,marginBottom:precisaJust?8:0}}>
-      {acoes.map(function(a){var crit=a==='Registrar devolução'||a==='Cancelar item';var analise=a==='Marcar em análise';return<button key={a} onClick={function(){onAcao(a,just);}} style={{padding:'7px 10px',borderRadius:8,border:'1px solid '+(crit?'#FCA5A5':analise?'#DDD6FE':'#CBD5E1'),background:crit?'#FEF2F2':analise?'#F5F3FF':'#F8FAFC',color:crit?'#DC2626':analise?'#7C3AED':'#475569',fontSize:11,fontWeight:700,cursor:'pointer'}}>{a}</button>;})}
-    </div>
-    {precisaJust&&<input value={just} onChange={function(e){setJust(e.target.value);}} placeholder="Justificativa (para registrar)" style={{width:'100%',padding:'8px 10px',borderRadius:8,border:'1.5px solid #E2E8F0',fontSize:12,boxSizing:'border-box'}}/>}
-  </div>);
-}
-
-// ---- Parte 3: Painel de Divergências ----
-function PainelDivergencias(props){
-  var B='#1351B4';
-  var stock=props.stock||{};
-  var _recs=useState([]);var recs=_recs[0];var setRecs=_recs[1];
-  var _concs=useState([]);var concs=_concs[0];var setConcs=_concs[1];
-  var _fDe=useState('');var fDe=_fDe[0];var setFDe=_fDe[1];
-  var _fAte=useState('');var fAte=_fAte[0];var setFAte=_fAte[1];
-  var _fForn=useState('');var fForn=_fForn[0];var setFForn=_fForn[1];
-  var _fProd=useState('');var fProd=_fProd[0];var setFProd=_fProd[1];
-  var _fStatus=useState('todos');var fStatus=_fStatus[0];var setFStatus=_fStatus[1];
-  // Divergências criadas pela importação de PDF (Conciliação Fiscal) somem sozinhas da lista quando o
-  // estoque do medicamento chega a zero (saída completa) — debounce por doc pra não reenviar update
-  // repetido enquanto o listener do Firestore ainda não refletiu a alteração anterior.
-  var _lastAutoResolve=useRef({});
-  useEffect(function(){
-    (concs||[]).forEach(function(cc){
-      if(!cc.itens||!cc.itens.length)return;
-      var temZerado=cc.itens.some(function(it){return it.origemPdf&&it.status==='divergente'&&(stock[it.medicamentoId]||0)<=0;});
-      if(!temZerado)return;
-      var last=_lastAutoResolve.current[cc.id]||0;
-      if(Date.now()-last<4000)return;
-      _lastAutoResolve.current[cc.id]=Date.now();
-      var novos=cc.itens.filter(function(it){return !(it.origemPdf&&it.status==='divergente'&&(stock[it.medicamentoId]||0)<=0);});
-      var sg=_concStatusGeral(novos);
-      db.collection('conciliacoes').doc(cc.id).update({itens:novos,statusGeral:sg}).catch(function(){});
-    });
-  },[concs,stock]);
-
-  useEffect(function(){
-    var u1=db.collection('recebimentos').orderBy('criadoEm','desc').limit(500).onSnapshot(function(sn){setRecs(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));},function(){});
-    var u2=db.collection('conciliacoes').orderBy('criadoEm','desc').limit(500).onSnapshot(function(sn){setConcs(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));},function(){});
-    return function(){try{u1();}catch(e){}try{u2();}catch(e){}};
-  },[]);
-
-  var todas=_buildLinhasDivergencias(recs,concs);
-  var linhas=_filtrarDivergencias(todas,{de:fDe,ate:fAte,fornecedor:fForn,produto:fProd,status:fStatus});
-  var COLS=['Data','Fornecedor','Nota Fiscal','Produto','Tipo de divergência','Responsável','Status'];
-  function linhaExport(l){return[_fDsimples(l.data),l.fornecedor||'—',l.notaFiscal||'—',l.produto||'—',l.tipo||'—',l.responsavel||'—',_statusFluxoInfo(l.statusFluxo).label];}
-  function exportarXL(){exportRelatorioXL('Painel de Divergências',COLS,linhas.map(linhaExport),'painel_divergencias');}
-  function exportarPDF(){exportRelatorioPDF('Painel de Divergências',COLS,linhas.map(linhaExport));}
-
-  var inp={width:'100%',padding:'10px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:13,boxSizing:'border-box'};
-  var lbl={fontSize:11,fontWeight:700,color:'#475569',display:'block',marginBottom:4};
-
-  return(<div>
-    <div data-tour="div-painel" style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9',marginBottom:16}}>
-      <div style={{fontWeight:800,fontSize:15,color:'#1E293B',marginBottom:12}}>🚨 Painel de Divergências</div>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
-        <div><label style={lbl}>De</label><input type="date" value={fDe} onChange={function(e){setFDe(e.target.value);}} style={inp}/></div>
-        <div><label style={lbl}>Até</label><input type="date" value={fAte} onChange={function(e){setFAte(e.target.value);}} style={inp}/></div>
-      </div>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
-        <div><label style={lbl}>Fornecedor</label><input value={fForn} onChange={function(e){setFForn(e.target.value);}} placeholder="Filtrar fornecedor" style={inp}/></div>
-        <div><label style={lbl}>Produto</label><input value={fProd} onChange={function(e){setFProd(e.target.value);}} placeholder="Filtrar produto" style={inp}/></div>
-      </div>
-      <div style={{marginBottom:10}}><label style={lbl}>Status</label>
-        <select value={fStatus} onChange={function(e){setFStatus(e.target.value);}} style={Object.assign({},inp,{background:'#fff'})}>
-          <option value="todos">Todos</option>
-          {STATUS_FLUXO_TODOS.map(function(s){return<option key={s} value={s}>{_statusFluxoInfo(s).label}</option>;})}
-        </select>
-      </div>
-      {(fDe||fAte||fForn||fProd||fStatus!=='todos')&&<button onClick={function(){setFDe('');setFAte('');setFForn('');setFProd('');setFStatus('todos');}} style={{padding:'7px 12px',background:'#F1F5F9',border:'none',borderRadius:8,fontSize:12,color:'#64748B',cursor:'pointer',fontWeight:600}}>Limpar filtros</button>}
-      <div style={{display:'flex',gap:8,marginTop:12}}>
-        <button onClick={exportarXL} style={{flex:1,padding:'10px',background:'#0C6B3E',border:'none',borderRadius:10,color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>📊 Exportar Excel</button>
-        <button onClick={exportarPDF} style={{flex:1,padding:'10px',background:'#D97706',border:'none',borderRadius:10,color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>📄 Exportar PDF</button>
-      </div>
-    </div>
-    <div style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9'}}>
-      <div style={{fontSize:12,color:'#94A3B8',marginBottom:10}}>{linhas.length} registro(s)</div>
-      {linhas.length===0?<div style={{textAlign:'center',color:'#94A3B8',padding:24,fontSize:13}}>Nenhuma divergência encontrada.</div>:
-      <div style={{overflowX:'auto'}}>
-        <table style={{width:'100%',borderCollapse:'collapse',fontSize:12,minWidth:640}}>
-          <thead><tr style={{color:'#94A3B8',textAlign:'left'}}>{COLS.map(function(c){return<th key={c} style={{padding:'6px 8px',whiteSpace:'nowrap'}}>{c}</th>;})}</tr></thead>
-          <tbody>{linhas.map(function(l){var si=_statusFluxoInfo(l.statusFluxo);return(<tr key={l.key} style={{borderTop:'1px solid #F1F5F9'}}>
-            <td style={{padding:'8px',whiteSpace:'nowrap'}}>{_fDsimples(l.data)||'—'}</td>
-            <td style={{padding:'8px'}}>{l.fornecedor||'—'}</td>
-            <td style={{padding:'8px',whiteSpace:'nowrap'}}>{l.notaFiscal||'—'}</td>
-            <td style={{padding:'8px'}}>{l.produto||'—'}</td>
-            <td style={{padding:'8px'}}>{l.tipo||'—'}</td>
-            <td style={{padding:'8px'}}>{l.responsavel||'—'}</td>
-            <td style={{padding:'8px'}}><span style={{background:si.bg,color:si.cor,fontSize:10,fontWeight:800,padding:'3px 8px',borderRadius:20,whiteSpace:'nowrap'}}>{si.label}</span></td>
-          </tr>);})}</tbody>
-        </table>
+        );})}
       </div>}
     </div>
+    {confirmCancelarItem&&<ModalConfirm titulo="Não é medicamento" msg={'Marcar "'+confirmCancelarItem.descricao+'" como "não é medicamento"? Ele deixa de aparecer na conciliação.'} tipo="warning" confirmTxt="Cancelar item" onConfirm={executarCancelarItemNota} onCancel={function(){setConfirmCancelarItem(null);}}/>}
+    {confirmExcluirNota&&<ModalConfirm titulo="Excluir nota permanentemente" msg={'Excluir a nota NF '+(confirmExcluirNota.nfNumero||'(sem número)')+'? Isso não pode ser desfeito.'} tipo="danger" confirmTxt="Excluir" onConfirm={executarExcluirNota} onCancel={function(){setConfirmExcluirNota(null);}}/>}
+    {confirmArquivarNota&&<ModalConfirm titulo="Entrada conferida" msg={'Marcar a NF '+(confirmArquivarNota.nfNumero||'(sem número)')+' como totalmente conferida? Ela sai desta lista e passa a aparecer em 🗂️ Histórico de Notas.'} tipo="success" confirmTxt="Entrada conferida" onConfirm={executarArquivarNota} onCancel={function(){setConfirmArquivarNota(null);}}/>}
   </div>);
 }
 
-// ---- Parte 3: Relatórios ----
-function RelatoriosRecebimento(props){
-  var _recs=useState([]);var recs=_recs[0];var setRecs=_recs[1];
-  var _concs=useState([]);var concs=_concs[0];var setConcs=_concs[1];
-  var _rel=useState('pendentes');var relSel=_rel[0];var setRelSel=_rel[1];
-  var _fDe=useState('');var fDe=_fDe[0];var setFDe=_fDe[1];
-  var _fAte=useState('');var fAte=_fAte[0];var setFAte=_fAte[1];
-  var _fForn=useState('');var fForn=_fForn[0];var setFForn=_fForn[1];
-  var _fProd=useState('');var fProd=_fProd[0];var setFProd=_fProd[1];
+// Passo 5: Divergências — lista simples do que sobrou de problema no matching (coleção 'divergencias'),
+// com resolução manual (checkbox "Confirmar") ou automática (some sozinha quando o estoque do medicamento
+// chega a zero, mesmo mecanismo já usado na importação de PDF anterior).
+function PainelDivergenciasV2(props){
+  var user=props.user;var stock=props.stock||{};
+  var podeResolver=user.role==='tecnico'||user.role==='gestor';
+  var _divs=useState([]);var divs=_divs[0];var setDivs=_divs[1];
+  var _resolvendo=useState(null);var resolvendo=_resolvendo[0];var setResolvendo=_resolvendo[1];
+  var _lastAuto=useRef({});
 
   useEffect(function(){
-    var u1=db.collection('recebimentos').orderBy('criadoEm','desc').limit(500).onSnapshot(function(sn){setRecs(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));},function(){});
-    var u2=db.collection('conciliacoes').orderBy('criadoEm','desc').limit(500).onSnapshot(function(sn){setConcs(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));},function(){});
-    return function(){try{u1();}catch(e){}try{u2();}catch(e){}};
+    return db.collection('divergencias').where('status','==','pendente').orderBy('criadoEm','desc').limit(200).onSnapshot(function(sn){
+      setDivs(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));
+    },function(){
+      // fallback sem índice composto (where+orderBy pode exigir índice): busca tudo e filtra local.
+      db.collection('divergencias').orderBy('criadoEm','desc').limit(200).onSnapshot(function(sn){
+        setDivs(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}).filter(function(d){return (d.status||'pendente')==='pendente';}));
+      });
+    });
   },[]);
 
-  var base=_filtrarRecsConcs(recs,concs,{de:fDe,ate:fAte,fornecedor:fForn,produto:fProd});
-  var rep=RELATORIOS_RECEBIMENTO.find(function(r){return r.id===relSel;})||RELATORIOS_RECEBIMENTO[0];
-  var linhas=rep.build(base.recs,base.concs);
+  // Auto-clear: quando o estoque do medicamento chega a zero, a divergência de quantidade some sozinha
+  // (a de "não encontrado" não tem medicamentoId — só resolve manual).
+  useEffect(function(){
+    divs.forEach(function(d){
+      if(!d.medicamentoId)return;
+      if((stock[d.medicamentoId]||0)>0)return;
+      var last=_lastAuto.current[d.id]||0;
+      if(Date.now()-last<4000)return;
+      _lastAuto.current[d.id]=Date.now();
+      db.collection('divergencias').doc(d.id).update({status:'resolvido',resolvidoEm:new Date().toISOString(),resolvidoPor:'auto (estoque zerado)'}).catch(function(){});
+    });
+  },[divs,stock]);
 
-  function exportarXL(){exportRelatorioXL(rep.label,rep.colunas,linhas,'relatorio_'+rep.id);}
-  function exportarPDF(){exportRelatorioPDF(rep.label,rep.colunas,linhas);}
-
-  var inp={width:'100%',padding:'10px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:13,boxSizing:'border-box'};
-  var lbl={fontSize:11,fontWeight:700,color:'#475569',display:'block',marginBottom:4};
+  function confirmar(d){
+    setResolvendo(d.id);
+    db.collection('divergencias').doc(d.id).update({status:'resolvido',resolvidoEm:new Date().toISOString(),resolvidoPor:user.name||''})
+      .then(function(){setResolvendo(null);}).catch(function(e){alert('Erro: '+((e&&e.message)||e));setResolvendo(null);});
+  }
 
   return(<div>
-    <div data-tour="rel-painel" style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9',marginBottom:16}}>
-      <div style={{fontWeight:800,fontSize:15,color:'#1E293B',marginBottom:12}}>📑 Relatórios</div>
-      <div style={{marginBottom:10}}><label style={lbl}>Relatório</label>
-        <select value={relSel} onChange={function(e){setRelSel(e.target.value);}} style={Object.assign({},inp,{background:'#fff'})}>
-          {RELATORIOS_RECEBIMENTO.map(function(r){return<option key={r.id} value={r.id}>{r.label}</option>;})}
-        </select>
-      </div>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
-        <div><label style={lbl}>De</label><input type="date" value={fDe} onChange={function(e){setFDe(e.target.value);}} style={inp}/></div>
-        <div><label style={lbl}>Até</label><input type="date" value={fAte} onChange={function(e){setFAte(e.target.value);}} style={inp}/></div>
-      </div>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:10}}>
-        <div><label style={lbl}>Fornecedor</label><input value={fForn} onChange={function(e){setFForn(e.target.value);}} placeholder="Filtrar fornecedor" style={inp}/></div>
-        <div><label style={lbl}>Produto</label><input value={fProd} onChange={function(e){setFProd(e.target.value);}} placeholder="Filtrar produto" style={inp}/></div>
-      </div>
-      {(fDe||fAte||fForn||fProd)&&<button onClick={function(){setFDe('');setFAte('');setFForn('');setFProd('');}} style={{marginBottom:10,padding:'7px 12px',background:'#F1F5F9',border:'none',borderRadius:8,fontSize:12,color:'#64748B',cursor:'pointer',fontWeight:600}}>Limpar filtros</button>}
-      <div style={{display:'flex',gap:8}}>
-        <button onClick={exportarXL} style={{flex:1,padding:'10px',background:'#0C6B3E',border:'none',borderRadius:10,color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>📊 Exportar Excel</button>
-        <button onClick={exportarPDF} style={{flex:1,padding:'10px',background:'#D97706',border:'none',borderRadius:10,color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>📄 Exportar PDF</button>
-      </div>
-    </div>
-    <div style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9'}}>
-      <div style={{fontWeight:700,fontSize:13,color:'#334155',marginBottom:2}}>{rep.label}</div>
-      <div style={{fontSize:12,color:'#94A3B8',marginBottom:10}}>{linhas.length} registro(s)</div>
-      {linhas.length===0?<div style={{textAlign:'center',color:'#94A3B8',padding:24,fontSize:13}}>Nenhum dado para este relatório.</div>:
-      <div style={{overflowX:'auto'}}>
-        <table style={{width:'100%',borderCollapse:'collapse',fontSize:12,minWidth:480}}>
-          <thead><tr style={{color:'#94A3B8',textAlign:'left'}}>{rep.colunas.map(function(c){return<th key={c} style={{padding:'6px 8px',whiteSpace:'nowrap'}}>{c}</th>;})}</tr></thead>
-          <tbody>{linhas.map(function(row,i){return(<tr key={i} style={{borderTop:'1px solid #F1F5F9'}}>{row.map(function(v,j){return<td key={j} style={{padding:'8px'}}>{v===''||v==null?'—':v}</td>;})}</tr>);})}</tbody>
-        </table>
+    <div data-tour="div-painel" style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9'}}>
+      <div style={{fontWeight:800,fontSize:15,color:'#1E293B',marginBottom:4}}>🚨 Divergências</div>
+      <div style={{fontSize:11,color:'#94A3B8',marginBottom:14}}>Some sozinha quando o estoque do medicamento zerar, ou confirme manualmente abaixo.</div>
+      {divs.length===0?<div style={{textAlign:'center',color:'#94A3B8',padding:24,fontSize:13}}><div style={{fontSize:36,marginBottom:6}}>✅</div>Nenhuma divergência pendente.</div>:
+      <div style={{display:'flex',flexDirection:'column',gap:10}}>
+        {divs.map(function(d){var naoEncontrado=d.tipo==='nao_encontrado';return(
+          <div key={d.id} style={{border:'1px solid '+(naoEncontrado?'#FCA5A5':'#FDE68A'),background:naoEncontrado?'#FEF2F2':'#FFFBEB',borderRadius:12,padding:'10px 12px'}}>
+            <div style={{fontWeight:700,fontSize:13,color:'#1E293B',marginBottom:4}}>{naoEncontrado?'❌':'⚠️'} {d.medicamentoNome}</div>
+            {naoEncontrado?
+              <div style={{fontSize:12,color:'#991B1B'}}>Na nota, sem recebimento correspondente · qtd nota: {d.qtdNota}</div>
+              :<div style={{fontSize:12,color:'#92400E'}}>Recebeu {d.qtdRecebida}, nota diz {d.qtdNota} (divergência: {d.diferenca>0?'+':''}{d.diferenca})</div>}
+            {podeResolver&&<button onClick={function(){confirmar(d);}} disabled={resolvendo===d.id} style={{marginTop:8,padding:'7px 14px',background:resolvendo===d.id?'#94A3B8':'#0C6B3E',border:'none',borderRadius:8,color:'#fff',fontWeight:700,fontSize:12,cursor:resolvendo===d.id?'default':'pointer'}}>{resolvendo===d.id?'Confirmando...':'✅ Marcar como resolvido'}</button>}
+          </div>
+        );})}
       </div>}
     </div>
   </div>);
@@ -8578,6 +8437,8 @@ function RelatoriosRecebimento(props){
 function TabRecebimento(props){
   var user=props.user;var medications=props.medications||[];var onSave=props.onSave;var stock=props.stock||{};
   var B='#1351B4';
+  var podeExcluirReceb=user.role==='tecnico'||user.role==='gestor';
+  var podeConferir=user.role==='tecnico'||user.role==='gestor';
   function blankItem(){_recSeq++;return{key:'it'+_recSeq,medId:'',medNome:'',busca:'',qtd:'',lote:'',validade:'',obs:''};}
   var _data=useState(todayStr());var data=_data[0];var setData=_data[1];
   var _forn=useState('');var fornecedor=_forn[0];var setFornecedor=_forn[1];
@@ -8607,6 +8468,8 @@ function TabRecebimento(props){
   var _nmSaving=useState(false);var nmSaving=_nmSaving[0];var setNmSaving=_nmSaving[1];
   // Confirmação ao finalizar recebimento (Mudança 3)
   var _confirmFin=useState(false);var confirmFin=_confirmFin[0];var setConfirmFin=_confirmFin[1];
+  // Marcar como conferido manualmente — recebimento certo, sem precisar vincular a nenhuma nota fiscal.
+  var _confirmConferido=useState(null);var confirmConferido=_confirmConferido[0];var setConfirmConferido=_confirmConferido[1];
 
   useEffect(function(){
     var u=db.collection('recebimentos').orderBy('criadoEm','desc').limit(200).onSnapshot(function(sn){
@@ -8648,14 +8511,12 @@ function TabRecebimento(props){
   // Confirmação antes de finalizar (Mudança 3): valida e abre o modal; só finaliza no "Confirmar".
   function pedirConfirmacaoFinalizar(){
     var validos=itens.filter(function(it){return it.medId&&(parseInt(it.qtd)||0)>0;});
-    if(!fornecedor.trim()){alert('Informe o fornecedor.');return;}
     if(validos.length===0){alert('Adicione ao menos um medicamento com quantidade.');return;}
     setConfirmFin(true);
   }
 
   async function finalizar(){
     var validos=itens.filter(function(it){return it.medId&&(parseInt(it.qtd)||0)>0;});
-    if(!fornecedor.trim()){alert('Informe o fornecedor.');return;}
     if(validos.length===0){alert('Adicione ao menos um medicamento com quantidade.');return;}
     setSaving(true);
     console.group('%c📦 finalizar() Recebimento','background:#1351B4;color:#fff;padding:3px 8px;border-radius:4px;font-weight:bold');
@@ -8746,6 +8607,44 @@ function TabRecebimento(props){
     }catch(e){alert('Erro ao cancelar: '+((e&&e.message)?e.message:e));}
     setCancelSaving(false);
   }
+  // Exclusão permanente (só gestor/técnico, só depois de já cancelado — o estorno de estoque do
+  // cancelamento já aconteceu e ficou registrado nas entries; isso só apaga o documento/papelada do
+  // recebimento em si, não mexe em estoque nem nas entries já criadas).
+  // Marcar como conferido manualmente: o usuário conferiu fisicamente que o recebimento está certo e não
+  // precisa ficar esperando a nota fiscal ser importada pra sumir da lista de pendentes — a nota, quando
+  // chegar, é que vira o registro fiscal oficial. Só muda o status (não apaga nada, nem mexe em estoque).
+  // Vale tanto pra "pendente" quanto pra "divergência" (a divergência em si pode já ter sido resolvida no
+  // painel de Divergências — isso não muda sozinho o status do recebimento, então libera aqui também).
+  // Restrito a gestor/técnico, igual à exclusão permanente.
+  function pedirMarcarConferido(rec){if(!podeConferir||!rec||rec.status==='conciliado'||rec.status==='cancelado')return;setConfirmConferido(rec);}
+  function executarMarcarConferido(){
+    var rec=confirmConferido;setConfirmConferido(null);
+    if(!podeConferir||!rec)return;
+    var now=new Date().toISOString();
+    db.collection('recebimentos').doc(rec.id).update({status:'conciliado',statusLabel:'Conferido manualmente',conferidoManualmente:true,statusAntesConferido:rec.status||'pendente',statusLabelAntesConferido:rec.statusLabel||'',conferidoEm:now,conferidoPor:user.name||''})
+      .then(function(){logAcao('recebimento_conferido_manual','Recebimento '+rec.id+' marcado como conferido manualmente — forn: '+(rec.fornecedor||''),rec.status||'pendente','conciliado');setDetalhe(null);})
+      .catch(function(e){alert('Erro ao marcar como conferido: '+((e&&e.message)?e.message:e));});
+  }
+  // Desfazer a confirmação manual: volta pro status que o recebimento tinha antes de ser marcado como
+  // conferido (pendente ou divergência), caso tenha marcado sem querer. Também restrito a gestor/técnico.
+  var _confirmDesfazerConferido=useState(null);var confirmDesfazerConferido=_confirmDesfazerConferido[0];var setConfirmDesfazerConferido=_confirmDesfazerConferido[1];
+  function pedirDesfazerConferido(rec){if(!podeConferir||!rec||!rec.conferidoManualmente)return;setConfirmDesfazerConferido(rec);}
+  function executarDesfazerConferido(){
+    var rec=confirmDesfazerConferido;setConfirmDesfazerConferido(null);
+    if(!podeConferir||!rec)return;
+    var statusVolta=rec.statusAntesConferido||'pendente';
+    db.collection('recebimentos').doc(rec.id).update({status:statusVolta,statusLabel:rec.statusLabelAntesConferido||(statusVolta==='divergencia'?'Divergência Aberta':'Pendente de Conciliação Fiscal'),conferidoManualmente:false,statusAntesConferido:'',statusLabelAntesConferido:''})
+      .then(function(){logAcao('recebimento_conferido_desfeito','Confirmação manual desfeita — recebimento '+rec.id+' — forn: '+(rec.fornecedor||''),'conciliado',statusVolta);setDetalhe(null);})
+      .catch(function(e){alert('Erro ao desfazer confirmação: '+((e&&e.message)?e.message:e));});
+  }
+  function excluirPermanentemente(rec){
+    if(!podeExcluirReceb||!rec||rec.status!=='cancelado')return;
+    if(!confirm('EXCLUIR PERMANENTEMENTE o recebimento de '+(rec.fornecedor||'(sem fornecedor)')+' de '+fD(rec.data)+'? Isso não pode ser desfeito!'))return;
+    db.collection('recebimentos').doc(rec.id).delete().then(function(){
+      logAcao('recebimento_excluido_permanente','Recebimento '+rec.id+' excluído permanentemente — forn: '+(rec.fornecedor||''),'cancelado',null);
+      setDetalhe(null);
+    }).catch(function(e){alert('Erro ao excluir: '+((e&&e.message)?e.message:e));});
+  }
   // Duplicar recebimento: pré-preenche o formulário de novo recebimento com os itens de um existente
   // (inclusive cancelado), pra economizar digitação e recuperar recebimentos perdidos por erro.
   // Não copia o status/id — o usuário só clica "Finalizar" pra criar um novo recebimento independente.
@@ -8827,14 +8726,13 @@ function TabRecebimento(props){
 
       {/* SUB-ABAS */}
       <div data-tour="receb-subabas" style={{display:'flex',gap:8,marginBottom:16,overflowX:'auto'}}>
-        {[['fisico','📦 Recebimento Físico'],['conciliacao','📋 Conciliação Fiscal'],['divergencias','🚨 Divergências'],['relatorios','📑 Relatórios']].map(function(t){return(
+        {[['fisico','📦 Recebimento'],['notas','📥 Importar Notas'],['divergencias','🚨 Divergências']].map(function(t){return(
           <button key={t[0]} data-tour={'receb-sub-'+t[0]} onClick={function(){setAba(t[0]);}} style={{flexShrink:0,padding:'11px 14px',borderRadius:12,border:'none',background:aba===t[0]?B:'#F1F5F9',color:aba===t[0]?'#fff':'#64748B',fontWeight:700,fontSize:13,cursor:'pointer',whiteSpace:'nowrap'}}>{t[1]}</button>
         );})}
       </div>
 
-      {aba==='conciliacao'&&<ConciliacaoFiscal user={user} medications={medications}/>}
-      {aba==='divergencias'&&<PainelDivergencias user={user} stock={stock}/>}
-      {aba==='relatorios'&&<RelatoriosRecebimento user={user}/>}
+      {aba==='notas'&&<ImportarNotas user={user} medications={medications} stock={stock}/>}
+      {aba==='divergencias'&&<PainelDivergenciasV2 user={user} stock={stock}/>}
 
       {aba==='fisico'&&<div>
       {/* FORMULÁRIO */}
@@ -8842,7 +8740,7 @@ function TabRecebimento(props){
         <div style={{fontWeight:800,fontSize:15,color:'#1E293B',marginBottom:12}}>Novo recebimento</div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:12}}>
           <div><label style={lbl}>📅 Data do recebimento</label><input type="date" value={data} max={todayStr()} onChange={function(e){setData(e.target.value);}} style={inp}/></div>
-          <div><label style={lbl}>Fornecedor *</label><input value={fornecedor} onChange={function(e){setFornecedor(e.target.value);}} placeholder="Nome do fornecedor" style={inp}/></div>
+          <div><label style={lbl}>Fornecedor (opcional)</label><input value={fornecedor} onChange={function(e){setFornecedor(e.target.value);}} placeholder="Nome do fornecedor" style={inp}/></div>
         </div>
         <div style={{marginBottom:14}}><label style={lbl}>Responsável pelo recebimento</label><input value={responsavel} onChange={function(e){setResponsavel(e.target.value);}} placeholder="Quem recebeu" style={inp}/></div>
 
@@ -8871,7 +8769,7 @@ function TabRecebimento(props){
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:8}}>
                 <div><label style={lbl}>Qtd *</label><input type="number" min="1" inputMode="numeric" value={it.qtd} onChange={function(e){setItem(it.key,{qtd:e.target.value.replace(/[^0-9]/g,'')});}} placeholder="0" style={inp}/></div>
                 <div><label style={lbl}>Lote</label><input value={it.lote} onChange={function(e){setItem(it.key,{lote:e.target.value});}} placeholder="Lote" style={inp}/></div>
-                <div><label style={lbl}>Validade</label><input value={it.validade} onChange={function(e){setItem(it.key,{validade:e.target.value});}} placeholder="MM/AAAA" inputMode="numeric" style={inp}/></div>
+                <div><label style={lbl}>Validade</label><input value={it.validade} onChange={function(e){setItem(it.key,{validade:_maskValidade(e.target.value)});}} placeholder="MM/AAAA" inputMode="numeric" maxLength={7} style={inp}/></div>
               </div>
               <div><label style={lbl}>Observações (opcional)</label><input value={it.obs} onChange={function(e){setItem(it.key,{obs:e.target.value});}} placeholder="Observações do item" style={inp}/></div>
             </div>);
@@ -8945,7 +8843,7 @@ function TabRecebimento(props){
                   <div style={{fontWeight:700,fontSize:14,color:'#1E293B'}}>{r.fornecedor||'—'}</div>
                   <div style={{fontSize:12,color:'#64748B',marginTop:2}}>📅 {fD(r.data)} · {r.totalItens||(r.itens||[]).length} item(ns){r.responsavel?' · '+r.responsavel:''}</div>
                 </div>
-                <span style={{background:st.bg,color:st.cor,fontSize:10,fontWeight:800,padding:'4px 9px',borderRadius:20,whiteSpace:'nowrap'}}>{r.status==='pendente'||!r.status?'Pendente':st.label}</span>
+                <span style={{background:st.bg,color:st.cor,fontSize:10,fontWeight:800,padding:'4px 9px',borderRadius:20,whiteSpace:'nowrap'}}>{r.status==='pendente'||!r.status?'Pendente':(r.statusLabel||st.label)}</span>
               </div>
             </div>
             <div style={{marginTop:8,paddingTop:8,borderTop:'1px solid #F1F5F9',display:'flex',gap:6,justifyContent:'flex-end'}}>
@@ -8967,7 +8865,7 @@ function TabRecebimento(props){
               </div>
               <button onClick={function(){setDetalhe(null);}} style={{background:'#F1F5F9',border:'none',borderRadius:10,width:36,height:36,cursor:'pointer',fontSize:18}}>✕</button>
             </div>
-            <div style={{display:'inline-block',background:st.bg,color:st.cor,fontSize:12,fontWeight:800,padding:'6px 12px',borderRadius:20,marginBottom:14}}>{st.label}</div>
+            <div style={{display:'inline-block',background:st.bg,color:st.cor,fontSize:12,fontWeight:800,padding:'6px 12px',borderRadius:20,marginBottom:14}}>{r.statusLabel||st.label}</div>
             <div style={{fontWeight:700,fontSize:13,color:'#334155',marginBottom:8}}>Itens recebidos</div>
             <div style={{display:'flex',flexDirection:'column',gap:8,marginBottom:16}}>
               {(r.itens||[]).map(function(it,i){return(<div key={i} style={{background:'#F8FAFC',borderRadius:10,padding:'10px 12px',border:'1px solid #E2E8F0'}}>
@@ -8982,13 +8880,28 @@ function TabRecebimento(props){
             </div>}
             <div style={{borderTop:'1px solid #F1F5F9',paddingTop:14,display:'flex',flexDirection:'column',gap:8}}>
               <button onClick={function(){duplicar(r);}} style={{width:'100%',padding:'12px',background:'#EFF6FF',border:'1.5px solid #BFDBFE',borderRadius:12,color:B,fontWeight:700,fontSize:14,cursor:'pointer'}}>📋 Duplicar recebimento</button>
+              {podeConferir&&r.status!=='conciliado'&&r.status!=='cancelado'&&<div>
+                <div style={{fontSize:12,color:'#94A3B8',marginBottom:8}}>Já conferiu que esse recebimento está certo{r.status==='divergencia'?' (mesmo com a divergência já resolvida)':''}? Marque como conferido — ele sai da lista de pendentes sem precisar vincular a nenhuma nota (a nota fiscal, quando importada, é que vira o registro oficial).</div>
+                <button onClick={function(){pedirMarcarConferido(r);}} style={{width:'100%',padding:'12px',background:'#DCFCE7',border:'1.5px solid #86EFAC',borderRadius:12,color:'#0C6B3E',fontWeight:700,fontSize:14,cursor:'pointer',marginBottom:12}}>✅ Marcar como conferido</button>
+              </div>}
+              {podeConferir&&r.conferidoManualmente&&<div>
+                <div style={{fontSize:12,color:'#94A3B8',marginBottom:8}}>Marcou como conferido sem querer? Desfaça a confirmação — volta pro status anterior.</div>
+                <button onClick={function(){pedirDesfazerConferido(r);}} style={{width:'100%',padding:'12px',background:'#FEF3C7',border:'1.5px solid #FDE68A',borderRadius:12,color:'#92400E',fontWeight:700,fontSize:14,cursor:'pointer',marginBottom:12}}>↩️ Desfazer confirmação</button>
+              </div>}
               {(r.status==='pendente'||!r.status)&&<div>
-                <div style={{fontSize:12,color:'#94A3B8',marginBottom:8}}>Recebimentos não podem ser excluídos. Ao cancelar, o estoque é estornado (saída de ajuste) e o status muda para Cancelado.</div>
+                <div style={{fontSize:12,color:'#94A3B8',marginBottom:8}}>Ao cancelar, o estoque é estornado (saída de ajuste) e o status muda para Cancelado{podeExcluirReceb?' — depois de cancelado, dá pra excluir permanentemente.':'.'}</div>
                 <button onClick={function(){setCancelRec(r);setCancelJust('');}} style={{width:'100%',padding:'12px',background:'#FEE2E2',border:'1.5px solid #FECACA',borderRadius:12,color:'#DC2626',fontWeight:700,fontSize:14,cursor:'pointer'}}>🚫 Cancelar recebimento</button>
+              </div>}
+              {r.status==='cancelado'&&podeExcluirReceb&&<div>
+                <div style={{fontSize:12,color:'#94A3B8',marginBottom:8}}>Exclusão permanente — remove o registro deste recebimento. Isso não pode ser desfeito.</div>
+                <button onClick={function(){excluirPermanentemente(r);}} style={{width:'100%',padding:'12px',background:'#7F1D1D',border:'none',borderRadius:12,color:'#fff',fontWeight:700,fontSize:14,cursor:'pointer'}}>🗑️ Excluir permanentemente</button>
               </div>}
             </div>
           </div>
         </div>);})()}
+
+      {confirmConferido&&<ModalConfirm titulo="Marcar como conferido" msg={'Marcar o recebimento de '+(confirmConferido.fornecedor||'(sem fornecedor)')+' de '+fD(confirmConferido.data)+' como conferido? Ele sai da lista de pendentes de conciliação fiscal.'} tipo="success" confirmTxt="Marcar como conferido" onConfirm={executarMarcarConferido} onCancel={function(){setConfirmConferido(null);}}/>}
+      {confirmDesfazerConferido&&<ModalConfirm titulo="Desfazer confirmação" msg={'Desfazer a confirmação manual do recebimento de '+(confirmDesfazerConferido.fornecedor||'(sem fornecedor)')+' de '+fD(confirmDesfazerConferido.data)+'? Ele volta a aparecer como pendente de conciliação.'} tipo="warning" confirmTxt="Desfazer" onConfirm={executarDesfazerConferido} onCancel={function(){setConfirmDesfazerConferido(null);}}/>}
 
       {/* CANCELAR (justificativa obrigatória) */}
       {cancelRec&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.6)',zIndex:1100,display:'flex',alignItems:'center',justifyContent:'center',padding:18}} onClick={function(){if(!cancelSaving){setCancelRec(null);setCancelJust('');}}}>
