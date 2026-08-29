@@ -632,7 +632,9 @@ function ShiftCard(props){
   var onSolicitar=props.onSolicitarEntrada;var onSair=props.onSair;var db=props.db;
   var _showGestao=useState(false);var showGestao=_showGestao[0];var setShowGestao=_showGestao[1];
   var _allUsers=useState([]);var allUsers=_allUsers[0];var setAllUsers=_allUsers[1];
-  var isManager=user&&(user.role==='gestor'||user.role==='tecnico');
+  // Gerenciar equipe (adicionar/remover mesmo com o plantão já aberto) e abrir/encerrar o plantão são
+  // liberados pra gestor, técnico E qualquer farmacêutico — não só quem abriu o plantão (o "líder").
+  var isManager=user&&(user.role==='gestor'||user.role==='tecnico'||user.role==='farmaceutico');
 
   useEffect(function(){
     if(!isManager||!db||!plantao)return;
@@ -668,7 +670,10 @@ function ShiftCard(props){
   }
 
   if(!plantao){
-    if(!user||user.role!=='farmaceutico'||!isShiftTime())return null;
+    // Farmacêutico só abre dentro do horário de plantão; gestor/técnico podem abrir a qualquer hora
+    // (eles já operam sem precisar de plantão, mas também podem formalizar/abrir um se quiserem).
+    if(!user||!(user.role==='farmaceutico'||user.role==='gestor'||user.role==='tecnico'))return null;
+    if(user.role==='farmaceutico'&&!isShiftTime())return null;
     return(<div style={{background:'#EFF6FF',border:'1.5px dashed #BFDBFE',borderRadius:16,padding:'16px 18px',marginBottom:14,textAlign:'center'}}>
       <div style={{fontSize:13,color:'#64748B',marginBottom:10}}>Nenhum plantão ativo hoje</div>
       <button onClick={onIniciar} style={{background:B,border:'none',borderRadius:10,padding:'10px 24px',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer'}}>Abrir Plantão</button>
@@ -676,8 +681,9 @@ function ShiftCard(props){
   }
 
   var equipe=plantao.equipe||[];
-  var isFarmaLeader=user&&user.role==='farmaceutico'&&plantao.iniciadoPor===user.uid;
-  var canEncerrar=(isFarmaLeader||isManager)&&onEncerrar&&shiftId;
+  // Encerrar não depende mais de ser o "líder" (quem abriu) — gestor, técnico e qualquer farmacêutico
+  // podem encerrar o plantão de hoje, independente de quem esteja com ele aberto no momento.
+  var canEncerrar=isManager&&onEncerrar&&shiftId;
   var inTeam=equipe.some(function(m){return m.id===user.uid&&m.status!=='saiu';});
   var canSolicitar=isGuest&&onSolicitar&&user&&(user.role==='auxiliar'||user.role==='diarista');
   var canSair=!isGuest&&onSair&&user&&(user.role==='auxiliar'||user.role==='diarista')&&inTeam;
@@ -8432,6 +8438,7 @@ function TabRecebimento(props){
   var user=props.user;var medications=props.medications||[];var onSave=props.onSave;var stock=props.stock||{};
   var B='#1351B4';
   var podeExcluirReceb=user.role==='tecnico'||user.role==='gestor';
+  var podeConferir=user.role==='tecnico'||user.role==='gestor';
   function blankItem(){_recSeq++;return{key:'it'+_recSeq,medId:'',medNome:'',busca:'',qtd:'',lote:'',validade:'',obs:''};}
   var _data=useState(todayStr());var data=_data[0];var setData=_data[1];
   var _forn=useState('');var fornecedor=_forn[0];var setFornecedor=_forn[1];
@@ -8606,14 +8613,29 @@ function TabRecebimento(props){
   // Marcar como conferido manualmente: o usuário conferiu fisicamente que o recebimento está certo e não
   // precisa ficar esperando a nota fiscal ser importada pra sumir da lista de pendentes — a nota, quando
   // chegar, é que vira o registro fiscal oficial. Só muda o status (não apaga nada, nem mexe em estoque).
-  function pedirMarcarConferido(rec){if(!rec||(rec.status||'pendente')!=='pendente')return;setConfirmConferido(rec);}
+  // Vale tanto pra "pendente" quanto pra "divergência" (a divergência em si pode já ter sido resolvida no
+  // painel de Divergências — isso não muda sozinho o status do recebimento, então libera aqui também).
+  // Restrito a gestor/técnico, igual à exclusão permanente.
+  function pedirMarcarConferido(rec){if(!podeConferir||!rec||rec.status==='conciliado'||rec.status==='cancelado')return;setConfirmConferido(rec);}
   function executarMarcarConferido(){
     var rec=confirmConferido;setConfirmConferido(null);
-    if(!rec)return;
+    if(!podeConferir||!rec)return;
     var now=new Date().toISOString();
-    db.collection('recebimentos').doc(rec.id).update({status:'conciliado',statusLabel:'Conferido manualmente',conferidoManualmente:true,conferidoEm:now,conferidoPor:user.name||''})
+    db.collection('recebimentos').doc(rec.id).update({status:'conciliado',statusLabel:'Conferido manualmente',conferidoManualmente:true,statusAntesConferido:rec.status||'pendente',statusLabelAntesConferido:rec.statusLabel||'',conferidoEm:now,conferidoPor:user.name||''})
       .then(function(){logAcao('recebimento_conferido_manual','Recebimento '+rec.id+' marcado como conferido manualmente — forn: '+(rec.fornecedor||''),rec.status||'pendente','conciliado');setDetalhe(null);})
       .catch(function(e){alert('Erro ao marcar como conferido: '+((e&&e.message)?e.message:e));});
+  }
+  // Desfazer a confirmação manual: volta pro status que o recebimento tinha antes de ser marcado como
+  // conferido (pendente ou divergência), caso tenha marcado sem querer. Também restrito a gestor/técnico.
+  var _confirmDesfazerConferido=useState(null);var confirmDesfazerConferido=_confirmDesfazerConferido[0];var setConfirmDesfazerConferido=_confirmDesfazerConferido[1];
+  function pedirDesfazerConferido(rec){if(!podeConferir||!rec||!rec.conferidoManualmente)return;setConfirmDesfazerConferido(rec);}
+  function executarDesfazerConferido(){
+    var rec=confirmDesfazerConferido;setConfirmDesfazerConferido(null);
+    if(!podeConferir||!rec)return;
+    var statusVolta=rec.statusAntesConferido||'pendente';
+    db.collection('recebimentos').doc(rec.id).update({status:statusVolta,statusLabel:rec.statusLabelAntesConferido||(statusVolta==='divergencia'?'Divergência Aberta':'Pendente de Conciliação Fiscal'),conferidoManualmente:false,statusAntesConferido:'',statusLabelAntesConferido:''})
+      .then(function(){logAcao('recebimento_conferido_desfeito','Confirmação manual desfeita — recebimento '+rec.id+' — forn: '+(rec.fornecedor||''),'conciliado',statusVolta);setDetalhe(null);})
+      .catch(function(e){alert('Erro ao desfazer confirmação: '+((e&&e.message)?e.message:e));});
   }
   function excluirPermanentemente(rec){
     if(!podeExcluirReceb||!rec||rec.status!=='cancelado')return;
@@ -8858,9 +8880,15 @@ function TabRecebimento(props){
             </div>}
             <div style={{borderTop:'1px solid #F1F5F9',paddingTop:14,display:'flex',flexDirection:'column',gap:8}}>
               <button onClick={function(){duplicar(r);}} style={{width:'100%',padding:'12px',background:'#EFF6FF',border:'1.5px solid #BFDBFE',borderRadius:12,color:B,fontWeight:700,fontSize:14,cursor:'pointer'}}>📋 Duplicar recebimento</button>
-              {(r.status==='pendente'||!r.status)&&<div>
-                <div style={{fontSize:12,color:'#94A3B8',marginBottom:8}}>Já conferiu que esse recebimento está certo? Marque como conferido — ele sai da lista de pendentes sem precisar vincular a nenhuma nota (a nota fiscal, quando importada, é que vira o registro oficial).</div>
+              {podeConferir&&r.status!=='conciliado'&&r.status!=='cancelado'&&<div>
+                <div style={{fontSize:12,color:'#94A3B8',marginBottom:8}}>Já conferiu que esse recebimento está certo{r.status==='divergencia'?' (mesmo com a divergência já resolvida)':''}? Marque como conferido — ele sai da lista de pendentes sem precisar vincular a nenhuma nota (a nota fiscal, quando importada, é que vira o registro oficial).</div>
                 <button onClick={function(){pedirMarcarConferido(r);}} style={{width:'100%',padding:'12px',background:'#DCFCE7',border:'1.5px solid #86EFAC',borderRadius:12,color:'#0C6B3E',fontWeight:700,fontSize:14,cursor:'pointer',marginBottom:12}}>✅ Marcar como conferido</button>
+              </div>}
+              {podeConferir&&r.conferidoManualmente&&<div>
+                <div style={{fontSize:12,color:'#94A3B8',marginBottom:8}}>Marcou como conferido sem querer? Desfaça a confirmação — volta pro status anterior.</div>
+                <button onClick={function(){pedirDesfazerConferido(r);}} style={{width:'100%',padding:'12px',background:'#FEF3C7',border:'1.5px solid #FDE68A',borderRadius:12,color:'#92400E',fontWeight:700,fontSize:14,cursor:'pointer',marginBottom:12}}>↩️ Desfazer confirmação</button>
+              </div>}
+              {(r.status==='pendente'||!r.status)&&<div>
                 <div style={{fontSize:12,color:'#94A3B8',marginBottom:8}}>Ao cancelar, o estoque é estornado (saída de ajuste) e o status muda para Cancelado{podeExcluirReceb?' — depois de cancelado, dá pra excluir permanentemente.':'.'}</div>
                 <button onClick={function(){setCancelRec(r);setCancelJust('');}} style={{width:'100%',padding:'12px',background:'#FEE2E2',border:'1.5px solid #FECACA',borderRadius:12,color:'#DC2626',fontWeight:700,fontSize:14,cursor:'pointer'}}>🚫 Cancelar recebimento</button>
               </div>}
@@ -8873,6 +8901,7 @@ function TabRecebimento(props){
         </div>);})()}
 
       {confirmConferido&&<ModalConfirm titulo="Marcar como conferido" msg={'Marcar o recebimento de '+(confirmConferido.fornecedor||'(sem fornecedor)')+' de '+fD(confirmConferido.data)+' como conferido? Ele sai da lista de pendentes de conciliação fiscal.'} tipo="success" confirmTxt="Marcar como conferido" onConfirm={executarMarcarConferido} onCancel={function(){setConfirmConferido(null);}}/>}
+      {confirmDesfazerConferido&&<ModalConfirm titulo="Desfazer confirmação" msg={'Desfazer a confirmação manual do recebimento de '+(confirmDesfazerConferido.fornecedor||'(sem fornecedor)')+' de '+fD(confirmDesfazerConferido.data)+'? Ele volta a aparecer como pendente de conciliação.'} tipo="warning" confirmTxt="Desfazer" onConfirm={executarDesfazerConferido} onCancel={function(){setConfirmDesfazerConferido(null);}}/>}
 
       {/* CANCELAR (justificativa obrigatória) */}
       {cancelRec&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.6)',zIndex:1100,display:'flex',alignItems:'center',justifyContent:'center',padding:18}} onClick={function(){if(!cancelSaving){setCancelRec(null);setCancelJust('');}}}>
