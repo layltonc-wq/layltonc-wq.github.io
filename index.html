@@ -8470,6 +8470,8 @@ function TabRecebimento(props){
   var _confirmFin=useState(false);var confirmFin=_confirmFin[0];var setConfirmFin=_confirmFin[1];
   // Marcar como conferido manualmente — recebimento certo, sem precisar vincular a nenhuma nota fiscal.
   var _confirmConferido=useState(null);var confirmConferido=_confirmConferido[0];var setConfirmConferido=_confirmConferido[1];
+  // Erro estilizado (ModalAlert) pras ações de conferência/exclusão — em vez do alert() feio do navegador.
+  var _erroAcao=useState('');var erroAcao=_erroAcao[0];var setErroAcao=_erroAcao[1];
 
   useEffect(function(){
     var u=db.collection('recebimentos').orderBy('criadoEm','desc').limit(200).onSnapshot(function(sn){
@@ -8623,7 +8625,7 @@ function TabRecebimento(props){
     var now=new Date().toISOString();
     db.collection('recebimentos').doc(rec.id).update({status:'conciliado',statusLabel:'Conferido manualmente',conferidoManualmente:true,statusAntesConferido:rec.status||'pendente',statusLabelAntesConferido:rec.statusLabel||'',conferidoEm:now,conferidoPor:user.name||''})
       .then(function(){logAcao('recebimento_conferido_manual','Recebimento '+rec.id+' marcado como conferido manualmente — forn: '+(rec.fornecedor||''),rec.status||'pendente','conciliado');setDetalhe(null);})
-      .catch(function(e){alert('Erro ao marcar como conferido: '+((e&&e.message)?e.message:e));});
+      .catch(function(e){setErroAcao('Erro ao marcar como conferido: '+((e&&e.message)?e.message:e));});
   }
   // Desfazer a confirmação manual: volta pro status que o recebimento tinha antes de ser marcado como
   // conferido (pendente ou divergência), caso tenha marcado sem querer. Também restrito a gestor/técnico.
@@ -8635,15 +8637,19 @@ function TabRecebimento(props){
     var statusVolta=rec.statusAntesConferido||'pendente';
     db.collection('recebimentos').doc(rec.id).update({status:statusVolta,statusLabel:rec.statusLabelAntesConferido||(statusVolta==='divergencia'?'Divergência Aberta':'Pendente de Conciliação Fiscal'),conferidoManualmente:false,statusAntesConferido:'',statusLabelAntesConferido:''})
       .then(function(){logAcao('recebimento_conferido_desfeito','Confirmação manual desfeita — recebimento '+rec.id+' — forn: '+(rec.fornecedor||''),'conciliado',statusVolta);setDetalhe(null);})
-      .catch(function(e){alert('Erro ao desfazer confirmação: '+((e&&e.message)?e.message:e));});
+      .catch(function(e){setErroAcao('Erro ao desfazer confirmação: '+((e&&e.message)?e.message:e));});
   }
-  function excluirPermanentemente(rec){
-    if(!podeExcluirReceb||!rec||rec.status!=='cancelado')return;
-    if(!confirm('EXCLUIR PERMANENTEMENTE o recebimento de '+(rec.fornecedor||'(sem fornecedor)')+' de '+fD(rec.data)+'? Isso não pode ser desfeito!'))return;
+  // Exclusão permanente: confirmação por modal bonito (ModalConfirm) em vez do confirm() feio do
+  // navegador, e erro (se a regra de permissão do Firestore negar, por ex.) mostrado no ModalAlert.
+  var _confirmExcluirPerm=useState(null);var confirmExcluirPerm=_confirmExcluirPerm[0];var setConfirmExcluirPerm=_confirmExcluirPerm[1];
+  function pedirExcluirPermanente(rec){if(!podeExcluirReceb||!rec||rec.status!=='cancelado')return;setConfirmExcluirPerm(rec);}
+  function executarExcluirPermanente(){
+    var rec=confirmExcluirPerm;setConfirmExcluirPerm(null);
+    if(!podeExcluirReceb||!rec)return;
     db.collection('recebimentos').doc(rec.id).delete().then(function(){
       logAcao('recebimento_excluido_permanente','Recebimento '+rec.id+' excluído permanentemente — forn: '+(rec.fornecedor||''),'cancelado',null);
       setDetalhe(null);
-    }).catch(function(e){alert('Erro ao excluir: '+((e&&e.message)?e.message:e));});
+    }).catch(function(e){setErroAcao('Erro ao excluir: '+((e&&e.message)?e.message:e));});
   }
   // Duplicar recebimento: pré-preenche o formulário de novo recebimento com os itens de um existente
   // (inclusive cancelado), pra economizar digitação e recuperar recebimentos perdidos por erro.
@@ -8894,7 +8900,7 @@ function TabRecebimento(props){
               </div>}
               {r.status==='cancelado'&&podeExcluirReceb&&<div>
                 <div style={{fontSize:12,color:'#94A3B8',marginBottom:8}}>Exclusão permanente — remove o registro deste recebimento. Isso não pode ser desfeito.</div>
-                <button onClick={function(){excluirPermanentemente(r);}} style={{width:'100%',padding:'12px',background:'#7F1D1D',border:'none',borderRadius:12,color:'#fff',fontWeight:700,fontSize:14,cursor:'pointer'}}>🗑️ Excluir permanentemente</button>
+                <button onClick={function(){pedirExcluirPermanente(r);}} style={{width:'100%',padding:'12px',background:'#7F1D1D',border:'none',borderRadius:12,color:'#fff',fontWeight:700,fontSize:14,cursor:'pointer'}}>🗑️ Excluir permanentemente</button>
               </div>}
             </div>
           </div>
@@ -8902,6 +8908,8 @@ function TabRecebimento(props){
 
       {confirmConferido&&<ModalConfirm titulo="Marcar como conferido" msg={'Marcar o recebimento de '+(confirmConferido.fornecedor||'(sem fornecedor)')+' de '+fD(confirmConferido.data)+' como conferido? Ele sai da lista de pendentes de conciliação fiscal.'} tipo="success" confirmTxt="Marcar como conferido" onConfirm={executarMarcarConferido} onCancel={function(){setConfirmConferido(null);}}/>}
       {confirmDesfazerConferido&&<ModalConfirm titulo="Desfazer confirmação" msg={'Desfazer a confirmação manual do recebimento de '+(confirmDesfazerConferido.fornecedor||'(sem fornecedor)')+' de '+fD(confirmDesfazerConferido.data)+'? Ele volta a aparecer como pendente de conciliação.'} tipo="warning" confirmTxt="Desfazer" onConfirm={executarDesfazerConferido} onCancel={function(){setConfirmDesfazerConferido(null);}}/>}
+      {confirmExcluirPerm&&<ModalConfirm titulo="Excluir permanentemente" msg={'Excluir permanentemente o recebimento de '+(confirmExcluirPerm.fornecedor||'(sem fornecedor)')+' de '+fD(confirmExcluirPerm.data)+'? Isso não pode ser desfeito.'} tipo="danger" confirmTxt="Excluir" onConfirm={executarExcluirPermanente} onCancel={function(){setConfirmExcluirPerm(null);}}/>}
+      {erroAcao&&<ModalAlert titulo="Erro" msg={erroAcao} tipo="danger" onClose={function(){setErroAcao('');}}/>}
 
       {/* CANCELAR (justificativa obrigatória) */}
       {cancelRec&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.6)',zIndex:1100,display:'flex',alignItems:'center',justifyContent:'center',padding:18}} onClick={function(){if(!cancelSaving){setCancelRec(null);setCancelJust('');}}}>
