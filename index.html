@@ -6769,18 +6769,18 @@ function TabPrevisao(props){
                   var val=valorPedido(m);var edu=ajustes[m.id]!==undefined;
                   var vUnitStr=precos[m.id]!==undefined?precos[m.id]:(it&&it.vUnit?String(it.vUnit).replace('.',','):'');
                   var vt=val*valorUnit(m.id,it);
-                  return(<div key={m.id} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 0',borderTop:'1px solid #EEF2F8'}}>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontSize:12,fontWeight:600,color:'#1E293B',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{m.nome}</div>
-                      <div style={{fontSize:10,color:'#94A3B8'}}>sugestão: {pAuto}{vt>0?' · total: R$ '+vt.toFixed(2).replace('.',','):''}</div>
-                    </div>
-                    <div style={{display:'flex',flexDirection:'column',alignItems:'center'}}>
-                      <span style={{fontSize:9,color:'#94A3B8',fontWeight:600}}>PEDIR</span>
-                      <input type="number" min="0" value={val} onChange={function(e){var v=e.target.value;setAjustes(function(pr){var n=Object.assign({},pr);n[m.id]=v;return n;});}} style={{width:64,padding:'6px 4px',border:'2px solid '+(edu?'#F59E0B':'#CBD5E1'),borderRadius:8,fontSize:14,fontWeight:800,textAlign:'center',outline:'none',background:edu?'#FFFBEB':'#fff'}}/>
-                    </div>
-                    <div style={{display:'flex',flexDirection:'column',alignItems:'center'}}>
-                      <span style={{fontSize:9,color:'#94A3B8',fontWeight:600}}>V.UNIT</span>
-                      <input type="text" inputMode="decimal" value={vUnitStr} onChange={function(e){var v=e.target.value;setPrecos(function(pr){var n=Object.assign({},pr);n[m.id]=v;return n;});}} placeholder="R$" style={{width:64,padding:'6px 4px',border:'1.5px solid #CBD5E1',borderRadius:8,fontSize:12,fontWeight:700,textAlign:'center',outline:'none'}}/>
+                  return(<div key={m.id} style={{padding:'8px 0',borderTop:'1px solid #EEF2F8'}}>
+                    <div style={{fontSize:12,fontWeight:600,color:'#1E293B',wordBreak:'break-word',marginBottom:2}}>{m.nome}</div>
+                    <div style={{display:'flex',alignItems:'center',gap:8}}>
+                      <div style={{fontSize:10,color:'#94A3B8',flex:1,minWidth:0}}>sugestão: {pAuto}{vt>0?' · total: R$ '+vt.toFixed(2).replace('.',','):''}</div>
+                      <div style={{display:'flex',flexDirection:'column',alignItems:'center',flexShrink:0}}>
+                        <span style={{fontSize:9,color:'#94A3B8',fontWeight:600}}>PEDIR</span>
+                        <input type="number" min="0" value={val} onChange={function(e){var v=e.target.value;setAjustes(function(pr){var n=Object.assign({},pr);n[m.id]=v;return n;});}} style={{width:64,padding:'6px 4px',border:'2px solid '+(edu?'#F59E0B':'#CBD5E1'),borderRadius:8,fontSize:14,fontWeight:800,textAlign:'center',outline:'none',background:edu?'#FFFBEB':'#fff'}}/>
+                      </div>
+                      <div style={{display:'flex',flexDirection:'column',alignItems:'center',flexShrink:0}}>
+                        <span style={{fontSize:9,color:'#94A3B8',fontWeight:600}}>V.UNIT</span>
+                        <input type="text" inputMode="decimal" value={vUnitStr} onChange={function(e){var v=e.target.value;setPrecos(function(pr){var n=Object.assign({},pr);n[m.id]=v;return n;});}} placeholder="R$" style={{width:64,padding:'6px 4px',border:'1.5px solid #CBD5E1',borderRadius:8,fontSize:12,fontWeight:700,textAlign:'center',outline:'none'}}/>
+                      </div>
                     </div>
                   </div>);
                 })}
@@ -6791,16 +6791,14 @@ function TabPrevisao(props){
                   var vUnitStr=precos[uKey]!==undefined?precos[uKey]:(it.vUnit?String(it.vUnit).replace('.',','):'');
                   var carregando=vincItemLoading===uKey;
                   return(<div key={uKey} style={{padding:'8px 0',borderTop:'1px solid #EEF2F8'}}>
-                    <div style={{display:'flex',alignItems:'center',gap:8}}>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontSize:12,fontWeight:600,color:'#1E293B',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{it.descricao||'(sem descrição)'}</div>
-                        <div style={{marginTop:2}}><span style={{display:'inline-block',fontSize:9,fontWeight:800,color:'#B45309',background:'#FEF3C7',border:'1px solid #FCD34D',borderRadius:6,padding:'1px 6px'}}>⚠️ NÃO VINCULADO</span></div>
-                      </div>
-                      <div style={{display:'flex',flexDirection:'column',alignItems:'center'}}>
+                    <div style={{fontSize:12,fontWeight:600,color:'#1E293B',wordBreak:'break-word',marginBottom:2}}>{it.descricao||'(sem descrição)'}</div>
+                    <div style={{marginBottom:6}}><span style={{display:'inline-block',fontSize:9,fontWeight:800,color:'#B45309',background:'#FEF3C7',border:'1px solid #FCD34D',borderRadius:6,padding:'1px 6px'}}>⚠️ NÃO VINCULADO</span></div>
+                    <div style={{display:'flex',alignItems:'center',gap:8,justifyContent:'flex-end'}}>
+                      <div style={{display:'flex',flexDirection:'column',alignItems:'center',flexShrink:0}}>
                         <span style={{fontSize:9,color:'#94A3B8',fontWeight:600}}>PEDIR</span>
                         <input type="number" min="0" value={val} onChange={function(e){var v=e.target.value;setAjustes(function(pr){var n=Object.assign({},pr);n[uKey]=v;return n;});}} placeholder="0" style={{width:64,padding:'6px 4px',border:'2px solid '+(edu?'#F59E0B':'#CBD5E1'),borderRadius:8,fontSize:14,fontWeight:800,textAlign:'center',outline:'none',background:edu?'#FFFBEB':'#fff'}}/>
                       </div>
-                      <div style={{display:'flex',flexDirection:'column',alignItems:'center'}}>
+                      <div style={{display:'flex',flexDirection:'column',alignItems:'center',flexShrink:0}}>
                         <span style={{fontSize:9,color:'#94A3B8',fontWeight:600}}>V.UNIT</span>
                         <input type="text" inputMode="decimal" value={vUnitStr} onChange={function(e){var v=e.target.value;setPrecos(function(pr){var n=Object.assign({},pr);n[uKey]=v;return n;});}} placeholder="R$" style={{width:64,padding:'6px 4px',border:'1.5px solid #CBD5E1',borderRadius:8,fontSize:12,fontWeight:700,textAlign:'center',outline:'none'}}/>
                       </div>
