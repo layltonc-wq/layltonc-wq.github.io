@@ -27,8 +27,8 @@ db.collection('users').get().then(function(snap){var isFirst=snap.empty; ...})
 ```
 Isso lê a coleção `users` **inteira, sem filtro**, só pra checar se está vazia. Hoje, "vazia" = ninguém nunca se cadastrou no sistema inteiro. Depois do multi-tenant, isso precisa virar "ninguém se cadastrou **NESTE** tenant" — senão o primeiro usuário da prefeitura B nunca vira gestor automaticamente (porque a prefeitura A já tem usuários), ou pior, um usuário de A poderia influenciar esse cálculo pra B. Precisa de lógica nova aqui, não só um filtro de leitura.
 
-### 5. `plantao_convites` — só tem leitura/atualização, nenhum `.add()` encontrado
-Não achei nenhum ponto do código que crie um convite (`db.collection('plantao_convites').add(...)`). A coleção é lida (linha 9443) e atualizada (linhas 9476, 9477, 9660), mas o fluxo que cria o convite não apareceu na busca — pode ser funcionalidade morta/legada, ou pode ser algo que só existia em uma versão anterior. **Preciso que você confirme**: essa função de "convidar alguém pro plantão" ainda é usada? Se não for, dá pra ignorar essa coleção na migração.
+### 5. `plantao_convites` — RESOLVIDO: é funcionalidade morta
+Não existe nenhum `.add()` nessa coleção em lugar nenhum do código. Investiguei mais: a UI de "Gerenciar Equipe" do plantão (`adicionarMembro`, usada pelo botão "⚙️ Equipe") adiciona alguém direto em `plantoes.equipe[]` — sem passar por convite/aceite nenhum. Ou seja, o fluxo de convite (que já tem tela pronta — `InviteScreen`, banner de notificação, tudo) ficou pra trás quando "Gerenciar Equipe" passou a adicionar direto. **Conclusão: dá pra ignorar `plantao_convites` na migração** — está morta, ninguém consegue gerar um convite hoje. Deixei essa coleção fora da Fase 2.
 
 ### 6. Leitura sem filtro nenhum em `entries` (linha 9430)
 ```js
@@ -36,6 +36,15 @@ var col=db.collection('entries');
 var fetch=(fonte==='server')?col.get():col.get({source:'cache'})...
 ```
 Isso é o "histórico" carregado no login — lê a coleção `entries` **inteira** (sem `.where()`, sem `.limit()`), só filtra os últimos 3 dias em memória depois de baixar tudo. Hoje já é uma leitura pesada; com múltiplos tenants compartilhando a mesma coleção sem filtro de tenant, um tenant literalmente baixaria os dados de todos os outros antes de aplicar a regra de segurança (a regra bloqueia o *resultado* que a query tenta trazer, mas uma query sem `.where('tenant_id',...)` viola a regra inteira e falha — o que é bom para segurança, mas quebra a tela pra todo mundo até esse `.where()` ser adicionado). **Este é provavelmente o primeiro código que vai quebrar visivelmente assim que a regra mudar** — sinalizando que a query correspondente também precisa mudar no mesmo commit da regra, não depois.
+
+### 7. `medications` (em inglês) — RESOLVIDO: é resquício, e o recurso que ele alimenta já está quebrado hoje
+Investiguei o que essa coleção realmente faz: só é lida em um lugar (linha 9445), pro badge de "estoque baixo" que gestor/técnico veem no topo do app — o filtro é `m.estoqueMin>0`. Só que **nenhum lugar do código grava documento nenhum em `medications` com o campo `estoqueMin`** — todo cadastro de medicamento de verdade vai pra `medicamentos` (português), com o campo `minEstoque` (nome diferente!). Ou seja, esse badge de estoque baixo hoje **nunca mostra nada, mesmo quando tem medicamento realmente baixo** — é um bug independente do multi-tenant, não é só sobrar código morto. **Conclusão: `medications` fica de fora da migração** (não vale a pena migrar uma coleção que não recebe dado nenhum). Se quiser, num momento separado eu conserto esse badge de estoque baixo pra ler de `medicamentos`/`minEstoque` de verdade — mas isso é assunto pra depois do multi-tenant, não decisão de arquitetura.
+
+### 8. `vales` e `conciliacoes` — RESOLVIDO: são regras órfãs, sem nenhum código correspondente
+Confirmei de novo: zero ocorrência de `db.collection('vales')` ou `db.collection('conciliacoes')` no arquivo inteiro. `conciliacoes` bate com o nome do fluxo antigo de "Conciliação Fiscal" que foi todo substituído pelo redesenho de Recebimento/Importar Notas em uma sessão anterior — a regra ficou pra trás quando o código foi trocado. `vales` não achei rastro de ter existido de verdade. **Conclusão: essas duas regras ficam de fora da migração** — não têm dado nenhum pra proteger. Dá pra limpar do arquivo de regras num momento oportuno, sem pressa.
+
+### 9. `config/tours` — decisão tomada: fica **global** (não por tenant)
+Essa é uma decisão de produto de verdade (não dá pra descobrir só lendo código), mas como você não tem como responder agora, decidi pelo caminho mais simples: deixar como configuração **global do app** (não específica de cada prefeitura), já que é só liga/desliga de tutorial da interface — não é dado sensível de nenhum tenant. Se no futuro alguma prefeitura quiser controlar isso separadamente, dá pra mudar depois sem risco (é só uma tela de ajuda).
 
 ---
 
@@ -667,14 +676,12 @@ O que **o código já indica que precisa** de índice composto (par `where` + `o
 - **2 coleções têm um problema estrutural que exige mudar o esquema do ID do documento**, não só adicionar filtro: `plantoes` e `conferencias` (ambas usam a data de hoje como ID).
 - **1 ponto de lógica de negócio precisa ser redesenhado**: "primeiro usuário do sistema vira gestor automático" precisa virar "primeiro usuário DO TENANT".
 - **1 leitura sem filtro nenhum** (`entries`, histórico no login) provavelmente será a primeira coisa a quebrar visivelmente quando a regra mudar, e precisa ganhar `.where('tenant_id',...)` no mesmo commit que a regra correspondente.
-- **2 coleções com regra definida mas sem uso no código** (`vales`, `conciliacoes`) e **1 coleção duplicada em inglês** (`medications` vs `medicamentos`) — candidatas a limpeza, mas preciso da sua confirmação antes de tratar como "não usadas".
-- **1 fluxo aparentemente incompleto**: `plantao_convites` só é lido/atualizado, nunca criado no código atual — preciso confirmar se ainda está em uso.
+- **`vales`, `conciliacoes` e `plantao_convites`**: confirmado, código morto/regras órfãs — ficam de fora da migração (achados #5 e #8).
+- **`medications` (inglês)**: confirmado resquício — alimenta um badge de estoque baixo que já não funciona hoje (campo errado). Fica de fora da migração (achado #7).
+- **`config/tours`**: decidi manter global, não por tenant — não é dado sensível de nenhuma prefeitura (achado #9).
+
+Todas as perguntas em aberto da primeira versão deste relatório foram investigadas e resolvidas direto pelo código — não ficou nenhuma pendência esperando resposta sua.
 
 ---
 
-**Este relatório é só leitura — nenhuma linha de código ou regra foi alterada.** Por favor confirme:
-1. Os achados críticos (seção "🚨") fazem sentido pra você / bate com o que você sabe do sistema?
-2. As 6 perguntas em aberto (plantao_convites, medications, vales, conciliacoes, config/tours global-ou-por-tenant) têm resposta sua antes de eu seguir pra Fase 2?
-3. Falta alguma coleção, query ou regra que eu não tenha pego?
-
-Quando confirmar, sigo pra **Fase 2 (Plano de Implementação)** — ainda sem tocar em código.
+**Este relatório é só leitura — nenhuma linha de código ou regra foi alterada.** Vou seguir direto pra **Fase 2 (Plano de Implementação)**, ainda sem tocar em código — te mando o plano assim que estiver pronto pra você conferir antes de eu implementar de verdade. Se alguma coisa aqui não bater com o que você sabe do sistema, me avisa a qualquer momento que eu ajusto.
