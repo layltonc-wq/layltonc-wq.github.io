@@ -3,7 +3,9 @@
 **Data:** conforme sessão atual · **Branch:** `testing` · **Arquivo analisado:** `index.html` (fonte única do app)
 **Método:** varredura automatizada (grep/regex sobre o código-fonte) + verificação manual linha a linha dos casos ambíguos. Nenhuma alteração de código foi feita nesta fase — só leitura.
 
-> ⚠️ Este relatório não teve acesso ao Console do Firebase (regras/índices ao vivo). A seção 3 (Regras) reproduz o texto que você mesmo colou nesta conversa em uma sessão anterior — pode já estar desatualizado se você mexeu no Console depois. A seção 4 (Índices) lista os pares `where`+`orderBy` já existentes no código (que vão precisar de índice composto novo assim que `tenant_id` entrar no filtro) — não tenho como ler os índices que já estão de fato criados no seu projeto; isso precisa ser conferido por você no Console.
+> ⚠️ Este relatório não teve acesso direto ao Console do Firebase. A seção 3 (Regras) reproduz o texto que você colou no chat (agora também versionado em `firestore.rules`, raiz do repo) — pode estar desatualizado se você mexeu no Console depois disso. A seção 4 (Índices) lista os pares `where`+`orderBy` já existentes no código (que vão precisar de índice composto novo assim que `tenant_id` entrar no filtro) — não tenho como ler os índices que já estão de fato criados no seu projeto; ainda falta você confirmar isso (ou confirmar que não há nenhum manual, só os automáticos de campo único).
+>
+> **Consolidação:** esta branch (`testing`) reúne o trabalho desta sessão + de uma sessão anterior que travou (excesso de mensagens). Achados #10-12 abaixo e o `firestore.rules` foram adicionados nesta sessão. A prefeitura em produção hoje é **Vicência** (`vicencia-pe`) — confirmado por você; o PLAN_MULTITENANT.md, que citava "São Lourenço da Mata" por engano (a sessão anterior inferiu isso de um documento de ATA, não da prefeitura real), foi corrigido.
 
 ---
 
@@ -45,6 +47,15 @@ Confirmei de novo: zero ocorrência de `db.collection('vales')` ou `db.collectio
 
 ### 9. `config/tours` — decisão tomada: fica **global** (não por tenant)
 Essa é uma decisão de produto de verdade (não dá pra descobrir só lendo código), mas como você não tem como responder agora, decidi pelo caminho mais simples: deixar como configuração **global do app** (não específica de cada prefeitura), já que é só liga/desliga de tutorial da interface — não é dado sensível de nenhum tenant. Se no futuro alguma prefeitura quiser controlar isso separadamente, dá pra mudar depois sem risco (é só uma tela de ajuda).
+
+### 10. `plantao_convites` — reavaliado: não é 100% código morto, é UI viva sem quem alimente ela
+Complementando o Achado #5: confirmei de novo que não existe `.add()` nessa coleção — mas o `onSnapshot` que escuta convites pendentes (linha 9443), a `useState`/banner "🔔 Convite de Plantão" (linhas 9642-9660) e os handlers `handleConfirmInvite`/`handleDenyInvite` (linhas 9476-9477) **continuam rodando pra todo usuário logado hoje**, mesmo que nunca recebam nada. **Mudança em relação ao plano anterior**: em vez de remover a regra dessa coleção (o que faria esse código vivo começar a tomar "permission denied" silencioso — sem crash, mas sem necessidade), decidi mantê-la no padrão normal de migração (ganha `tenant_id`, ganha regra igual às outras) — custa 4 linhas a mais na regra e evita qualquer comportamento diferente do que já existe hoje. Ver PLAN_MULTITENANT.md atualizado.
+
+### 11. Bug pré-existente na regra de `create` de `users` (independente do multi-tenant, mas crítico pro Achado #4)
+A regra atual exige `request.resource.data.status == 'pending'` **sempre**, sem exceção. Mas `register()` (linha 570), quando `isFirst` é verdadeiro, tenta criar o documento já com `status:'approved'` — isso deveria falhar com "permission denied" hoje. Não trava a produção porque `isFirst` só é `true` quando a coleção `users` está totalmente vazia (só acontece uma vez, na vida do projeto Firebase). **Isso volta a ser um problema assim que uma prefeitura nova entrar** — é o mesmo mecanismo do Achado #4, só que agora com a regra confirmada barrando ele. Ver a solução proposta no PLAN_MULTITENANT.md (não tentei "consertar" isso com mais lógica de regra — troquei a abordagem: nenhum cadastro novo vira gestor sozinho, o técnico aprova manualmente o primeiro usuário de cada prefeitura nova).
+
+### 12. Superfície fora do Firestore: nenhuma
+Sem Cloud Functions, sem Firebase Storage (fotos como `fotoMural`/`photoURL` são *data URL* base64 direto no Firestore, via `readAsDataURL`), sem `collectionGroup`, sem outro provedor de autenticação além de e-mail/senha, sem *custom claims*. `db.batch()` é usado 13 vezes — cada escrita dentro de um batch continua avaliada individualmente pela regra da própria coleção, então não muda nada estrutural no plano. Confirma que a migração é 100% Firestore (regras + queries + esquema de ID), sem superfície extra em Storage/Functions pra atualizar.
 
 ---
 
@@ -676,11 +687,14 @@ O que **o código já indica que precisa** de índice composto (par `where` + `o
 - **2 coleções têm um problema estrutural que exige mudar o esquema do ID do documento**, não só adicionar filtro: `plantoes` e `conferencias` (ambas usam a data de hoje como ID).
 - **1 ponto de lógica de negócio precisa ser redesenhado**: "primeiro usuário do sistema vira gestor automático" precisa virar "primeiro usuário DO TENANT".
 - **1 leitura sem filtro nenhum** (`entries`, histórico no login) provavelmente será a primeira coisa a quebrar visivelmente quando a regra mudar, e precisa ganhar `.where('tenant_id',...)` no mesmo commit que a regra correspondente.
-- **`vales`, `conciliacoes` e `plantao_convites`**: confirmado, código morto/regras órfãs — ficam de fora da migração (achados #5 e #8).
+- **`vales` e `conciliacoes`**: confirmado, regras órfãs sem nenhum código correspondente — ficam de fora da migração (achado #8).
+- **`plantao_convites`**: sem `.add()` em lugar nenhum (ninguém cria convite novo hoje), mas a leitura/UI ainda roda pra todo usuário — decidi manter no padrão normal de migração em vez de remover a regra, pra não mudar comportamento observável à toa (achado #10, revisando o achado #5).
 - **`medications` (inglês)**: confirmado resquício — alimenta um badge de estoque baixo que já não funciona hoje (campo errado). Fica de fora da migração (achado #7).
 - **`config/tours`**: decidi manter global, não por tenant — não é dado sensível de nenhuma prefeitura (achado #9).
+- **Bug pré-existente na regra de `create` de `users`** (achado #11): a regra sempre exigiu `status=='pending'`, mas `register()` tenta criar o 1º usuário do sistema já `'approved'` — vai voltar a acontecer em toda prefeitura nova. Solução: abandonar o "primeiro usuário vira gestor sozinho" e deixar o técnico aprovar manualmente o primeiro usuário de cada prefeitura nova (ver PLAN_MULTITENANT.md).
+- **Nenhuma superfície fora do Firestore** (achado #12): sem Storage, sem Functions, sem outros provedores de auth — a migração é só Firestore.
 
-Todas as perguntas em aberto da primeira versão deste relatório foram investigadas e resolvidas direto pelo código — não ficou nenhuma pendência esperando resposta sua.
+Todas as perguntas em aberto da primeira versão deste relatório foram investigadas e resolvidas direto pelo código — não ficou nenhuma pendência esperando resposta sua sobre o levantamento em si. As decisões de produto (qual prefeitura é a atual, como escolher o tenant no cadastro) foram confirmadas por você na conversa e estão refletidas no PLAN_MULTITENANT.md.
 
 ---
 

@@ -2,31 +2,35 @@
 
 **Fase 2 — ainda sem tocar em código.** Baseado no `AUDIT_MULTITENANT.md` (Fase 1, já confirmada). Este documento define EXATAMENTE o que muda em cada coleção, cada tipo de query, e traz o arquivo de regras novo por completo (não só um template) pra você revisar.
 
+> **Atualização desta sessão:** você confirmou que a prefeitura em produção hoje é **Vicência** (`tenant_id: "vicencia-pe"`) — a versão anterior deste documento citava "São Lourenço da Mata" por engano, já corrigido em todo o arquivo. Você também confirmou que **Itaquitinga** é a próxima prefeitura a entrar, ainda não está rodando nada, e pediu pra eu decidir o melhor caminho (deixando aberto pra outras prefeituras entrarem depois também) — as decisões que antes estavam em aberto já foram tomadas abaixo, com a lógica de cada uma explicada. A seção 6 (nova) é o passo a passo prático de como colocar Itaquitinga (e qualquer prefeitura futura) pra rodar.
+
 ---
 
 ## Resumo em português simples
 
-Hoje o FarmaControl é de **uma prefeitura só**. A ideia é várias prefeituras usarem o **mesmo sistema**, cada uma vendo só os próprios dados — sem uma conseguir ver ou mexer nos dados da outra.
+Hoje o FarmaControl é de **uma prefeitura só** (Vicência). A ideia é várias prefeituras usarem o **mesmo sistema, no mesmo endereço de sempre**, cada uma vendo só os próprios dados — sem uma conseguir ver ou mexer nos dados da outra.
 
 Pra isso, todo documento salvo no banco (todo medicamento, toda entrada de estoque, todo recebimento, etc.) vai ganhar uma etiqueta invisível dizendo "isso é da prefeitura X". Toda vez que o app buscar dados, ele só busca os que têm a etiqueta da prefeitura de quem está logado. E as regras de segurança do banco (que já existem, protegendo contra acesso indevido) passam a exigir essa etiqueta batendo também — então mesmo que o app tivesse um bug e esquecesse de filtrar, o banco recusaria a operação.
 
-Dois pontos precisam de mais cuidado que simplesmente "adicionar a etiqueta" (detalhados abaixo): o plantão e a conferência diária, que hoje usam a **data** como identificador do registro — isso precisa de ajuste pra não misturar prefeituras diferentes no mesmo dia. E falta decidir **como um novo funcionário escolhe pra qual prefeitura está se cadastrando** — isso o sistema não faz sozinho, é uma decisão sua (opções no fim deste documento).
+Três pontos precisam de mais cuidado que simplesmente "adicionar a etiqueta" (detalhados abaixo): o plantão e a conferência diária, que hoje usam a **data** como identificador do registro — isso precisa de ajuste pra não misturar prefeituras diferentes no mesmo dia; e como o **primeiro usuário de uma prefeitura nova** vira gestor (hoje isso é automático e global, e tem inclusive um bug de regra já existente, independente do multi-tenant — ver `AUDIT_MULTITENANT.md` achado #11).
 
 ---
 
-## ⚠️ Decisão que só você pode tomar antes da Fase 3
+## ✅ Decisões já tomadas nesta sessão (você pode revisar, mas não estou mais esperando resposta pra seguir)
 
-**Como um usuário novo escolhe a prefeitura dele ao se cadastrar?** Hoje `register()` só pede nome/email/senha/cargo — não existe conceito de "de qual prefeitura" em lugar nenhum. Preciso que você escolha uma opção (ou sugira outra):
+### Como um usuário novo escolhe a prefeitura dele ao se cadastrar → **Opção A: link de convite com a prefeitura embutida**
 
-| Opção | Como funciona | Prós | Contras |
-|---|---|---|---|
-| **A — Link de convite com a prefeitura embutida (recomendada)** | Cada prefeitura recebe um link próprio pra distribuir aos funcionários, tipo `https://farmacontrol.app.br/?tenant=vicencia-pe`. O cadastro lê isso da URL e trava nessa prefeitura. Sem link válido, não cadastra. | Não precisa mexer em DNS/hospedagem — é só um parâmetro na mesma URL de sempre. Fácil de implementar e testar. | Cada prefeitura precisa ser instruída a usar o link certo (não o link genérico). |
-| **B — Subdomínio por prefeitura** | `vicencia.farmacontrol.app.br`, `saolourenco.farmacontrol.app.br`, etc. — cada uma com seu próprio endereço. | Mais "profissional", mais fácil pra usuário não errar. | Precisa configurar DNS + hospedagem pra cada subdomínio novo; mais trabalho toda vez que entra uma prefeitura nova. |
-| **C — Escolher numa lista suspensa na tela de cadastro** | Tela de cadastro ganha um campo "Prefeitura" com todas as prefeituras cadastradas no sistema. | Não depende de link nenhum. | Qualquer um pode se cadastrar em qualquer prefeitura (mistura o problema que queremos evitar) — precisaria de um código/senha extra por prefeitura pra não deixar isso aberto. |
+Cada prefeitura recebe um link próprio pra distribuir aos funcionários, tipo `<url-do-site>/?tenant=itaquitinga-pe`. O cadastro lê isso da URL e trava nessa prefeitura; sem link válido (ou com um `tenant_id` que não existe/está inativo), não cadastra. Essa foi a opção mais simples e com menor risco de alguém se cadastrar na prefeitura errada, então segui com ela — as duas alternativas descartadas (subdomínio por prefeitura, ou lista suspensa na tela de cadastro) exigiam mais infraestrutura ou abriam brecha de qualquer um escolher qualquer prefeitura.
 
-**Minha recomendação: Opção A.** É a que menos trabalho dá pra manter e a que menos risco tem de alguém se cadastrar na prefeitura errada por engano. Se topar, sigo com ela no plano abaixo — me avisa se preferir outra.
+⚠️ Um detalhe que ainda preciso que você confirme: o link de exemplo usa `<url-do-site>` porque **não encontrei nenhum domínio próprio configurado no repositório** (não há arquivo `CNAME`) — o endereço real hoje é provavelmente o padrão do GitHub Pages (`https://layltonc-wq.github.io/...`). Se `farmacontrol.app.br` (mencionado num rascunho anterior) já existe e está apontado pra este site, me confirma; senão sigo usando a URL do GitHub Pages mesmo nos links de convite.
 
-Também preciso confirmar: **qual é o `tenant_id` da prefeitura que já está usando o sistema hoje** (a atual, São Lourenço da Mata, pelo que vi no documento de ATA que você me mandou)? Sugestão de slug: `sao-lourenco-da-mata-pe`. Confirma ou me diz o que prefere.
+### Como o primeiro usuário de uma prefeitura nova vira gestor → **abandonar o "automático", o técnico aprova manualmente**
+
+Hoje `register()` verifica se `users` está vazia pra decidir se quem está se cadastrando vira `gestor` (`status:'approved'`) direto, sem aprovação de ninguém. Isso já tem um bug de regra (achado #11 da auditoria: a regra de `create` sempre exigiu `status=='pending'`, então essa criação "automática" já deveria falhar hoje — só nunca aconteceu de novo porque `users` nunca mais ficou vazia desde a primeira vez).
+
+Ao invés de tentar reproduzir esse "primeiro usuário vira gestor" por tenant dentro da regra do Firestore (o Firestore não faz contagem/agregação em regra de segurança — a única forma seria uma segunda leitura condicional arriscada e frágil), decidi **remover esse mecanismo automático por completo**: todo cadastro novo sempre nasce `status:'pending'`, de qualquer prefeitura, sem exceção — a regra fica mais simples e sem o bug. Quem aprova o **primeiro** usuário de uma prefeitura nova (e o promove a `gestor`) é o **técnico** (você), manualmente, na tela de Aprovar Contas — que passa a poder ver/aprovar pendências de **qualquer** prefeitura, não só da sua própria (é uma mudança de regra pequena, seção 3). Depois desse primeiro gestor aprovado, ele aprova o resto da equipe da própria prefeitura normalmente, do jeito que já funciona hoje.
+
+Isso resolve o bug pré-existente de graça e dá um ponto de controle humano na entrada de cada prefeitura nova — natural, já que é você mesmo quem está onboardando Itaquitinga agora. Ver seção 6 pro passo a passo completo.
 
 ---
 
@@ -38,13 +42,13 @@ Guarda os dados de cada prefeitura/cliente. Pequena, poucos documentos, cresce d
 ```
 tenants/{tenant_id}
 {
-  nome: "São Lourenço da Mata",      // nome de exibição
+  nome: "Vicência",      // nome de exibição
   uf: "PE",
   ativo: true,
   criadoEm: "2026-01-01T00:00:00.000Z"
 }
 ```
-`{tenant_id}` é o próprio ID do documento (ex.: `sao-lourenco-da-mata-pe`) — vira o valor gravado em `tenant_id` em todo o resto do sistema.
+`{tenant_id}` é o próprio ID do documento (ex.: `vicencia-pe`, e futuramente `itaquitinga-pe`) — vira o valor gravado em `tenant_id` em todo o resto do sistema.
 
 ### 1.2 `users/{uid}` — ganha o campo que amarra tudo
 ```
@@ -53,20 +57,21 @@ DEPOIS: {uid, role, status, name, email, color, sessionTimeout, photoURL, crf, c
 ```
 Não precisa duplicar o nome da prefeitura aqui — busca em `tenants/{tenant_id}` quando precisar exibir.
 
-### 1.3 As outras 22 coleções em uso — todas ganham `tenant_id`
+### 1.3 As outras 23 coleções em uso — todas ganham `tenant_id`
 Mesmo padrão pra todas (uso o schema já levantado na Fase 1, só acrescentando o campo novo):
 
-`medicamentos`, `entries`, `notas_fiscais`, `divergencias`, `recebimentos`, `tratamentos_atb`, `logs_contas`, `logs_acesso`, `atas`, `solicitacoes`, `pacientes_leite`, `plantao_solicitacoes`, `pacientes_controlados`, `vinculos_nfe`, `alertas`, `saidas_controladas`, `avisos`, `retiradas_leite`, `conferencias`*, `plantoes`*
+`medicamentos`, `entries`, `notas_fiscais`, `divergencias`, `recebimentos`, `tratamentos_atb`, `logs_contas`, `logs_acesso`, `atas`, `solicitacoes`, `pacientes_leite`, `plantao_solicitacoes`, `plantao_convites`, `pacientes_controlados`, `vinculos_nfe`, `alertas`, `saidas_controladas`, `avisos`, `retiradas_leite`, `conferencias`*, `plantoes`*
 
 ```
 ANTES: { ...campos que já existem... }
-DEPOIS: { ...campos que já existem..., tenant_id: "sao-lourenco-da-mata-pe" }
+DEPOIS: { ...campos que já existem..., tenant_id: "vicencia-pe" }
 ```
 
-**Ficam de fora da migração** (achados #5, #7, #8 da Fase 1 — código morto/órfão, confirmados):
-- `medications` (inglês) — resquício, alimenta um badge de estoque baixo já quebrado hoje.
-- `plantao_convites` — funcionalidade morta (Gerenciar Equipe adiciona direto, sem convite).
-- `vales`, `conciliacoes` — regras sem coleção correspondente no código.
+`plantao_convites` entrou na lista nesta revisão: apesar de nenhum `.add()` criar convite novo hoje (achado #10 da auditoria), a leitura/UI (banner de notificação, botões aceitar/recusar) continua rodando pra todo usuário — migrar como as demais evita que essa parte (hoje inofensiva) passe a tomar erro de permissão à toa depois que a regra endurecer.
+
+**Ficam de fora da migração** (achados #7, #8 da Fase 1 — código morto/órfão, confirmados):
+- `medications` (inglês) — resquício, alimenta um badge de estoque baixo já quebrado hoje (bug préexistente, fora do escopo do multi-tenant).
+- `vales`, `conciliacoes` — regras sem coleção correspondente no código nenhum lugar.
 
 **Fica global, sem `tenant_id`** (achado #9, decisão já tomada):
 - `config` — configuração da interface (tutoriais), não é dado de nenhuma prefeitura.
@@ -160,22 +165,31 @@ service cloud.firestore {
     }
 
     // ===== USUÁRIOS ===== (users NÃO ganha filtro de tenant na leitura — precisa poder ler o próprio
-    // doc ANTES de saber o tenant, pra função meuPerfil() funcionar. A escrita continua igual, só
-    // valida que create grava um tenant_id de um tenant que existe e está ativo.)
+    // doc ANTES de saber o tenant, pra função meuPerfil() funcionar. create SEMPRE nasce 'pending',
+    // sem exceção — o "primeiro usuário vira gestor" automático foi removido (era a origem do bug
+    // pré-existente do achado #11: a regra já exigia 'pending' sempre, e o create do isFirst tentava
+    // gravar 'approved'). create também confere que o tenant_id aponta pra um tenant que existe e
+    // está ativo, senão um link de convite com tenant_id errado/inventado nem chega a criar o doc.
+    // update/delete: técnico aprova/gerencia usuário de QUALQUER prefeitura (é ele quem faz a
+    // aprovação manual do primeiro gestor de uma prefeitura nova — ver runbook na seção 6); gestor
+    // só da própria prefeitura (tenantOk).
     match /users/{userId} {
       allow read: if logado();
       allow create: if request.auth != null
                     && request.auth.uid == userId
                     && request.resource.data.status == 'pending'
                     && request.resource.data.tenant_id is string
-                    && request.resource.data.tenant_id != '';
-      allow update: if (ehAdmin() && tenantOk(resource.data))
+                    && request.resource.data.tenant_id != ''
+                    && exists(/databases/$(database)/documents/tenants/$(request.resource.data.tenant_id))
+                    && get(/databases/$(database)/documents/tenants/$(request.resource.data.tenant_id)).data.ativo == true;
+      allow update: if ehTecnico()
+                    || (ehGestor() && tenantOk(resource.data))
                     || (logado()
                         && request.auth.uid == userId
                         && request.resource.data.role == resource.data.role
                         && request.resource.data.status == resource.data.status
                         && request.resource.data.tenant_id == resource.data.tenant_id);
-      allow delete: if ehAdmin() && tenantOk(resource.data);
+      allow delete: if ehTecnico() || (ehGestor() && tenantOk(resource.data));
     }
 
     // ===== MEDICAMENTOS =====
@@ -247,8 +261,13 @@ service cloud.firestore {
       allow create: if logado() && tenantOk(request.resource.data);
       allow update: if logado() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
     }
-    // plantao_convites: REMOVIDO (código morto — Fase 1, achado #5). Se algum dia a funcionalidade
-    // de convite voltar a ser usada, recriar esta regra com o mesmo padrão das outras.
+    // plantao_convites: sem .add() no código hoje (achado #10), mas a leitura/UI segue ativa —
+    // mantida no padrão normal em vez de removida, pra não mudar comportamento observável à toa.
+    match /plantao_convites/{id} {
+      allow read: if logado() && resource.data.tenant_id == userTenant();
+      allow create: if logado() && tenantOk(request.resource.data);
+      allow update: if logado() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
+    }
 
     // ===== MURAL E ALERTAS =====
     match /avisos/{id} {
@@ -314,7 +333,7 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // ===== _META (doc de versão por tenant — ex.: entries_version__sao-lourenco-da-mata-pe) =====
+    // ===== _META (doc de versão por tenant — ex.: entries_version__vicencia-pe) =====
     match /_meta/{doc} {
       allow read: if logado();
       allow write: if logado();
@@ -342,6 +361,8 @@ service cloud.firestore {
 **O que mudou estruturalmente em relação ao padrão do seu rascunho original:**
 - Toda regra de `create` agora também confere que o documento **sendo criado** já vem com o `tenant_id` certo (`tenantOk(request.resource.data)`), não só que quem tá logado pertence a algum tenant — sem isso, um usuário mal-intencionado (ou um bug no app) poderia criar um documento marcado com o `tenant_id` de OUTRA prefeitura.
 - `users` não filtra leitura por tenant — proposital: pra regra `userTenant()` funcionar em qualquer outra coleção, o Firestore precisa poder ler `users/{uid}` do próprio usuário logado sem cair numa dependência circular. (Isso não vaza dado sensível de outros tenants nessa coleção específica — é só nome/cargo/status; ainda assim, se quiser, dá pra travar mais a leitura de `users` só ao próprio doc + admins do mesmo tenant, mas isso complica a regra. Posso detalhar se você quiser essa camada extra.)
+- **`users` é a única coleção onde `ehTecnico()` tem alcance cross-tenant** (`update`/`delete` sem exigir `tenantOk`) — de propósito, é o que permite você (técnico) aprovar o primeiro usuário de uma prefeitura nova sem já pertencer a ela (seção 6). Em todas as outras 23 coleções, `ehAdmin()` (gestor OU técnico) continua exigindo `tenantOk` — ou seja, o técnico de uma prefeitura NÃO enxerga nem edita medicamento, entrada, paciente etc. de outra prefeitura. Esse acesso extra fica restrito só ao cadastro de usuários, o mínimo necessário pra fazer o onboarding funcionar.
+- `create` de `users` também confere que o `tenant_id` do documento aponta pra um `tenants/{id}` que existe e tem `ativo:true` — um link de convite com `tenant_id` inventado ou de uma prefeitura desativada nem chega a criar o cadastro.
 
 ---
 
@@ -359,17 +380,24 @@ db.collection('conferencias').doc(tenantDe(user)+'__'+todayStr())
 ```
 Isso muda em ~20 lugares no código (todo lugar que hoje monta `today`/`todayStr()` como ID direto — listados na Fase 1, achados #1 e #2). O campo `tenant_id` dentro do documento (seção 1.3) continua existindo também, é redundante com o ID mas mantém consistência com o resto do sistema e simplifica a regra.
 
-### 4.2 `register()` — "primeiro usuário vira gestor" por tenant, não pro sistema inteiro
+### 4.2 `register()` — remove o "primeiro usuário vira gestor" automático; lê o tenant da URL (Opção A)
 ```js
-// ANTES (linha 570) — lê a coleção inteira, sem filtro
-return db.collection('users').get();
-}).then(function(snap){var isFirst=snap.empty; ...})
+// ANTES (linha 570) — lê a coleção inteira sem filtro, só pra decidir se aprova como gestor sozinho
+auth.createUserWithEmailAndPassword(email,pass).then(function(c){var uid=c.user.uid;
+  return c.user.getIdToken(true).then(function(){return db.collection('users').get();})
+  .then(function(snap){var isFirst=snap.empty;
+    var ud={name:name,role:isFirst?'gestor':role,...,status:isFirst?'approved':'pending',...};
+    return db.collection('users').doc(uid).set(ud)...
 
-// DEPOIS
-return db.collection('users').where('tenant_id','==',tenantEscolhido).get();
-}).then(function(snap){var isFirst=snap.empty; ...})
+// DEPOIS — tenant_id vem de ?tenant= na URL (lido uma vez no carregamento da tela de login/cadastro,
+// igual o resto do app já lê outros parâmetros); sem isFirst, sem leitura de users nenhuma, sempre 'pending'
+auth.createUserWithEmailAndPassword(email,pass).then(function(c){var uid=c.user.uid;
+  return c.user.getIdToken(true).then(function(){
+    var ud={name:name,role:role,color:color,email:email,status:'pending',tenant_id:tenantDaURL,
+      criadoEm:new Date().toISOString(),sessionTimeout:12,photoURL:'',crf:role==='farmaceutico'?crf.trim():''};
+    return db.collection('users').doc(uid).set(ud)...
 ```
-`tenantEscolhido` vem da Opção A/B/C descrita no início deste documento (depende da decisão que falta).
+Se `tenantDaURL` estiver vazio/ausente (alguém abriu a tela de cadastro sem link de convite), a tela de cadastro mostra um erro e nem tenta criar a conta — evita o cadastro "sem prefeitura" que a regra do Firestore ia recusar mesmo assim, só que com uma mensagem melhor pro usuário. `tenantDaURL` fica guardado (ex. `sessionStorage`) entre o carregamento da página e o clique em "Cadastrar", já que o React aqui não usa router — é só ler `new URLSearchParams(location.search).get('tenant')` uma vez.
 
 ### 4.3 `entries` — leitura do histórico completo (linha 9430) ganha filtro
 ```js
@@ -407,7 +435,7 @@ Do mais simples/isolado pro mais arriscado, testando depois de cada um (a Fase 3
 8. `pacientes_leite`, `retiradas_leite` (módulo de leites)
 9. `solicitacoes`, `alertas`, `avisos` (módulos menores, independentes)
 10. `logs_acesso`, `logs_contas` (auditoria — baixo risco, ninguém depende de leitura em tempo real)
-11. `plantoes`, `plantao_solicitacoes` (junto com a mudança de esquema de ID — seção 4.1)
+11. `plantoes`, `plantao_solicitacoes`, `plantao_convites` (junto com a mudança de esquema de ID — seção 4.1)
 12. `conferencias` (junto com a mudança de esquema de ID — seção 4.1)
 13. `_meta` (seção 4.4)
 14. Regras do Firestore inteiras (seção 3) — só depois de TODAS as coleções acima já estarem gravando `tenant_id` nos dados existentes (Passo 5 da Fase 3, a migração dos documentos antigos)
@@ -416,10 +444,27 @@ Do mais simples/isolado pro mais arriscado, testando depois de cada um (a Fase 3
 
 ---
 
+## 6. Runbook: colocando uma prefeitura nova pra funcionar (ex.: Itaquitinga)
+
+Isso é o que responde diretamente sua pergunta — "qual o melhor caminho pra desmembrar e, quem sabe, adicionar outras prefeituras também". Depois que a Fase 3 estiver implantada (regras + código com `tenant_id`), colocar uma prefeitura nova pra rodar vira uma rotina de poucos passos, sem precisar mexer em código de novo:
+
+1. **Você (técnico) cria o documento da prefeitura** em `tenants/{tenant_id}` — por enquanto direto no Console do Firebase (4 campos: `nome`, `uf`, `ativo:true`, `criadoEm`); dá pra construir uma telinha no app pra isso depois, mas não é bloqueante. Ex.: `tenants/itaquitinga-pe = {nome:"Itaquitinga", uf:"PE", ativo:true, criadoEm:...}`.
+2. **Você gera o link de convite** dessa prefeitura: `<url-do-site>/?tenant=itaquitinga-pe` — e manda pro primeiro responsável de Itaquitinga (por WhatsApp, e-mail, o que for).
+3. **Esse primeiro funcionário se cadastra pelo link.** Nasce com `status:'pending'` e `tenant_id:'itaquitinga-pe'` — como qualquer cadastro novo, sem gestor automático (seção "Decisões já tomadas").
+4. **Você aprova esse primeiro usuário manualmente**, na tela de Aprovar Contas do próprio app (que, pra você — técnico — passa a mostrar pendências de todas as prefeituras, não só a sua) — e ajusta o cargo dele pra `gestor` se ainda não estiver.
+5. **Dali em diante, esse gestor cuida da própria prefeitura sozinho**: aprova o resto da equipe de Itaquitinga pela mesma tela de sempre — as regras já impedem ele de ver ou aprovar gente de Vicência ou de qualquer outra prefeitura.
+6. **Repete os passos 1-2 pra próxima prefeitura** (ex., depois de Itaquitinga, uma terceira). Nenhum deploy de código novo é necessário pra isso — é só cadastro de dado (`tenants`) + um link.
+
+Isso significa: **Vicência não precisa de nenhuma ação** quando Itaquitinga (ou qualquer prefeitura futura) entrar — ela já continua no mesmo link/URL de sempre, com os próprios dados intactos, sem saber que existe outra prefeitura no mesmo sistema.
+
+---
+
 ## Pendências antes de eu seguir pra Fase 3
 
-1. **Qual opção (A/B/C) pra escolha de tenant no cadastro** — recomendo A.
-2. **Confirmar o `tenant_id` da prefeitura atual** (sugestão: `sao-lourenco-da-mata-pe`) e o nome de exibição.
-3. Revisar o arquivo de regras da seção 3 — principalmente a observação sobre `users` não filtrar por tenant na leitura (é proposital, mas quero seu ok).
+As decisões de produto já foram tomadas nesta sessão (seção "✅ Decisões já tomadas" no topo). O que falta antes de eu começar a mudar código de verdade:
 
-Assim que você confirmar (ou me disser "pode decidir você mesmo" de novo, como fez na Fase 1), sigo pra Fase 3 — que é quando o código de fato começa a mudar, passo a passo, com commit e teste depois de cada coleção.
+1. **Confirmar o domínio real do link de convite** — `farmacontrol.app.br` (citado num rascunho anterior) ou o padrão do GitHub Pages? Não achei `CNAME` no repositório, então por enquanto os exemplos usam `<url-do-site>` genérico.
+2. **OK explícito no desenho do técnico com poder cross-tenant só sobre `users`** (seção 3, explicado logo abaixo do bloco de regras) — é a peça nova desta sessão que resolve o onboarding e o bug do achado #11 ao mesmo tempo; quero confirmar que faz sentido pra você antes de codificar em cima disso.
+3. **Índices do Firestore** — ainda não recebi (Fase 1, seção 4 do `AUDIT_MULTITENANT.md`); não bloqueia o início da Fase 3 (o Firestore avisa no console do navegador quando falta um, com link pra criar), mas ajuda saber de antemão.
+
+Fora isso, pode considerar o plano fechado. Assim que você confirmar os itens 1-2 (ou disser "pode decidir você mesmo" de novo), sigo pra Fase 3 — que é quando o código de fato começa a mudar, coleção por coleção, com commit e teste depois de cada uma, começando pela ordem da seção 5.
