@@ -1892,7 +1892,7 @@ function save(){if(!sel){setErr('Selecione um medicamento.');return;}var q=parse
       tipo:divRealMed?'substituicao':'nao_chegou',
       saidaPendenteQty:Number(divNotaQty)||0,
       saidaFicticiaTotal:0,
-      registradoPor:user.name,registradoEm:hoje,date:todayStr()
+      registradoPor:user.name,registradoEm:hoje,date:todayStr(),tenant_id:tenantDe(user)
     });
     Promise.all([p1,p2,p3]).then(function(){
       setSalvandoDiv(false);
@@ -1981,7 +1981,7 @@ function save(){if(!sel){setErr('Selecione um medicamento.');return;}var q=parse
           motivo:item2.divMotivo||'',status:'pendente',
           tipo:item2.divTipo||'substituicao',
           saidaPendenteQty:Number(item2.qty)||0,saidaFicticiaTotal:0,
-          registradoPor:user.name,registradoEm:hoje2,date:todayStr()
+          registradoPor:user.name,registradoEm:hoje2,date:todayStr(),tenant_id:tenantDe(user)
         });
         Promise.all([pDiv1,pDiv2,pDiv3]).then(function(){
           concluidos++;finalizarSeCompleto();
@@ -3237,7 +3237,7 @@ function TabDivergenciasPainel(props){
   var _carregando=useState(true);var carregando=_carregando[0];var setCarregando=_carregando[1];
   useEffect(function(){
     if(!db)return;
-    return db.collection('divergencias').orderBy('registradoEm','desc').limit(100).onSnapshot(function(s){
+    return db.collection('divergencias').where('tenant_id','==',tenantDe(user)).orderBy('registradoEm','desc').limit(100).onSnapshot(function(s){
       setDivs(s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;}));
       setCarregando(false);
     },function(){setCarregando(false);});
@@ -4236,7 +4236,7 @@ function TabNotas({user,medications}){
   var _ocrRun=sl(false);var ocrRunning=_ocrRun[0];var setOcrRunning=_ocrRun[1];
 
   ef(function(){
-    var u=db.collection('notas_fiscais').orderBy('criadoEm','desc').onSnapshot(function(sn){
+    var u=db.collection('notas_fiscais').where('tenant_id','==',tenantDe(user)).orderBy('criadoEm','desc').onSnapshot(function(sn){
       setNotas(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));
     });return u;
   },[]);
@@ -4420,7 +4420,7 @@ function TabNotas({user,medications}){
       await salvarVinculo(it.xProd,it.medId,it.medCasado?it.medCasado.nome:'');
       itensSalvos.push({nome:it.xProd,qtd:Math.round(it.qCom),lote:it.lote||''});
     }
-    await db.collection('notas_fiscais').add({nNF:preview.nNF,dataEmissao:preview.dataEmissao,fornecedorNome:preview.fornecedorNome,fornecedorCNPJ:preview.fornecedorCNPJ,chaveAcesso:preview.chaveAcesso,vTotal:preview.vTotal,itensSalvos:itensSalvos,importadoPor:user.name,importadoCor:user.color||B,criadoEm:new Date().toISOString(),nomeArquivo:preview.nomeArquivo,tipo:preview.tipo||'xml'});
+    await db.collection('notas_fiscais').add({nNF:preview.nNF,dataEmissao:preview.dataEmissao,fornecedorNome:preview.fornecedorNome,fornecedorCNPJ:preview.fornecedorCNPJ,chaveAcesso:preview.chaveAcesso,vTotal:preview.vTotal,itensSalvos:itensSalvos,importadoPor:user.name,importadoCor:user.color||B,criadoEm:new Date().toISOString(),nomeArquivo:preview.nomeArquivo,tipo:preview.tipo||'xml',tenant_id:tenantDe(user)});
     setConfirmando(false);setPreview(null);setItemsEdit([]);
     alert('NF-e '+preview.nNF+' importada! '+itensSalvos.length+' item(ns) adicionado(s) ao estoque.');
   }
@@ -5603,11 +5603,11 @@ function TabHistoricoNotas(props){
   var _confirmDesarquivar=useState(null);var confirmDesarquivar=_confirmDesarquivar[0];var setConfirmDesarquivar=_confirmDesarquivar[1];
   useEffect(function(){
     if(!db)return;
-    var u=db.collection('notas_fiscais').where('arquivadaHistorico','==',true).orderBy('arquivadaEm','desc').limit(150).onSnapshot(function(sn){
+    var u=db.collection('notas_fiscais').where('tenant_id','==',tenantDe(user)).where('arquivadaHistorico','==',true).orderBy('arquivadaEm','desc').limit(150).onSnapshot(function(sn){
       setNotasConf(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));
     },function(){
       // fallback sem índice composto: busca tudo e filtra/ordena local.
-      db.collection('notas_fiscais').limit(300).onSnapshot(function(sn){
+      db.collection('notas_fiscais').where('tenant_id','==',tenantDe(user)).limit(300).onSnapshot(function(sn){
         var arr=sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}).filter(function(n){return n.arquivadaHistorico;});
         arr.sort(function(a,b){return (b.arquivadaEm||'').localeCompare(a.arquivadaEm||'');});
         setNotasConf(arr);
@@ -8125,8 +8125,8 @@ function ImportarNotas(props){
   var _salvandoEditNota=useState(false);var salvandoEditNota=_salvandoEditNota[0];var setSalvandoEditNota=_salvandoEditNota[1];
 
   useEffect(function(){
-    var u1=db.collection('notas_fiscais').orderBy('criadoEm','desc').limit(100).onSnapshot(function(sn){setNotas(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));},function(){});
-    var u2=db.collection('recebimentos').orderBy('criadoEm','desc').limit(200).onSnapshot(function(sn){setRecs(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));},function(){});
+    var u1=db.collection('notas_fiscais').where('tenant_id','==',tenantDe(user)).orderBy('criadoEm','desc').limit(100).onSnapshot(function(sn){setNotas(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));},function(){});
+    var u2=db.collection('recebimentos').where('tenant_id','==',tenantDe(user)).orderBy('criadoEm','desc').limit(200).onSnapshot(function(sn){setRecs(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));},function(){});
     return function(){try{u1();}catch(e){}try{u2();}catch(e){}};
   },[]);
 
@@ -8169,7 +8169,7 @@ function ImportarNotas(props){
     if(novasNotas.length){
       setProgresso('Salvando '+novasNotas.length+' nota(s)...');
       var batch=db.batch();
-      novasNotas.forEach(function(n){var ref=db.collection('notas_fiscais').doc();batch.set(ref,n);notasComId.push(Object.assign({id:ref.id},n));});
+      novasNotas.forEach(function(n){var ref=db.collection('notas_fiscais').doc();n.tenant_id=tenantDe(user);batch.set(ref,n);notasComId.push(Object.assign({id:ref.id},n));});
       await batch.commit();
       logAcao('notas_importadas_lote',novasNotas.length+' nota(s) importada(s) em lote'+(falhas.length?(' — '+falhas.length+' falha(s)'):''));
     }
@@ -8199,11 +8199,11 @@ function ImportarNotas(props){
       resultado.conciliados.forEach(function(c){marcarRec(c.recFontes,'conciliado');marcarNota(c.notaFontes,'conciliado',c.medicamentoId,c.medicamentoNome);});
       resultado.divergencias.forEach(function(d){
         marcarRec(d.recFontes,'divergencia');marcarNota(d.notaFontes,'divergencia',d.medicamentoId,d.medicamentoNome);
-        batch.set(db.collection('divergencias').doc(),{medicamentoId:d.medicamentoId,medicamentoNome:d.medicamentoNome,qtdRecebida:d.qtdRecebida,qtdNota:d.qtdNota,diferenca:d.diferenca,tipo:'quantidade',status:'pendente',origem:'matching_notas',criadoEm:now,criadoPor:user.name||''});
+        batch.set(db.collection('divergencias').doc(),{medicamentoId:d.medicamentoId,medicamentoNome:d.medicamentoNome,qtdRecebida:d.qtdRecebida,qtdNota:d.qtdNota,diferenca:d.diferenca,tipo:'quantidade',status:'pendente',origem:'matching_notas',criadoEm:now,criadoPor:user.name||'',tenant_id:tenantDe(user)});
       });
       resultado.naoEncontrados.forEach(function(x){
         marcarNota(x.notaFontes,'nao_encontrado','','');
-        batch.set(db.collection('divergencias').doc(),{medicamentoId:'',medicamentoNome:x.medicamentoNome,qtdRecebida:0,qtdNota:x.qtdNota,diferenca:x.qtdNota,tipo:'nao_encontrado',status:'pendente',origem:'matching_notas',criadoEm:now,criadoPor:user.name||''});
+        batch.set(db.collection('divergencias').doc(),{medicamentoId:'',medicamentoNome:x.medicamentoNome,qtdRecebida:0,qtdNota:x.qtdNota,diferenca:x.qtdNota,tipo:'nao_encontrado',status:'pendente',origem:'matching_notas',criadoEm:now,criadoPor:user.name||'',tenant_id:tenantDe(user)});
       });
       // conciliado=true no item só quer dizer "já processado nesta ou numa rodada anterior" (evita
       // reprocessar) — o TIPO do resultado (resultadoMatching) é que decide o status do recebimento; uma
@@ -8287,7 +8287,7 @@ function ImportarNotas(props){
     var statusNovoRec=temDivRec?'divergencia':(todosProcRec?'conciliado':(rec.status||'pendente'));
     batch.update(db.collection('recebimentos').doc(rec.id),{itens:novosItensRec,status:statusNovoRec,statusLabel:temDivRec?'Divergência Aberta':(todosProcRec?'Conciliado':(rec.statusLabel||'Pendente de Conciliação Fiscal'))});
     if(divRef){
-      batch.set(divRef,{medicamentoId:itRec.medicamentoId||'',medicamentoNome:itRec.medicamentoNome||'',qtdRecebida:qtdRecebida,qtdNota:qtdNota,diferenca:qtdNota-qtdRecebida,tipo:'quantidade',status:'pendente',origem:'vinculo_manual',criadoEm:now,criadoPor:user.name||''});
+      batch.set(divRef,{medicamentoId:itRec.medicamentoId||'',medicamentoNome:itRec.medicamentoNome||'',qtdRecebida:qtdRecebida,qtdNota:qtdNota,diferenca:qtdNota-qtdRecebida,tipo:'quantidade',status:'pendente',origem:'vinculo_manual',criadoEm:now,criadoPor:user.name||'',tenant_id:tenantDe(user)});
     }
     batch.commit().then(function(){
       logAcao('vinculo_manual_notas','Vínculo manual: "'+(itNota.descricao||'')+'" (nota) → "'+(itRec.medicamentoNome||'')+'" (recebimento) — '+(bate?'conciliado':'divergência de quantidade'));
@@ -8531,11 +8531,11 @@ function PainelDivergenciasV2(props){
   var _lastAuto=useRef({});
 
   useEffect(function(){
-    return db.collection('divergencias').where('status','==','pendente').orderBy('criadoEm','desc').limit(200).onSnapshot(function(sn){
+    return db.collection('divergencias').where('tenant_id','==',tenantDe(user)).where('status','==','pendente').orderBy('criadoEm','desc').limit(200).onSnapshot(function(sn){
       setDivs(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));
     },function(){
       // fallback sem índice composto (where+orderBy pode exigir índice): busca tudo e filtra local.
-      db.collection('divergencias').orderBy('criadoEm','desc').limit(200).onSnapshot(function(sn){
+      db.collection('divergencias').where('tenant_id','==',tenantDe(user)).orderBy('criadoEm','desc').limit(200).onSnapshot(function(sn){
         setDivs(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}).filter(function(d){return (d.status||'pendente')==='pendente';}));
       });
     });
@@ -8625,7 +8625,7 @@ function TabRecebimento(props){
   var _erroAcao=useState('');var erroAcao=_erroAcao[0];var setErroAcao=_erroAcao[1];
 
   useEffect(function(){
-    var u=db.collection('recebimentos').orderBy('criadoEm','desc').limit(200).onSnapshot(function(sn){
+    var u=db.collection('recebimentos').where('tenant_id','==',tenantDe(user)).orderBy('criadoEm','desc').limit(200).onSnapshot(function(sn){
       setRecs(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));
     },function(){});
     return u;
@@ -8713,7 +8713,7 @@ function TabRecebimento(props){
         if(loteTrim&&valNorm)lotesParaAtualizar.push({medId:it.medId,lote:loteTrim,validade:valNorm});
       }
       // Doc do recebimento JÁ COM os entryIds preenchidos (não precisa de update depois).
-      batch.set(recRef,{data:data,fornecedor:fornecedor.trim(),responsavel:(responsavel||user.name||'').trim(),responsavelId:user.uid||'',status:'pendente',statusLabel:'Pendente de Conciliação Fiscal',totalItens:validos.length,itens:itensComEntry,criadoEm:now,criadoPor:user.name||'',criadoPorId:user.uid||''});
+      batch.set(recRef,{data:data,fornecedor:fornecedor.trim(),responsavel:(responsavel||user.name||'').trim(),responsavelId:user.uid||'',status:'pendente',statusLabel:'Pendente de Conciliação Fiscal',totalItens:validos.length,itens:itensComEntry,criadoEm:now,criadoPor:user.name||'',criadoPorId:user.uid||'',tenant_id:tenantDe(user)});
       console.log('Committing batch: '+validos.length+' entries + 1 recebimento (updates de cadastro ficam FORA do batch)...');
       await batch.commit();
       console.log('%c✅ Batch commitado com SUCESSO — estoque atualizado. Recebimento: '+recId,'color:#0C6B3E;font-weight:bold');
@@ -8835,7 +8835,7 @@ function TabRecebimento(props){
   async function verificarRecebimentos(){
     setVerif({loading:true});
     try{
-      var recsSnap=await db.collection('recebimentos').limit(1000).get();
+      var recsSnap=await db.collection('recebimentos').where('tenant_id','==',tenantDe(user)).limit(1000).get();
       var ativos=[];recsSnap.forEach(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];if((o.status||'pendente')!=='cancelado')ativos.push(o);});
       var entSnap=await db.collection('entries').where('tenant_id','==',tenantDe(user)).where('origemRecebimento','==',true).get();
       var porRec={};// recebimentoId -> { medicamentoId: qtdSomada }
@@ -9516,6 +9516,7 @@ function addEntry(data){try{var obj={criadoEm:new Date().toISOString(),date:toda
     promise=promise.then(function(ref){
       // Buscar divergências do tipo substituição onde este med é o 'real'
       return db.collection('divergencias')
+        .where('tenant_id','==',tenantDe(user))
         .where('realMedId','==',obj.medicamentoId)
         .where('tipo','==','substituicao')
         .get().then(function(snap){
