@@ -698,4 +698,22 @@ Todas as perguntas em aberto da primeira versão deste relatório foram investig
 
 ---
 
-**Este relatório é só leitura — nenhuma linha de código ou regra foi alterada.** Vou seguir direto pra **Fase 2 (Plano de Implementação)**, ainda sem tocar em código — te mando o plano assim que estiver pronto pra você conferir antes de eu implementar de verdade. Se alguma coisa aqui não bater com o que você sabe do sistema, me avisa a qualquer momento que eu ajusto.
+## Checagem final antes da Fase 3 (feita nesta sessão, a seu pedido)
+
+Antes de começar a mudar `index.html`/`firestore.rules` de verdade, conferi:
+
+- **Toda coleção usada no código (25) tem regra correspondente** no `firestore.rules` novo (PLAN_MULTITENANT.md, seção 3) — cruzado 1:1, nenhuma faltando, nenhuma sobrando (as 2 sobras conhecidas, `vales`/`conciliacoes`, foram removidas do arquivo novo de propósito).
+- **O bloco de regras novo (seção 3 do plano) é sintaticamente consistente**: chaves e parênteses balanceados (verifiquei programaticamente, ignorando parênteses dentro de comentários em português), 26 `match` (as 23 coleções operacionais + `users` + `tenants` + `super_admins` novas).
+- **Todas as decisões de produto em aberto foram fechadas**: domínio (`www.farmacontrol.app.br`), tenant atual (`vicencia-pe`), escolha de tenant no cadastro (Opção A — link de convite), poder cross-tenant (Opção 2 — `super_admins` por conta específica, não por cargo). Nenhuma pendência de decisão restante — só os índices do Firestore, que não bloqueiam o início.
+- **Nenhuma referência residual** ao nome errado da prefeitura anterior ("São Lourenço da Mata") ou ao placeholder de URL (`<url-do-site>`) em nenhum dos dois documentos.
+
+### O que eu consigo (e não consigo) fazer sozinho na Fase 3 — importante você saber antes de eu começar
+
+Isso não é uma pendência de decisão, é uma limitação real do meu acesso que muda **como** a Fase 3 vai rodar na prática, então é parte da "checagem final" pedida:
+
+- **Eu consigo**: editar o `index.html` (todas as 225 ocorrências, coleção por coleção, seguindo a ordem da seção 5 do plano), escrever o `firestore.rules` final, escrever scripts de migração de dados, e fazer verificação estática depois de cada coleção (grep confirmando que toda ocorrência ganhou o filtro certo, checagem de sintaxe JS, releitura do trecho alterado). Tudo isso commitado na branch `testing`, passo a passo, um commit por coleção — do jeito que o plano original pediu.
+- **Eu NÃO consigo**: publicar as regras novas no Console do Firebase (não tenho login nem credencial dos projetos `app-farma-b21e2`/`farmacontrol-dev-6a3e3`), rodar o script de migração dos documentos existentes contra o banco real (mesmo motivo), nem abrir o app de verdade num navegador logado pra clicar e testar cada tela como um usuário real.
+- **Consequência prática**: o "TESTAR" que o plano original pede depois de cada passo vai acontecer em duas camadas — eu faço a verificação estática de cada commit (garantindo que o código está certo e coerente), e **você** faz a verificação viva: publica a regra correspondente no projeto de teste (`farmacontrol-dev-6a3e3`), roda o script de migração nesse mesmo projeto de teste, e clica no app pra confirmar que a tela em questão continua funcionando — só depois disso a gente repete pro projeto de produção (`app-farma-b21e2`, onde está o Vicência de verdade). Eu aviso exatamente o que testar em cada commit.
+- Isso significa que, embora eu já comece a escrever o código nesta sessão, **as regras novas só entram em vigor de verdade quando você as publicar no Console** — até lá, o app de produção continua rodando com as regras atuais, sem risco, mesmo com o código já tendo `tenant_id` sendo escrito (o Firestore aceita campos extras nos documentos sem problema, mesmo que a regra antiga não os exija).
+
+Com isso registrado, começo a Fase 3 nesta mesma sessão pela ordem da seção 5 do `PLAN_MULTITENANT.md`.

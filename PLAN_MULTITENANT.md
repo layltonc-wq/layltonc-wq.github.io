@@ -50,6 +50,17 @@ tenants/{tenant_id}
 ```
 `{tenant_id}` é o próprio ID do documento (ex.: `vicencia-pe`, e futuramente `itaquitinga-pe`) — vira o valor gravado em `tenant_id` em todo o resto do sistema.
 
+### 1.1b Nova coleção: `super_admins` (Opção 2 — poder cross-tenant por conta, não por cargo)
+Lista pequena de UIDs com acesso cross-tenant sobre `users`/`tenants` (seção 3). Sem escrita liberada pelo app (`allow write: if false`) — só você mesmo cadastra/remove um UID aqui, direto no Console do Firebase.
+
+```
+super_admins/{uid}
+{
+  ativo: true   // conteúdo não importa de verdade — a regra só checa se o doc existe
+}
+```
+`{uid}` é o UID do Firebase Auth da sua conta original de Vicência (acha em Authentication → Users, no Console — a mesma que você já usa hoje pra logar). Nenhum outro campo é lido pela regra; pode ficar só `{ativo:true}` ou até vazio.
+
 ### 1.2 `users/{uid}` — ganha o campo que amarra tudo
 ```
 ANTES: {uid, role, status, name, email, color, sessionTimeout, photoURL, crf, criadoEm, tutoriaisVistos[]}
@@ -157,11 +168,24 @@ service cloud.firestore {
     function userTenant() { return meuPerfil().tenant_id; }
     // NOVO: dono do documento (create) tem que já vir com o tenant certo, senão a escrita é recusada.
     function tenantOk(data) { return data.tenant_id == userTenant(); }
+    // NOVO (Opção 2, escolhida): poder cross-tenant travado por CONTA específica, não por cargo —
+    // só quem tiver um doc em super_admins/{uid} (você cria isso manualmente no Console, é uma
+    // lista pequena de UIDs de confiança, não um cargo). Nenhuma conta técnico local de nenhuma
+    // prefeitura ganha isso por padrão, mesmo que você promova alguém a 'tecnico' numa cidade nova.
+    function ehSuperAdmin() { return logado() && exists(/databases/$(database)/documents/super_admins/$(request.auth.uid)); }
 
-    // ===== TENANTS (cadastro das prefeituras — só leitura pra usuários logados, escrita só técnico) =====
+    // ===== SUPER_ADMINS (lista de contas com poder cross-tenant — só leitura de si mesmo, escrita
+    // NENHUMA pelo app: só você mesmo edita essa coleção direto no Console do Firebase, de propósito,
+    // pra não existir nenhum caminho no código capaz de se auto-promover.) =====
+    match /super_admins/{uid} {
+      allow read: if logado() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    // ===== TENANTS (cadastro das prefeituras — só leitura pra usuários logados, escrita só super admin) =====
     match /tenants/{id} {
       allow read: if logado();
-      allow write: if ehTecnico();
+      allow write: if ehSuperAdmin();
     }
 
     // ===== USUÁRIOS ===== (users NÃO ganha filtro de tenant na leitura — precisa poder ler o próprio
@@ -170,9 +194,10 @@ service cloud.firestore {
     // pré-existente do achado #11: a regra já exigia 'pending' sempre, e o create do isFirst tentava
     // gravar 'approved'). create também confere que o tenant_id aponta pra um tenant que existe e
     // está ativo, senão um link de convite com tenant_id errado/inventado nem chega a criar o doc.
-    // update/delete: técnico aprova/gerencia usuário de QUALQUER prefeitura (é ele quem faz a
-    // aprovação manual do primeiro gestor de uma prefeitura nova — ver runbook na seção 6); gestor
-    // só da própria prefeitura (tenantOk).
+    // update/delete: super admin aprova/gerencia usuário de QUALQUER prefeitura (é quem faz a
+    // aprovação manual do primeiro usuário de uma prefeitura nova — ver runbook na seção 6); gestor
+    // OU técnico só da própria prefeitura (tenantOk) — nenhum dos dois cargos, por si só, cruza
+    // prefeitura nenhuma; só a lista super_admins faz isso.
     match /users/{userId} {
       allow read: if logado();
       allow create: if request.auth != null
@@ -182,14 +207,14 @@ service cloud.firestore {
                     && request.resource.data.tenant_id != ''
                     && exists(/databases/$(database)/documents/tenants/$(request.resource.data.tenant_id))
                     && get(/databases/$(database)/documents/tenants/$(request.resource.data.tenant_id)).data.ativo == true;
-      allow update: if ehTecnico()
-                    || (ehGestor() && tenantOk(resource.data))
+      allow update: if ehSuperAdmin()
+                    || (ehAdmin() && tenantOk(resource.data))
                     || (logado()
                         && request.auth.uid == userId
                         && request.resource.data.role == resource.data.role
                         && request.resource.data.status == resource.data.status
                         && request.resource.data.tenant_id == resource.data.tenant_id);
-      allow delete: if ehTecnico() || (ehGestor() && tenantOk(resource.data));
+      allow delete: if ehSuperAdmin() || (ehAdmin() && tenantOk(resource.data));
     }
 
     // ===== MEDICAMENTOS =====
@@ -361,7 +386,8 @@ service cloud.firestore {
 **O que mudou estruturalmente em relação ao padrão do seu rascunho original:**
 - Toda regra de `create` agora também confere que o documento **sendo criado** já vem com o `tenant_id` certo (`tenantOk(request.resource.data)`), não só que quem tá logado pertence a algum tenant — sem isso, um usuário mal-intencionado (ou um bug no app) poderia criar um documento marcado com o `tenant_id` de OUTRA prefeitura.
 - `users` não filtra leitura por tenant — proposital: pra regra `userTenant()` funcionar em qualquer outra coleção, o Firestore precisa poder ler `users/{uid}` do próprio usuário logado sem cair numa dependência circular. (Isso não vaza dado sensível de outros tenants nessa coleção específica — é só nome/cargo/status; ainda assim, se quiser, dá pra travar mais a leitura de `users` só ao próprio doc + admins do mesmo tenant, mas isso complica a regra. Posso detalhar se você quiser essa camada extra.)
-- **`users` é a única coleção onde `ehTecnico()` tem alcance cross-tenant** (`update`/`delete` sem exigir `tenantOk`) — de propósito, é o que permite você (técnico) aprovar o primeiro usuário de uma prefeitura nova sem já pertencer a ela (seção 6). Em todas as outras 23 coleções, `ehAdmin()` (gestor OU técnico) continua exigindo `tenantOk` — ou seja, o técnico de uma prefeitura NÃO enxerga nem edita medicamento, entrada, paciente etc. de outra prefeitura. Esse acesso extra fica restrito só ao cadastro de usuários, o mínimo necessário pra fazer o onboarding funcionar.
+- **`users` é a única coleção com alcance cross-tenant, e só pra quem estiver em `super_admins`** (`update`/`delete` sem exigir `tenantOk`) — de propósito, é o que permite você aprovar o primeiro usuário de uma prefeitura nova sem já pertencer a ela (seção 6). Isso é uma CONTA específica (seu UID), não um CARGO — nenhuma conta `tecnico` de nenhuma prefeitura ganha isso automaticamente, nem a sua original de Vicência, a menos que o UID dela esteja em `super_admins/{uid}`. Em todas as outras 24 coleções (as 23 operacionais + a própria `users` pra quem não é super admin), `ehAdmin()` (gestor OU técnico) continua exigindo `tenantOk` — ou seja, mesmo um técnico local de uma prefeitura NÃO enxerga nem edita medicamento, entrada, paciente etc. de outra prefeitura, e nem aprova usuário de outra prefeitura, a não ser que também esteja em `super_admins`.
+- **`super_admins/{uid}` não tem nenhuma escrita liberada pelo app** (`allow write: if false`) — de propósito, pra não existir NENHUM caminho no código (nem um bug, nem alguém mal-intencionado) capaz de se auto-promover a super admin. Só você, direto no Console do Firebase, adiciona ou remove um UID dessa coleção (documento vazio ou `{ativo:true}` já basta, o conteúdo não importa — só a existência do doc é checada). Isso também trava a escrita em `tenants` (criar/editar/desativar prefeitura), que virou `ehSuperAdmin()` em vez de `ehTecnico()` pela mesma lógica.
 - `create` de `users` também confere que o `tenant_id` do documento aponta pra um `tenants/{id}` que existe e tem `ativo:true` — um link de convite com `tenant_id` inventado ou de uma prefeitura desativada nem chega a criar o cadastro.
 
 ---
@@ -425,6 +451,7 @@ E o listener correspondente (que hoje escuta sempre o mesmo doc fixo) passa a es
 
 Do mais simples/isolado pro mais arriscado, testando depois de cada um (a Fase 3 detalha o passo a passo; aqui é só a ordem das coleções):
 
+0. **Manual, seu (fora do código)**: cadastrar seu UID em `super_admins/{seu-uid}` no Console do Firebase — antes das regras novas entrarem em vigor, senão ninguém tem o poder cross-tenant no primeiro momento.
 1. `tenants` (nova, cria a base)
 2. `users` (adiciona `tenant_id` aos usuários existentes — todo o resto depende disso)
 3. `medicamentos` (mais simples, poucas dependências)
@@ -448,27 +475,26 @@ Do mais simples/isolado pro mais arriscado, testando depois de cada um (a Fase 3
 
 Isso é o que responde diretamente sua pergunta — "qual o melhor caminho pra desmembrar e, quem sabe, adicionar outras prefeituras também". Depois que a Fase 3 estiver implantada (regras + código com `tenant_id`), colocar uma prefeitura nova pra rodar vira uma rotina de poucos passos, sem precisar mexer em código de novo:
 
-1. **Você cria o documento da prefeitura** em `tenants/{tenant_id}` — por enquanto direto no Console do Firebase (4 campos: `nome`, `uf`, `ativo:true`, `criadoEm`); dá pra construir uma telinha no app pra isso depois, mas não é bloqueante. Ex.: `tenants/itaquitinga-pe = {nome:"Itaquitinga", uf:"PE", ativo:true, criadoEm:...}`.
+1. **Você cria o documento da prefeitura** em `tenants/{tenant_id}` — direto no Console do Firebase, com sua conta `super_admin` (4 campos: `nome`, `uf`, `ativo:true`, `criadoEm`); dá pra construir uma telinha no app pra isso depois, mas não é bloqueante. Ex.: `tenants/itaquitinga-pe = {nome:"Itaquitinga", uf:"PE", ativo:true, criadoEm:...}`.
 2. **Você mesmo se cadastra pelo link de convite dessa prefeitura**: `https://www.farmacontrol.app.br/?tenant=itaquitinga-pe`. Você confirmou que quer ser sempre a primeira conta de cada prefeitura nova — então é você quem entra pelo link, cria essa conta nova, e ela nasce `status:'pending'`, `tenant_id:'itaquitinga-pe'`, igual qualquer cadastro (não tem gestor automático, seção "Decisões já tomadas").
-3. **Você aprova essa própria conta usando sua conta técnico original** (a de Vicência, que já existe e tem o poder cross-tenant explicado na pergunta anterior sua), na tela de Aprovar Contas (que pra técnico passa a mostrar pendências de todas as prefeituras, não só a de Vicência) — e define o cargo dela como `tecnico`, já que é você mesmo controlando Itaquitinga por enquanto.
-4. **Com essa conta técnico de Itaquitinga em mãos, você vai aceitando e ajustando o cargo do pessoal de lá** conforme for cadastrando — exatamente como já faz hoje em Vicência: aprova, promove alguém a `gestor` quando fizer sentido, etc. A conta técnico de Itaquitinga já cuida da própria prefeitura sozinha a partir daí (ver nota abaixo sobre o alcance cross-tenant).
-5. **Repete os passos 1-3 pra próxima prefeitura.** Nenhum deploy de código novo é necessário pra isso — é só cadastro de dado (`tenants`) + um link + uma aprovação sua.
+3. **Você aprova essa própria conta usando sua conta `super_admin`** (a original, de Vicência — é ela que está listada em `super_admins/{uid}`, não a conta nova de Itaquitinga), na tela de Aprovar Contas (que pra super admin passa a mostrar pendências de todas as prefeituras) — e define o cargo dessa conta nova como `tecnico`, já que é você mesmo controlando Itaquitinga por enquanto.
+4. **Com essa conta técnico de Itaquitinga em mãos, você vai aceitando e ajustando o cargo do pessoal de lá** conforme for cadastrando — exatamente como já faz hoje em Vicência: aprova, promove alguém a `gestor` quando fizer sentido, etc. Essa conta técnico de Itaquitinga cuida só da própria prefeitura — com a Opção 2, ela **não** enxerga nem aprova usuário de Vicência nem de nenhuma outra prefeitura (só a conta `super_admins` original faz isso). Se precisar aprovar alguém de outra prefeitura de novo, você troca pra sua conta `super_admin` original.
+5. **Repete os passos 1-3 pra próxima prefeitura.** Nenhum deploy de código novo é necessário pra isso — é só cadastro de dado (`tenants` + `super_admins`, se quiser repetir o padrão) + um link + uma aprovação sua.
 
 Isso significa: **Vicência não precisa de nenhuma ação** quando Itaquitinga (ou qualquer prefeitura futura) entrar — ela já continua no mesmo link/URL de sempre, com os próprios dados intactos, sem saber que existe outra prefeitura no mesmo sistema.
 
-### Sobre sua conta técnico ficar ativa durante os testes
+### Sobre sua conta ficar ativa durante os testes (e a Opção 2 que você escolheu)
 
-Confirmando o que você pediu: **o cargo `tecnico` nunca é desativado nem expira** — não existe nada no plano que derrube ou limite essa conta com o tempo. Sua conta técnico de Vicência continua com acesso total aos dados de Vicência (igual hoje) durante toda a Fase 3, o que é justamente o que você vai usar pra testar cada coleção migrada. O único cuidado, que já vale pra tudo nesta migração: **antes de qualquer regra nova entrar em vigor, os documentos existentes (incluindo o `users` da sua própria conta) já precisam ter `tenant_id` gravado** (Passo 5 da Fase 3, seção 5) — senão até você tomaria "permission denied" no meio do processo. Isso já está previsto na ordem de execução, não é um risco novo.
+Confirmando o que você pediu: **nada no plano desativa ou expira sua conta** — nem por cargo, nem por tempo. Sua conta original de Vicência continua com acesso total aos dados de Vicência durante toda a Fase 3 (é o que você vai usar pra testar cada coleção migrada), e ganha o poder extra cross-tenant assim que o UID dela for cadastrado em `super_admins` (passo 0 da Fase 3, abaixo). O único cuidado, que já vale pra tudo nesta migração: **antes de qualquer regra nova entrar em vigor, os documentos existentes (incluindo o `users` da sua própria conta) já precisam ter `tenant_id` gravado** (Passo 5 da Fase 3, seção 5) — senão até você tomaria "permission denied" no meio do processo. Isso já está previsto na ordem de execução, não é um risco novo.
 
-⚠️ Uma correção pro que expliquei na resposta anterior: o poder cross-tenant (`ehTecnico()` sem `tenantOk` na regra de `users`, seção 3) hoje vale pra **qualquer conta com cargo `tecnico`, de qualquer prefeitura** — não é exclusivo da sua conta original de Vicência. Ou seja, a conta técnico de Itaquitinga que você criar no passo 3 **também** vai enxergar/aprovar usuários de Vicência e de qualquer outra prefeitura, não só da própria — porque é sua mesma pessoa por trás de todas, isso não é problema. Só fica registrado: se um dia repassar uma conta técnico local pra alguém de confiança que não seja você, essa pessoa também herda esse alcance cross-tenant sobre `users` de qualquer prefeitura. Se preferir travar isso só pra sua conta específica (por UID, não por cargo), me avisa que ajusto a regra antes da Fase 3.
+**Implementei a Opção 2** (que você escolheu): o poder cross-tenant agora é por **conta específica** (`super_admins/{uid}`), não por cargo `tecnico`. Isso muda um detalhe importante do runbook acima: a conta técnico que você cria pra cada prefeitura nova (passo 3-4) **não** herda esse poder automaticamente — só a conta cujo UID está em `super_admins` (a sua original) consegue aprovar usuário de qualquer prefeitura. Pra evitar confusão no dia a dia: sempre que for aprovar o primeiro usuário de uma prefeitura nova, entre com a conta que você sabe que está em `super_admins` (a original de Vicência), não com uma conta técnico local que você tenha criado numa prefeitura.
 
 ---
 
 ## Pendências antes de eu seguir pra Fase 3
 
-As decisões de produto já foram tomadas nesta sessão (seção "✅ Decisões já tomadas" no topo). ~~Domínio do link de convite~~ — confirmado: `www.farmacontrol.app.br`. O que falta antes de eu começar a mudar código de verdade:
+~~Domínio do link de convite~~ — confirmado: `www.farmacontrol.app.br`. ~~Desenho do poder cross-tenant~~ — confirmado: Opção 2 (`super_admins` por conta, seção 3). Não há mais nenhuma decisão de produto em aberto.
 
-1. **OK explícito no desenho do técnico com poder cross-tenant só sobre `users`** (seção 3, explicado logo abaixo do bloco de regras) — é a peça nova desta sessão que resolve o onboarding e o bug do achado #11 ao mesmo tempo; quero confirmar que faz sentido pra você antes de codificar em cima disso.
-2. **Índices do Firestore** — ainda não recebi (Fase 1, seção 4 do `AUDIT_MULTITENANT.md`); não bloqueia o início da Fase 3 (o Firestore avisa no console do navegador quando falta um, com link pra criar), mas ajuda saber de antemão.
+**Único item que segue pendente, e não bloqueia o início:** **Índices do Firestore** — ainda não recebi (Fase 1, seção 4 do `AUDIT_MULTITENANT.md`); o Firestore avisa no console do navegador quando falta um, com link pra criar, então dá pra ir resolvendo durante a Fase 3 mesmo.
 
-Fora isso, pode considerar o plano fechado. Assim que você confirmar o item 1 (ou disser "pode decidir você mesmo" de novo), sigo pra Fase 3 — que é quando o código de fato começa a mudar, coleção por coleção, com commit e teste depois de cada uma, começando pela ordem da seção 5.
+**Plano fechado — Fase 3 começa nesta sessão.** Ver `AUDIT_MULTITENANT.md`, seção final ("Checagem final antes da Fase 3"), pra como a verificação e a execução vão funcionar na prática dado que eu não tenho acesso ao Console/projeto Firebase real.
