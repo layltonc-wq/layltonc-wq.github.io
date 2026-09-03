@@ -33,7 +33,7 @@ const COLECOES_SIMPLES = [
   'tratamentos_atb', 'pacientes_controlados', 'saidas_controladas',
   'pacientes_leite', 'retiradas_leite',
   'solicitacoes', 'alertas', 'avisos',
-  // 'logs_acesso', 'logs_contas',
+  'logs_acesso', 'logs_contas',
   // 'plantao_solicitacoes', 'plantao_convites',
 ];
 
