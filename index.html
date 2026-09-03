@@ -1510,7 +1510,7 @@ function ModalSaidaControlada(props){
   var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];
 
   useEffect(function(){
-    return db.collection('pacientes_controlados').limit(2000).onSnapshot(function(sn){
+    return db.collection('pacientes_controlados').where('tenant_id','==',tenantDe(user)).limit(2000).onSnapshot(function(sn){
       setPacientes(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}).sort(function(a,b){return (a.nome||'').localeCompare(b.nome||'');}));
     },function(){});
   },[]);
@@ -1520,7 +1520,7 @@ function ModalSaidaControlada(props){
   useEffect(function(){
     if(!pacSel){setObsObrigatoria(false);return;}
     setChecando(true);
-    db.collection('saidas_controladas').where('pacienteId','==',pacSel.id).get().then(function(sn){
+    db.collection('saidas_controladas').where('tenant_id','==',tenantDe(user)).where('pacienteId','==',pacSel.id).get().then(function(sn){
       var jaTemNaData=sn.docs.some(function(d){var x=d.data();return x.medicamentoId===data.medicamentoId&&x.dataSaida===dataSaida;});
       setObsObrigatoria(jaTemNaData);setChecando(false);
     }).catch(function(){setChecando(false);});
@@ -1533,7 +1533,7 @@ function ModalSaidaControlada(props){
   function cadastrarNovoPaciente(){
     if(!buscaTrim)return;
     setNovoPacSaving(true);
-    db.collection('pacientes_controlados').add({nome:buscaTrim,criadoEm:new Date().toISOString(),criadoPor:user.name||''})
+    db.collection('pacientes_controlados').add({nome:buscaTrim,criadoEm:new Date().toISOString(),criadoPor:user.name||'',tenant_id:tenantDe(user)})
       .then(function(ref){setPacSel({id:ref.id,nome:buscaTrim});setBusca('');setNovoPacSaving(false);})
       .catch(function(e){setErro('Erro ao cadastrar paciente: '+((e&&e.message)||e));setNovoPacSaving(false);});
   }
@@ -1546,7 +1546,7 @@ function ModalSaidaControlada(props){
     if(dataSaida>todayStr()){setErro('A data da saída não pode ser no futuro.');return;}
     if(obsObrigatoria&&!obs.trim()){setErro('Já existe saída de '+data.medicamentoNome+' para '+pacSel.nome+' em '+fD(dataSaida)+' — a observação é obrigatória.');return;}
     setErro('');setSaving(true);
-    var payload={pacienteId:pacSel.id,pacienteNome:pacSel.nome,medicamentoId:data.medicamentoId,medicamentoNome:data.medicamentoNome,quantidade:data.quantidade,medicoNome:medico.trim(),medicoCrm:crm.trim(),observacao:obs.trim(),liberadoPorUid:user.uid||'',liberadoPorNome:user.name||'',dataSaida:dataSaida,criadoEm:new Date().toISOString()};
+    var payload={pacienteId:pacSel.id,pacienteNome:pacSel.nome,medicamentoId:data.medicamentoId,medicamentoNome:data.medicamentoNome,quantidade:data.quantidade,medicoNome:medico.trim(),medicoCrm:crm.trim(),observacao:obs.trim(),liberadoPorUid:user.uid||'',liberadoPorNome:user.name||'',dataSaida:dataSaida,criadoEm:new Date().toISOString(),tenant_id:tenantDe(user)};
     onConfirm(payload).then(function(){setSaving(false);}).catch(function(e){setErro('Erro: '+((e&&e.message)||e));setSaving(false);});
   }
 
@@ -3383,7 +3383,7 @@ function TabAdmin({user,entries,medications,db}){
   var _logAcesso=sl([]);var logAcesso=_logAcesso[0];var setLogAcesso=_logAcesso[1];
 
   ef(function(){
-    var u1=db.collection('tratamentos_atb').orderBy('criadoEm','desc').limit(50).onSnapshot(function(sn){setTratamentos(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));});
+    var u1=db.collection('tratamentos_atb').where('tenant_id','==',tenantDe(currentUser)).orderBy('criadoEm','desc').limit(50).onSnapshot(function(sn){setTratamentos(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));});
     var u2=db.collection('entries').where('tenant_id','==',tenantDe(currentUser)).orderBy('criadoEm','desc').limit(100).onSnapshot(function(sn){setLogs(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));});
     var u3=db.collection('logs_contas').orderBy('criadoEm','desc').limit(100).onSnapshot(function(sn){setHistcontas(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));}).catch?db.collection('logs_contas').orderBy('criadoEm','desc').limit(100).onSnapshot(function(sn){setHistcontas(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));}):function(){};
     var u4=db.collection('logs_acesso').orderBy('criadoEm','desc').limit(100).onSnapshot(function(sn){setLogAcesso(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));},function(){});
@@ -4839,7 +4839,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
   var canManage=user.role==='gestor'||user.role==='tecnico';
 
   ef(function(){
-    var u=db.collection('tratamentos_atb').orderBy('criadoEm','desc').limit(1000).onSnapshot(function(sn){
+    var u=db.collection('tratamentos_atb').where('tenant_id','==',tenantDe(user)).orderBy('criadoEm','desc').limit(1000).onSnapshot(function(sn){
       setTratamentos(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));
       setLoading(false);
     });
@@ -4966,7 +4966,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
       doses=[{data:hj,hora:hr,responsavel:user.name,responsavelCor:user.color||B,qtd:qtdEsp,doseEspera:true}];
       await db.collection('entries').add({tipo:'saida',medicamentoId:medSel,medicamentoNome:mO.nome||'',quantidade:qtdEsp,autorNome:user.name,autorCor:user.color||B,autorId:user.uid,lote:'',validade:'',obs:'Espera ATB - '+nomePac.trim(),criadoEm:new Date().toISOString(),date:hj,tenant_id:tenantDe(user)});
     }
-    await db.collection('tratamentos_atb').add({pacienteNome:nomePac.trim(),diasTratamento:parseInt(diasTrat)||0,dataInicio:dataInicioCalc,dosesPorDia:dPorDia,qtdPorDose:qDose,medicamentoId:medSel,medicamentoNome:mO.nome||'',nomeMedico:nomeMed.trim(),crmMedico:crmMed.trim(),obs:obsForm.trim(),telefone:telefone.trim(),telefoneDono:telDono,responsavelNome:telDono==='responsavel'?respNome.trim():'',doses:doses,status:statusIni,criadoPor:user.name,criadoEm:new Date().toISOString()});
+    await db.collection('tratamentos_atb').add({pacienteNome:nomePac.trim(),diasTratamento:parseInt(diasTrat)||0,dataInicio:dataInicioCalc,dosesPorDia:dPorDia,qtdPorDose:qDose,medicamentoId:medSel,medicamentoNome:mO.nome||'',nomeMedico:nomeMed.trim(),crmMedico:crmMed.trim(),obs:obsForm.trim(),telefone:telefone.trim(),telefoneDono:telDono,responsavelNome:telDono==='responsavel'?respNome.trim():'',doses:doses,status:statusIni,criadoPor:user.name,criadoEm:new Date().toISOString(),tenant_id:tenantDe(user)});
     setSaving(false);setShowForm(false);rForm();
   }
 
@@ -9167,12 +9167,12 @@ function TabPacientes(props){
   var _novoErro=useState('');var novoErro=_novoErro[0];var setNovoErro=_novoErro[1];
 
   useEffect(function(){
-    var u1=db.collection('pacientes_controlados').limit(2000).onSnapshot(function(snap){
+    var u1=db.collection('pacientes_controlados').where('tenant_id','==',tenantDe(user)).limit(2000).onSnapshot(function(snap){
       var arr=[];snap.forEach(function(d){arr.push(Object.assign({id:d.id},d.data()));});
       arr.sort(function(a,b){return (a.nome||'').localeCompare(b.nome||'');});
       setPacientes(arr);
     },function(){});
-    var u2=db.collection('saidas_controladas').orderBy('criadoEm','desc').limit(1000).onSnapshot(function(snap){
+    var u2=db.collection('saidas_controladas').where('tenant_id','==',tenantDe(user)).orderBy('criadoEm','desc').limit(1000).onSnapshot(function(snap){
       setSaidas(snap.docs.map(function(d){return Object.assign({id:d.id},d.data());}));
     },function(){});
     return function(){try{u1();}catch(e){}try{u2();}catch(e){}};
@@ -9203,7 +9203,7 @@ function TabPacientes(props){
   function cadastrarPaciente(){
     var nome=novoNome.trim();if(!nome){setNovoErro('Informe o nome do paciente.');return;}
     setNovoSaving(true);setNovoErro('');
-    db.collection('pacientes_controlados').add({nome:nome,criadoEm:new Date().toISOString(),criadoPor:user.name||''})
+    db.collection('pacientes_controlados').add({nome:nome,criadoEm:new Date().toISOString(),criadoPor:user.name||'',tenant_id:tenantDe(user)})
       .then(function(){setShowNovo(false);setNovoNome('');setNovoSaving(false);})
       .catch(function(e){setNovoErro('Erro: '+((e&&e.message)||e));setNovoSaving(false);});
   }
