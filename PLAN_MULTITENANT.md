@@ -188,18 +188,21 @@ service cloud.firestore {
       allow write: if ehSuperAdmin();
     }
 
-    // ===== USUÁRIOS ===== (users NÃO ganha filtro de tenant na leitura — precisa poder ler o próprio
-    // doc ANTES de saber o tenant, pra função meuPerfil() funcionar. create SEMPRE nasce 'pending',
-    // sem exceção — o "primeiro usuário vira gestor" automático foi removido (era a origem do bug
-    // pré-existente do achado #11: a regra já exigia 'pending' sempre, e o create do isFirst tentava
-    // gravar 'approved'). create também confere que o tenant_id aponta pra um tenant que existe e
-    // está ativo, senão um link de convite com tenant_id errado/inventado nem chega a criar o doc.
+    // ===== USUÁRIOS ===== (leitura segue o padrão normal — mesmo tenant, ou super admin. Um get()
+    // dentro de uma regra, tipo o que meuPerfil() faz, NÃO é reavaliado pelas regras de novo — o
+    // Firestore trata isso com acesso interno, sem risco de dependência circular. Por isso dá pra
+    // exigir tenantOk até na leitura do PRÓPRIO doc do usuário, sem quebrar nada: ele sempre bate
+    // com o próprio tenant, trivialmente.
+    // create SEMPRE nasce 'pending', sem exceção — o "primeiro usuário vira gestor" automático foi
+    // removido (era a origem do bug pré-existente do achado #11: a regra já exigia 'pending' sempre,
+    // e o create do isFirst tentava gravar 'approved'). create também confere que o tenant_id aponta
+    // pra um tenant que existe e está ativo, senão um link de convite com tenant_id errado/inventado
+    // nem chega a criar o doc.
     // update/delete: super admin aprova/gerencia usuário de QUALQUER prefeitura (é quem faz a
-    // aprovação manual do primeiro usuário de uma prefeitura nova — ver runbook na seção 6); gestor
-    // OU técnico só da própria prefeitura (tenantOk) — nenhum dos dois cargos, por si só, cruza
-    // prefeitura nenhuma; só a lista super_admins faz isso.
+    // aprovação manual do primeiro usuário de uma prefeitura nova — ver runbook na seção 6, por
+    // enquanto direto no Console); gestor OU técnico só da própria prefeitura (tenantOk).
     match /users/{userId} {
-      allow read: if logado();
+      allow read: if logado() && (ehSuperAdmin() || resource.data.tenant_id == userTenant());
       allow create: if request.auth != null
                     && request.auth.uid == userId
                     && request.resource.data.status == 'pending'
@@ -385,7 +388,7 @@ service cloud.firestore {
 
 **O que mudou estruturalmente em relação ao padrão do seu rascunho original:**
 - Toda regra de `create` agora também confere que o documento **sendo criado** já vem com o `tenant_id` certo (`tenantOk(request.resource.data)`), não só que quem tá logado pertence a algum tenant — sem isso, um usuário mal-intencionado (ou um bug no app) poderia criar um documento marcado com o `tenant_id` de OUTRA prefeitura.
-- `users` não filtra leitura por tenant — proposital: pra regra `userTenant()` funcionar em qualquer outra coleção, o Firestore precisa poder ler `users/{uid}` do próprio usuário logado sem cair numa dependência circular. (Isso não vaza dado sensível de outros tenants nessa coleção específica — é só nome/cargo/status; ainda assim, se quiser, dá pra travar mais a leitura de `users` só ao próprio doc + admins do mesmo tenant, mas isso complica a regra. Posso detalhar se você quiser essa camada extra.)
+- **Correção em relação a uma versão anterior deste documento**: eu tinha escrito que `users` precisava ficar sem filtro de tenant na leitura, pra não cair numa "dependência circular" com `meuPerfil()`. Reconferindo com mais calma: isso estava errado — um `get()`/`exists()` chamado de DENTRO de uma regra (como `meuPerfil()` faz) nunca é reavaliado pelas regras de novo, o Firestore usa acesso interno pra isso. Ou seja, dá pra exigir `resource.data.tenant_id == userTenant()` até na leitura do próprio doc do usuário, sem quebrar nada (bate trivialmente, é o próprio tenant) — e isso fecha um vazamento real que a versão anterior deixava aberto: sem esse filtro, qualquer usuário logado de qualquer prefeitura conseguiria listar a coleção `users` inteira (nome, cargo, e-mail, status de todo mundo, de todas as prefeituras) direto pelo DevTools do navegador, sem passar pela tela do app. Com o filtro, isso só é possível pra quem está em `super_admins`.
 - **`users` é a única coleção com alcance cross-tenant, e só pra quem estiver em `super_admins`** (`update`/`delete` sem exigir `tenantOk`) — de propósito, é o que permite você aprovar o primeiro usuário de uma prefeitura nova sem já pertencer a ela (seção 6). Isso é uma CONTA específica (seu UID), não um CARGO — nenhuma conta `tecnico` de nenhuma prefeitura ganha isso automaticamente, nem a sua original de Vicência, a menos que o UID dela esteja em `super_admins/{uid}`. Em todas as outras 24 coleções (as 23 operacionais + a própria `users` pra quem não é super admin), `ehAdmin()` (gestor OU técnico) continua exigindo `tenantOk` — ou seja, mesmo um técnico local de uma prefeitura NÃO enxerga nem edita medicamento, entrada, paciente etc. de outra prefeitura, e nem aprova usuário de outra prefeitura, a não ser que também esteja em `super_admins`.
 - **`super_admins/{uid}` não tem nenhuma escrita liberada pelo app** (`allow write: if false`) — de propósito, pra não existir NENHUM caminho no código (nem um bug, nem alguém mal-intencionado) capaz de se auto-promover a super admin. Só você, direto no Console do Firebase, adiciona ou remove um UID dessa coleção (documento vazio ou `{ativo:true}` já basta, o conteúdo não importa — só a existência do doc é checada). Isso também trava a escrita em `tenants` (criar/editar/desativar prefeitura), que virou `ehSuperAdmin()` em vez de `ehTecnico()` pela mesma lógica.
 - `create` de `users` também confere que o `tenant_id` do documento aponta pra um `tenants/{id}` que existe e tem `ativo:true` — um link de convite com `tenant_id` inventado ou de uma prefeitura desativada nem chega a criar o cadastro.
@@ -477,7 +480,7 @@ Isso é o que responde diretamente sua pergunta — "qual o melhor caminho pra d
 
 1. **Você cria o documento da prefeitura** em `tenants/{tenant_id}` — direto no Console do Firebase, com sua conta `super_admin` (4 campos: `nome`, `uf`, `ativo:true`, `criadoEm`); dá pra construir uma telinha no app pra isso depois, mas não é bloqueante. Ex.: `tenants/itaquitinga-pe = {nome:"Itaquitinga", uf:"PE", ativo:true, criadoEm:...}`.
 2. **Você mesmo se cadastra pelo link de convite dessa prefeitura**: `https://www.farmacontrol.app.br/?tenant=itaquitinga-pe`. Você confirmou que quer ser sempre a primeira conta de cada prefeitura nova — então é você quem entra pelo link, cria essa conta nova, e ela nasce `status:'pending'`, `tenant_id:'itaquitinga-pe'`, igual qualquer cadastro (não tem gestor automático, seção "Decisões já tomadas").
-3. **Você aprova essa própria conta usando sua conta `super_admin`** (a original, de Vicência — é ela que está listada em `super_admins/{uid}`, não a conta nova de Itaquitinga), na tela de Aprovar Contas (que pra super admin passa a mostrar pendências de todas as prefeituras) — e define o cargo dessa conta nova como `tecnico`, já que é você mesmo controlando Itaquitinga por enquanto.
+3. **Você aprova essa própria conta direto no Console do Firebase** (Firestore Database → coleção `users` → o documento com o UID da conta nova → edita o campo `status` pra `"approved"` e `role` pra `"tecnico"`). A tela de "Aprovar Contas" do próprio app continua mostrando só a prefeitura de quem está logado (mesmo padrão de todas as outras telas) — dar pra ela essa visão cross-tenant é uma extensão de UI que dá pra construir depois, não é bloqueante: como isso só acontece uma vez por prefeitura nova, o Console resolve bem por enquanto.
 4. **Com essa conta técnico de Itaquitinga em mãos, você vai aceitando e ajustando o cargo do pessoal de lá** conforme for cadastrando — exatamente como já faz hoje em Vicência: aprova, promove alguém a `gestor` quando fizer sentido, etc. Essa conta técnico de Itaquitinga cuida só da própria prefeitura — com a Opção 2, ela **não** enxerga nem aprova usuário de Vicência nem de nenhuma outra prefeitura (só a conta `super_admins` original faz isso). Se precisar aprovar alguém de outra prefeitura de novo, você troca pra sua conta `super_admin` original.
 5. **Repete os passos 1-3 pra próxima prefeitura.** Nenhum deploy de código novo é necessário pra isso — é só cadastro de dado (`tenants` + `super_admins`, se quiser repetir o padrão) + um link + uma aprovação sua.
 
