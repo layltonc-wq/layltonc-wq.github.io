@@ -28,7 +28,7 @@ const COLECOES_SIMPLES = [
   'users',
   'medicamentos',
   'atas', 'vinculos_nfe',
-  // 'entries',
+  'entries',
   // 'recebimentos', 'notas_fiscais', 'divergencias',
   // 'tratamentos_atb', 'pacientes_controlados', 'saidas_controladas',
   // 'pacientes_leite', 'retiradas_leite',
