@@ -3,7 +3,7 @@
 **Data:** conforme sessão atual · **Branch:** `testing` · **Arquivo analisado:** `index.html` (fonte única do app)
 **Método:** varredura automatizada (grep/regex sobre o código-fonte) + verificação manual linha a linha dos casos ambíguos. Nenhuma alteração de código foi feita nesta fase — só leitura.
 
-> ⚠️ Este relatório não teve acesso direto ao Console do Firebase. A seção 3 (Regras) reproduz o texto que você colou no chat (agora também versionado em `firestore.rules`, raiz do repo) — pode estar desatualizado se você mexeu no Console depois disso. A seção 4 (Índices) lista os pares `where`+`orderBy` já existentes no código (que vão precisar de índice composto novo assim que `tenant_id` entrar no filtro) — não tenho como ler os índices que já estão de fato criados no seu projeto; ainda falta você confirmar isso (ou confirmar que não há nenhum manual, só os automáticos de campo único).
+> ⚠️ Este relatório não teve acesso direto ao Console do Firebase. A seção 3 (Regras) reproduz o texto que você colou no chat — as regras ATUAIS (antes da migração) ficaram salvas em `firestore.rules.pre-multitenant`; `firestore.rules` agora é a versão NOVA, pronta pra publicar (ver "Fase 3 concluída no código" no fim deste documento). A seção 4 (Índices) lista os pares `where`+`orderBy` já existentes no código (que vão precisar de índice composto novo assim que `tenant_id` entrar no filtro) — não tenho como ler os índices que já estão de fato criados no seu projeto; ainda falta você confirmar isso (ou confirmar que não há nenhum manual, só os automáticos de campo único).
 >
 > **Consolidação:** esta branch (`testing`) reúne o trabalho desta sessão + de uma sessão anterior que travou (excesso de mensagens). Achados #10-12 abaixo e o `firestore.rules` foram adicionados nesta sessão. A prefeitura em produção hoje é **Vicência** (`vicencia-pe`) — confirmado por você; o PLAN_MULTITENANT.md, que citava "São Lourenço da Mata" por engano (a sessão anterior inferiu isso de um documento de ATA, não da prefeitura real), foi corrigido.
 
@@ -717,3 +717,21 @@ Isso não é uma pendência de decisão, é uma limitação real do meu acesso q
 - Isso significa que, embora eu já comece a escrever o código nesta sessão, **as regras novas só entram em vigor de verdade quando você as publicar no Console** — até lá, o app de produção continua rodando com as regras atuais, sem risco, mesmo com o código já tendo `tenant_id` sendo escrito (o Firestore aceita campos extras nos documentos sem problema, mesmo que a regra antiga não os exija).
 
 Com isso registrado, começo a Fase 3 nesta mesma sessão pela ordem da seção 5 do `PLAN_MULTITENANT.md`.
+
+---
+
+## Fase 3 concluída no código (mesma sessão)
+
+Todas as 24 coleções (`users` + 23 operacionais) foram migradas no `index.html`, coleção por coleção, cada uma com commit próprio e verificação de sintaxe (JSX) depois de cada uma — histórico completo na branch `testing`. `firestore.rules` agora é a versão NOVA (pronta pra publicar); a versão antiga (a que valia antes desta sessão) ficou salva em `firestore.rules.pre-multitenant`, pra você comparar se quiser. `scripts/migrate_multitenant.js` cobre as 24 coleções, incluindo o caso especial de `plantoes`/`conferencias` (recria o doc sob o novo ID) e o `_meta` por tenant.
+
+**O que falta, e só você (ou alguém com acesso ao Firebase) consegue fazer** — nenhum item destes eu tenho como executar desta sessão:
+
+1. Rodar `scripts/migrate_multitenant.js vicencia-pe` contra o projeto de **teste** (`farmacontrol-dev-6a3e3`) primeiro.
+2. Cadastrar seu UID em `super_admins/{uid}` nesse mesmo projeto de teste (Console, coleção nova).
+3. Publicar o `firestore.rules` novo nesse projeto de teste.
+4. Testar o app de verdade (login, cada aba, o fluxo de plantão/conferência com atenção redobrada por causa da troca de ID, aprovar/rejeitar usuário) contra o projeto de teste.
+5. Só depois de tudo validado no teste: repetir os passos 1-3 no projeto de **produção** (`app-farma-b21e2`) — é aí que o Vicência de verdade passa a rodar com tenant_id.
+6. Testes de segurança cross-tenant (Fase 3, Passo 7 do prompt original): criar uma conta de outra prefeitura (ex. `itaquitinga-pe`, mesmo que só de teste) e confirmar que ela não vê nem edita nada de Vicência.
+7. Índices que o Firestore pedir durante os testes (o próprio console do navegador mostra um link pronto pra criar cada um).
+
+Fico à disposição pra qualquer ajuste que aparecer durante esses testes — é bem provável que apareça algo pontual (um campo esquecido, um índice faltando) e é rápido de corrigir uma vez identificado.
