@@ -34,8 +34,43 @@ const COLECOES_SIMPLES = [
   'pacientes_leite', 'retiradas_leite',
   'solicitacoes', 'alertas', 'avisos',
   'logs_acesso', 'logs_contas',
-  // 'plantao_solicitacoes', 'plantao_convites',
+  'plantao_solicitacoes', 'plantao_convites',
 ];
+
+// plantoes e conferencias: o ID do documento muda de esquema (era só a data, ex. "2026-09-01";
+// vira tenantId+"__"+data, ex. "vicencia-pe__2026-09-01") - não dá pra só adicionar um campo,
+// precisa recriar o doc com o novo ID. Copia pro novo ID (com tenant_id) e apaga o antigo.
+// Idempotente: se o doc novo já existe, pula: e só mexe em doc cujo ID ainda não tem "__" (ou seja,
+// ainda no formato antigo).
+const COLECOES_COM_ID_POR_DATA = ['plantoes', 'conferencias'];
+
+async function migrarColecaoComIdPorData(nome, tenantId) {
+  const snap = await db.collection(nome).get();
+  let migrados = 0;
+  for (const doc of snap.docs) {
+    const idAntigo = doc.id;
+    if (idAntigo.indexOf('__') >= 0) continue; // já no formato novo, pula
+    const idNovo = tenantId + '__' + idAntigo;
+    const novoRef = db.collection(nome).doc(idNovo);
+    const novoSnap = await novoRef.get();
+    if (novoSnap.exists) continue; // já migrado (rodou antes e falhou no delete, por ex.)
+    const dados = doc.data();
+    await novoRef.set(Object.assign({}, dados, { tenant_id: tenantId }));
+    await doc.ref.delete();
+    migrados++;
+  }
+  console.log(`${nome}: ${migrados} documento(s) re-criado(s) com o novo esquema de ID, de ${snap.size} total.`);
+}
+
+// _meta/entries_version vira um doc por tenant (entries_version__<tenantId>). Não precisa copiar
+// dado nenhum (é só um contador de "algo mudou") - só garante que o novo doc existe.
+async function migrarMetaEntriesVersion(tenantId) {
+  const ref = db.collection('_meta').doc('entries_version__' + tenantId);
+  const snap = await ref.get();
+  if (snap.exists) { console.log('_meta/entries_version__' + tenantId + ': já existe, não mexi.'); return; }
+  await ref.set({ v: Date.now(), at: new Date().toISOString(), tenant_id: tenantId });
+  console.log('_meta/entries_version__' + tenantId + ': criado.');
+}
 
 async function migrarColecaoSimples(nome, tenantId) {
   const snap = await db.collection(nome).get();
@@ -78,6 +113,10 @@ async function main() {
   for (const nome of COLECOES_SIMPLES) {
     await migrarColecaoSimples(nome, tenantId);
   }
+  for (const nome of COLECOES_COM_ID_POR_DATA) {
+    await migrarColecaoComIdPorData(nome, tenantId);
+  }
+  await migrarMetaEntriesVersion(tenantId);
 
   console.log('Concluído. Confira no Console antes de publicar as regras novas.');
 }

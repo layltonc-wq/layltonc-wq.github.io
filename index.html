@@ -213,6 +213,10 @@ function tenantDe(user){return (user&&user.tenant_id)||null;}
 // Lê ?tenant= da URL de convite (ex.: .../?tenant=itaquitinga-pe). Guarda em sessionStorage pra
 // sobreviver a um reload da tela de cadastro sem o parâmetro na URL (ex.: depois de trocar de aba
 // login/cadastro). Sem link de convite válido, cadastro novo não é permitido (ver Auth.register()).
+// ID do doc de plantoes/conferencias muda de esquema: era só a data (colide entre prefeituras no
+// mesmo dia), agora é tenant_id+'__'+data. O campo 'data'/'date' dentro do próprio doc continua sendo
+// a data pura, sem o prefixo — só o ID do documento muda.
+function plantaoDocId(user,dateStr){return tenantDe(user)+'__'+dateStr;}
 function tenantDaURL(){
   try{
     var p=new URLSearchParams(window.location.search).get('tenant');
@@ -273,11 +277,12 @@ function getShiftEndHour(role){return role==='diarista'?14:20;}
 // Fecha automaticamente qualquer plantão de um dia anterior que tenha ficado ativo
 // (ex: app ficou aberto/suspenso no celular do farmacêutico e o auto-encerramento das 20h não rodou).
 // Roda para qualquer usuário que abrir o app, não depende de quem esqueceu logado.
-function autoFecharPlantoesAntigos(){
-  db.collection('plantoes').where('ativo','==',true).get().then(function(snap){
+function autoFecharPlantoesAntigos(user){
+  db.collection('plantoes').where('tenant_id','==',tenantDe(user)).where('ativo','==',true).get().then(function(snap){
     var today=todayStr();
     snap.docs.forEach(function(d){
-      if(d.id<today){
+      var data=d.data();
+      if((data.data||data.date||'')<today){
         d.ref.update({ativo:false,encerradoEm:new Date().toISOString(),encerradoAuto:true,motivoEncerramentoAuto:'virada_dia'}).catch(function(){});
       }
     });
@@ -312,7 +317,7 @@ function initFB(c){try{
 // editado/excluído (fora da janela de 3 dias o listener não pega). Todos os aparelhos escutam esse doc e,
 // ao mudar, rebuscam o histórico completo do servidor. Adições não chamam isto (o listener de 3 dias já pega).
 // Fire-and-forget: nunca bloqueia nem quebra a mutação original.
-function _bumpEntriesVersion(){try{if(db)db.collection('_meta').doc('entries_version').set({v:Date.now(),at:new Date().toISOString()},{merge:true}).catch(function(){});}catch(e){}}
+function _bumpEntriesVersion(user){try{if(db&&tenantDe(user))db.collection('_meta').doc('entries_version__'+tenantDe(user)).set({v:Date.now(),at:new Date().toISOString(),tenant_id:tenantDe(user)},{merge:true}).catch(function(){});}catch(e){}}
 // Impressão/PDF robusta: usa um IFRAME oculto em vez de window.open('_blank').
 // Por quê: no celular, abrir uma janela em branco e chamar print() com frequência TRAVA a aba
 // principal (o app "congela") e ainda esbarra em bloqueador de pop-up. O iframe imprime só o seu
@@ -633,7 +638,7 @@ var _showCarrinho=useState(false);var showCarrinho=_showCarrinho[0];var setShowC
     if(jaTemFarma){alert('Já existe um farmacêutico neste plantão. Não é permitido ter dois.');return prev;}
   }
   return prev.concat([{id:u.id,nome:u.name,cargo:u.role,color:u.color}]);
-});}function startShift(){setSaving(true);var today=todayStr();var leader={id:user.uid,nome:user.name,cargo:user.role,color:user.color,status:'confirmado'};var members=team.map(function(m){return {id:m.id,nome:m.nome||m.name,cargo:m.cargo||m.role,color:m.color,status:'confirmado'};});var equipe=[leader].concat(members);db.collection('plantoes').doc(today).set({iniciadoPor:user.uid,iniciadoPorNome:user.name,inicio:new Date().toISOString(),equipe:equipe,ativo:true,data:today}).then(function(){return Promise.resolve();}).then(function(){onDone({plantao:{equipe:equipe,iniciadoPor:user.uid,iniciadoPorNome:user.name,inicio:new Date().toISOString(),ativo:true},isGuest:false,shiftId:today});setSaving(false);}).catch(function(e){alert('Erro: '+e.message);setSaving(false);});}
+});}function startShift(){setSaving(true);var today=todayStr();var leader={id:user.uid,nome:user.name,cargo:user.role,color:user.color,status:'confirmado'};var members=team.map(function(m){return {id:m.id,nome:m.nome||m.name,cargo:m.cargo||m.role,color:m.color,status:'confirmado'};});var equipe=[leader].concat(members);db.collection('plantoes').doc(plantaoDocId(user,today)).set({iniciadoPor:user.uid,iniciadoPorNome:user.name,inicio:new Date().toISOString(),equipe:equipe,ativo:true,data:today,tenant_id:tenantDe(user)}).then(function(){return Promise.resolve();}).then(function(){onDone({plantao:{equipe:equipe,iniciadoPor:user.uid,iniciadoPorNome:user.name,inicio:new Date().toISOString(),ativo:true},isGuest:false,shiftId:today});setSaving(false);}).catch(function(e){alert('Erro: '+e.message);setSaving(false);});}
 return(<div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'linear-gradient(160deg,#0A2D6E,#1351B4)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:500,padding:16,overflowY:'auto'}}><div style={{background:'#fff',borderRadius:24,padding:'28px 22px',maxWidth:440,width:'100%',maxHeight:'90vh',overflowY:'auto',boxShadow:'0 24px 64px rgba(0,0,0,.25)'}}><div style={{textAlign:'center',marginBottom:20}}><div style={{fontSize:18,fontWeight:800,color:B,marginBottom:4}}>Abrir Plantão</div><div style={{fontSize:12,color:'#64748B'}}>Selecione sua equipe para hoje</div></div>{eligible.length>0&&(<div style={{display:'flex',flexDirection:'column',gap:8,marginBottom:16}}>{eligible.map(function(u){var sel=team.some(function(t){return t.id===u.id;});return(<div key={u.id} onClick={function(){toggle(u);}} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 14px',borderRadius:12,border:'1.5px solid '+(sel?B:'#E2E8F0'),background:sel?'#EFF6FF':'#fff',cursor:'pointer',transition:'all .15s'}}><UserAvatar user={u} size={40}/><div style={{flex:1}}><div style={{fontWeight:600,fontSize:14,color:sel?B:'#1E293B'}}>{u.name}</div><div style={{fontSize:12,color:'#64748B'}}>{ROLE_ICON[u.role]} {ROLES[u.role]||u.role}</div></div>{sel&&<div style={{width:22,height:22,borderRadius:'50%',background:B,display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:12,fontWeight:700}}>✓</div>}</div>);})}</div>)}<button onClick={startShift} disabled={saving} className="bp" style={{marginBottom:10,opacity:saving?0.7:1}}>{saving?'Abrindo...':'Abrir Plantão'}</button><button onClick={function(){onDone({plantao:null,isGuest:true,shiftId:null});}} className="bs">Entrar como Convidado</button></div></div>);}
 
 function InviteScreen(props){return(<div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(15,23,42,.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:500,padding:16,backdropFilter:'blur(4px)'}}><div style={{background:'#fff',borderRadius:24,padding:'32px 24px',maxWidth:380,width:'100%',textAlign:'center',boxShadow:'0 24px 64px rgba(0,0,0,.25)'}}><div style={{width:56,height:56,borderRadius:16,background:'#EFF6FF',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px',fontSize:24}}>🏥</div><div style={{fontSize:18,fontWeight:800,color:B,marginBottom:8}}>Convite de Plantão</div><div style={{fontSize:14,color:'#64748B',marginBottom:24,lineHeight:1.7}}><strong style={{color:B}}>{props.invite.deNome}</strong><br/>te adicionou ao plantao de hoje.</div><div style={{display:'flex',gap:10}}><button onClick={function(){props.onDeny(props.invite);}} className="bs" style={{flex:1}}>Recusar</button><button onClick={function(){props.onConfirm(props.invite);}} className="bg" style={{flex:2}}>Aceitar Plantão</button></div></div></div>);}
@@ -666,7 +671,7 @@ function ShiftCard(props){
     }
     var novoMembro={id:u.id,nome:u.name||u.nome||u.email,cargo:u.role,color:u.color||'#1351B4',status:'confirmado'};
     var novaEquipe=equipeAtual.concat([novoMembro]);
-    db.collection('plantoes').doc(shiftId).update({equipe:novaEquipe})
+    db.collection('plantoes').doc(plantaoDocId(user,shiftId)).update({equipe:novaEquipe})
       .then(function(){
         // Atualizar plantão local
         var np={};for(var k in plantao)np[k]=plantao[k];np.equipe=novaEquipe;
@@ -678,7 +683,7 @@ function ShiftCard(props){
   function removerMembro(uid){
     if(!plantao||!shiftId)return;
     var novaEquipe=(plantao.equipe||[]).filter(function(m){return m.id!==uid;});
-    db.collection('plantoes').doc(shiftId).update({equipe:novaEquipe}).catch(function(e){alert('Erro: '+e.message);});
+    db.collection('plantoes').doc(plantaoDocId(user,shiftId)).update({equipe:novaEquipe}).catch(function(e){alert('Erro: '+e.message);});
   }
 
   if(!plantao){
@@ -2302,7 +2307,7 @@ function HistModal(props){
     if(!editLote)return;
     var entsDoLote=entries.filter(function(e){return e.medicamentoId===med.id&&e.tipo==='entrada'&&e.lote===editLote.lote;});
     var batch=entsDoLote.map(function(e){return db.collection('entries').doc(e.id).update({lote:novoLote||editLote.lote,validade:_normValidade(novaVal||editLote.validade)});});
-    Promise.all(batch).then(function(){_bumpEntriesVersion();setEditLote(null);}).catch(function(e){alert('Erro: '+e.message);});
+    Promise.all(batch).then(function(){_bumpEntriesVersion(user);setEditLote(null);}).catch(function(e){alert('Erro: '+e.message);});
   }
 
   function ajustarLote(){
@@ -2318,7 +2323,7 @@ function HistModal(props){
     if(!loteAjuste)return;
     if(!window.confirm('Excluir todas as entradas do lote '+loteAjuste.lote+'?'))return;
     var entsDoLote=entries.filter(function(e){return e.medicamentoId===med.id&&e.tipo==='entrada'&&e.lote===loteAjuste.lote;});
-    Promise.all(entsDoLote.map(function(e){return db.collection('entries').doc(e.id).delete();})).then(function(){_bumpEntriesVersion();setLoteAjuste(null);});
+    Promise.all(entsDoLote.map(function(e){return db.collection('entries').doc(e.id).delete();})).then(function(){_bumpEntriesVersion(user);setLoteAjuste(null);});
   }
 
   // EXCLUSÃO PERMANENTE de um lançamento individual — TÉCNICO e GESTOR (coordenadora). Remove o doc de
@@ -2331,7 +2336,7 @@ function HistModal(props){
     setExcSaving(true);
     db.collection('entries').doc(e.id).delete().then(function(){
       try{db.collection('logs_acesso').add({uid:user.uid||'',nome:user.name||'',cargo:user.role||'',acao:'entry_excluida_permanente',detalhe:(e.tipo||'')+' '+(e.quantidade||0)+'x '+(med.nome||'')+(e.lote?' lote '+e.lote:'')+(e.observacao?' — '+e.observacao:'')+' (entryId '+e.id+')',criadoEm:new Date().toISOString(),tenant_id:tenantDe(user)}).catch(function(){});}catch(_){}
-      _bumpEntriesVersion();setExcId(null);setExcSaving(false);
+      _bumpEntriesVersion(user);setExcId(null);setExcSaving(false);
     }).catch(function(err){alert('Erro ao excluir: '+(err&&err.message?err.message:err));setExcSaving(false);});
   }
 
@@ -2549,7 +2554,7 @@ function exportAlertasXL(){var rows=[['Tipo','Medicamento','Estoque','Min','Vali
 function saveNew(){if(!newNome.trim())return;setSaving(true);db.collection('medicamentos').add({nome:newNome.trim(),ean:newEan.trim(),minEstoque:parseInt(newMin)||0,categoria:newTipo,criadoEm:new Date().toISOString(),tenant_id:tenantDe(user)}).then(function(){setShowAdd(false);setNewNome('');setNewEan('');setNewMin('');setNewTipo('medicamento');setSaving(false);});}
 function saveEdit(){setSaving(true);db.collection('medicamentos').doc(editId).update({nome:editNome.trim(),minEstoque:parseInt(editMin)||0,categoria:editTipo}).then(function(){setEditId(null);setSaving(false);});}
 function delMed(id){if(!confirm('Excluir medicamento?'))return;db.collection('medicamentos').doc(id).delete();}
-function salvarEditLote(){if(!editLote)return;setSaving(true);var ps=[];if(editLote.medId)ps.push(db.collection('medicamentos').doc(editLote.medId).update({loteAtual:editLoteVal.trim(),validadeAtual:_normValidade(editLoteData)}));if(editLote.entryId)ps.push(db.collection('entries').doc(editLote.entryId).update({lote:editLoteVal.trim(),validade:_normValidade(editLoteData)}).catch(function(){}));var _hadEntry=!!editLote.entryId;Promise.all(ps).then(function(){if(_hadEntry)_bumpEntriesVersion();setEditLote(null);setSaving(false);}).catch(function(e){alert('Erro: '+e.message);setSaving(false);});}
+function salvarEditLote(){if(!editLote)return;setSaving(true);var ps=[];if(editLote.medId)ps.push(db.collection('medicamentos').doc(editLote.medId).update({loteAtual:editLoteVal.trim(),validadeAtual:_normValidade(editLoteData)}));if(editLote.entryId)ps.push(db.collection('entries').doc(editLote.entryId).update({lote:editLoteVal.trim(),validade:_normValidade(editLoteData)}).catch(function(){}));var _hadEntry=!!editLote.entryId;Promise.all(ps).then(function(){if(_hadEntry)_bumpEntriesVersion(user);setEditLote(null);setSaving(false);}).catch(function(e){alert('Erro: '+e.message);setSaving(false);});}
 function salvarAjuste(){if(!ajusteMed)return;var nq=parseInt(ajusteQty);if(isNaN(nq)||nq<0){alert('Quantidade inválida.');return;}if(!ajusteMotivo.trim()){alert('Informe o motivo.');return;}var atual=loteSel?loteSel.qty:(stock[ajusteMed.id]||0);var diff=nq-atual;if(diff===0){setAjusteId(null);setAjusteMed(null);setAjusteQty('');setAjusteMotivo('');setLoteSel(null);return;}setSaving(true);db.collection('entries').add({medicamentoId:ajusteMed.id,medicamentoNome:ajusteMed.nome,ean:ajusteMed.ean||'',tipo:diff>0?'entrada':'saida',quantidade:Math.abs(diff),lote:loteSel?loteSel.lote:'',validade:loteSel?loteSel.validade:'',observacao:'Balanço: '+ajusteMotivo.trim()+' (era '+atual+', passou a '+nq+')',criadoEm:new Date().toISOString(),date:todayStr(),autorId:user.uid,autorNome:user.name,autorCargo:user.role,autorColor:user.color||B,isAjuste:true,tenant_id:tenantDe(user)}).then(function(){setAjusteId(null);setAjusteMed(null);setAjusteQty('');setAjusteMotivo('');setLoteSel(null);setSaving(false);}).catch(function(e){alert(e.message);setSaving(false);});}
 function handleImportXls(file){if(!file)return;setImporting(true);setImportStatus('Lendo arquivo...');var reader=new FileReader();reader.onload=function(ev){try{var data=new Uint8Array(ev.target.result);var wb=XLSX.read(data,{type:'array'});var catMap={'CONTROLADOS':'controlado','CONTROLADO':'controlado','FARMACIA BASICA':'medicamento','FARMACIA':'medicamento','LEITES':'leite','LEITE':'leite','INJETAVEIS':'injetavel','INJETAVEL':'injetavel','PENSOS':'penso','MATERIAIS':'penso'};var batch=[];for(var si=0;si<wb.SheetNames.length;si++){var sn=wb.SheetNames[si];if(sn.toUpperCase().indexOf('INSTRUC')>=0)continue;var ws2=wb.Sheets[sn];var rows=XLSX.utils.sheet_to_json(ws2,{defval:''});if(!rows||rows.length===0)continue;var su=sn.toUpperCase().trim();var sc='medicamento';for(var key in catMap){if(su.indexOf(key)>=0){sc=catMap[key];break;}}for(var i=0;i<rows.length;i++){var row=rows[i];var nome=row['Nome']||row['NOME']||row['nome']||'';if(!nome||!nome.trim())continue;var cat=row['Categoria']||row['CATEGORIA']||sc;var est2=parseInt(row['Estoque Inicial']||row['estoque']||0)||0;var min2=parseInt(row['Estoque Minimo']||row['minimo']||0)||0;var ean=(row['EAN (opcional)']||row['EAN']||'')+'';var val2=(row['Validade (MM/AAAA)']||row['Validade']||'')+'';var cl=cat.toLowerCase().trim();if(cl.indexOf('injet')>=0)cl='injetavel';else if(cl.indexOf('penso')>=0||cl.indexOf('material')>=0)cl='penso';else if(cl.indexOf('control')>=0)cl='controlado';else if(cl.indexOf('leite')>=0)cl='leite';else cl='medicamento';batch.push({nome:nome.trim(),categoria:cl,minEstoque:min2,ean:ean,validade:_normValidade(val2),estoque:est2,criadoEm:new Date().toISOString()});}}if(batch.length===0){setImportStatus('Nenhum item encontrado.');setImporting(false);return;}setImportStatus('Importando '+batch.length+' itens...');var idx=0,done=0;function next2(){if(idx>=batch.length){setImportStatus('Registrando estoques...');var ei=0;function ne(){if(ei>=batch.length){setImportStatus('Concluido! '+done+' itens!');setImporting(false);return;}var item=batch[ei++];if(item.estoque>0){db.collection('medicamentos').where('tenant_id','==',tenantDe(user)).where('nome','==',item.nome).limit(1).get().then(function(s){if(!s.empty){db.collection('entries').add({medicamentoId:s.docs[0].id,medicamentoNome:item.nome,ean:item.ean||'',tipo:'entrada',quantidade:item.estoque,lote:'',validade:item.validade||'',observacao:'Estoque inicial',criadoEm:new Date().toISOString(),date:todayStr(),autorId:user.uid,autorNome:user.name,autorCargo:user.role,autorColor:user.color||B,tenant_id:tenantDe(user)}).then(ne).catch(ne);}else ne();}).catch(ne);}else ne();}ne();return;}var item=batch[idx++];db.collection('medicamentos').add({nome:item.nome,categoria:item.categoria,minEstoque:item.minEstoque,ean:item.ean,criadoEm:item.criadoEm,tenant_id:tenantDe(user)}).then(function(){done++;next2();}).catch(function(){done++;next2();});}next2();}catch(ex){setImportStatus('Erro: '+ex.message);setImporting(false);}};reader.readAsArrayBuffer(file);}
 var _cutDesc=(function(){var d=new Date();d.setDate(d.getDate()-30);return d.toISOString().slice(0,10);})();var descartes30=(entries||[]).filter(function(e){return e.tipo==='saida'&&e.descarte&&(e.date||'')>=_cutDesc;});var subTabs=[{id:'estoque',label:'Estoque'},{id:'faltas',label:'Faltas'+(faltas.length>0?' ('+faltas.length+')':'')},{id:'vencimento',label:'Vencimentos'+(totalAlertas>0?' ('+totalAlertas+')':'')},{id:'descartes',label:'🗑️ Descartes'+(descartes30.length>0?' ('+descartes30.length+')':'')}];
@@ -3345,7 +3350,7 @@ return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
   })}
 </div>)}
 {sub==='inativo'&&(inactive.length===0?<div className="card" style={{padding:40,textAlign:'center',color:'#94A3B8'}}>Nenhuma conta inativa.</div>:(<div style={{display:'flex',flexDirection:'column',gap:10}}>{inactive.map(function(u){return(<div key={u.id} className="card" style={{padding:'14px 16px',display:'flex',alignItems:'center',gap:12,flexWrap:'wrap',opacity:0.65}}><UserAvatar user={u} size={38}/><div style={{flex:1}}><div style={{fontWeight:600,color:'#64748B'}}>{u.name}</div><div style={{fontSize:12,color:'#94A3B8'}}>{ROLES[u.role]||u.role}</div></div><button onClick={function(){reactivate(u);}} style={{fontSize:12,background:'#DCFCE7',border:'1px solid #86EFAC',borderRadius:20,padding:'5px 14px',color:'#0C6B3E',cursor:'pointer',fontWeight:600}}>Reativar</button>{currentUser.role==='tecnico'&&<button onClick={function(){if(!confirm('EXCLUIR PERMANENTEMENTE '+u.name+'? Isso não pode ser desfeito!'))return;auth.currentUser&&db.collection('users').doc(u.id).delete().then(function(){db.collection('logs_contas').add({uid:u.id,nome:u.name,cargo:u.role,acao:'excluido permanentemente',por:currentUser.name,criadoEm:new Date().toISOString(),tenant_id:tenantDe(currentUser)}).catch(function(){});alert(u.name+' excluido permanentemente.');}).catch(function(e){alert('Erro: '+e.message);});}} style={{fontSize:12,background:'#FEE2E2',border:'1px solid #FCA5A5',borderRadius:20,padding:'5px 14px',color:'#DC2626',cursor:'pointer',fontWeight:600}}>Excluir</button>}</div>);})}</div>))}
-{sub==='reset'&&(<div><div className="wn" style={{marginBottom:16}}>Atenção: estas acoes sao permanentes e irreversiveis.</div><div className="card" style={{padding:'20px',marginBottom:12}}><div style={{fontWeight:700,color:'#1E293B',fontSize:14,marginBottom:6}}>Apagar movimentacoes</div><div style={{fontSize:13,color:'#64748B',marginBottom:14}}>Remove todos os registros de entrada e saida. Medicamentos mantidos.</div><button onClick={function(){if(!confirm('Apagar TODAS as movimentacoes?'))return;if(!confirm('CONFIRMACAO FINAL: isso não pode ser desfeito!'))return;db.collection('entries').where('tenant_id','==',tenantDe(currentUser)).get().then(function(s){var b=db.batch();s.docs.forEach(function(d){b.delete(d.ref);});return b.commit();}).then(function(){_bumpEntriesVersion();alert('Movimentacoes apagadas!');}).catch(function(e){alert(e.message);});}} className="br">Apagar movimentacoes</button></div><div className="card" style={{padding:'20px',marginBottom:12}}><div style={{fontWeight:700,color:'#1E293B',fontSize:14,marginBottom:6}}>Apagar medicamentos</div><div style={{fontSize:13,color:'#64748B',marginBottom:14}}>Remove todos os medicamentos cadastrados.</div><button onClick={function(){if(!confirm('Apagar TODOS os medicamentos?'))return;if(!confirm('CONFIRMACAO FINAL?'))return;db.collection('medicamentos').where('tenant_id','==',tenantDe(currentUser)).get().then(function(s){var b=db.batch();s.docs.forEach(function(d){b.delete(d.ref);});return b.commit();}).then(function(){alert('Medicamentos apagados!');}).catch(function(e){alert(e.message);});}} className="br">Apagar medicamentos</button></div><div className="card" style={{padding:'20px'}}><div style={{fontWeight:700,color:'#1E293B',fontSize:14,marginBottom:6}}>Reset completo</div><div style={{fontSize:13,color:'#64748B',marginBottom:14}}>Apaga todos os medicamentos e movimentacoes.</div><button onClick={function(){if(!confirm('RESET COMPLETO do sistema?'))return;if(!confirm('ULTIMA CONFIRMACAO — sem volta!'))return;Promise.all([db.collection('entries').where('tenant_id','==',tenantDe(currentUser)).get().then(function(s){var b=db.batch();s.docs.forEach(function(d){b.delete(d.ref);});return b.commit();}),db.collection('medicamentos').where('tenant_id','==',tenantDe(currentUser)).get().then(function(s){var b=db.batch();s.docs.forEach(function(d){b.delete(d.ref);});return b.commit();})]).then(function(){_bumpEntriesVersion();alert('Reset realizado!');}).catch(function(e){alert(e.message);});}} style={{background:'#7B1FA2',border:'none',borderRadius:10,padding:'12px',color:'#fff',fontSize:14,fontWeight:600,cursor:'pointer',width:'100%',boxShadow:'0 2px 8px rgba(123,31,162,.3)'}}>Reset completo</button></div></div>)}
+{sub==='reset'&&(<div><div className="wn" style={{marginBottom:16}}>Atenção: estas acoes sao permanentes e irreversiveis.</div><div className="card" style={{padding:'20px',marginBottom:12}}><div style={{fontWeight:700,color:'#1E293B',fontSize:14,marginBottom:6}}>Apagar movimentacoes</div><div style={{fontSize:13,color:'#64748B',marginBottom:14}}>Remove todos os registros de entrada e saida. Medicamentos mantidos.</div><button onClick={function(){if(!confirm('Apagar TODAS as movimentacoes?'))return;if(!confirm('CONFIRMACAO FINAL: isso não pode ser desfeito!'))return;db.collection('entries').where('tenant_id','==',tenantDe(currentUser)).get().then(function(s){var b=db.batch();s.docs.forEach(function(d){b.delete(d.ref);});return b.commit();}).then(function(){_bumpEntriesVersion(currentUser);alert('Movimentacoes apagadas!');}).catch(function(e){alert(e.message);});}} className="br">Apagar movimentacoes</button></div><div className="card" style={{padding:'20px',marginBottom:12}}><div style={{fontWeight:700,color:'#1E293B',fontSize:14,marginBottom:6}}>Apagar medicamentos</div><div style={{fontSize:13,color:'#64748B',marginBottom:14}}>Remove todos os medicamentos cadastrados.</div><button onClick={function(){if(!confirm('Apagar TODOS os medicamentos?'))return;if(!confirm('CONFIRMACAO FINAL?'))return;db.collection('medicamentos').where('tenant_id','==',tenantDe(currentUser)).get().then(function(s){var b=db.batch();s.docs.forEach(function(d){b.delete(d.ref);});return b.commit();}).then(function(){alert('Medicamentos apagados!');}).catch(function(e){alert(e.message);});}} className="br">Apagar medicamentos</button></div><div className="card" style={{padding:'20px'}}><div style={{fontWeight:700,color:'#1E293B',fontSize:14,marginBottom:6}}>Reset completo</div><div style={{fontSize:13,color:'#64748B',marginBottom:14}}>Apaga todos os medicamentos e movimentacoes.</div><button onClick={function(){if(!confirm('RESET COMPLETO do sistema?'))return;if(!confirm('ULTIMA CONFIRMACAO — sem volta!'))return;Promise.all([db.collection('entries').where('tenant_id','==',tenantDe(currentUser)).get().then(function(s){var b=db.batch();s.docs.forEach(function(d){b.delete(d.ref);});return b.commit();}),db.collection('medicamentos').where('tenant_id','==',tenantDe(currentUser)).get().then(function(s){var b=db.batch();s.docs.forEach(function(d){b.delete(d.ref);});return b.commit();})]).then(function(){_bumpEntriesVersion(currentUser);alert('Reset realizado!');}).catch(function(e){alert(e.message);});}} style={{background:'#7B1FA2',border:'none',borderRadius:10,padding:'12px',color:'#fff',fontSize:14,fontWeight:600,cursor:'pointer',width:'100%',boxShadow:'0 2px 8px rgba(123,31,162,.3)'}}>Reset completo</button></div></div>)}
 </div>);}
 
 function TabLog(props){var user=props.user;var _logs=useState([]);var logs=_logs[0];var setLogs=_logs[1];useEffect(function(){db.collection('logs_acesso').where('tenant_id','==',tenantDe(user)).limit(100).onSnapshot(function(s){var list=s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;});list.sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});setLogs(list);});},[]);return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}><div className="card"><div className="ch"><div className="ch-title"><div className="ch-accent"/><span>Log de Acessos</span></div><span style={{fontSize:12,color:'#94A3B8',fontWeight:500}}>{logs.length} registros</span></div>{logs.length===0?<div style={{padding:32,textAlign:'center',color:'#94A3B8'}}>Nenhum log.</div>:(<div style={{overflowX:'auto'}}><table className="tbl"><thead><tr><th>Data</th><th>Hora</th><th>Usuario</th><th>Cargo</th><th>Acao</th></tr></thead><tbody>{logs.map(function(l){return(<tr key={l.id}><td style={{fontSize:12,color:'#64748B',whiteSpace:'nowrap'}}>{fmtD(l.criadoEm)}</td><td style={{whiteSpace:'nowrap',fontSize:12,color:'#64748B'}}>{fmtT(l.criadoEm)}</td><td><div style={{display:'flex',alignItems:'center',gap:8}}><Avatar nome={l.nome} color={l.color} foto={l.foto} size={28}/><div style={{fontWeight:600,color:'#1E293B',fontSize:13}}>{l.nome}</div></div></td><td><span className="badge badge-gray">{ROLES[l.cargo]||l.cargo}</span></td><td><span className={'badge '+(l.acao==='login'?'badge-blue':'badge-red')}>{l.acao==='login'?'Login':'Logout'}</span></td></tr>);})}</tbody></table></div>)}</div></div>);}
@@ -5641,7 +5646,7 @@ function TabHistoricoNotas(props){
     var batch=editGrupo.itens.slice();
     var i=0;
     function nx(){
-      if(i>=batch.length){_bumpEntriesVersion();setSavingG(false);setEditGrupo(null);setEditGF({});setMsg('ok');setTimeout(function(){setMsg('');},3000);return;}
+      if(i>=batch.length){_bumpEntriesVersion(user);setSavingG(false);setEditGrupo(null);setEditGF({});setMsg('ok');setTimeout(function(){setMsg('');},3000);return;}
       var entry=batch[i++];
       var upd={nfNumero:editGF.nota,nfFornecedor:editGF.forn,editadoPor:user.name,editadoEm:new Date().toISOString()};if(editGF.data){upd.nfData=editGF.data;}db.collection('entries').doc(entry.id).update(upd).then(nx).catch(nx);
     }
@@ -5651,7 +5656,7 @@ function TabHistoricoNotas(props){
   function salvar(){
     if(!editEntry||saving)return;
     setSaving(true);
-    db.collection('entries').doc(editEntry.id).update({nfNumero:editF.nota,nfFornecedor:editF.forn,medicamentoNome:editF.med,quantidade:parseInt(editF.qty)||editEntry.quantidade,lote:editF.lote,validade:editF.val,editadoPor:user.name,editadoEm:new Date().toISOString()}).then(function(){_bumpEntriesVersion();setSaving(false);setEditEntry(null);setEditF({});setMsg('ok');setTimeout(function(){setMsg('');},3000);}).catch(function(e){setSaving(false);setMsg('e:'+e.message);});
+    db.collection('entries').doc(editEntry.id).update({nfNumero:editF.nota,nfFornecedor:editF.forn,medicamentoNome:editF.med,quantidade:parseInt(editF.qty)||editEntry.quantidade,lote:editF.lote,validade:editF.val,editadoPor:user.name,editadoEm:new Date().toISOString()}).then(function(){_bumpEntriesVersion(user);setSaving(false);setEditEntry(null);setEditF({});setMsg('ok');setTimeout(function(){setMsg('');},3000);}).catch(function(e){setSaving(false);setMsg('e:'+e.message);});
   }
   return(
     <div style={{maxWidth:700,margin:'0 auto',padding:'16px 12px 90px'}}>
@@ -5712,7 +5717,7 @@ function TabHistoricoNotas(props){
             <button onClick={function(e){e.stopPropagation();
               if(!window.confirm('Excluir TODOS os '+g.itens.length+' item(ns) desta nota (NF '+g.nf+')? Esta ação não pode ser desfeita.'))return;
               Promise.all(g.itens.map(function(it){return db.collection('entries').doc(it.id).delete();}))
-                .then(function(){_bumpEntriesVersion();setMsg('ok');setTimeout(function(){setMsg('');},3000);})
+                .then(function(){_bumpEntriesVersion(user);setMsg('ok');setTimeout(function(){setMsg('');},3000);})
                 .catch(function(er){setMsg('e:Erro ao excluir: '+er.message);});
             }} style={{background:'#FEF2F2',border:'1.5px solid #FCA5A5',borderRadius:8,padding:'6px 14px',color:'#DC2626',fontWeight:700,fontSize:12,cursor:'pointer'}}>
               🗑️ Excluir nota
@@ -7015,7 +7020,7 @@ function confKey(medId,lote,val){return (medId+'--'+(lote||'SEM')+'--'+(val||'SE
 function TabConferencia(props){
   var user=props.user;var medications=props.medications||[];var entries=props.entries||[];var stock=props.stock||{};
   var CCOR={medicamento:'#1351B4',controlado:'#DC2626',injetavel:'#7C3AED',leite:'#D97706',penso:'#0891B2'};
-  var docRef=function(){return db.collection('conferencias').doc(todayStr());};
+  var docRef=function(){return db.collection('conferencias').doc(plantaoDocId(user,todayStr()));};
   var _contagens=useState({});var contagens=_contagens[0];var setContagens=_contagens[1];
   var _contadoPor=useState({});var contadoPor=_contadoPor[0];var setContadoPor=_contadoPor[1];
   var _novosLotes=useState([]);var novosLotes=_novosLotes[0];var setNovosLotes=_novosLotes[1];
@@ -7084,7 +7089,7 @@ function TabConferencia(props){
     var now=new Date().toISOString();if(!entrouRef.current)entrouRef.current=now;
     var p={nome:user.name,cor:user.color||B,cat:(cat!==undefined?cat:minhaCatRef.current)||null,em:now,entrou:entrouRef.current};
     var upd={};upd[user.uid]=p;
-    return docRef().set({participantes:upd},{merge:true});
+    return docRef().set({participantes:upd,tenant_id:tenantDe(user)},{merge:true});
   }
   useEffect(function(){
     if(!user||!user.uid)return;
@@ -7124,7 +7129,7 @@ function TabConferencia(props){
     var contUpd={},porUpd={};contUpd[key]=novo;porUpd[key]={nome:user.name,em:now};
     pendingRef.current[key]=Date.now();
     setContagens(function(p){var n=Object.assign({},p);n[key]=String(novo);return n;});// otimista
-    docRef().set({contagens:contUpd,contadoPor:porUpd,recontagens:firebase.firestore.FieldValue.arrayUnion(rec),atualizadoEm:now,atualizadoPor:user.name},{merge:true})
+    docRef().set({contagens:contUpd,contadoPor:porUpd,recontagens:firebase.firestore.FieldValue.arrayUnion(rec),atualizadoEm:now,atualizadoPor:user.name,tenant_id:tenantDe(user)},{merge:true})
       .then(function(){delete pendingRef.current[key];setErro('');setAcheiForm(null);setAcheiQty('');})
       .catch(function(e){delete pendingRef.current[key];revertKey(key);erroEscrita(e);});// desfaz a soma otimista
   }
@@ -7140,7 +7145,7 @@ function TabConferencia(props){
       docRef().update(u).then(ok).catch(fail);
     } else {
       var contUpd={},porUpd={};contUpd[key]=parseInt(valStr)||0;porUpd[key]={nome:user.name,em:new Date().toISOString()};
-      docRef().set({contagens:contUpd,contadoPor:porUpd,atualizadoEm:new Date().toISOString(),atualizadoPor:user.name},{merge:true}).then(ok).catch(fail);
+      docRef().set({contagens:contUpd,contadoPor:porUpd,atualizadoEm:new Date().toISOString(),atualizadoPor:user.name,tenant_id:tenantDe(user)},{merge:true}).then(ok).catch(fail);
     }
   }
   function onCount(key,raw){
@@ -7156,7 +7161,7 @@ function TabConferencia(props){
     if(qty<=0){alert('Informe a quantidade contada (maior que zero).');return;}
     var obj={id:'nl_'+Date.now()+'_'+Math.floor(Math.random()*9999),medId:med.id,medNome:med.nome,lote:lote,validade:val,qty:qty,por:user.name,em:new Date().toISOString()};
     // novosLotes vem via snapshot; só limpa o formulário se a gravação confirmar
-    docRef().set({novosLotes:firebase.firestore.FieldValue.arrayUnion(obj),atualizadoEm:new Date().toISOString(),atualizadoPor:user.name},{merge:true})
+    docRef().set({novosLotes:firebase.firestore.FieldValue.arrayUnion(obj),atualizadoEm:new Date().toISOString(),atualizadoPor:user.name,tenant_id:tenantDe(user)},{merge:true})
       .then(function(){setErro('');setNovoForm(null);setNlLote('');setNlVal('');setNlQty('');})
       .catch(function(e){erroEscrita(e);});
   }
@@ -7213,7 +7218,7 @@ function TabConferencia(props){
       ops.push(db.collection('entries').add({medicamentoId:m.id,medicamentoNome:m.nome,tipo:'entrada',quantidade:semLote,lote:lote,validade:val,observacao:'Conferência: atribuição de lote',origemConferencia:true,divergenciaTipo:'conferencia',autorNome:user.name,autorId:user.uid||'',autorCor:user.color||B,criadoEm:now,date:todayStr(),tenant_id:tenantDe(user)}));
       ops.push(db.collection('entries').add({medicamentoId:m.id,medicamentoNome:m.nome,tipo:'saida',quantidade:semLote,lote:'',validade:'',observacao:'Conferência: atribuição de lote (reclassificação)',origemConferencia:true,divergenciaTipo:'conferencia',autorNome:user.name,autorId:user.uid||'',autorCor:user.color||B,criadoEm:now,date:todayStr(),tenant_id:tenantDe(user)}));
     }
-    Promise.all(ops).then(function(){if(semLote>0)_bumpEntriesVersion();setLcSaving(false);setLcId(null);setLcLote('');setLcVal('');setErro('');})
+    Promise.all(ops).then(function(){if(semLote>0)_bumpEntriesVersion(user);setLcSaving(false);setLcId(null);setLcLote('');setLcVal('');setErro('');})
       .catch(function(e){setLcSaving(false);erroEscrita(e);});
   }
 
@@ -7338,7 +7343,7 @@ function TabConferencia(props){
     });
     batch.commit().then(function(){
       // Zera a conferência ativa: os ajustes já corrigiram o estoque (evita reaplicar lotes novos)
-      return docRef().set({contagens:{},contadoPor:{},novosLotes:[],aplicadoEm:now,aplicadoPor:user.name,atualizadoEm:now,atualizadoPor:user.name});
+      return docRef().set({contagens:{},contadoPor:{},novosLotes:[],aplicadoEm:now,aplicadoPor:user.name,atualizadoEm:now,atualizadoPor:user.name,tenant_id:tenantDe(user)});
     }).then(function(){
       // Só limpa o estado local após a gravação confirmar no banco
       setContagens({});setNovosLotes([]);setContadoPor({});setRecontagens([]);pendingRef.current={};
@@ -7379,7 +7384,7 @@ function TabConferencia(props){
       batch.commit().then(function(){
         // 2) Marca a categoria como finalizada (set+merge cria o doc se preciso e mescla finalizadas de outras categorias).
         var finMap={};finMap[cat]={em:now,por:user.name,ajustes:lista.length};
-        return docRef().set({finalizadas:finMap,atualizadoEm:now,atualizadoPor:user.name},{merge:true});
+        return docRef().set({finalizadas:finMap,atualizadoEm:now,atualizadoPor:user.name,tenant_id:tenantDe(user)},{merge:true});
       }).then(function(){
         // 3) Limpa só as contagens/lotes/recontagens desta categoria (doc já existe -> update seguro).
         var del=firebase.firestore.FieldValue.delete();var upd={};
@@ -9356,7 +9361,7 @@ useEffect(function(){
             if(m.id===user.uid){var o={};for(var k in m)o[k]=m[k];o.status='saiu';return o;}
             return m;
           });
-          db.collection('plantoes').doc(shiftId).update({equipe:eq}).catch(function(){});
+          db.collection('plantoes').doc(plantaoDocId(user,shiftId)).update({equipe:eq}).catch(function(){});
         }
         setIsGuest(true);
         alert('Seu plantão encerrou automaticamente às 14h. Até logo!');
@@ -9368,7 +9373,7 @@ useEffect(function(){
       if(!localStorage.getItem(keyEnc)){
         localStorage.setItem(keyEnc,'auto');
         if(user.role==='gestor'||user.role==='tecnico'){
-          db.collection('plantoes').doc(shiftId).update({ativo:false,encerradoEm:new Date().toISOString(),encerradoAuto:true}).then(function(){
+          db.collection('plantoes').doc(plantaoDocId(user,shiftId)).update({ativo:false,encerradoEm:new Date().toISOString(),encerradoAuto:true}).then(function(){
             setPlantao(null);setIsGuest(true);setShiftId(null);
           }).catch(function(){});
         } else {
@@ -9387,7 +9392,7 @@ useEffect(function(){
 useEffect(function(){
   if(!ready||!user)return;
   var today=todayStr();
-  var unsub=db.collection('plantoes').doc(today).onSnapshot(function(snap){
+  var unsub=db.collection('plantoes').doc(plantaoDocId(user,today)).onSnapshot(function(snap){
     if(!snap.exists){
       // Plantao nao existe: se e gestor/tecnico, nao muda nada (podem operar); demais viram convidado
       if(user.role!=='gestor'&&user.role!=='tecnico'){setPlantao(null);setShiftId(null);}
@@ -9451,11 +9456,11 @@ useEffect(function(){if(!ready||!user)return;
   unsubs.push(db.collection('entries').where('tenant_id','==',tenantDe(user)).where('criadoEm','>=',_ws).onSnapshot(function(s){setRecentEntries(s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;}));setLoading(false);},function(){setLoading(false);}));
   // Versão do histórico: quando muda (edição/exclusão de lançamento ANTIGO), rebusca o histórico do SERVIDOR uma vez.
   var _metaFirst=true;
-  unsubs.push(db.collection('_meta').doc('entries_version').onSnapshot(function(){if(_metaFirst){_metaFirst=false;return;}carregarHistorico('server');},function(){}));
+  unsubs.push(db.collection('_meta').doc('entries_version__'+tenantDe(user)).onSnapshot(function(){if(_metaFirst){_metaFirst=false;return;}carregarHistorico('server');},function(){}));
   unsubs.push(db.collection('medicamentos').where('tenant_id','==',tenantDe(user)).onSnapshot(function(s){var list=s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;});list.sort(function(a,b){return a.nome.localeCompare(b.nome);});setMeds(list);}));
   unsubs.push(db.collection('users').where('tenant_id','==',tenantDe(user)).where('status','==','approved').onSnapshot(function(s){setAllUsers(s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;}));}));
   // Convites de plantão do usuário atual (fora do callback de users p/ não recriar/vazar). user.uid: currentUser não existe no escopo do App.
-  unsubs.push(db.collection('plantao_convites').where('para','==',user.uid).where('status','==','pendente').onSnapshot(function(s){setConvites(s.docs.map(function(d){return Object.assign({id:d.id},d.data());}));}));
+  unsubs.push(db.collection('plantao_convites').where('tenant_id','==',tenantDe(user)).where('para','==',user.uid).where('status','==','pendente').onSnapshot(function(s){setConvites(s.docs.map(function(d){return Object.assign({id:d.id},d.data());}));}));
   // Estoque mínimo - só gestor/técnico
   if(user.role==='gestor'||user.role==='tecnico'){unsubs.push(db.collection('medications').onSnapshot(function(s){var mds=s.docs.map(function(d){return Object.assign({id:d.id},d.data());});setLowStock(mds.filter(function(m){return m.estoqueMin&&m.estoqueMin>0;}));}));}
   if(can(user.role,'gestao')){
@@ -9463,7 +9468,7 @@ useEffect(function(){if(!ready||!user)return;
     unsubs.push(db.collection('alertas').where('tenant_id','==',tenantDe(user)).where('lido','==',false).where('tipo','==','saida_excessiva').onSnapshot(function(s){setAlertCount(s.size);}));
     unsubs.push(db.collection('solicitacoes').where('tenant_id','==',tenantDe(user)).where('status','==','pendente').onSnapshot(function(s){setSolicitCount(s.size);}));
   }
-  if(user.role==='farmaceutico'){unsubs.push(db.collection('plantao_solicitacoes').where('para','==',user.uid).where('status','==','pendente').onSnapshot(function(s){setSolicitacoesPlantao(s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;}));}));}
+  if(user.role==='farmaceutico'){unsubs.push(db.collection('plantao_solicitacoes').where('tenant_id','==',tenantDe(user)).where('para','==',user.uid).where('status','==','pendente').onSnapshot(function(s){setSolicitacoesPlantao(s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;}));}));}
   setTimeout(function(){checkShift(user);},1000);
   return function(){unsubs.forEach(function(u){try{u();}catch(e){}});};
 },[ready,user&&user.uid,user&&user.role]);
@@ -9479,7 +9484,7 @@ var entries=useMemo(function(){
 var stock=useMemo(function(){return calcStock(entries);},[entries]);
 var latest=useMemo(function(){var l=calcLatest(entries);for(var k in l){if((stock[k]||0)<=0)l[k]={lote:'',validade:''};}return l;},[entries,stock]);
 var lowCount=useMemo(function(){var c=0;meds.forEach(function(m){if(m.minEstoque&&(stock[m.id]||0)<=m.minEstoque&&(stock[m.id]||0)>0)c++;});return c;},[meds,stock]);
-function checkShift(u){if(shiftChecked)return;setShiftChecked(true);autoFecharPlantoesAntigos();var today=todayStr();var role=u.role;if(role==='gestor'||role==='tecnico'){setIsGuest(false);db.collection('plantoes').doc(today).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);}else{setPlantao(null);setShiftId(null);}}).catch(function(){});return;}if(!isShiftTime()){setIsGuest(true);return;}var leftKey='fc_shift_saiu_'+today;var encKey='fc_shift_enc_'+today;var leftToday=localStorage.getItem(encKey)||localStorage.getItem(leftKey);if(leftToday){db.collection('plantoes').doc(today).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);var readicionado=false;if(p.iniciadoPor===u.uid){readicionado=true;}else if(p.equipe){for(var j=0;j<p.equipe.length;j++){if(p.equipe[j].id===u.uid&&p.equipe[j].status==='confirmado'){readicionado=true;break;}}}if(readicionado){localStorage.removeItem(leftKey);localStorage.removeItem(encKey);setIsGuest(false);}else{setIsGuest(true);}}else{setIsGuest(true);}}).catch(function(){setIsGuest(true);});return;}db.collection('plantao_convites').where('para','==',u.uid).where('status','==','pendente').get().then(function(invSnap){var todayInvite=null;for(var i=0;i<invSnap.docs.length;i++){var d=invSnap.docs[i].data();if(d.data===today){var o={id:invSnap.docs[i].id};for(var k in d)o[k]=d[k];todayInvite=o;break;}}if(todayInvite){setPendingInvite(todayInvite);return;}db.collection('plantoes').doc(today).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);var inTeam=false;
+function checkShift(u){if(shiftChecked)return;setShiftChecked(true);autoFecharPlantoesAntigos(u);var today=todayStr();var role=u.role;if(role==='gestor'||role==='tecnico'){setIsGuest(false);db.collection('plantoes').doc(plantaoDocId(u,today)).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);}else{setPlantao(null);setShiftId(null);}}).catch(function(){});return;}if(!isShiftTime()){setIsGuest(true);return;}var leftKey='fc_shift_saiu_'+today;var encKey='fc_shift_enc_'+today;var leftToday=localStorage.getItem(encKey)||localStorage.getItem(leftKey);if(leftToday){db.collection('plantoes').doc(plantaoDocId(u,today)).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);var readicionado=false;if(p.iniciadoPor===u.uid){readicionado=true;}else if(p.equipe){for(var j=0;j<p.equipe.length;j++){if(p.equipe[j].id===u.uid&&p.equipe[j].status==='confirmado'){readicionado=true;break;}}}if(readicionado){localStorage.removeItem(leftKey);localStorage.removeItem(encKey);setIsGuest(false);}else{setIsGuest(true);}}else{setIsGuest(true);}}).catch(function(){setIsGuest(true);});return;}db.collection('plantao_convites').where('tenant_id','==',tenantDe(u)).where('para','==',u.uid).where('status','==','pendente').get().then(function(invSnap){var todayInvite=null;for(var i=0;i<invSnap.docs.length;i++){var d=invSnap.docs[i].data();if(d.data===today){var o={id:invSnap.docs[i].id};for(var k in d)o[k]=d[k];todayInvite=o;break;}}if(todayInvite){setPendingInvite(todayInvite);return;}db.collection('plantoes').doc(plantaoDocId(u,today)).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);var inTeam=false;
               // Quem iniciou o plantão nunca é convidado
               if(p.iniciadoPor===u.uid){inTeam=true;}
               // Verificar na equipe (confirmado ou próprio farmacêutico que abriu)
@@ -9488,13 +9493,13 @@ function checkShift(u){if(shiftChecked)return;setShiftChecked(true);autoFecharPl
               }}
               setIsGuest(!inTeam);}else{setPlantao(null);if(role==='farmaceutico')setShowShift(true);else setIsGuest(true);}}).catch(function(){setIsGuest(true);});}).catch(function(){setIsGuest(true);});}
 function handleShiftDone(r){setShowShift(false);setShowShiftModal(false);setPlantao(r.plantao);setIsGuest(r.isGuest);if(r.shiftId)setShiftId(r.shiftId);}
-function handleConfirmInvite(invite){var today=todayStr();db.collection('plantao_convites').doc(invite.id).update({status:'confirmado'}).then(function(){return db.collection('plantoes').doc(today).get();}).then(function(snap){if(snap.exists){var p=snap.data();var eq=p.equipe.map(function(m){if(m.id===user.uid){var o={};for(var k in m)o[k]=m[k];o.status='confirmado';return o;}return m;});db.collection('plantoes').doc(today).update({equipe:eq});var np={};for(var k in p)np[k]=p[k];np.equipe=eq;setPlantao(np);}}).catch(function(){});setPendingInvite(null);setIsGuest(false);}
+function handleConfirmInvite(invite){var today=todayStr();db.collection('plantao_convites').doc(invite.id).update({status:'confirmado'}).then(function(){return db.collection('plantoes').doc(plantaoDocId(user,today)).get();}).then(function(snap){if(snap.exists){var p=snap.data();var eq=p.equipe.map(function(m){if(m.id===user.uid){var o={};for(var k in m)o[k]=m[k];o.status='confirmado';return o;}return m;});db.collection('plantoes').doc(plantaoDocId(user,today)).update({equipe:eq});var np={};for(var k in p)np[k]=p[k];np.equipe=eq;setPlantao(np);}}).catch(function(){});setPendingInvite(null);setIsGuest(false);}
 function handleDenyInvite(invite){db.collection('plantao_convites').doc(invite.id).update({status:'negou'}).catch(function(){});setPendingInvite(null);setIsGuest(true);}
-function solicitarEntradaPlantao(){if(!plantao||!shiftId)return;if(!confirm('Solicitar entrada no plantao?'))return;var hoje=todayStr();db.collection('plantao_solicitacoes').where('de','==',user.uid).where('data','==',hoje).where('status','==','pendente').get().then(function(s){if(!s.empty){alert('Solicitação ja enviada.');return;}db.collection('plantao_solicitacoes').add({de:user.uid,deNome:user.name,deCargo:user.role,deColor:user.color,para:plantao.iniciadoPor,paraNome:plantao.iniciadoPorNome,data:hoje,status:'pendente',criadoEm:new Date().toISOString()}).then(function(){playSound('success');alert('Solicitação enviada!');});});}
-function aprovarEntradaPlantao(sol){var hoje=todayStr();var novoMembro={id:sol.de,nome:sol.deNome,cargo:sol.deCargo,color:sol.deColor,status:'confirmado'};var equipeAtual=plantao?plantao.equipe||[]:[];var jaEsta=equipeAtual.some(function(m){return m.id===sol.de;});var novaEquipe=jaEsta?equipeAtual:equipeAtual.concat([novoMembro]);db.collection('plantoes').doc(hoje).update({equipe:novaEquipe}).then(function(){db.collection('plantao_solicitacoes').doc(sol.id).update({status:'aprovado'});if(plantao){var p={};for(var k in plantao)p[k]=plantao[k];p.equipe=novaEquipe;setPlantao(p);}playSound('success');});}
+function solicitarEntradaPlantao(){if(!plantao||!shiftId)return;if(!confirm('Solicitar entrada no plantao?'))return;var hoje=todayStr();db.collection('plantao_solicitacoes').where('tenant_id','==',tenantDe(user)).where('de','==',user.uid).where('data','==',hoje).where('status','==','pendente').get().then(function(s){if(!s.empty){alert('Solicitação ja enviada.');return;}db.collection('plantao_solicitacoes').add({de:user.uid,deNome:user.name,deCargo:user.role,deColor:user.color,para:plantao.iniciadoPor,paraNome:plantao.iniciadoPorNome,data:hoje,status:'pendente',criadoEm:new Date().toISOString(),tenant_id:tenantDe(user)}).then(function(){playSound('success');alert('Solicitação enviada!');});});}
+function aprovarEntradaPlantao(sol){var hoje=todayStr();var novoMembro={id:sol.de,nome:sol.deNome,cargo:sol.deCargo,color:sol.deColor,status:'confirmado'};var equipeAtual=plantao?plantao.equipe||[]:[];var jaEsta=equipeAtual.some(function(m){return m.id===sol.de;});var novaEquipe=jaEsta?equipeAtual:equipeAtual.concat([novoMembro]);db.collection('plantoes').doc(plantaoDocId(user,hoje)).update({equipe:novaEquipe}).then(function(){db.collection('plantao_solicitacoes').doc(sol.id).update({status:'aprovado'});if(plantao){var p={};for(var k in plantao)p[k]=plantao[k];p.equipe=novaEquipe;setPlantao(p);}playSound('success');});}
 function recusarEntradaPlantao(sol){db.collection('plantao_solicitacoes').doc(sol.id).update({status:'recusado'}).catch(function(){});}
-function encerrarPlantao(){if(!shiftId)return;if(!confirm('Encerrar o plantao de hoje?'))return;db.collection('plantoes').doc(shiftId).update({ativo:false,encerradoEm:new Date().toISOString()}).then(function(){localStorage.setItem('fc_shift_enc_'+todayStr(),'1');setPlantao(null);setIsGuest(true);setShiftId(null);}).catch(function(e){alert('Erro: '+e.message);});}
-function sairDoPlantao(){if(!confirm('Sair do plantao?'))return;localStorage.setItem('fc_shift_saiu_'+todayStr(),'1');if(shiftId&&plantao){var eq=(plantao.equipe||[]).map(function(m){if(m.id===user.uid){var o={};for(var k in m)o[k]=m[k];o.status='saiu';return o;}return m;});db.collection('plantoes').doc(shiftId).update({equipe:eq}).catch(function(){});}setIsGuest(true);}
+function encerrarPlantao(){if(!shiftId)return;if(!confirm('Encerrar o plantao de hoje?'))return;db.collection('plantoes').doc(plantaoDocId(user,shiftId)).update({ativo:false,encerradoEm:new Date().toISOString()}).then(function(){localStorage.setItem('fc_shift_enc_'+todayStr(),'1');setPlantao(null);setIsGuest(true);setShiftId(null);}).catch(function(e){alert('Erro: '+e.message);});}
+function sairDoPlantao(){if(!confirm('Sair do plantao?'))return;localStorage.setItem('fc_shift_saiu_'+todayStr(),'1');if(shiftId&&plantao){var eq=(plantao.equipe||[]).map(function(m){if(m.id===user.uid){var o={};for(var k in m)o[k]=m[k];o.status='saiu';return o;}return m;});db.collection('plantoes').doc(plantaoDocId(user,shiftId)).update({equipe:eq}).catch(function(){});}setIsGuest(true);}
 function addSolicitacao(data){var obj={medicamentoId:data.medicamentoId,medicamentoNome:data.medicamentoNome,ean:data.ean||'',tipo:data.tipo,quantidade:data.quantidade,lote:data.lote||'',validade:_normValidade(data.validade||''),observacao:data.observação||'',solicitanteId:user.uid,solicitanteNome:user.name,solicitanteCargo:user.role,solicitanteColor:user.color||B,status:'pendente',criadoEm:new Date().toISOString(),origem:'convidado',tenant_id:tenantDe(user)};return db.collection('solicitacoes').add(obj);}
 function addEntry(data){try{var obj={criadoEm:new Date().toISOString(),date:todayStr(),autorId:user.uid,autorNome:user.name||user.email,autorCargo:user.role||'',autorColor:user.color||B,tenant_id:tenantDe(user)};for(var k in data)obj[k]=data[k];if(obj.quantidade!==undefined)obj.quantidade=Number(obj.quantidade)||0;
   if(obj.validade)obj.validade=_normValidade(obj.validade);// normaliza MM/AA -> MM/AAAA
