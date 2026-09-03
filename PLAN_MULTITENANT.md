@@ -22,7 +22,7 @@ Três pontos precisam de mais cuidado que simplesmente "adicionar a etiqueta" (d
 
 Cada prefeitura recebe um link próprio pra distribuir aos funcionários, tipo `<url-do-site>/?tenant=itaquitinga-pe`. O cadastro lê isso da URL e trava nessa prefeitura; sem link válido (ou com um `tenant_id` que não existe/está inativo), não cadastra. Essa foi a opção mais simples e com menor risco de alguém se cadastrar na prefeitura errada, então segui com ela — as duas alternativas descartadas (subdomínio por prefeitura, ou lista suspensa na tela de cadastro) exigiam mais infraestrutura ou abriam brecha de qualquer um escolher qualquer prefeitura.
 
-⚠️ Um detalhe que ainda preciso que você confirme: o link de exemplo usa `<url-do-site>` porque **não encontrei nenhum domínio próprio configurado no repositório** (não há arquivo `CNAME`) — o endereço real hoje é provavelmente o padrão do GitHub Pages (`https://layltonc-wq.github.io/...`). Se `farmacontrol.app.br` (mencionado num rascunho anterior) já existe e está apontado pra este site, me confirma; senão sigo usando a URL do GitHub Pages mesmo nos links de convite.
+Você confirmou o domínio: `https://www.farmacontrol.app.br/` é a URL real de Vicência hoje — uso ela nos exemplos de link de convite a partir daqui. (Fica só uma curiosidade técnica, sem ação necessária: não achei um arquivo `CNAME` neste repositório amarrando esse domínio ao GitHub Pages — o domínio deve estar configurado direto nas Settings → Pages do GitHub, ou o site roda por trás de outro serviço tipo Cloudflare/Netlify na frente do GitHub Pages. Não muda nada no plano, só registrando.)
 
 ### Como o primeiro usuário de uma prefeitura nova vira gestor → **abandonar o "automático", o técnico aprova manualmente**
 
@@ -461,10 +461,9 @@ Isso significa: **Vicência não precisa de nenhuma ação** quando Itaquitinga 
 
 ## Pendências antes de eu seguir pra Fase 3
 
-As decisões de produto já foram tomadas nesta sessão (seção "✅ Decisões já tomadas" no topo). O que falta antes de eu começar a mudar código de verdade:
+As decisões de produto já foram tomadas nesta sessão (seção "✅ Decisões já tomadas" no topo). ~~Domínio do link de convite~~ — confirmado: `www.farmacontrol.app.br`. O que falta antes de eu começar a mudar código de verdade:
 
-1. **Confirmar o domínio real do link de convite** — `farmacontrol.app.br` (citado num rascunho anterior) ou o padrão do GitHub Pages? Não achei `CNAME` no repositório, então por enquanto os exemplos usam `<url-do-site>` genérico.
-2. **OK explícito no desenho do técnico com poder cross-tenant só sobre `users`** (seção 3, explicado logo abaixo do bloco de regras) — é a peça nova desta sessão que resolve o onboarding e o bug do achado #11 ao mesmo tempo; quero confirmar que faz sentido pra você antes de codificar em cima disso.
-3. **Índices do Firestore** — ainda não recebi (Fase 1, seção 4 do `AUDIT_MULTITENANT.md`); não bloqueia o início da Fase 3 (o Firestore avisa no console do navegador quando falta um, com link pra criar), mas ajuda saber de antemão.
+1. **OK explícito no desenho do técnico com poder cross-tenant só sobre `users`** (seção 3, explicado logo abaixo do bloco de regras) — é a peça nova desta sessão que resolve o onboarding e o bug do achado #11 ao mesmo tempo; quero confirmar que faz sentido pra você antes de codificar em cima disso.
+2. **Índices do Firestore** — ainda não recebi (Fase 1, seção 4 do `AUDIT_MULTITENANT.md`); não bloqueia o início da Fase 3 (o Firestore avisa no console do navegador quando falta um, com link pra criar), mas ajuda saber de antemão.
 
-Fora isso, pode considerar o plano fechado. Assim que você confirmar os itens 1-2 (ou disser "pode decidir você mesmo" de novo), sigo pra Fase 3 — que é quando o código de fato começa a mudar, coleção por coleção, com commit e teste depois de cada uma, começando pela ordem da seção 5.
+Fora isso, pode considerar o plano fechado. Assim que você confirmar o item 1 (ou disser "pode decidir você mesmo" de novo), sigo pra Fase 3 — que é quando o código de fato começa a mudar, coleção por coleção, com commit e teste depois de cada uma, começando pela ordem da seção 5.
