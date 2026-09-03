@@ -4242,7 +4242,7 @@ function TabNotas({user,medications}){
   },[]);
 
   ef(function(){
-    var u=db.collection('vinculos_nfe').onSnapshot(function(sn){
+    var u=db.collection('vinculos_nfe').where('tenant_id','==',tenantDe(user)).onSnapshot(function(sn){
       var v={};sn.docs.forEach(function(d){var dat=d.data();if(dat.chaveNota)v[dat.chaveNota]={medId:dat.medId,medNome:dat.medNome};});setVinculos(v);
     });return u;
   },[]);
@@ -4263,8 +4263,8 @@ function TabNotas({user,medications}){
 
   async function salvarVinculo(nomeNota,medId,medNome){
     var chave=gerarChave(nomeNota);if(!chave||!medId)return;
-    var sn=await db.collection('vinculos_nfe').where('chaveNota','==',chave).get();
-    if(sn.empty){await db.collection('vinculos_nfe').add({chaveNota:chave,nomeOriginal:nomeNota,medId:medId,medNome:medNome,confirmadoPor:user.name,criadoEm:new Date().toISOString()});}
+    var sn=await db.collection('vinculos_nfe').where('tenant_id','==',tenantDe(user)).where('chaveNota','==',chave).get();
+    if(sn.empty){await db.collection('vinculos_nfe').add({chaveNota:chave,nomeOriginal:nomeNota,medId:medId,medNome:medNome,confirmadoPor:user.name,criadoEm:new Date().toISOString(),tenant_id:tenantDe(user)});}
     else{await db.collection('vinculos_nfe').doc(sn.docs[0].id).update({medId:medId,medNome:medNome,confirmadoPor:user.name,atualizadoEm:new Date().toISOString()});}
   }
 
@@ -5839,7 +5839,7 @@ function TabPrevisao(props){
   // Carregar atas do Firebase
   useEffect(function(){
     if(!db)return;
-    var u=db.collection('atas').onSnapshot(function(s){
+    var u=db.collection('atas').where('tenant_id','==',tenantDe(user)).onSnapshot(function(s){
       var list=s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;});
       list.sort(function(a,b){return (a.nome||'').localeCompare(b.nome||'');});
       setAtas(list);
@@ -6120,7 +6120,7 @@ function TabPrevisao(props){
   function salvarAtaImportada(){
     if(!importPreview||!importNome.trim()){setMsg('e:Dê um nome à ata antes de salvar');return;}
     var vTot=importPreview.reduce(function(a,it){return a+(it.vUnit*it.qtdTeto);},0);
-    db.collection('atas').add({nome:importNome.trim(),categoria:importCat,limite:0,valorTotal:parseFloat(vTot.toFixed(2)),itens:importPreview,criadoEm:new Date().toISOString(),criadoPor:user.name||''}).then(function(){
+    db.collection('atas').add({nome:importNome.trim(),categoria:importCat,limite:0,valorTotal:parseFloat(vTot.toFixed(2)),itens:importPreview,criadoEm:new Date().toISOString(),criadoPor:user.name||'',tenant_id:tenantDe(user)}).then(function(){
       setImportPreview(null);setImportNome('');
       setMsg('ok:Ata "'+importNome+'" importada com '+importPreview.length+' itens!');
       setTimeout(function(){setMsg('');},4000);
@@ -6164,7 +6164,7 @@ function TabPrevisao(props){
   }
   function criarAta(){
     if(!novaAta.trim())return;
-    db.collection('atas').add({nome:novaAta.trim(),categoria:novaAtaCat,limite:0,criadoEm:new Date().toISOString(),criadoPor:user.name||''}).then(function(){
+    db.collection('atas').add({nome:novaAta.trim(),categoria:novaAtaCat,limite:0,criadoEm:new Date().toISOString(),criadoPor:user.name||'',tenant_id:tenantDe(user)}).then(function(){
       setNovaAta('');setMsg('ok:Ata criada!');setTimeout(function(){setMsg('');},2500);
     }).catch(function(e){setMsg('e:'+e.message);});
   }

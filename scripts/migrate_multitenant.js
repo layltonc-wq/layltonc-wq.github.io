@@ -27,7 +27,7 @@ const db = admin.firestore();
 const COLECOES_SIMPLES = [
   'users',
   'medicamentos',
-  // 'atas', 'vinculos_nfe',
+  'atas', 'vinculos_nfe',
   // 'entries',
   // 'recebimentos', 'notas_fiscais', 'divergencias',
   // 'tratamentos_atb', 'pacientes_controlados', 'saidas_controladas',
