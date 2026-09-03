@@ -31,8 +31,8 @@ const COLECOES_SIMPLES = [
   'entries',
   'recebimentos', 'notas_fiscais', 'divergencias',
   'tratamentos_atb', 'pacientes_controlados', 'saidas_controladas',
-  // 'pacientes_leite', 'retiradas_leite',
-  // 'solicitacoes', 'alertas', 'avisos',
+  'pacientes_leite', 'retiradas_leite',
+  'solicitacoes', 'alertas', 'avisos',
   // 'logs_acesso', 'logs_contas',
   // 'plantao_solicitacoes', 'plantao_convites',
 ];
