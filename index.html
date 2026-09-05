@@ -3242,8 +3242,10 @@ function TabDivergenciasPainel(props){
   var _carregando=useState(true);var carregando=_carregando[0];var setCarregando=_carregando[1];
   useEffect(function(){
     if(!db)return;
-    return db.collection('divergencias').where('tenant_id','==',tenantDe(user)).orderBy('registradoEm','desc').limit(100).onSnapshot(function(s){
-      setDivs(s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;}));
+    return db.collection('divergencias').where('tenant_id','==',tenantDe(user)).onSnapshot(function(s){
+      var list=s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;});
+      list.sort(function(a,b){return (b.registradoEm||'').localeCompare(a.registradoEm||'');});
+      setDivs(list.slice(0,100));
       setCarregando(false);
     },function(){setCarregando(false);});
   },[db]);
@@ -3388,11 +3390,12 @@ function TabAdmin({user,entries,medications,db}){
   var _logAcesso=sl([]);var logAcesso=_logAcesso[0];var setLogAcesso=_logAcesso[1];
 
   ef(function(){
-    var u1=db.collection('tratamentos_atb').where('tenant_id','==',tenantDe(currentUser)).orderBy('criadoEm','desc').limit(50).onSnapshot(function(sn){setTratamentos(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));});
-    var u2=db.collection('entries').where('tenant_id','==',tenantDe(currentUser)).orderBy('criadoEm','desc').limit(100).onSnapshot(function(sn){setLogs(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));});
-    var u3=db.collection('logs_contas').where('tenant_id','==',tenantDe(currentUser)).orderBy('criadoEm','desc').limit(100).onSnapshot(function(sn){setHistcontas(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));}).catch?db.collection('logs_contas').where('tenant_id','==',tenantDe(currentUser)).orderBy('criadoEm','desc').limit(100).onSnapshot(function(sn){setHistcontas(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));}):function(){};
-    var u4=db.collection('logs_acesso').where('tenant_id','==',tenantDe(currentUser)).orderBy('criadoEm','desc').limit(100).onSnapshot(function(sn){setLogAcesso(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));},function(){});
-    return function(){u1();u2();};
+    function comData(sn){var list=sn.docs.map(function(d){return Object.assign({id:d.id},d.data());});list.sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});return list;}
+    var u1=db.collection('tratamentos_atb').where('tenant_id','==',tenantDe(user)).onSnapshot(function(sn){setTratamentos(comData(sn).slice(0,50));});
+    var u2=db.collection('entries').where('tenant_id','==',tenantDe(user)).onSnapshot(function(sn){setLogs(comData(sn).slice(0,100));});
+    var u3=db.collection('logs_contas').where('tenant_id','==',tenantDe(user)).onSnapshot(function(sn){setHistcontas(comData(sn).slice(0,100));});
+    var u4=db.collection('logs_acesso').where('tenant_id','==',tenantDe(user)).onSnapshot(function(sn){setLogAcesso(comData(sn).slice(0,100));},function(){});
+    return function(){u1();u2();u3();u4();};
   },[]);
 
   function del(col,id,nome){
@@ -3654,7 +3657,7 @@ function TabLeites(props){
       arr.sort(function(a,b){return (a.nome||'').localeCompare(b.nome||'');});
       setPacientes(arr);
     },function(){});
-    var unsub2=db.collection('retiradas_leite').where('tenant_id','==',tenantDe(user)).orderBy('criadoEm','desc').limit(2000).onSnapshot(function(snap){
+    var unsub2=db.collection('retiradas_leite').where('tenant_id','==',tenantDe(user)).limit(2000).onSnapshot(function(snap){
       var arr=[];snap.forEach(function(d){arr.push(Object.assign({id:d.id},d.data()));});
       arr.sort(function(a,b){return (b.data||'').localeCompare(a.data||'');});
       setRetiradas(arr);
@@ -4243,8 +4246,10 @@ function TabNotas({user,medications}){
   var _ocrRun=sl(false);var ocrRunning=_ocrRun[0];var setOcrRunning=_ocrRun[1];
 
   ef(function(){
-    var u=db.collection('notas_fiscais').where('tenant_id','==',tenantDe(user)).orderBy('criadoEm','desc').onSnapshot(function(sn){
-      setNotas(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));
+    var u=db.collection('notas_fiscais').where('tenant_id','==',tenantDe(user)).onSnapshot(function(sn){
+      var list=sn.docs.map(function(d){return Object.assign({id:d.id},d.data());});
+      list.sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});
+      setNotas(list);
     });return u;
   },[]);
 
@@ -4846,8 +4851,10 @@ function TabAntibiotico({user,medications,stock,allUsers}){
   var canManage=user.role==='gestor'||user.role==='tecnico';
 
   ef(function(){
-    var u=db.collection('tratamentos_atb').where('tenant_id','==',tenantDe(user)).orderBy('criadoEm','desc').limit(1000).onSnapshot(function(sn){
-      setTratamentos(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));
+    var u=db.collection('tratamentos_atb').where('tenant_id','==',tenantDe(user)).limit(1000).onSnapshot(function(sn){
+      var list=sn.docs.map(function(d){return Object.assign({id:d.id},d.data());});
+      list.sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});
+      setTratamentos(list);
       setLoading(false);
     });
     return u;
@@ -8132,8 +8139,8 @@ function ImportarNotas(props){
   var _salvandoEditNota=useState(false);var salvandoEditNota=_salvandoEditNota[0];var setSalvandoEditNota=_salvandoEditNota[1];
 
   useEffect(function(){
-    var u1=db.collection('notas_fiscais').where('tenant_id','==',tenantDe(user)).orderBy('criadoEm','desc').limit(100).onSnapshot(function(sn){setNotas(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));},function(){});
-    var u2=db.collection('recebimentos').where('tenant_id','==',tenantDe(user)).orderBy('criadoEm','desc').limit(200).onSnapshot(function(sn){setRecs(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));},function(){});
+    var u1=db.collection('notas_fiscais').where('tenant_id','==',tenantDe(user)).onSnapshot(function(sn){var list=sn.docs.map(function(d){return Object.assign({id:d.id},d.data());});list.sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});setNotas(list.slice(0,100));},function(){});
+    var u2=db.collection('recebimentos').where('tenant_id','==',tenantDe(user)).onSnapshot(function(sn){var list=sn.docs.map(function(d){return Object.assign({id:d.id},d.data());});list.sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});setRecs(list.slice(0,200));},function(){});
     return function(){try{u1();}catch(e){}try{u2();}catch(e){}};
   },[]);
 
@@ -8538,13 +8545,10 @@ function PainelDivergenciasV2(props){
   var _lastAuto=useRef({});
 
   useEffect(function(){
-    return db.collection('divergencias').where('tenant_id','==',tenantDe(user)).where('status','==','pendente').orderBy('criadoEm','desc').limit(200).onSnapshot(function(sn){
-      setDivs(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));
-    },function(){
-      // fallback sem índice composto (where+orderBy pode exigir índice): busca tudo e filtra local.
-      db.collection('divergencias').where('tenant_id','==',tenantDe(user)).orderBy('criadoEm','desc').limit(200).onSnapshot(function(sn){
-        setDivs(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}).filter(function(d){return (d.status||'pendente')==='pendente';}));
-      });
+    return db.collection('divergencias').where('tenant_id','==',tenantDe(user)).onSnapshot(function(sn){
+      var list=sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}).filter(function(d){return (d.status||'pendente')==='pendente';});
+      list.sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});
+      setDivs(list.slice(0,200));
     });
   },[]);
 
@@ -8632,8 +8636,10 @@ function TabRecebimento(props){
   var _erroAcao=useState('');var erroAcao=_erroAcao[0];var setErroAcao=_erroAcao[1];
 
   useEffect(function(){
-    var u=db.collection('recebimentos').where('tenant_id','==',tenantDe(user)).orderBy('criadoEm','desc').limit(200).onSnapshot(function(sn){
-      setRecs(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));
+    var u=db.collection('recebimentos').where('tenant_id','==',tenantDe(user)).onSnapshot(function(sn){
+      var list=sn.docs.map(function(d){return Object.assign({id:d.id},d.data());});
+      list.sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});
+      setRecs(list.slice(0,200));
     },function(){});
     return u;
   },[]);
@@ -9179,8 +9185,10 @@ function TabPacientes(props){
       arr.sort(function(a,b){return (a.nome||'').localeCompare(b.nome||'');});
       setPacientes(arr);
     },function(){});
-    var u2=db.collection('saidas_controladas').where('tenant_id','==',tenantDe(user)).orderBy('criadoEm','desc').limit(1000).onSnapshot(function(snap){
-      setSaidas(snap.docs.map(function(d){return Object.assign({id:d.id},d.data());}));
+    var u2=db.collection('saidas_controladas').where('tenant_id','==',tenantDe(user)).limit(1000).onSnapshot(function(snap){
+      var list=snap.docs.map(function(d){return Object.assign({id:d.id},d.data());});
+      list.sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});
+      setSaidas(list);
     },function(){});
     return function(){try{u1();}catch(e){}try{u2();}catch(e){}};
   },[]);
@@ -9453,7 +9461,13 @@ useEffect(function(){if(!ready||!user)return;
   }
   carregarHistorico('cache');
   // Tempo real SÓ dos últimos 3 dias (o que muda). Exclusão/edição recente reflete na hora.
-  unsubs.push(db.collection('entries').where('tenant_id','==',tenantDe(user)).where('criadoEm','>=',_ws).onSnapshot(function(s){setRecentEntries(s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;}));setLoading(false);},function(){setLoading(false);}));
+  // Filtro de data feito no CLIENTE (não no servidor): um where('criadoEm','>=',_ws) junto do
+  // where('tenant_id','==',...) exigiria um índice composto no Firestore que não existe em bases
+  // novas — sem ele o onSnapshot falhava silenciosamente (erro engolido pelo callback vazio) e
+  // NENHUMA entrada nova aparecia até recarregar a página. Isso era o bug relatado: "cadastra o
+  // medicamento mas a quantidade não entra" em Entrada, Conferência e Balanço — as 3 telas dependem
+  // deste mesmo listener pra refletir a entrada recém-criada.
+  unsubs.push(db.collection('entries').where('tenant_id','==',tenantDe(user)).onSnapshot(function(s){var list=s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;});setRecentEntries(list.filter(function(e){return e.criadoEm>=_ws;}));setLoading(false);},function(){setLoading(false);}));
   // Versão do histórico: quando muda (edição/exclusão de lançamento ANTIGO), rebusca o histórico do SERVIDOR uma vez.
   var _metaFirst=true;
   unsubs.push(db.collection('_meta').doc('entries_version__'+tenantDe(user)).onSnapshot(function(){if(_metaFirst){_metaFirst=false;return;}carregarHistorico('server');},function(){}));
