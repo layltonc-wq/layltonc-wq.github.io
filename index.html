@@ -197,6 +197,26 @@ select.inp{cursor:pointer}
     banner.innerHTML = '🧪 AMBIENTE DE TESTE — Dados ficam separados de PRODUÇÃO';
     document.body.appendChild(banner);
   }
+  // ===== Auto-reload de segurança =====
+  // Computador que fica com o FarmaControl aberto por dias sem dar F5 pode ter a conexão em tempo
+  // real do Firestore travando silenciosamente depois de uma queda de internet: a tela parece
+  // normal mas para de mostrar lançamentos novos até alguém recarregar manualmente (foi a causa de
+  // um farmacêutico ver só parte das saídas do dia depois de oscilar a rede). Recarrega sozinho só
+  // em momentos em que ninguém deveria estar no meio de um formulário: quando a internet volta
+  // depois de ter caído de verdade, ou quando a aba volta a ficar visível após passar muito tempo
+  // em segundo plano — nunca enquanto um campo de texto/seleção está com foco.
+  (function(){
+    var LOAD_AT = Date.now(), MAX_IDLE_MS = 4*60*60*1000, houveQueda = false;
+    function campoAtivo(){var el=document.activeElement;return !!el && (el.tagName==='INPUT'||el.tagName==='TEXTAREA'||el.tagName==='SELECT');}
+    window.addEventListener('offline', function(){ houveQueda = true; });
+    window.addEventListener('online', function(){
+      if(!houveQueda) return;
+      setTimeout(function(){ if(!campoAtivo()) window.location.reload(); }, 3000);
+    });
+    document.addEventListener('visibilitychange', function(){
+      if(document.visibilityState === 'visible' && (Date.now()-LOAD_AT) > MAX_IDLE_MS && !campoAtivo()) window.location.reload();
+    });
+  })();
 </script>
 <div id="root"></div>
 <script type="text/babel" data-presets="react">
