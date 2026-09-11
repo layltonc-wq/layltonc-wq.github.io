@@ -10,8 +10,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone@7.23.10/babel.min.js"></script>
 <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
@@ -217,6 +215,37 @@ select.inp{cursor:pointer}
       if(document.visibilityState === 'visible' && (Date.now()-LOAD_AT) > MAX_IDLE_MS && !campoAtivo()) window.location.reload();
     });
   })();
+  // ===== Carregamento sob demanda de bibliotecas pesadas (OCR e leitor de PDF) =====
+  // Tesseract.js (motor de OCR) e PDF.js eram carregados sempre, em toda abertura do app, mesmo pra
+  // quem só ia olhar o estoque — são as duas bibliotecas mais pesadas da lista e só servem pras telas
+  // de leitura de documento por câmera e importação de nota fiscal em PDF. Agora só entram quando uma
+  // dessas telas realmente precisa, deixando a abertura normal do app mais rápida.
+  window.__garantirScript = function(id, src){
+    return new Promise(function(resolve, reject){
+      if(window.__scriptsCarregados && window.__scriptsCarregados[id]){ resolve(); return; }
+      var existente = document.getElementById(id);
+      if(existente){
+        existente.addEventListener('load', function(){ resolve(); });
+        existente.addEventListener('error', function(){ reject(new Error('Falha ao carregar biblioteca.')); });
+        return;
+      }
+      var s = document.createElement('script');
+      s.id = id; s.src = src;
+      s.onload = function(){
+        window.__scriptsCarregados = window.__scriptsCarregados || {};
+        window.__scriptsCarregados[id] = true;
+        resolve();
+      };
+      s.onerror = function(){ reject(new Error('Falha ao carregar biblioteca.')); };
+      document.head.appendChild(s);
+    });
+  };
+  window.__garantirTesseract = function(){
+    return window.Tesseract ? Promise.resolve() : window.__garantirScript('lib-tesseract','https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js');
+  };
+  window.__garantirPdfJs = function(){
+    return window.pdfjsLib ? Promise.resolve() : window.__garantirScript('lib-pdfjs','https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js');
+  };
 </script>
 <div id="root"></div>
 <script type="text/babel" data-presets="react">
@@ -3543,10 +3572,11 @@ function LeitorDocumentoOCR(props){
     if(file)processarImagem(file);
   }
   async function processarImagem(file){
-    if(!window.Tesseract){setErro('OCR não disponível — biblioteca não carregada. Verifique sua conexão.');return;}
     setStep('processando');setProg(0);setErro('');
     var url=null;
     try{
+      await window.__garantirTesseract();
+      if(!window.Tesseract){setErro('OCR não disponível — biblioteca não carregada. Verifique sua conexão.');setStep('captura');return;}
       url=URL.createObjectURL(file);
       var res=await window.Tesseract.recognize(url,['por','eng'],{logger:function(m){if(m&&m.status==='recognizing text'&&typeof m.progress==='number')setProg(Math.round(m.progress*100));}});
       var texto=(res&&res.data&&res.data.text)||'';
@@ -4299,9 +4329,10 @@ function TabNotas({user,medications}){
 
   async function processarFotos(){
     if(!fotos.length){setErro('Adicione ao menos uma foto!');return;}
-    var Tesseract=window.Tesseract;
-    if(!Tesseract){setErro('Biblioteca OCR não carregada. Verifique sua conexao.');return;}
     setOcrRunning(true);setErro('');
+    try{await window.__garantirTesseract();}catch(e){setErro('Não foi possível carregar a biblioteca de OCR. Verifique sua conexão.');setOcrRunning(false);return;}
+    var Tesseract=window.Tesseract;
+    if(!Tesseract){setErro('Biblioteca OCR não carregada. Verifique sua conexao.');setOcrRunning(false);return;}
     var textoTotal='';
     for(var i=0;i<fotos.length;i++){
       setOcrProg('Lendo pagina '+(i+1)+' de '+fotos.length+'...');
@@ -4361,6 +4392,7 @@ function TabNotas({user,medications}){
     if(!file)return;
     if(!file.name.toLowerCase().endsWith('.pdf')){setErro('Selecione um arquivo .pdf!');return;}
     setErro('');setLoading(true);
+    try{await window.__garantirPdfJs();}catch(e){setErro('Não foi possível carregar a biblioteca de leitura de PDF. Verifique sua conexão.');setLoading(false);return;}
     var pdfLib=window.pdfjsLib;
     if(!pdfLib){setErro('Biblioteca PDF não carregada.');setLoading(false);return;}
     pdfLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -8139,6 +8171,7 @@ function ImportarNotas(props){
   function logAcao(acao,det){try{db.collection('logs_acesso').add({uid:user.uid||'',nome:user.name||'',cargo:user.role||'',acao:acao,detalhe:det||'',criadoEm:new Date().toISOString()}).catch(function(){});}catch(_){}}
 
   async function processarUmPDF(file){
+    try{await window.__garantirPdfJs();}catch(e){throw new Error('Não foi possível carregar a biblioteca de leitura de PDF. Verifique sua conexão.');}
     var pdfLib=window.pdfjsLib;
     if(!pdfLib)throw new Error('Biblioteca de leitura de PDF não carregada. Recarregue a página.');
     pdfLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -8147,6 +8180,7 @@ function ImportarNotas(props){
     var linhas=await _extrairLinhasPDF(pdf);
     var textoExtraido=linhas.join(' ').trim();
     if(textoExtraido.length<30){
+      try{await window.__garantirTesseract();}catch(e){}
       if(!window.Tesseract)throw new Error('"'+file.name+'": parece uma nota escaneada e o OCR não carregou.');
       setProgresso('"'+file.name+'": sem texto — lendo por OCR...');
       linhas=await _ocrPaginasPDF(pdf,function(p){setProgresso('"'+file.name+'": '+p);});
