@@ -2507,7 +2507,7 @@ function HistModal(props){
       </div>);})}
     </div>}
   </Modal>);}
-function TabEstoque(props){var user=props.user;var medications=props.medications;var entries=props.entries;var stock=props.stock;var estoqueNegativo=props.estoqueNegativo||{};var onSave=props.onSave;var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};var alert2=props.alert2||function(m){window.alert(m);};var _search=useState('');var search=_search[0];var setSearch=_search[1];var _sub=useState('estoque');var sub=_sub[0];var setSub=_sub[1];var _showAdd=useState(false);var showAdd=_showAdd[0];var setShowAdd=_showAdd[1];var _hist=useState(null);var hist=_hist[0];var setHist=_hist[1];var _editId=useState(null);var editId=_editId[0];var setEditId=_editId[1];var _editNome=useState('');var editNome=_editNome[0];var setEditNome=_editNome[1];var _editMin=useState('');var editMin=_editMin[0];var setEditMin=_editMin[1];var _editTipo=useState('medicamento');var editTipo=_editTipo[0];var setEditTipo=_editTipo[1];var _newNome=useState('');var newNome=_newNome[0];var setNewNome=_newNome[1];var _newEan=useState('');var newEan=_newEan[0];var setNewEan=_newEan[1];var _newMin=useState('');var newMin=_newMin[0];var setNewMin=_newMin[1];var _newTipo=useState('medicamento');var newTipo=_newTipo[0];var setNewTipo=_newTipo[1];
+function TabEstoque(props){var user=props.user;var medications=props.medications;var entries=props.entries;var stock=props.stock;var estoqueBruto=props.estoqueBruto||{};var onSave=props.onSave;var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};var alert2=props.alert2||function(m){window.alert(m);};var _search=useState('');var search=_search[0];var setSearch=_search[1];var _sub=useState('estoque');var sub=_sub[0];var setSub=_sub[1];var _showAdd=useState(false);var showAdd=_showAdd[0];var setShowAdd=_showAdd[1];var _hist=useState(null);var hist=_hist[0];var setHist=_hist[1];var _editId=useState(null);var editId=_editId[0];var setEditId=_editId[1];var _editNome=useState('');var editNome=_editNome[0];var setEditNome=_editNome[1];var _editMin=useState('');var editMin=_editMin[0];var setEditMin=_editMin[1];var _editTipo=useState('medicamento');var editTipo=_editTipo[0];var setEditTipo=_editTipo[1];var _newNome=useState('');var newNome=_newNome[0];var setNewNome=_newNome[1];var _newEan=useState('');var newEan=_newEan[0];var setNewEan=_newEan[1];var _newMin=useState('');var newMin=_newMin[0];var setNewMin=_newMin[1];var _newTipo=useState('medicamento');var newTipo=_newTipo[0];var setNewTipo=_newTipo[1];
   var _showBaixa=useState(null);var showBaixa=_showBaixa[0];var setShowBaixa=_showBaixa[1];
   var _motivoBaixa=useState('descarte');var motivoBaixa=_motivoBaixa[0];var setMotivoBaixa=_motivoBaixa[1];
   var _motivoLivre=useState('');var motivoLivre=_motivoLivre[0];var setMotivoLivre=_motivoLivre[1];
@@ -2548,10 +2548,10 @@ var medListBase=useMemo(function(){
     var est=stock[m.id]||0;
     var info=est<=0?{lote:'',validade:''}:(mi.ult?{lote:mi.ult.lote||'',validade:mi.ult.validade||''}:{lote:'',validade:''});
     if(est>0){if(m.loteAtual)info.lote=m.loteAtual;if(m.validadeAtual)info.validade=m.validadeAtual;}
-    var bruto=estoqueNegativo[m.id];
+    var bruto=estoqueBruto[m.id];
     return {id:m.id,nome:m.nome,ean:m.ean,est:est,info:info,minEstoque:m.minEstoque||0,cat:m.categoria||'medicamento',lotes:lotes,negativo:(bruto!=null&&bruto<0)?bruto:null};
   });
-},[entries,medications,stock,estoqueNegativo]);
+},[entries,medications,stock,estoqueBruto]);
 var medList=medListBase;
 if(search.trim())medList=medList.filter(function(m){return m.nome.toLowerCase().indexOf(search.toLowerCase())>=0;});
 if(filtCat&&filtCat!=='todos')medList=medList.filter(function(m){return m.cat===filtCat;});
@@ -2593,7 +2593,11 @@ function saveNew(){if(!newNome.trim())return;setSaving(true);db.collection('medi
 function saveEdit(){setSaving(true);db.collection('medicamentos').doc(editId).update({nome:editNome.trim(),minEstoque:parseInt(editMin)||0,categoria:editTipo}).then(function(){setEditId(null);setSaving(false);});}
 function delMed(id){if(!confirm('Excluir medicamento?'))return;db.collection('medicamentos').doc(id).delete();}
 function salvarEditLote(){if(!editLote)return;setSaving(true);var ps=[];if(editLote.medId)ps.push(db.collection('medicamentos').doc(editLote.medId).update({loteAtual:editLoteVal.trim(),validadeAtual:_normValidade(editLoteData)}));if(editLote.entryId)ps.push(db.collection('entries').doc(editLote.entryId).update({lote:editLoteVal.trim(),validade:_normValidade(editLoteData)}).catch(function(){}));var _hadEntry=!!editLote.entryId;Promise.all(ps).then(function(){if(_hadEntry)_bumpEntriesVersion();setEditLote(null);setSaving(false);}).catch(function(e){alert('Erro: '+e.message);setSaving(false);});}
-function salvarAjuste(){if(!ajusteMed)return;var nq=parseInt(ajusteQty);if(isNaN(nq)||nq<0){alert('Quantidade inválida.');return;}if(!ajusteMotivo.trim()){alert('Informe o motivo.');return;}var atual=loteSel?loteSel.qty:(stock[ajusteMed.id]||0);var diff=nq-atual;if(diff===0){setAjusteId(null);setAjusteMed(null);setAjusteQty('');setAjusteMotivo('');setLoteSel(null);return;}setSaving(true);db.collection('entries').add({medicamentoId:ajusteMed.id,medicamentoNome:ajusteMed.nome,ean:ajusteMed.ean||'',tipo:diff>0?'entrada':'saida',quantidade:Math.abs(diff),lote:loteSel?loteSel.lote:'',validade:loteSel?loteSel.validade:'',observacao:'Balanço: '+ajusteMotivo.trim()+' (era '+atual+', passou a '+nq+')',criadoEm:new Date().toISOString(),date:todayStr(),autorId:user.uid,autorNome:user.name,autorCargo:user.role,autorColor:user.color||B,isAjuste:true}).then(function(){setAjusteId(null);setAjusteMed(null);setAjusteQty('');setAjusteMotivo('');setLoteSel(null);setSaving(false);}).catch(function(e){alert(e.message);setSaving(false);});}
+function salvarAjuste(){if(!ajusteMed)return;var nq=parseInt(ajusteQty);if(isNaN(nq)||nq<0){alert('Quantidade inválida.');return;}if(!ajusteMotivo.trim()){alert('Informe o motivo.');return;}
+  // Usa o saldo BRUTO (sem zerar negativo) como base do ajuste — se não usasse, um medicamento com saída
+  // registrada a mais que entrada (saldo real negativo, mas exibido como "0") nunca fecharia o balanço:
+  // o ajuste calcularia a diferença a partir do "0" fictício, e o déficit escondido continuaria por baixo.
+  var brutoAtual=estoqueBruto[ajusteMed.id];var atual=loteSel?loteSel.qty:(brutoAtual!=null?brutoAtual:(stock[ajusteMed.id]||0));var diff=nq-atual;if(diff===0){setAjusteId(null);setAjusteMed(null);setAjusteQty('');setAjusteMotivo('');setLoteSel(null);return;}setSaving(true);db.collection('entries').add({medicamentoId:ajusteMed.id,medicamentoNome:ajusteMed.nome,ean:ajusteMed.ean||'',tipo:diff>0?'entrada':'saida',quantidade:Math.abs(diff),lote:loteSel?loteSel.lote:'',validade:loteSel?loteSel.validade:'',observacao:'Balanço: '+ajusteMotivo.trim()+' (era '+atual+', passou a '+nq+')',criadoEm:new Date().toISOString(),date:todayStr(),autorId:user.uid,autorNome:user.name,autorCargo:user.role,autorColor:user.color||B,isAjuste:true}).then(function(){setAjusteId(null);setAjusteMed(null);setAjusteQty('');setAjusteMotivo('');setLoteSel(null);setSaving(false);}).catch(function(e){alert(e.message);setSaving(false);});}
 function handleImportXls(file){if(!file)return;setImporting(true);setImportStatus('Lendo arquivo...');var reader=new FileReader();reader.onload=function(ev){try{var data=new Uint8Array(ev.target.result);var wb=XLSX.read(data,{type:'array'});var catMap={'CONTROLADOS':'controlado','CONTROLADO':'controlado','FARMACIA BASICA':'medicamento','FARMACIA':'medicamento','LEITES':'leite','LEITE':'leite','INJETAVEIS':'injetavel','INJETAVEL':'injetavel','PENSOS':'penso','MATERIAIS':'penso'};var batch=[];for(var si=0;si<wb.SheetNames.length;si++){var sn=wb.SheetNames[si];if(sn.toUpperCase().indexOf('INSTRUC')>=0)continue;var ws2=wb.Sheets[sn];var rows=XLSX.utils.sheet_to_json(ws2,{defval:''});if(!rows||rows.length===0)continue;var su=sn.toUpperCase().trim();var sc='medicamento';for(var key in catMap){if(su.indexOf(key)>=0){sc=catMap[key];break;}}for(var i=0;i<rows.length;i++){var row=rows[i];var nome=row['Nome']||row['NOME']||row['nome']||'';if(!nome||!nome.trim())continue;var cat=row['Categoria']||row['CATEGORIA']||sc;var est2=parseInt(row['Estoque Inicial']||row['estoque']||0)||0;var min2=parseInt(row['Estoque Minimo']||row['minimo']||0)||0;var ean=(row['EAN (opcional)']||row['EAN']||'')+'';var val2=(row['Validade (MM/AAAA)']||row['Validade']||'')+'';var cl=cat.toLowerCase().trim();if(cl.indexOf('injet')>=0)cl='injetavel';else if(cl.indexOf('penso')>=0||cl.indexOf('material')>=0)cl='penso';else if(cl.indexOf('control')>=0)cl='controlado';else if(cl.indexOf('leite')>=0)cl='leite';else cl='medicamento';batch.push({nome:nome.trim(),categoria:cl,minEstoque:min2,ean:ean,validade:_normValidade(val2),estoque:est2,criadoEm:new Date().toISOString()});}}if(batch.length===0){setImportStatus('Nenhum item encontrado.');setImporting(false);return;}setImportStatus('Importando '+batch.length+' itens...');var idx=0,done=0;function next2(){if(idx>=batch.length){setImportStatus('Registrando estoques...');var ei=0;function ne(){if(ei>=batch.length){setImportStatus('Concluido! '+done+' itens!');setImporting(false);return;}var item=batch[ei++];if(item.estoque>0){db.collection('medicamentos').where('nome','==',item.nome).limit(1).get().then(function(s){if(!s.empty){db.collection('entries').add({medicamentoId:s.docs[0].id,medicamentoNome:item.nome,ean:item.ean||'',tipo:'entrada',quantidade:item.estoque,lote:'',validade:item.validade||'',observacao:'Estoque inicial',criadoEm:new Date().toISOString(),date:todayStr(),autorId:user.uid,autorNome:user.name,autorCargo:user.role,autorColor:user.color||B}).then(ne).catch(ne);}else ne();}).catch(ne);}else ne();}ne();return;}var item=batch[idx++];db.collection('medicamentos').add({nome:item.nome,categoria:item.categoria,minEstoque:item.minEstoque,ean:item.ean,criadoEm:item.criadoEm}).then(function(){done++;next2();}).catch(function(){done++;next2();});}next2();}catch(ex){setImportStatus('Erro: '+ex.message);setImporting(false);}};reader.readAsArrayBuffer(file);}
 var _cutDesc=(function(){var d=new Date();d.setDate(d.getDate()-30);return d.toISOString().slice(0,10);})();var descartes30=(entries||[]).filter(function(e){return e.tipo==='saida'&&e.descarte&&(e.date||'')>=_cutDesc;});var subTabs=[{id:'estoque',label:'Estoque'},{id:'faltas',label:'Faltas'+(faltas.length>0?' ('+faltas.length+')':'')},{id:'vencimento',label:'Vencimentos'+(totalAlertas>0?' ('+totalAlertas+')':'')},{id:'descartes',label:'🗑️ Descartes'+(descartes30.length>0?' ('+descartes30.length+')':'')}];
 var TipoBtn=function(props){var t=TIPOS[props.k];var sel=props.sel===props.k;return <button onClick={function(){props.onClick(props.k);}} style={{padding:'7px 12px',borderRadius:20,border:'1.5px solid '+(sel?t.cor:'#E2E8F0'),background:sel?t.cor:'#fff',color:sel?'#fff':'#64748B',cursor:'pointer',fontWeight:sel?700:500,fontSize:12,transition:'all .15s'}}>{t.icon} {t.label}</button>;};
@@ -7056,7 +7060,7 @@ function TabPrevisao(props){
 // separador '--' (o Firestore não aceita '~' em caminhos de campo, ex.: contagens.<key> no update()).
 function confKey(medId,lote,val){return (medId+'--'+(lote||'SEM')+'--'+(val||'SEM')).replace(/[^A-Za-z0-9_-]/g,'_');}
 function TabConferencia(props){
-  var user=props.user;var medications=props.medications||[];var entries=props.entries||[];var stock=props.stock||{};
+  var user=props.user;var medications=props.medications||[];var entries=props.entries||[];var stock=props.stock||{};var estoqueBruto=props.estoqueBruto||{};
   var CCOR={medicamento:'#1351B4',controlado:'#DC2626',injetavel:'#7C3AED',leite:'#D97706',penso:'#0891B2'};
   var docRef=function(){return db.collection('conferencias').doc(todayStr());};
   var _contagens=useState({});var contagens=_contagens[0];var setContagens=_contagens[1];
@@ -7270,12 +7274,12 @@ function TabConferencia(props){
       var now=new Date().toISOString();
       var itens=[];
       m.lotes.forEach(function(l){var k=confKey(m.id,l.lote,l.validade);var raw=contagens[k];if(raw===undefined||raw==='')return;var contado=parseInt(raw)||0;if(contado-l.qty!==0)itens.push({lote:l.lote,validade:l.validade,sistema:l.qty,contado:contado,diff:contado-l.qty,novo:false});});
-      if(m.semLote>0){var ks=confKey(m.id,'__SEMLOTE__','');var rawS=contagens[ks];if(rawS!==undefined&&rawS!==''){var cs=parseInt(rawS)||0;if(cs-m.semLote!==0)itens.push({lote:'',validade:'',sistema:m.semLote,contado:cs,diff:cs-m.semLote,novo:false});}}
+      if(m.semLote!==0){var ks=confKey(m.id,'__SEMLOTE__','');var rawS=contagens[ks];if(rawS!==undefined&&rawS!==''){var cs=parseInt(rawS)||0;if(cs-m.semLote!==0)itens.push({lote:'',validade:'',sistema:m.semLote,contado:cs,diff:cs-m.semLote,novo:false});}}
       novosLotes.filter(function(nl){return nl.medId===m.id;}).forEach(function(nl){if((parseInt(nl.qty)||0)>0)itens.push({lote:nl.lote,validade:nl.validade||'',sistema:0,contado:parseInt(nl.qty)||0,diff:parseInt(nl.qty)||0,novo:true});});
       // saldo final deste medicamento após aplicar a contagem
       var resultante=0;
       m.lotes.forEach(function(l){var k=confKey(m.id,l.lote,l.validade);var raw=contagens[k];resultante+=(raw!==undefined&&raw!=='')?(parseInt(raw)||0):l.qty;});
-      if(m.semLote>0){var ks2=confKey(m.id,'__SEMLOTE__','');var rawS2=contagens[ks2];resultante+=(rawS2!==undefined&&rawS2!=='')?(parseInt(rawS2)||0):m.semLote;}
+      if(m.semLote!==0){var ks2=confKey(m.id,'__SEMLOTE__','');var rawS2=contagens[ks2];resultante+=(rawS2!==undefined&&rawS2!=='')?(parseInt(rawS2)||0):m.semLote;}
       novosLotes.forEach(function(nl){if(nl.medId===m.id)resultante+=(parseInt(nl.qty)||0);});
       var batch=db.batch();
       itens.forEach(function(it){
@@ -7319,12 +7323,17 @@ function TabConferencia(props){
       var lotes=Object.keys(loteMap).map(function(k){var l=loteMap[k];return {lote:l.lote,validade:l.validade,qty:Math.max(0,l.entrada-l.saida)};}).filter(function(l){return l.qty>0;});
       var est=stock[m.id]||0;
       var totalLotado=lotes.reduce(function(s,l){return s+l.qty;},0);
-      var semLote=Math.max(0,est-totalLotado);
+      // Saldo BRUTO (sem zerar negativo) menos o que já está em lote — pode dar negativo se houver saída
+      // registrada a mais do que entrada (déficit escondido atrás do "0" exibido em est). Antes isso vinha
+      // zerado com Math.max(0,...), o que escondia a linha "Sem lote" inteira da conferência e fazia o
+      // balanço nunca fechar de verdade, mesmo depois de conferir e ajustar.
+      var bruto=estoqueBruto[m.id];if(bruto==null)bruto=est;
+      var semLote=bruto-totalLotado;
       return {id:m.id,nome:m.nome,cat:m.categoria||'medicamento',est:est,lotes:lotes,semLote:semLote};
     });
-  },[medications,entries,stock]);
+  },[medications,entries,stock,estoqueBruto]);
 
-  function medKeys(m){var ks=[];m.lotes.forEach(function(l){ks.push(confKey(m.id,l.lote,l.validade));});if(m.semLote>0)ks.push(confKey(m.id,'__SEMLOTE__',''));return ks;}
+  function medKeys(m){var ks=[];m.lotes.forEach(function(l){ks.push(confKey(m.id,l.lote,l.validade));});if(m.semLote!==0)ks.push(confKey(m.id,'__SEMLOTE__',''));return ks;}
   function medConferido(m){
     var ks=medKeys(m);
     for(var i=0;i<ks.length;i++){if(contagens[ks[i]]!==undefined&&contagens[ks[i]]!=='')return true;}
@@ -7345,7 +7354,7 @@ function TabConferencia(props){
         var contado=parseInt(raw)||0;var rc=recByKey[key]?recByKey[key].total:0;
         itens.push({medId:m.id,medNome:m.nome,cat:m.cat,lote:l.lote,validade:l.validade,sistema:l.qty,contado:contado,diff:contado-l.qty,novo:false,semLote:false,recontagem:rc});
       });
-      if(m.semLote>0){
+      if(m.semLote!==0){
         var keyS=confKey(m.id,'__SEMLOTE__','');var rawS=contagens[keyS];
         if(rawS!==undefined&&rawS!==''){var contadoS=parseInt(rawS)||0;var rcS=recByKey[keyS]?recByKey[keyS].total:0;itens.push({medId:m.id,medNome:m.nome,cat:m.cat,lote:'',validade:'',sistema:m.semLote,contado:contadoS,diff:contadoS-m.semLote,novo:false,semLote:true,recontagem:rcS});}
       }
@@ -7406,7 +7415,7 @@ function TabConferencia(props){
         if(!medConferido(m))return;
         var resultante=0;
         m.lotes.forEach(function(l){var k=confKey(m.id,l.lote,l.validade);var raw=contagens[k];resultante+=(raw!==undefined&&raw!=='')?(parseInt(raw)||0):l.qty;});
-        if(m.semLote>0){var ks=confKey(m.id,'__SEMLOTE__','');var rawS=contagens[ks];resultante+=(rawS!==undefined&&rawS!=='')?(parseInt(rawS)||0):m.semLote;}
+        if(m.semLote!==0){var ks=confKey(m.id,'__SEMLOTE__','');var rawS=contagens[ks];resultante+=(rawS!==undefined&&rawS!=='')?(parseInt(rawS)||0):m.semLote;}
         novosLotes.forEach(function(nl){if(nl.medId===m.id)resultante+=(parseInt(nl.qty)||0);});
         var rawm=medById[m.id]||{};
         if(resultante===0&&(rawm.loteAtual||rawm.validadeAtual))zerar.push(m.id);
@@ -7643,7 +7652,7 @@ function TabConferencia(props){
                     <div style={{fontWeight:600,fontSize:13,color:aplicado?'#065F46':'#1E293B',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{m.nome}</div>
                     {aplicado
                       ?<div style={{fontSize:10,color:'#059669',fontWeight:700}}>✓ contagem aplicada no estoque</div>
-                      :<div style={{fontSize:10,color:'#94A3B8'}}>{m.lotes.length+(m.semLote>0?1:0)} lote(s){!cega&&' · sistema: '+m.est+' un.'}</div>
+                      :<div style={{fontSize:10,color:'#94A3B8'}}>{m.lotes.length+(m.semLote!==0?1:0)} lote(s){!cega&&' · sistema: '+m.est+' un.'}</div>
                     }
                   </div>
                   <span style={{fontSize:13,color:'#94A3B8'}}>{exp?'▲':'▼'}</span>
@@ -7666,7 +7675,7 @@ function TabConferencia(props){
               {exp&&<div style={{padding:'0 12px 12px'}}>
                 {m.lotes.length===0&&m.semLote===0&&<div style={{fontSize:12,color:'#94A3B8',padding:'6px 0'}}>Sem estoque registrado no sistema.</div>}
                 {m.lotes.map(function(l,li){return loteRow({key:confKey(m.id,l.lote,l.validade),titulo:'Lote '+(l.lote||'—'),sub:(l.validade?'Val '+l.validade:'sem validade'),sistema:l.qty,med:m,lote:l.lote,validade:l.validade,topBorder:li>0,tourMark:mi===0&&li===0});})}
-                {m.semLote>0&&loteRow({key:confKey(m.id,'__SEMLOTE__',''),titulo:'Sem lote',sub:'unidades sem lote/validade',sistema:m.semLote,med:m,lote:'',validade:'',topBorder:m.lotes.length>0,tourMark:mi===0&&m.lotes.length===0})}
+                {m.semLote!==0&&loteRow({key:confKey(m.id,'__SEMLOTE__',''),titulo:'Sem lote',sub:'unidades sem lote/validade',sistema:m.semLote,med:m,lote:'',validade:'',topBorder:m.lotes.length>0,tourMark:mi===0&&m.lotes.length===0})}
                 {(function(){
                   // Parte 2 (#6): lote/validade no cadastro do medicamento
                   var raw=medById[m.id]||{};var temCad=raw.loteAtual||raw.validadeAtual;
@@ -9521,7 +9530,7 @@ var entries=useMemo(function(){
   return out;
 },[histEntries,recentEntries]);
 var stock=useMemo(function(){return calcStock(entries);},[entries]);
-var estoqueNegativo=useMemo(function(){var b=calcStockBruto(entries);var neg={};for(var k in b){if(b[k]<0)neg[k]=b[k];}return neg;},[entries]);
+var estoqueBruto=useMemo(function(){return calcStockBruto(entries);},[entries]);
 var latest=useMemo(function(){var l=calcLatest(entries);for(var k in l){if((stock[k]||0)<=0)l[k]={lote:'',validade:''};}return l;},[entries,stock]);
 var lowCount=useMemo(function(){var c=0;meds.forEach(function(m){if(m.minEstoque&&(stock[m.id]||0)<=m.minEstoque&&(stock[m.id]||0)>0)c++;});return c;},[meds,stock]);
 function checkShift(u){if(shiftChecked)return;setShiftChecked(true);autoFecharPlantoesAntigos();var today=todayStr();var role=u.role;if(role==='gestor'||role==='tecnico'){setIsGuest(false);db.collection('plantoes').doc(today).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);}else{setPlantao(null);setShiftId(null);}}).catch(function(){});return;}if(!isShiftTime()){setIsGuest(true);return;}var leftKey='fc_shift_saiu_'+today;var encKey='fc_shift_enc_'+today;var leftToday=localStorage.getItem(encKey)||localStorage.getItem(leftKey);if(leftToday){db.collection('plantoes').doc(today).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);var readicionado=false;if(p.iniciadoPor===u.uid){readicionado=true;}else if(p.equipe){for(var j=0;j<p.equipe.length;j++){if(p.equipe[j].id===u.uid&&p.equipe[j].status==='confirmado'){readicionado=true;break;}}}if(readicionado){localStorage.removeItem(leftKey);localStorage.removeItem(encKey);setIsGuest(false);}else{setIsGuest(true);}}else{setIsGuest(true);}}).catch(function(){setIsGuest(true);});return;}db.collection('plantao_convites').where('para','==',u.uid).where('status','==','pendente').get().then(function(invSnap){var todayInvite=null;for(var i=0;i<invSnap.docs.length;i++){var d=invSnap.docs[i].data();if(d.data===today){var o={id:invSnap.docs[i].id};for(var k in d)o[k]=d[k];todayInvite=o;break;}}if(todayInvite){setPendingInvite(todayInvite);return;}db.collection('plantoes').doc(today).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);var inTeam=false;
@@ -9737,8 +9746,8 @@ return(
         {tab==='comparapedido'&&isManagerRole&&<ErrBoundary><TabComparacaoPedido/></ErrBoundary>}
         {tab==='saida'&&<TabSaida user={user} medications={meds} stock={stock} entries={entries} onSave={addEntryStable} onSolicitar={addSolicitacaoStable} latest={latest} isGuest={isGuest} canMove={canMove} confirm2={confirm2} alert2={alert2}/>}
         {tab==='entrada'&&<TabEntrada user={user} medications={meds} entries={entries} onSave={addEntry} onSolicitar={addSolicitacao} isGuest={isGuest} canMove={canMove} confirm2={confirm2} alert2={alert2}/>}
-        {tab==='estoque'&&<TabEstoque user={user} medications={meds} entries={entries} stock={stock} estoqueNegativo={estoqueNegativo} onSave={addEntryStable} confirm2={confirm2} alert2={alert2}/>}
-        {tab==='conferencia'&&<ErrBoundary><TabConferencia user={user} medications={meds} entries={entries} stock={stock}/></ErrBoundary>}
+        {tab==='estoque'&&<TabEstoque user={user} medications={meds} entries={entries} stock={stock} estoqueBruto={estoqueBruto} onSave={addEntryStable} confirm2={confirm2} alert2={alert2}/>}
+        {tab==='conferencia'&&<ErrBoundary><TabConferencia user={user} medications={meds} entries={entries} stock={stock} estoqueBruto={estoqueBruto}/></ErrBoundary>}
         {tab==='relatorio'&&<TabRelatorio entries={entries} medications={meds} db={db} user={user}/>}
         {tab==='gestao'&&can(user.role,'gestao')&&<TabGestao currentUser={user} entries={entries}/>}
         {tab==='log'&&can(user.role,'log')&&<TabLog/>}
