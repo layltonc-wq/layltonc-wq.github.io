@@ -469,9 +469,14 @@ function extrairNomeTexto(texto){
 }
 // Auditoria: registra criação/acesso a cadastro de paciente em logs_acesso (usuário, cargo, ação, hora).
 function logAcessoPaciente(user,acao,detalhe){try{db.collection('logs_acesso').add({uid:(user&&user.uid)||'',nome:(user&&user.name)||'',cargo:(user&&user.role)||'',acao:acao,detalhe:detalhe||'',criadoEm:new Date().toISOString()}).catch(function(){});}catch(_){}}
-function calcStock(entries){var s={};for(var i=0;i<entries.length;i++){var e=entries[i];if(!e.medicamentoId)continue;if(!s[e.medicamentoId])s[e.medicamentoId]=0;if(e.tipo==='entrada'){if(e.divergenciaTipo==='nota')continue;
+function calcStock(entries){var s=calcStockBruto(entries);for(var k in s){if(s[k]<0)s[k]=0;}return s;}
+// Igual a calcStock, mas SEM zerar saldo negativo — usado só pra detectar quando as saídas registradas
+// somam mais do que as entradas (sinal de lançamento errado/duplicado, não falta de estoque de verdade).
+// calcStock esconde isso mostrando "0" como se fosse falta comum; esta função deixa o número negativo
+// visível pra quem for investigar.
+function calcStockBruto(entries){var s={};for(var i=0;i<entries.length;i++){var e=entries[i];if(!e.medicamentoId)continue;if(!s[e.medicamentoId])s[e.medicamentoId]=0;if(e.tipo==='entrada'){if(e.divergenciaTipo==='nota')continue;
 s[e.medicamentoId]+=(Number(e.quantidade)||0);}else if(e.tipo==='saida'){if(e.ficticioDiv)continue;
-s[e.medicamentoId]-=(Number(e.quantidade)||0);}}for(var k in s){if(s[k]<0)s[k]=0;}return s;}
+s[e.medicamentoId]-=(Number(e.quantidade)||0);}}return s;}
 function calcLatest(entries){var info={};var sorted=[];for(var i=0;i<entries.length;i++){if(entries[i].tipo==='entrada')sorted.push(entries[i]);}sorted.sort(function(a,b){return (a.criadoEm||'').localeCompare(b.criadoEm||'');});for(var j=0;j<sorted.length;j++){var e=sorted[j];if(e.medicamentoId)info[e.medicamentoId]={lote:e.lote||'',validade:e.validade||''};}return info;}
 // Converte um ano em 2 dígitos para 4: <=50 -> 20XX (ex: 28->2028); >50 -> 19XX (ex: 98->1998). Ano já com 3+ dígitos passa direto.
 function _anoVal(y){var n=parseInt(y,10);if(isNaN(n))return NaN;if(n<100)return n<=50?2000+n:1900+n;return n;}
@@ -2502,7 +2507,7 @@ function HistModal(props){
       </div>);})}
     </div>}
   </Modal>);}
-function TabEstoque(props){var user=props.user;var medications=props.medications;var entries=props.entries;var stock=props.stock;var onSave=props.onSave;var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};var alert2=props.alert2||function(m){window.alert(m);};var _search=useState('');var search=_search[0];var setSearch=_search[1];var _sub=useState('estoque');var sub=_sub[0];var setSub=_sub[1];var _showAdd=useState(false);var showAdd=_showAdd[0];var setShowAdd=_showAdd[1];var _hist=useState(null);var hist=_hist[0];var setHist=_hist[1];var _editId=useState(null);var editId=_editId[0];var setEditId=_editId[1];var _editNome=useState('');var editNome=_editNome[0];var setEditNome=_editNome[1];var _editMin=useState('');var editMin=_editMin[0];var setEditMin=_editMin[1];var _editTipo=useState('medicamento');var editTipo=_editTipo[0];var setEditTipo=_editTipo[1];var _newNome=useState('');var newNome=_newNome[0];var setNewNome=_newNome[1];var _newEan=useState('');var newEan=_newEan[0];var setNewEan=_newEan[1];var _newMin=useState('');var newMin=_newMin[0];var setNewMin=_newMin[1];var _newTipo=useState('medicamento');var newTipo=_newTipo[0];var setNewTipo=_newTipo[1];
+function TabEstoque(props){var user=props.user;var medications=props.medications;var entries=props.entries;var stock=props.stock;var estoqueNegativo=props.estoqueNegativo||{};var onSave=props.onSave;var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};var alert2=props.alert2||function(m){window.alert(m);};var _search=useState('');var search=_search[0];var setSearch=_search[1];var _sub=useState('estoque');var sub=_sub[0];var setSub=_sub[1];var _showAdd=useState(false);var showAdd=_showAdd[0];var setShowAdd=_showAdd[1];var _hist=useState(null);var hist=_hist[0];var setHist=_hist[1];var _editId=useState(null);var editId=_editId[0];var setEditId=_editId[1];var _editNome=useState('');var editNome=_editNome[0];var setEditNome=_editNome[1];var _editMin=useState('');var editMin=_editMin[0];var setEditMin=_editMin[1];var _editTipo=useState('medicamento');var editTipo=_editTipo[0];var setEditTipo=_editTipo[1];var _newNome=useState('');var newNome=_newNome[0];var setNewNome=_newNome[1];var _newEan=useState('');var newEan=_newEan[0];var setNewEan=_newEan[1];var _newMin=useState('');var newMin=_newMin[0];var setNewMin=_newMin[1];var _newTipo=useState('medicamento');var newTipo=_newTipo[0];var setNewTipo=_newTipo[1];
   var _showBaixa=useState(null);var showBaixa=_showBaixa[0];var setShowBaixa=_showBaixa[1];
   var _motivoBaixa=useState('descarte');var motivoBaixa=_motivoBaixa[0];var setMotivoBaixa=_motivoBaixa[1];
   var _motivoLivre=useState('');var motivoLivre=_motivoLivre[0];var setMotivoLivre=_motivoLivre[1];
@@ -2543,9 +2548,10 @@ var medListBase=useMemo(function(){
     var est=stock[m.id]||0;
     var info=est<=0?{lote:'',validade:''}:(mi.ult?{lote:mi.ult.lote||'',validade:mi.ult.validade||''}:{lote:'',validade:''});
     if(est>0){if(m.loteAtual)info.lote=m.loteAtual;if(m.validadeAtual)info.validade=m.validadeAtual;}
-    return {id:m.id,nome:m.nome,ean:m.ean,est:est,info:info,minEstoque:m.minEstoque||0,cat:m.categoria||'medicamento',lotes:lotes};
+    var bruto=estoqueNegativo[m.id];
+    return {id:m.id,nome:m.nome,ean:m.ean,est:est,info:info,minEstoque:m.minEstoque||0,cat:m.categoria||'medicamento',lotes:lotes,negativo:(bruto!=null&&bruto<0)?bruto:null};
   });
-},[entries,medications,stock]);
+},[entries,medications,stock,estoqueNegativo]);
 var medList=medListBase;
 if(search.trim())medList=medList.filter(function(m){return m.nome.toLowerCase().indexOf(search.toLowerCase())>=0;});
 if(filtCat&&filtCat!=='todos')medList=medList.filter(function(m){return m.cat===filtCat;});
@@ -2698,10 +2704,10 @@ function darBaixaVencido(){
 {!importing&&importStatus&&<div className="ok" style={{marginBottom:10}}>{importStatus}</div>}
 <div className="card"><div className="ch"><div className="ch-title"><div className="ch-accent"/><span>Estoque Atual</span></div><span style={{fontSize:12,color:'#94A3B8',fontWeight:500}}>{medList.length} produto(s)</span></div>
 {medList.length===0?<div style={{padding:48,textAlign:'center',color:'#94A3B8'}}>Nenhum medicamento cadastrado.</div>:(<div style={{overflowX:'auto'}}><table className="tbl"><thead><tr><th>Medicamento</th><th>Estoque</th><th>Status</th><th></th></tr></thead><tbody>
-{medList.map(function(m){var low=m.minEstoque>0&&m.est<=m.minEstoque;var zero=m.est<=0;var tp=TIPOS[m.cat]||TIPOS.medicamento;return(<tr key={m.id}>
+{medList.map(function(m){var low=m.minEstoque>0&&m.est<=m.minEstoque;var zero=m.est<=0;var neg=m.negativo!=null;var tp=TIPOS[m.cat]||TIPOS.medicamento;return(<tr key={m.id}>
 <td><div style={{fontWeight:600,color:B,cursor:can(user.role,'historico')?'pointer':'default',marginBottom:4,fontSize:13}} onClick={function(){if(can(user.role,'historico'))setHist(m);}}>{m.nome}</div><span style={{fontSize:10,padding:'2px 8px',borderRadius:20,background:tp.cor+'18',color:tp.cor,fontWeight:700,border:'1px solid '+tp.cor+'40'}}>{tp.icon} {tp.label}</span></td>
 <td><span style={{fontWeight:900,fontSize:22,color:zero?'#B91C1C':low?'#B45309':'#0C6B3E'}}>{m.est}</span></td>
-<td><span className={'badge '+(zero?'badge-red':low?'badge-amber':'badge-green')}>{zero?'Zerado':low?'Baixo':'OK'}</span></td>
+<td>{neg?<span className="badge badge-red" title={'Saídas registradas superam as entradas em '+Math.abs(m.negativo)+' un. — revise os lançamentos, não é falta de estoque comum.'}>⚠️ Saldo negativo ({m.negativo})</span>:<span className={'badge '+(zero?'badge-red':low?'badge-amber':'badge-green')}>{zero?'Zerado':low?'Baixo':'OK'}</span>}</td>
 <td><div style={{display:'flex',gap:4}}>{can(user.role,'editar')&&<button onClick={function(){setEditId(m.id);setEditNome(m.nome);setEditMin(m.minEstoque||'');setEditTipo(m.cat||'medicamento');}} style={{background:'#EFF6FF',border:'none',borderRadius:8,width:32,height:32,cursor:'pointer',fontSize:14}}>✏️</button>}{can(user.role,'editar')&&<button onClick={function(){delMed(m.id);}} style={{background:'#FEE2E2',border:'none',borderRadius:8,width:32,height:32,cursor:'pointer',fontSize:14}}>🗑</button>}<button onClick={function(){setAjusteId(m.id);setAjusteMed(m);setAjusteQty(String(m.est));}} style={{background:'#FEF3C7',border:'none',borderRadius:8,width:32,height:32,cursor:'pointer',fontSize:14}}>⚖️</button><button onClick={function(){setDescarteMed(m);setDescarteLoteSel(m.lotes&&m.lotes.length===1?m.lotes[0]:null);var loteInicial=m.lotes&&m.lotes.length===1?m.lotes[0]:null;setShowBaixa({id:m.id,medId:m.id,nome:m.nome,lote:loteInicial?loteInicial.lote:(m.info.lote||''),validade:loteInicial?loteInicial.validade:(m.info.validade||''),est:loteInicial?loteInicial.qty:m.est});setQtdBaixa('');}} title="Descarte por vencimento" style={{background:'#FEE2E2',border:'none',borderRadius:8,width:32,height:32,cursor:'pointer',fontSize:14}}>♻️</button><button onClick={function(){var li=m.lotes&&m.lotes.length>0?m.lotes[0]:{entryId:'',lote:m.info.lote||'',validade:m.info.validade||''};setEditLote({entryId:li.entryId,medId:m.id,nome:m.nome});setEditLoteVal(li.lote||'');setEditLoteData(li.validade||'');}} style={{background:'#F0FDF4',border:'none',borderRadius:8,width:32,height:32,cursor:'pointer',fontSize:14}}>📅</button></div></td>
 </tr>);})}</tbody></table></div>)}</div></div>)}
 {sub==='faltas'&&(<div><div style={{display:'flex',justifyContent:'flex-end',marginBottom:14}}><button onClick={exportAlertasXL} className="bg" style={{width:'auto',padding:'0 16px'}}>Excel Alertas</button></div>
@@ -9515,6 +9521,7 @@ var entries=useMemo(function(){
   return out;
 },[histEntries,recentEntries]);
 var stock=useMemo(function(){return calcStock(entries);},[entries]);
+var estoqueNegativo=useMemo(function(){var b=calcStockBruto(entries);var neg={};for(var k in b){if(b[k]<0)neg[k]=b[k];}return neg;},[entries]);
 var latest=useMemo(function(){var l=calcLatest(entries);for(var k in l){if((stock[k]||0)<=0)l[k]={lote:'',validade:''};}return l;},[entries,stock]);
 var lowCount=useMemo(function(){var c=0;meds.forEach(function(m){if(m.minEstoque&&(stock[m.id]||0)<=m.minEstoque&&(stock[m.id]||0)>0)c++;});return c;},[meds,stock]);
 function checkShift(u){if(shiftChecked)return;setShiftChecked(true);autoFecharPlantoesAntigos();var today=todayStr();var role=u.role;if(role==='gestor'||role==='tecnico'){setIsGuest(false);db.collection('plantoes').doc(today).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);}else{setPlantao(null);setShiftId(null);}}).catch(function(){});return;}if(!isShiftTime()){setIsGuest(true);return;}var leftKey='fc_shift_saiu_'+today;var encKey='fc_shift_enc_'+today;var leftToday=localStorage.getItem(encKey)||localStorage.getItem(leftKey);if(leftToday){db.collection('plantoes').doc(today).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);var readicionado=false;if(p.iniciadoPor===u.uid){readicionado=true;}else if(p.equipe){for(var j=0;j<p.equipe.length;j++){if(p.equipe[j].id===u.uid&&p.equipe[j].status==='confirmado'){readicionado=true;break;}}}if(readicionado){localStorage.removeItem(leftKey);localStorage.removeItem(encKey);setIsGuest(false);}else{setIsGuest(true);}}else{setIsGuest(true);}}).catch(function(){setIsGuest(true);});return;}db.collection('plantao_convites').where('para','==',u.uid).where('status','==','pendente').get().then(function(invSnap){var todayInvite=null;for(var i=0;i<invSnap.docs.length;i++){var d=invSnap.docs[i].data();if(d.data===today){var o={id:invSnap.docs[i].id};for(var k in d)o[k]=d[k];todayInvite=o;break;}}if(todayInvite){setPendingInvite(todayInvite);return;}db.collection('plantoes').doc(today).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);var inTeam=false;
@@ -9730,7 +9737,7 @@ return(
         {tab==='comparapedido'&&isManagerRole&&<ErrBoundary><TabComparacaoPedido/></ErrBoundary>}
         {tab==='saida'&&<TabSaida user={user} medications={meds} stock={stock} entries={entries} onSave={addEntryStable} onSolicitar={addSolicitacaoStable} latest={latest} isGuest={isGuest} canMove={canMove} confirm2={confirm2} alert2={alert2}/>}
         {tab==='entrada'&&<TabEntrada user={user} medications={meds} entries={entries} onSave={addEntry} onSolicitar={addSolicitacao} isGuest={isGuest} canMove={canMove} confirm2={confirm2} alert2={alert2}/>}
-        {tab==='estoque'&&<TabEstoque user={user} medications={meds} entries={entries} stock={stock} onSave={addEntryStable} confirm2={confirm2} alert2={alert2}/>}
+        {tab==='estoque'&&<TabEstoque user={user} medications={meds} entries={entries} stock={stock} estoqueNegativo={estoqueNegativo} onSave={addEntryStable} confirm2={confirm2} alert2={alert2}/>}
         {tab==='conferencia'&&<ErrBoundary><TabConferencia user={user} medications={meds} entries={entries} stock={stock}/></ErrBoundary>}
         {tab==='relatorio'&&<TabRelatorio entries={entries} medications={meds} db={db} user={user}/>}
         {tab==='gestao'&&can(user.role,'gestao')&&<TabGestao currentUser={user} entries={entries}/>}
