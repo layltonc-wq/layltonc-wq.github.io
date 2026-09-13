@@ -7268,6 +7268,13 @@ function TabConferencia(props){
   // A partir daqui, saídas normais já descontam do novo saldo (calcStock inclui o ajuste).
   function confirmarContagemMed(m){
     if(!medConferido(m)){alert('Digite a contagem de ao menos um lote deste medicamento antes de confirmar.');return;}
+    if(m.semLote!==0){
+      var ksReq=confKey(m.id,'__SEMLOTE__','');
+      if(contagens[ksReq]===undefined||contagens[ksReq]===''){
+        alert('Preencha também o campo "Sem lote" (mesmo que seja 0) antes de confirmar — sem ele, uma diferença de '+m.semLote+' unidade(s) que não bate com nenhum lote fica sem corrigir, mesmo confirmando o resto.');
+        return;
+      }
+    }
     setConfMedId(m.id);
     var falhou=function(e){setConfMedId(null);erroEscrita(e);try{alert('Erro ao confirmar a contagem: '+((e&&e.message)?e.message:e));}catch(_){}};
     try{
@@ -7474,6 +7481,24 @@ function TabConferencia(props){
     var itens=resumo.itens.filter(function(it){return it.cat===catAtiva;});
     var ajustes=itens.filter(function(i){return i.diff!==0;});
     return {itens:itens,total:itens.length,bateram:itens.length-ajustes.length,divergiram:ajustes.length,ajustes:ajustes};
+  })();
+  // Trava de segurança: campo em branco não conta como "contei zero" — o sistema simplesmente ignora
+  // e a linha "Sem lote" (que fecha a diferença entre o saldo total e o que está detalhado por lote,
+  // podendo inclusive representar um déficit escondido) fica de fora do ajuste sem avisar ninguém.
+  // Já aconteceu de alguém contar só os lotes normais, confirmar, e a divergência continuar do mesmo
+  // jeito — silenciosamente. Isso aqui pega quem já começou a contar um medicamento (mexeu em algum
+  // campo dele) mas deixou esse campo específico em branco, e trava o "Finalizar" até ser preenchido
+  // (mesmo que o preenchimento seja 0) — só nesse caso; medicamento que a pessoa nem começou a contar
+  // continua liberado pra ficar pra depois, normalmente.
+  var pendenciasSemLote=(function(){
+    if(!catAtiva)return [];
+    return medList.filter(function(m){
+      if(m.cat!==catAtiva||m.semLote===0)return false;
+      if(!medConferido(m))return false;
+      var ks=confKey(m.id,'__SEMLOTE__','');
+      var raw=contagens[ks];
+      return raw===undefined||raw==='';
+    });
   })();
   // Status de cada categoria para a tela de seleção
   function catStatus(cat){if(finalizadas[cat])return'finalizada';var st=catStats[cat]||{conf:0,total:0};return st.conf>0?'andamento':'nova';}
@@ -7803,13 +7828,17 @@ function TabConferencia(props){
           })}
         </div>
         <div style={{padding:'12px 16px 18px',borderTop:'1px solid #E2E8F0',background:'#fff'}}>
+          {pendenciasSemLote.length>0&&<div style={{background:'#FEF2F2',border:'1.5px solid #FCA5A5',borderRadius:10,padding:'10px 12px',marginBottom:10}}>
+            <div style={{fontSize:12,fontWeight:800,color:'#B91C1C',marginBottom:4}}>⚠️ Falta preencher "Sem lote" (mesmo que seja 0)</div>
+            <div style={{fontSize:11,color:'#7F1D1D'}}>{pendenciasSemLote.map(function(m){return m.nome;}).join(', ')} — sem esse campo preenchido, a divergência escondida deles não vai ser corrigida, mesmo confirmando os outros lotes.</div>
+          </div>}
           {resumoCat.divergiram===0
             ?<div style={{textAlign:'center',fontSize:13,color:'#0C6B3E',fontWeight:700,padding:'6px 0'}}>🎉 Tudo bateu! Finalize a categoria para concluir.</div>
             :<div style={{fontSize:11,color:'#64748B',textAlign:'center',marginBottom:10}}>Os ajustes corrigem o estoque e ficam fora do ranking e dos relatórios de saída/entrada.</div>
           }
           <div style={{display:'flex',gap:10}}>
             <button onClick={function(){if(!aplicando)setShowResumo(false);}} disabled={aplicando} style={{flex:1,padding:'13px',background:'#F1F5F9',border:'none',borderRadius:12,fontWeight:700,fontSize:14,color:'#64748B',cursor:'pointer'}}>Cancelar</button>
-            <button onClick={aplicarAjustesCategoria} disabled={aplicando||resumoCat.total===0} style={{flex:2,padding:'13px',background:(aplicando||resumoCat.total===0)?'#94A3B8':'#0C6B3E',border:'none',borderRadius:12,fontWeight:700,fontSize:14,color:'#fff',cursor:(aplicando||resumoCat.total===0)?'default':'pointer'}}>{aplicando?'Finalizando...':resumoCat.divergiram>0?'✅ Finalizar e aplicar '+resumoCat.divergiram+' ajuste(s)':'✅ Finalizar categoria'}</button>
+            <button onClick={aplicarAjustesCategoria} disabled={aplicando||resumoCat.total===0||pendenciasSemLote.length>0} style={{flex:2,padding:'13px',background:(aplicando||resumoCat.total===0||pendenciasSemLote.length>0)?'#94A3B8':'#0C6B3E',border:'none',borderRadius:12,fontWeight:700,fontSize:14,color:'#fff',cursor:(aplicando||resumoCat.total===0||pendenciasSemLote.length>0)?'default':'pointer'}}>{aplicando?'Finalizando...':pendenciasSemLote.length>0?'Preencha "Sem lote" antes de finalizar':resumoCat.divergiram>0?'✅ Finalizar e aplicar '+resumoCat.divergiram+' ajuste(s)':'✅ Finalizar categoria'}</button>
           </div>
         </div>
       </div>
