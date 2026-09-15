@@ -18,9 +18,10 @@
 // (Fase 3, seção 5 do PLAN_MULTITENANT.md). Rode de novo a cada nova versão deste arquivo — ele só
 // mexe no que ainda não tem tenant_id, então é seguro rodar incrementalmente.
 
-const admin = require('firebase-admin');
-admin.initializeApp({ credential: admin.credential.applicationDefault() });
-const db = admin.firestore();
+const { initializeApp, applicationDefault } = require('firebase-admin/app');
+const { getFirestore } = require('firebase-admin/firestore');
+initializeApp({ credential: applicationDefault() });
+const db = getFirestore();
 
 // Coleções simples: todo documento sem tenant_id recebe o tenant_id passado por argumento.
 // (Ordem = mesma ordem da seção 5 do plano; vá descomentando/adicionando conforme migrar cada uma.)
