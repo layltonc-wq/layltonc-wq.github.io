@@ -13,7 +13,7 @@
 // ser a data/hora atual em segundos, ex.: no terminal `date +%s`) — sem isso, o auto-update não
 // detecta a mudança e navegadores/ícones de tela inicial com cache antigo continuam presos até
 // alguém limpar o cache manualmente (foi exatamente isso que causou o incidente de 18/09/2026).
-window.__FC_VERSION=1789742163;
+window.__FC_VERSION=1789742951;
 (function(){
   try{
     fetch(location.pathname+'?_vcheck='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(html){
@@ -9611,24 +9611,26 @@ useEffect(function(){if(!ready||!user)return;
   // Histórico antigo: 1x do CACHE (0 leituras quando quente). Cache frio/vazio/erro -> servidor,
   // em PÁGINAS de 2000 (não tudo de uma vez): em produção são quase 19 mil documentos, e um
   // pedido único gigante travava/demorava demais em conexões mais fracas (incidente 18/09/2026).
-  // Cada página já atualiza a tela (setHistEntries progressivo) — o estoque vai ficando exato aos
-  // poucos em vez de tudo travado até o fim; e libera setLoading(false) já na 1ª página.
+  // IMPORTANTE: acumula todas as páginas em memória e só chama setHistEntries UMA VEZ no final —
+  // chamar a cada página (como uma versão anterior fazia) disparava recálculo pesado de estoque
+  // (calcStock, computeVencimentos etc., cada um O(medicamentos × entries)) a cada pedaço que
+  // chegava, MULTIPLICANDO o custo total em vez de reduzir — foi isso que travou o navegador no
+  // incidente de 18/09/2026, não a rede. Paginar a BUSCA continua bom (evita 1 pedido gigante
+  // frágil em conexão fraca); só a atualização de tela que precisa ser 1x só.
   function carregarHistoricoPaginado(){
-    var acumulado=[];var ultimoDoc=null;var PAGINA=2000;var primeira=true;
+    var acumulado=[];var ultimoDoc=null;var PAGINA=2000;
     function pagina(){
       var q=db.collection('entries').where('tenant_id','==',tenantDe(user)).orderBy('__name__').limit(PAGINA);
       if(ultimoDoc)q=q.startAfter(ultimoDoc);
       return q.get().then(function(snap){
         if(!snap.empty){
           snap.docs.forEach(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];acumulado.push(o);});
-          setHistEntries(acumulado.slice());
           ultimoDoc=snap.docs[snap.docs.length-1];
         }
-        if(primeira){primeira=false;setLoading(false);}
         if(snap.size===PAGINA)return pagina();
       });
     }
-    return pagina();
+    return pagina().then(function(){setHistEntries(acumulado);setLoading(false);});
   }
   function carregarHistorico(fonte){
     if(fonte==='server')return carregarHistoricoPaginado().catch(function(){setLoading(false);});
