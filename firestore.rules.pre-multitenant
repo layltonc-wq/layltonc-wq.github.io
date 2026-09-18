@@ -1,0 +1,186 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function logado() { return request.auth != null; }
+    function meuPerfil() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function ehGestor() { return logado() && meuPerfil().role == 'gestor'; }
+    function ehTecnico() { return logado() && meuPerfil().role == 'tecnico'; }
+    function ehAdmin() { return ehGestor() || ehTecnico(); }
+
+    // ===== USUÁRIOS =====
+    match /users/{userId} {
+      allow read: if logado();
+      allow create: if request.auth != null
+                    && request.auth.uid == userId
+                    && request.resource.data.status == 'pending';
+      allow update: if ehAdmin()
+                    || (logado()
+                        && request.auth.uid == userId
+                        && request.resource.data.role == resource.data.role
+                        && request.resource.data.status == resource.data.status);
+      allow delete: if ehAdmin();
+    }
+
+    // ===== MEDICAMENTOS =====
+    match /medications/{id} {
+      allow read: if logado();
+      allow create, update: if logado();
+      allow delete: if ehAdmin();
+    }
+    match /medicamentos/{id} {
+      allow read: if logado();
+      allow create, update: if logado();
+      allow delete: if ehAdmin();
+    }
+
+    // ===== ENTRADAS E SAÍDAS =====
+    match /entries/{id} {
+      allow read: if logado();
+      allow create: if logado();
+      allow update: if logado();
+      allow delete: if logado();
+    }
+
+    // ===== CONFERÊNCIA =====
+    match /conferencias/{id} {
+      allow read: if logado();
+      allow write: if logado();
+    }
+
+    // ===== ATB =====
+    match /tratamentos_atb/{id} {
+      allow read: if logado();
+      allow create, update: if logado();
+      allow delete: if ehAdmin();
+    }
+
+    // ===== LEITES =====
+    match /pacientes_leite/{id} {
+      allow read: if logado();
+      allow create, update: if logado();
+      allow delete: if ehAdmin();
+    }
+    match /retiradas_leite/{id} {
+      allow read: if logado();
+      allow create: if logado();
+      allow update: if false;
+      allow delete: if ehTecnico();
+    }
+
+    // ===== CONTROLADOS (Morfina/Tramal — paciente/médico/CRM) =====
+    match /pacientes_controlados/{id} {
+      allow read: if logado();
+      allow create, update: if logado();
+      allow delete: if ehAdmin();
+    }
+    match /saidas_controladas/{id} {
+      allow read: if logado();
+      allow create: if logado();
+      allow update, delete: if false;
+    }
+
+    // ===== PLANTÃO =====
+    match /plantoes/{id} {
+      allow read: if logado();
+      allow write: if logado();
+    }
+    match /plantao_solicitacoes/{id} {
+      allow read: if logado();
+      allow write: if logado();
+    }
+    match /plantao_convites/{id} {
+      allow read: if logado();
+      allow write: if logado();
+    }
+
+    // ===== MURAL E ALERTAS =====
+    match /avisos/{id} {
+      allow read: if logado();
+      allow create, update: if logado();
+      allow delete: if logado();
+    }
+    match /alertas/{id} {
+      allow read: if logado();
+      allow create, update: if logado();
+      allow delete: if ehAdmin();
+    }
+
+    // ===== SOLICITAÇÕES =====
+    match /solicitacoes/{id} {
+      allow read: if logado();
+      allow write: if logado();
+    }
+
+    // ===== NOTAS FISCAIS =====
+    match /notas_fiscais/{id} {
+      allow read: if logado();
+      allow create, update: if logado();
+      allow delete: if ehAdmin();
+    }
+    match /vinculos_nfe/{id} {
+      allow read: if logado();
+      allow create, update: if logado();
+      allow delete: if ehAdmin();
+    }
+
+    // ===== ATAS =====
+    match /atas/{id} {
+      allow read: if logado();
+      allow create, update: if logado();
+      allow delete: if ehAdmin();
+    }
+
+    // ===== DIVERGÊNCIAS E VALES =====
+    match /divergencias/{id} {
+      allow read: if logado();
+      allow create, update: if logado();
+      allow delete: if ehAdmin();
+    }
+    match /vales/{id} {
+      allow read: if logado();
+      allow create, update: if logado();
+      allow delete: if ehAdmin();
+    }
+
+    // ===== LOGS (auditoria — nunca apagáveis) =====
+    match /logs_acesso/{id} {
+      allow read: if ehAdmin();
+      allow create: if logado();
+      allow update, delete: if false;
+    }
+    match /logs_contas/{id} {
+      allow read: if ehAdmin();
+      allow create: if logado();
+      allow update, delete: if false;
+    }
+
+    // ===== _META (doc de versão — Camada 2) =====
+    match /_meta/{doc} {
+      allow read: if logado();
+      allow write: if logado();
+    }
+
+    // ===== CONFIG (tutoriais e configurações) =====
+    match /config/{docId} {
+      allow read: if logado();
+      allow write: if logado();
+    }
+
+    // ===== RECEBIMENTOS (cancelável por qualquer logado; exclusão permanente só gestor/técnico
+    // e só depois de já cancelado — mantém o estorno de estoque intacto no histórico de entries) =====
+    match /recebimentos/{id} {
+      allow read: if logado();
+      allow create: if logado();
+      allow update: if logado();
+      allow delete: if ehAdmin() && resource.data.status == 'cancelado';
+    }
+
+    // ===== CONCILIAÇÕES (documento fiscal — nunca excluível) =====
+    match /conciliacoes/{id} {
+      allow read, create, update: if logado();
+      allow delete: if false;
+    }
+
+  }
+}
