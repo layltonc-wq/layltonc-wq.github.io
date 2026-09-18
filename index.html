@@ -9473,7 +9473,15 @@ useEffect(function(){var cfg=loadCfg();if(cfg&&initFB(cfg)){setReady(true);
   // tenant vazio (nada bate, tudo "some" na tela até a busca de verdade no Firestore terminar).
   // Sem tenant_id, é melhor esperar a busca de verdade do que mostrar uma tela vazia enganosa.
   var saved=localStorage.getItem('fc_user');if(saved){try{var su=JSON.parse(saved);if(su&&su.tenant_id)setUser(su);}catch(e){}}
-  auth.onAuthStateChanged(function(firebaseUser){if(firebaseUser&&!skipAuthCheck){db.collection('users').doc(firebaseUser.uid).get().then(function(s){if(s.exists){var d=s.data();if(d.status==='inativo'||d.status==='rejected'||d.status==='pending'){auth.signOut();localStorage.removeItem('fc_user');setUser(null);return;}var u={uid:firebaseUser.uid,name:d.name,role:d.role,color:d.color,email:d.email,status:d.status,tenant_id:d.tenant_id||'',sessionTimeout:d.sessionTimeout||12,photoURL:d.photoURL||'',crf:d.crf||''};localStorage.setItem('fc_user',JSON.stringify(u));setUser(u);}}).catch(function(){var s2=localStorage.getItem('fc_user');if(s2){try{var su2=JSON.parse(s2);if(su2&&su2.tenant_id)setUser(su2);}catch(e){}}});}});}},[] );
+  auth.onAuthStateChanged(function(firebaseUser){if(firebaseUser&&!skipAuthCheck){
+    // Força renovar o token de login ANTES de ler qualquer coisa do Firestore: é o token
+    // renovado que carrega a custom claim tenant_id (ver scripts/set_tenant_claims.js e a
+    // função userTenant() em firestore.rules) — sem isso, sessões já abertas quando a claim é
+    // gravada só pegariam ela numa renovação natural do token (até 1h depois), continuando lentas
+    // nesse meio tempo. getIdToken(true) é rápido (raramente passa de 1s) e roda 1x por sessão.
+    firebaseUser.getIdToken(true).catch(function(){}).then(function(){
+    db.collection('users').doc(firebaseUser.uid).get().then(function(s){if(s.exists){var d=s.data();if(d.status==='inativo'||d.status==='rejected'||d.status==='pending'){auth.signOut();localStorage.removeItem('fc_user');setUser(null);return;}var u={uid:firebaseUser.uid,name:d.name,role:d.role,color:d.color,email:d.email,status:d.status,tenant_id:d.tenant_id||'',sessionTimeout:d.sessionTimeout||12,photoURL:d.photoURL||'',crf:d.crf||''};localStorage.setItem('fc_user',JSON.stringify(u));setUser(u);}}).catch(function(){var s2=localStorage.getItem('fc_user');if(s2){try{var su2=JSON.parse(s2);if(su2&&su2.tenant_id)setUser(su2);}catch(e){}}});
+    });}});}},[] );
 useEffect(function(){function on(){setOnline(true);}function off(){setOnline(false);}window.addEventListener('online',on);window.addEventListener('offline',off);return function(){window.removeEventListener('online',on);window.removeEventListener('offline',off);};},[]);
 useEffect(function(){if(!user)return;var stored=localStorage.getItem('fc_last_act');if(stored)lastAct.current=parseInt(stored);var timeout=(user.sessionTimeout||12)*3600000;function reset(){lastAct.current=Date.now();localStorage.setItem('fc_last_act',String(Date.now()));}function check(){if(Date.now()-lastAct.current>timeout){localStorage.removeItem('fc_last_act');logout();}}document.addEventListener('touchstart',reset);document.addEventListener('click',reset);var t=setInterval(check,60000);return function(){document.removeEventListener('touchstart',reset);document.removeEventListener('click',reset);clearInterval(t);};},[user]);
 useEffect(function(){
