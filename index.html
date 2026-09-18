@@ -13,7 +13,7 @@
 // ser a data/hora atual em segundos, ex.: no terminal `date +%s`) — sem isso, o auto-update não
 // detecta a mudança e navegadores/ícones de tela inicial com cache antigo continuam presos até
 // alguém limpar o cache manualmente (foi exatamente isso que causou o incidente de 18/09/2026).
-window.__FC_VERSION=1789739711;
+window.__FC_VERSION=1789740261;
 (function(){
   try{
     fetch(location.pathname+'?_vcheck='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(html){
@@ -9600,11 +9600,35 @@ useEffect(function(){if(!ready||!user)return;
   var unsubs=[];
   window._backPressed=function(){setShowSairModal(true);};
   var _ws=_fcWinStart.current;
-  // Histórico antigo: 1x do CACHE (0 leituras quando quente). Cache frio/vazio/erro -> servidor (1 leitura cheia, só então).
+  // Histórico antigo: 1x do CACHE (0 leituras quando quente). Cache frio/vazio/erro -> servidor,
+  // em PÁGINAS de 2000 (não tudo de uma vez): em produção são quase 19 mil documentos, e um
+  // pedido único gigante travava/demorava demais em conexões mais fracas (incidente 18/09/2026).
+  // Cada página já atualiza a tela (setHistEntries progressivo) — o estoque vai ficando exato aos
+  // poucos em vez de tudo travado até o fim; e libera setLoading(false) já na 1ª página.
+  function carregarHistoricoPaginado(){
+    var acumulado=[];var ultimoDoc=null;var PAGINA=2000;var primeira=true;
+    function pagina(){
+      var q=db.collection('entries').where('tenant_id','==',tenantDe(user)).orderBy('__name__').limit(PAGINA);
+      if(ultimoDoc)q=q.startAfter(ultimoDoc);
+      return q.get().then(function(snap){
+        if(!snap.empty){
+          snap.docs.forEach(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];acumulado.push(o);});
+          setHistEntries(acumulado.slice());
+          ultimoDoc=snap.docs[snap.docs.length-1];
+        }
+        if(primeira){primeira=false;setLoading(false);}
+        if(snap.size===PAGINA)return pagina();
+      });
+    }
+    return pagina();
+  }
   function carregarHistorico(fonte){
+    if(fonte==='server')return carregarHistoricoPaginado().catch(function(){setLoading(false);});
     var col=db.collection('entries').where('tenant_id','==',tenantDe(user));
-    var fetch=(fonte==='server')?col.get():col.get({source:'cache'}).then(function(snap){return (snap&&!snap.empty)?snap:col.get();}).catch(function(){return col.get();});
-    return fetch.then(function(snap){setHistEntries(snap.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;}));setLoading(false);}).catch(function(){setLoading(false);});
+    return col.get({source:'cache'}).then(function(snap){
+      if(snap&&!snap.empty){setHistEntries(snap.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;}));setLoading(false);return;}
+      return carregarHistoricoPaginado();
+    }).catch(function(){return carregarHistoricoPaginado();}).catch(function(){setLoading(false);});
   }
   carregarHistorico('cache');
   // Tempo real SÓ dos últimos 3 dias (o que muda). Exclusão/edição recente reflete na hora.
