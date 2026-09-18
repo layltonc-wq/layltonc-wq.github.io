@@ -13,7 +13,7 @@
 // ser a data/hora atual em segundos, ex.: no terminal `date +%s`) — sem isso, o auto-update não
 // detecta a mudança e navegadores/ícones de tela inicial com cache antigo continuam presos até
 // alguém limpar o cache manualmente (foi exatamente isso que causou o incidente de 18/09/2026).
-window.__FC_VERSION=1789737782;
+window.__FC_VERSION=1789738400;
 (function(){
   try{
     fetch(location.pathname+'?_vcheck='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(html){
@@ -23,6 +23,30 @@ window.__FC_VERSION=1789737782;
       }
     }).catch(function(){});
   }catch(e){}
+})();
+// ===== Diagnóstico TEMPORÁRIO (incidente de 18/09/2026): mostra qualquer erro de JS direto na
+// tela, em texto, pra quem estiver travado no carregamento poder mandar o texto sem precisar de
+// ferramenta de desenvolvedor. Remover depois que o incidente for resolvido.
+(function(){
+  function mostrar(txt){
+    try{
+      var el=document.getElementById('fc-diag-erro');
+      if(!el){
+        el=document.createElement('div');
+        el.id='fc-diag-erro';
+        el.style.cssText='position:fixed;top:0;left:0;right:0;background:#7F1D1D;color:#fff;padding:10px 12px;font:12px/1.4 monospace;z-index:2147483647;white-space:pre-wrap;max-height:45vh;overflow:auto;box-shadow:0 2px 10px rgba(0,0,0,.4)';
+        (document.body||document.documentElement).appendChild(el);
+      }
+      el.textContent+=txt+'\n\n';
+    }catch(e){}
+  }
+  window.addEventListener('error',function(ev){
+    mostrar('ERRO JS: '+(ev&&ev.message?ev.message:'?')+' ('+(ev&&ev.filename?ev.filename.split('/').pop():'?')+':'+(ev&&ev.lineno)+')');
+  });
+  window.addEventListener('unhandledrejection',function(ev){
+    var r=ev&&ev.reason;
+    mostrar('PROMESSA REJEITADA: '+(r&&r.message?r.message:String(r)));
+  });
 })();
 </script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
