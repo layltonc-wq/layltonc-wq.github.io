@@ -5,6 +5,26 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>FarmaControl</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%231351B4'/><text x='50%25' y='54%25' font-family='Georgia,serif' font-size='28' font-weight='900' fill='white' text-anchor='middle' dominant-baseline='middle' letter-spacing='-2'>FC</text></svg>"/>
+<script>
+// ===== Auto-atualização: checa em segundo plano se existe uma versão mais nova no servidor e,
+// se existir, força um recarregamento de verdade (com um parâmetro novo na URL, que nunca bate
+// com nada em cache — um location.reload() comum pode ainda servir do cache do navegador).
+// IMPORTANTE PRA QUEM FOR FAZER O PRÓXIMO DEPLOY: troque o número de __FC_VERSION abaixo (pode
+// ser a data/hora atual em segundos, ex.: no terminal `date +%s`) — sem isso, o auto-update não
+// detecta a mudança e navegadores/ícones de tela inicial com cache antigo continuam presos até
+// alguém limpar o cache manualmente (foi exatamente isso que causou o incidente de 18/09/2026).
+window.__FC_VERSION=1789737782;
+(function(){
+  try{
+    fetch(location.pathname+'?_vcheck='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(html){
+      var m=html.match(/window\.__FC_VERSION=(\d+)/);
+      if(m&&parseInt(m[1],10)!==window.__FC_VERSION){
+        location.href=location.pathname+'?_v='+Date.now();
+      }
+    }).catch(function(){});
+  }catch(e){}
+})();
+</script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
