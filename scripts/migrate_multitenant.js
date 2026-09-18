@@ -73,24 +73,33 @@ async function migrarMetaEntriesVersion(tenantId) {
   console.log('_meta/entries_version__' + tenantId + ': criado.');
 }
 
+// Busca paginada (500 por vez, ordenado pelo ID do doc) em vez de um .get() só pra coleção
+// inteira — coleções grandes (ex.: entries, com anos de histórico) estouram o prazo padrão
+// de uma busca única. Cada página é rápida, então não há mais risco de "Deadline exceeded".
 async function migrarColecaoSimples(nome, tenantId) {
-  const snap = await db.collection(nome).get();
   let migrados = 0;
-  let batch = db.batch();
-  let opsNoBatch = 0;
-  for (const doc of snap.docs) {
-    if (doc.data().tenant_id) continue; // já migrado, pula (idempotente)
-    batch.update(doc.ref, { tenant_id: tenantId });
-    opsNoBatch++;
-    migrados++;
-    if (opsNoBatch >= 400) { // limite do Firestore é 500 por batch; 400 dá margem
-      await batch.commit();
-      batch = db.batch();
-      opsNoBatch = 0;
+  let total = 0;
+  let ultimoDoc = null;
+  while (true) {
+    let q = db.collection(nome).orderBy('__name__').limit(500);
+    if (ultimoDoc) q = q.startAfter(ultimoDoc);
+    const snap = await q.get();
+    if (snap.empty) break;
+    total += snap.size;
+    let batch = db.batch();
+    let opsNoBatch = 0;
+    for (const doc of snap.docs) {
+      if (!doc.data().tenant_id) { // já migrado, pula (idempotente)
+        batch.update(doc.ref, { tenant_id: tenantId });
+        opsNoBatch++;
+        migrados++;
+      }
     }
+    if (opsNoBatch > 0) await batch.commit();
+    ultimoDoc = snap.docs[snap.docs.length - 1];
+    if (snap.size < 500) break; // última página
   }
-  if (opsNoBatch > 0) await batch.commit();
-  console.log(`${nome}: ${migrados} documento(s) migrado(s) de ${snap.size} total.`);
+  console.log(`${nome}: ${migrados} documento(s) migrado(s) de ${total} total.`);
 }
 
 async function main() {
