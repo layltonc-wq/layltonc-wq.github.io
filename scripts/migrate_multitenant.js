@@ -1,0 +1,134 @@
+// Script de migração — adiciona tenant_id aos documentos existentes (Fase 3, Passo 5 do plano).
+//
+// COMO RODAR (você, Laylton — isto não roda sozinho, e não roda daqui da sessão):
+//   1. npm install firebase-admin  (na pasta onde salvar este arquivo, ou `npm install -g` se preferir)
+//   2. No Console do Firebase: Configurações do projeto → Contas de serviço → "Gerar nova chave
+//      privada" — baixa um .json. NÃO comite esse arquivo no git (é uma credencial).
+//   3. Rode assim, sempre no projeto de TESTE primeiro (farmacontrol-dev-6a3e3):
+//        GOOGLE_APPLICATION_CREDENTIALS=/caminho/da/chave.json node migrate_multitenant.js vicencia-pe
+//      O primeiro argumento é o tenant_id a gravar em todo documento que ainda não tiver um.
+//   4. Confirme no Console (Firestore Database) que os documentos ganharam o campo `tenant_id`.
+//   5. Só depois, repita apontando pro projeto de PRODUÇÃO (app-farma-b21e2), com a chave de serviço
+//      desse projeto.
+//
+// O script é seguro pra rodar mais de uma vez (idempotente): só grava tenant_id em documentos que
+// ainda não têm o campo, então rodar de novo não sobrescreve nada.
+//
+// Coleções migradas por este script vão sendo adicionadas conforme cada uma é migrada no código
+// (Fase 3, seção 5 do PLAN_MULTITENANT.md). Rode de novo a cada nova versão deste arquivo — ele só
+// mexe no que ainda não tem tenant_id, então é seguro rodar incrementalmente.
+
+const { initializeApp, applicationDefault } = require('firebase-admin/app');
+const { getFirestore } = require('firebase-admin/firestore');
+initializeApp({ credential: applicationDefault() });
+const db = getFirestore();
+
+// Coleções simples: todo documento sem tenant_id recebe o tenant_id passado por argumento.
+// (Ordem = mesma ordem da seção 5 do plano; vá descomentando/adicionando conforme migrar cada uma.)
+const COLECOES_SIMPLES = [
+  'users',
+  'medicamentos',
+  'atas', 'vinculos_nfe',
+  'entries',
+  'recebimentos', 'notas_fiscais', 'divergencias',
+  'tratamentos_atb', 'pacientes_controlados', 'saidas_controladas',
+  'pacientes_leite', 'retiradas_leite',
+  'solicitacoes', 'alertas', 'avisos',
+  'logs_acesso', 'logs_contas',
+  'plantao_solicitacoes', 'plantao_convites',
+];
+
+// plantoes e conferencias: o ID do documento muda de esquema (era só a data, ex. "2026-09-01";
+// vira tenantId+"__"+data, ex. "vicencia-pe__2026-09-01") - não dá pra só adicionar um campo,
+// precisa recriar o doc com o novo ID. Copia pro novo ID (com tenant_id) e apaga o antigo.
+// Idempotente: se o doc novo já existe, pula: e só mexe em doc cujo ID ainda não tem "__" (ou seja,
+// ainda no formato antigo).
+const COLECOES_COM_ID_POR_DATA = ['plantoes', 'conferencias'];
+
+async function migrarColecaoComIdPorData(nome, tenantId) {
+  const snap = await db.collection(nome).get();
+  let migrados = 0;
+  for (const doc of snap.docs) {
+    const idAntigo = doc.id;
+    if (idAntigo.indexOf('__') >= 0) continue; // já no formato novo, pula
+    const idNovo = tenantId + '__' + idAntigo;
+    const novoRef = db.collection(nome).doc(idNovo);
+    const novoSnap = await novoRef.get();
+    if (novoSnap.exists) continue; // já migrado (rodou antes e falhou no delete, por ex.)
+    const dados = doc.data();
+    await novoRef.set(Object.assign({}, dados, { tenant_id: tenantId }));
+    await doc.ref.delete();
+    migrados++;
+  }
+  console.log(`${nome}: ${migrados} documento(s) re-criado(s) com o novo esquema de ID, de ${snap.size} total.`);
+}
+
+// _meta/entries_version vira um doc por tenant (entries_version__<tenantId>). Não precisa copiar
+// dado nenhum (é só um contador de "algo mudou") - só garante que o novo doc existe.
+async function migrarMetaEntriesVersion(tenantId) {
+  const ref = db.collection('_meta').doc('entries_version__' + tenantId);
+  const snap = await ref.get();
+  if (snap.exists) { console.log('_meta/entries_version__' + tenantId + ': já existe, não mexi.'); return; }
+  await ref.set({ v: Date.now(), at: new Date().toISOString(), tenant_id: tenantId });
+  console.log('_meta/entries_version__' + tenantId + ': criado.');
+}
+
+// Busca paginada (500 por vez, ordenado pelo ID do doc) em vez de um .get() só pra coleção
+// inteira — coleções grandes (ex.: entries, com anos de histórico) estouram o prazo padrão
+// de uma busca única. Cada página é rápida, então não há mais risco de "Deadline exceeded".
+async function migrarColecaoSimples(nome, tenantId) {
+  let migrados = 0;
+  let total = 0;
+  let ultimoDoc = null;
+  while (true) {
+    let q = db.collection(nome).orderBy('__name__').limit(500);
+    if (ultimoDoc) q = q.startAfter(ultimoDoc);
+    const snap = await q.get();
+    if (snap.empty) break;
+    total += snap.size;
+    let batch = db.batch();
+    let opsNoBatch = 0;
+    for (const doc of snap.docs) {
+      if (!doc.data().tenant_id) { // já migrado, pula (idempotente)
+        batch.update(doc.ref, { tenant_id: tenantId });
+        opsNoBatch++;
+        migrados++;
+      }
+    }
+    if (opsNoBatch > 0) await batch.commit();
+    ultimoDoc = snap.docs[snap.docs.length - 1];
+    if (snap.size < 500) break; // última página
+  }
+  console.log(`${nome}: ${migrados} documento(s) migrado(s) de ${total} total.`);
+}
+
+async function main() {
+  const tenantId = process.argv[2];
+  if (!tenantId) {
+    console.error('Uso: node migrate_multitenant.js <tenant_id>  (ex.: vicencia-pe)');
+    process.exit(1);
+  }
+  console.log(`Migrando pro tenant_id="${tenantId}"...`);
+
+  // 0. Garante que o documento da prefeitura existe em tenants/{tenantId} (não sobrescreve se já existir).
+  const tenantRef = db.collection('tenants').doc(tenantId);
+  const tenantSnap = await tenantRef.get();
+  if (!tenantSnap.exists) {
+    console.log(`tenants/${tenantId} não existe ainda — criando com ativo:true (edite nome/uf depois no Console se quiser).`);
+    await tenantRef.set({ nome: tenantId, uf: '', ativo: true, criadoEm: new Date().toISOString() });
+  } else {
+    console.log(`tenants/${tenantId} já existe, não mexi.`);
+  }
+
+  for (const nome of COLECOES_SIMPLES) {
+    await migrarColecaoSimples(nome, tenantId);
+  }
+  for (const nome of COLECOES_COM_ID_POR_DATA) {
+    await migrarColecaoComIdPorData(nome, tenantId);
+  }
+  await migrarMetaEntriesVersion(tenantId);
+
+  console.log('Concluído. Confira no Console antes de publicar as regras novas.');
+}
+
+main().catch(function (e) { console.error(e); process.exit(1); });
