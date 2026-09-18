@@ -13,7 +13,7 @@
 // ser a data/hora atual em segundos, ex.: no terminal `date +%s`) — sem isso, o auto-update não
 // detecta a mudança e navegadores/ícones de tela inicial com cache antigo continuam presos até
 // alguém limpar o cache manualmente (foi exatamente isso que causou o incidente de 18/09/2026).
-window.__FC_VERSION=1789743970;
+window.__FC_VERSION=1789744328;
 (function(){
   try{
     fetch(location.pathname+'?_vcheck='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(html){
@@ -23,31 +23,6 @@ window.__FC_VERSION=1789743970;
       }
     }).catch(function(){});
   }catch(e){}
-})();
-// ===== Diagnóstico TEMPORÁRIO (incidente de 18/09/2026): mostra qualquer erro de JS direto na
-// tela, em texto, pra quem estiver travado no carregamento poder mandar o texto sem precisar de
-// ferramenta de desenvolvedor. Remover depois que o incidente for resolvido.
-(function(){
-  function mostrar(txt){
-    try{
-      var el=document.getElementById('fc-diag-erro');
-      if(!el){
-        el=document.createElement('div');
-        el.id='fc-diag-erro';
-        el.style.cssText='position:fixed;top:0;left:0;right:0;background:#7F1D1D;color:#fff;padding:10px 12px;font:12px/1.4 monospace;z-index:2147483647;white-space:pre-wrap;max-height:45vh;overflow:auto;box-shadow:0 2px 10px rgba(0,0,0,.4)';
-        (document.body||document.documentElement).appendChild(el);
-      }
-      el.textContent+=txt+'\n\n';
-    }catch(e){}
-  }
-  window.addEventListener('error',function(ev){
-    mostrar('ERRO JS: '+(ev&&ev.message?ev.message:'?')+' ('+(ev&&ev.filename?ev.filename.split('/').pop():'?')+':'+(ev&&ev.lineno)+')');
-  });
-  window.addEventListener('unhandledrejection',function(ev){
-    var r=ev&&ev.reason;
-    mostrar('PROMESSA REJEITADA: '+(r&&r.message?r.message:String(r)));
-  });
-  window.__fcDiag=mostrar;
 })();
 </script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -9480,11 +9455,8 @@ useEffect(function(){var cfg=loadCfg();if(cfg&&initFB(cfg)){setReady(true);
     // função userTenant() em firestore.rules) — sem isso, sessões já abertas quando a claim é
     // gravada só pegariam ela numa renovação natural do token (até 1h depois), continuando lentas
     // nesse meio tempo. getIdToken(true) é rápido (raramente passa de 1s) e roda 1x por sessão.
-    var _tAuth0=Date.now();
     firebaseUser.getIdToken(true).catch(function(){}).then(function(){
-    if(window.__fcDiag)window.__fcDiag('⏱ token renovado em '+(Date.now()-_tAuth0)+'ms');
-    var _tPerfil0=Date.now();
-    db.collection('users').doc(firebaseUser.uid).get().then(function(s){if(window.__fcDiag)window.__fcDiag('⏱ perfil (users/{uid}) lido em '+(Date.now()-_tPerfil0)+'ms');if(s.exists){var d=s.data();if(d.status==='inativo'||d.status==='rejected'||d.status==='pending'){auth.signOut();localStorage.removeItem('fc_user');setUser(null);return;}var u={uid:firebaseUser.uid,name:d.name,role:d.role,color:d.color,email:d.email,status:d.status,tenant_id:d.tenant_id||'',sessionTimeout:d.sessionTimeout||12,photoURL:d.photoURL||'',crf:d.crf||''};localStorage.setItem('fc_user',JSON.stringify(u));setUser(u);}}).catch(function(e){if(window.__fcDiag)window.__fcDiag('⏱ ERRO ao ler perfil: '+(e&&e.message));var s2=localStorage.getItem('fc_user');if(s2){try{var su2=JSON.parse(s2);if(su2&&su2.tenant_id)setUser(su2);}catch(e){}}});
+    db.collection('users').doc(firebaseUser.uid).get().then(function(s){if(s.exists){var d=s.data();if(d.status==='inativo'||d.status==='rejected'||d.status==='pending'){auth.signOut();localStorage.removeItem('fc_user');setUser(null);return;}var u={uid:firebaseUser.uid,name:d.name,role:d.role,color:d.color,email:d.email,status:d.status,tenant_id:d.tenant_id||'',sessionTimeout:d.sessionTimeout||12,photoURL:d.photoURL||'',crf:d.crf||''};localStorage.setItem('fc_user',JSON.stringify(u));setUser(u);}}).catch(function(){var s2=localStorage.getItem('fc_user');if(s2){try{var su2=JSON.parse(s2);if(su2&&su2.tenant_id)setUser(su2);}catch(e){}}});
     });}});}},[] );
 useEffect(function(){function on(){setOnline(true);}function off(){setOnline(false);}window.addEventListener('online',on);window.addEventListener('offline',off);return function(){window.removeEventListener('online',on);window.removeEventListener('offline',off);};},[]);
 useEffect(function(){if(!user)return;var stored=localStorage.getItem('fc_last_act');if(stored)lastAct.current=parseInt(stored);var timeout=(user.sessionTimeout||12)*3600000;function reset(){lastAct.current=Date.now();localStorage.setItem('fc_last_act',String(Date.now()));}function check(){if(Date.now()-lastAct.current>timeout){localStorage.removeItem('fc_last_act');logout();}}document.addEventListener('touchstart',reset);document.addEventListener('click',reset);var t=setInterval(check,60000);return function(){document.removeEventListener('touchstart',reset);document.removeEventListener('click',reset);clearInterval(t);};},[user]);
@@ -9622,13 +9594,11 @@ useEffect(function(){if(!ready||!user)return;
   // incidente de 18/09/2026, não a rede. Paginar a BUSCA continua bom (evita 1 pedido gigante
   // frágil em conexão fraca); só a atualização de tela que precisa ser 1x só.
   function carregarHistoricoPaginado(){
-    var acumulado=[];var ultimoDoc=null;var PAGINA=2000;var _tPag0=Date.now();var _nPagina=0;
+    var acumulado=[];var ultimoDoc=null;var PAGINA=2000;
     function pagina(){
-      var _tp=Date.now();_nPagina++;
       var q=db.collection('entries').where('tenant_id','==',tenantDe(user)).orderBy('__name__').limit(PAGINA);
       if(ultimoDoc)q=q.startAfter(ultimoDoc);
       return q.get().then(function(snap){
-        if(window.__fcDiag)window.__fcDiag('⏱ página '+_nPagina+' do histórico: '+snap.size+' docs em '+(Date.now()-_tp)+'ms');
         if(!snap.empty){
           snap.docs.forEach(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];acumulado.push(o);});
           ultimoDoc=snap.docs[snap.docs.length-1];
@@ -9636,13 +9606,7 @@ useEffect(function(){if(!ready||!user)return;
         if(snap.size===PAGINA)return pagina();
       });
     }
-    return pagina().then(function(){
-      if(window.__fcDiag)window.__fcDiag('⏱ TOTAL busca histórico: '+acumulado.length+' docs em '+(Date.now()-_tPag0)+'ms — chamando setHistEntries agora');
-      var _tSet=Date.now();
-      setHistEntries(acumulado);
-      setLoading(false);
-      if(window.__fcDiag)requestAnimationFrame(function(){requestAnimationFrame(function(){window.__fcDiag('⏱ tela re-renderizada '+(Date.now()-_tSet)+'ms depois do setHistEntries (inclui o recálculo de estoque)');});});
-    });
+    return pagina().then(function(){setHistEntries(acumulado);setLoading(false);});
   }
   // Medido em produção (18/09/2026): ler o histórico do CACHE LOCAL (col.get({source:'cache'}))
   // levou 31s pra ~19 mil docs, e travou a fila interna do SDK do Firestore — até a leitura do
