@@ -8,7 +8,13 @@ service cloud.firestore {
     function ehTecnico() { return logado() && meuPerfil().role == 'tecnico'; }
     function ehAdmin() { return ehGestor() || ehTecnico(); }
     // NOVO: tenant do usuário logado — todas as regras abaixo comparam com isso.
-    function userTenant() { return meuPerfil().tenant_id; }
+    // Performance (18/09/2026): antes fazia get(users/{uid}) TODA vez que era chamada — em
+    // listas grandes (ex.: entries, ~19 mil docs em produção) isso deixava a consulta lentíssima.
+    // Agora lê primeiro a CUSTOM CLAIM tenant_id do próprio token de login (grátis, sem consulta
+    // ao banco — ver scripts/set_tenant_claims.js), e só cai pro get() do Firestore se a claim
+    // ainda não tiver sido gravada pra essa conta (conta muito nova, ou script ainda não rodado
+    // pra ela) — plano B automático, garante que ninguém fica travado sem acesso por causa disso.
+    function userTenant() { return request.auth.token.tenant_id != null ? request.auth.token.tenant_id : meuPerfil().tenant_id; }
     // NOVO: dono do documento (create) tem que já vir com o tenant certo, senão a escrita é recusada.
     function tenantOk(data) { return data.tenant_id == userTenant(); }
     // NOVO (Opção 2, escolhida): poder cross-tenant travado por CONTA específica, não por cargo —
