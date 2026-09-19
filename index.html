@@ -13,7 +13,7 @@
 // ser a data/hora atual em segundos, ex.: no terminal `date +%s`) — sem isso, o auto-update não
 // detecta a mudança e navegadores/ícones de tela inicial com cache antigo continuam presos até
 // alguém limpar o cache manualmente (foi exatamente isso que causou o incidente de 18/09/2026).
-window.__FC_VERSION=1789744328;
+window.__FC_VERSION=1789784996;
 (function(){
   try{
     fetch(location.pathname+'?_vcheck='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(html){
@@ -9652,8 +9652,14 @@ var entries=useMemo(function(){
   out.sort(function(a,b){return (a.criadoEm||'').localeCompare(b.criadoEm||'');});
   return out;
 },[histEntries,recentEntries]);
-var stock=useMemo(function(){return calcStock(entries);},[entries]);
-var estoqueBruto=useMemo(function(){return calcStockBruto(entries);},[entries]);
+// Perf DEFINITIVA (19/09/2026): stock/estoqueBruto não dependem mais de somar TODO o histórico
+// de entries (calcStock/calcStockBruto ficam mantidas só pra outros usos pontuais que ainda
+// processam um subconjunto de entries, ex.: por lote). Uma Cloud Function (functions/index.js)
+// mantém medicamentos/{id}.estoqueAtual sempre em dia, incrementalmente, a cada entrada/saída —
+// então o estoque já vem pronto na leitura de `meds` (só 405 documentos, rápida), sem depender
+// da sincronização do histórico completo (quase 19 mil documentos) pra aparecer certo.
+var stock=useMemo(function(){var s={};meds.forEach(function(m){var v=m.estoqueAtual||0;s[m.id]=v<0?0:v;});return s;},[meds]);
+var estoqueBruto=useMemo(function(){var s={};meds.forEach(function(m){s[m.id]=m.estoqueAtual||0;});return s;},[meds]);
 var latest=useMemo(function(){var l=calcLatest(entries);for(var k in l){if((stock[k]||0)<=0)l[k]={lote:'',validade:''};}return l;},[entries,stock]);
 var lowCount=useMemo(function(){var c=0;meds.forEach(function(m){if(m.minEstoque&&(stock[m.id]||0)<=m.minEstoque&&(stock[m.id]||0)>0)c++;});return c;},[meds,stock]);
 function checkShift(u){if(shiftChecked)return;setShiftChecked(true);autoFecharPlantoesAntigos(u);var today=todayStr();var role=u.role;if(role==='gestor'||role==='tecnico'){setIsGuest(false);db.collection('plantoes').doc(plantaoDocId(u,today)).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);}else{setPlantao(null);setShiftId(null);}}).catch(function(){});return;}if(!isShiftTime()){setIsGuest(true);return;}var leftKey='fc_shift_saiu_'+today;var encKey='fc_shift_enc_'+today;var leftToday=localStorage.getItem(encKey)||localStorage.getItem(leftKey);if(leftToday){db.collection('plantoes').doc(plantaoDocId(u,today)).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);var readicionado=false;if(p.iniciadoPor===u.uid){readicionado=true;}else if(p.equipe){for(var j=0;j<p.equipe.length;j++){if(p.equipe[j].id===u.uid&&p.equipe[j].status==='confirmado'){readicionado=true;break;}}}if(readicionado){localStorage.removeItem(leftKey);localStorage.removeItem(encKey);setIsGuest(false);}else{setIsGuest(true);}}else{setIsGuest(true);}}).catch(function(){setIsGuest(true);});return;}db.collection('plantao_convites').where('tenant_id','==',tenantDe(u)).where('para','==',u.uid).where('status','==','pendente').get().then(function(invSnap){var todayInvite=null;for(var i=0;i<invSnap.docs.length;i++){var d=invSnap.docs[i].data();if(d.data===today){var o={id:invSnap.docs[i].id};for(var k in d)o[k]=d[k];todayInvite=o;break;}}if(todayInvite){setPendingInvite(todayInvite);return;}db.collection('plantoes').doc(plantaoDocId(u,today)).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);var inTeam=false;
