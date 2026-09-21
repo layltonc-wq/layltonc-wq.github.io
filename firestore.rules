@@ -198,6 +198,15 @@ service cloud.firestore {
     }
     // vales: REMOVIDO (Fase 1, achado #8 — sem coleção correspondente no código).
 
+    // ===== PEDIDOS JUDICIAIS (só usado por Itaquitinga hoje, mas a regra segue o padrão normal
+    // de tenant — nada impede outra prefeitura de usar no futuro) =====
+    match /pedidos_judiciais/{id} {
+      allow read: if logado() && resource.data.tenant_id == userTenant();
+      allow create: if logado() && tenantOk(request.resource.data);
+      allow update: if logado() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
+      allow delete: if ehAdmin() && resource.data.tenant_id == userTenant();
+    }
+
     // ===== LOGS (auditoria — nunca apagáveis) =====
     match /logs_acesso/{id} {
       allow read: if ehAdmin() && resource.data.tenant_id == userTenant();
