@@ -13,7 +13,7 @@
 // ser a data/hora atual em segundos, ex.: no terminal `date +%s`) — sem isso, o auto-update não
 // detecta a mudança e navegadores/ícones de tela inicial com cache antigo continuam presos até
 // alguém limpar o cache manualmente (foi exatamente isso que causou o incidente de 18/09/2026).
-window.__FC_VERSION=1790033876;
+window.__FC_VERSION=1790034905;
 (function(){
   try{
     fetch(location.pathname+'?_vcheck='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(html){
@@ -6355,6 +6355,27 @@ function TabPrevisao(props){
   // Chave sintética para ajuste manual de item de ATA ainda sem medicamento vinculado (Mudança 4).
   function itemAtaKey(ataId,idx){return 'ITEM__'+ataId+'__'+idx;}
 
+  // Desconta do saldo da ATA a quantidade de cada item de um pedido recém-gerado (soma no
+  // pedidoAcumulado de cada item, que é exatamente o mesmo campo já usado pelo ajuste manual em
+  // "Já pedido"). Recebe `linhas` = resultado já calculado de linhasPedidoAta(ata), pra não duplicar
+  // a lógica de quantidade. Escreve o array `itens` inteiro DE UMA VEZ (uma única atualização no
+  // Firestore) em vez de uma chamada por item — evita corrida entre updates concorrentes, já que
+  // atualizarItemAta() sobrescreve o array inteiro a cada chamada.
+  function descontarPedidoDaAta(ata,linhas){
+    if(!ata||!ata.itens||!linhas||linhas.length===0)return Promise.resolve();
+    var novos=ata.itens.map(function(it){return Object.assign({},it);});
+    var mudou=false;
+    linhas.forEach(function(l){
+      if(!l.item||l.qtd<=0)return; // item sem vínculo na própria ATA: não há saldo pra descontar
+      var idx=ata.itens.indexOf(l.item);
+      if(idx<0)return;
+      novos[idx].pedidoAcumulado=(novos[idx].pedidoAcumulado||0)+l.qtd;
+      mudou=true;
+    });
+    if(!mudou)return Promise.resolve();
+    return db.collection('atas').doc(ata.id).update({itens:novos});
+  }
+
   // ── AÇÕES ────────────────────────────────────────────────────
   function importarAtaDocx(file){
     if(!file)return;
@@ -6695,7 +6716,10 @@ function TabPrevisao(props){
         orgLinha1:'PREFEITURA DE ITAQUITINGA',
         orgLinha2:'Secretaria Municipal de Saúde — Coordenação de Assistência Farmacêutica',
         cidadeUf:'Itaquitinga/PE',
-        rodape:'Secretaria Municipal de Saúde de Itaquitinga - PE'
+        rodape:'Secretaria Municipal de Saúde de Itaquitinga - PE',
+        assinatura:'COORDENADOR DA FARMÁCIA',
+        mostrarBoxEmpresa:false,
+        autoDescontarAta:true
       };
     }
     return {
@@ -6704,7 +6728,10 @@ function TabPrevisao(props){
       orgLinha1:'SECRETARIA DE SAÚDE E DEPARTAMENTO DE COMPRAS',
       orgLinha2:'Fundo Municipal de Saúde — CAF-Unidade Hospitalar',
       cidadeUf:'Vicência/PE',
-      rodape:'Fundo Municipal de Saúde de Vicência - CNPJ: 10.566.414/0001-36<br>Rua José Candido de Oliveira, 79 - Centro - Vicência - PE; CEP: 558580-000'
+      rodape:'Fundo Municipal de Saúde de Vicência - CNPJ: 10.566.414/0001-36<br>Rua José Candido de Oliveira, 79 - Centro - Vicência - PE; CEP: 558580-000',
+      assinatura:'COORDENADORA DA FARMÁCIA',
+      mostrarBoxEmpresa:true,
+      autoDescontarAta:false
     };
   }
   // Marca d'água (SÓ quando o tenant tem logo configurado): usa <img>, não background-image, porque
@@ -6730,7 +6757,7 @@ function TabPrevisao(props){
     s+='</div>';
     s+='<div style="text-align:right;font-size:11px;margin-bottom:14px">'+info.cidadeUf+', '+dataHoje+'.</div>';
     s+='<div style="font-size:11px;font-weight:700;margin-bottom:10px">PARA: CENTRAL DE COMPRAS DO MUNICÍPIO</div>';
-    s+='<div style="border:1.5px solid #222;padding:10px 14px;margin:12px 0;font-size:11px;line-height:1.7"><b>À EMPRESA: '+(empresa.trim()||'_______________________________________________')+'</b><br>CNPJ: '+(cnpjEmpresa.trim()||'___________________________________')+'<br>NÚMERO P/ CONTATO: ______________________</div>';
+    if(info.mostrarBoxEmpresa)s+='<div style="border:1.5px solid #222;padding:10px 14px;margin:12px 0;font-size:11px;line-height:1.7"><b>À EMPRESA: '+(empresa.trim()||'_______________________________________________')+'</b><br>CNPJ: '+(cnpjEmpresa.trim()||'___________________________________')+'<br>NÚMERO P/ CONTATO: ______________________</div>';
     s+='<div style="font-size:11px;font-weight:700;margin:14px 0 8px;text-transform:uppercase">ASSUNTO: PEDIDO DE FORNECIMENTO DE INSUMOS COM O OBJETIVO DE ATENDEREM AS DEMANDAS DE ACORDO COM AS NECESSIDADES CLÍNICAS DOS PACIENTES NO ÂMBITO HOSPITALAR.</div>';
     s+='<div style="font-size:11px;margin-bottom:12px;line-height:1.6">Caro Sr.(a):<br><br>Venho por meio deste, solicitar o fornecimento do(s) seguinte(s) insumo(s) e sua respectiva quantidade para atender as necessidades do Município.</div>';
     return s;
@@ -6764,6 +6791,7 @@ function TabPrevisao(props){
         '</td></tr>';
     }).join('');
     if(grupoPedir.length===0){setMsg('e:Nenhum medicamento com pedido > 0 nesta ata. Ajuste as quantidades antes de exportar.');return;}
+    if(info.autoDescontarAta&&!window.confirm('Confirmar este pedido de "'+nomeAta+'"? '+totalUn+' unidade(s) serão descontadas do saldo da ATA.'))return;
     var html='<!DOCTYPE html><html><head><meta charset="utf-8">'+
       '<style>body{font-family:Arial,sans-serif;padding:24px;font-size:12px}'+
       'h2{color:'+info.cor+';margin-bottom:4px}h3{color:#475569;margin-bottom:16px;font-size:13px}'+
@@ -6788,7 +6816,8 @@ function TabPrevisao(props){
       '<td style="padding:7px 8px;border:1px solid #ddd;text-align:right">R$ '+totalVal.toFixed(2).replace('.',',')+
       '</td>'+(info.logo?'<td style="padding:7px 8px;border:1px solid #ddd"></td>':'')+
       '</tr></tfoot></table></body></html>';
-    if(!_imprimirDoc(html))setMsg('e:Não foi possível abrir a impressão. Tente de novo.');
+    if(!_imprimirDoc(html)){setMsg('e:Não foi possível abrir a impressão. Tente de novo.');return;}
+    if(info.autoDescontarAta)descontarPedidoDaAta(ata,grupoPedir).catch(function(e){setMsg('e:Pedido impresso, mas houve erro ao atualizar o saldo da ATA: '+e.message);});
   }
 
   // atasFiltro (opcional): array de ATAs para gerar o pedido SÓ delas (pedido unitário por ata),
@@ -6802,13 +6831,21 @@ function TabPrevisao(props){
 
     // Construir seções por ATA — fonte única linhasPedidoAta (TODOS os meds vinculados, qtd manual+auto).
     var secoes=[];
+    var linhasPorAta=[]; // guarda as linhas cruas (com referência ao item) pra poder descontar do saldo depois de imprimir
+    var totalUnGeral=0;
     listaAtas.forEach(function(ata){
-      var itensPedido=linhasPedidoAta(ata).map(function(x){return {desc:x.desc,unidade:x.unidade,qtd:x.qtd,vUnit:x.vUnit,vTotal:x.vTotal,marca:x.marca,naoVinculado:x.naoVinculado};});
-      if(itensPedido.length>0)secoes.push({titulo:ata.nome.toUpperCase(),itens:itensPedido,cor:COR[ata.categoria]||info.cor});
+      var linhasAta=linhasPedidoAta(ata);
+      var itensPedido=linhasAta.map(function(x){return {desc:x.desc,unidade:x.unidade,qtd:x.qtd,vUnit:x.vUnit,vTotal:x.vTotal,marca:x.marca,naoVinculado:x.naoVinculado};});
+      if(itensPedido.length>0){
+        secoes.push({titulo:ata.nome.toUpperCase(),itens:itensPedido,cor:COR[ata.categoria]||info.cor});
+        linhasPorAta.push({ata:ata,linhas:linhasAta});
+        totalUnGeral+=linhasAta.reduce(function(s,x){return s+x.qtd;},0);
+      }
     });
     // Medicamentos sem ata não entram no PDF oficial
 
     if(secoes.length===0){setMsg('e:Nenhum medicamento com pedido > 0. Ajuste as quantidades antes de exportar.');return;}
+    if(info.autoDescontarAta&&!window.confirm('Confirmar este pedido? '+totalUnGeral+' unidade(s), no total, serão descontadas do saldo das ATAs envolvidas.'))return;
 
     var css='<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;font-size:11px;color:#111;padding:20px}'+
       '.header{border-bottom:3px solid '+info.cor+';padding-bottom:8px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:flex-start}'+
@@ -6871,10 +6908,13 @@ function TabPrevisao(props){
     html+='<div style="font-size:11px;margin-top:4px"><b>Obs.:</b> Dúvidas e informações, contatar o setor de compras.</div>';
     html+='<div class="footer-line"></div>';
     html+='<div class="footer-data">'+info.rodape+'</div>';
-    html+='<div class="assinatura">COORDENADORA DA FARMÁCIA</div>';
+    html+='<div class="assinatura">'+info.assinatura+'</div>';
     html+='</body></html>';
 
-    if(!_imprimirDoc(html))setMsg('e:Não foi possível abrir a impressão. Tente de novo.');
+    if(!_imprimirDoc(html)){setMsg('e:Não foi possível abrir a impressão. Tente de novo.');return;}
+    if(info.autoDescontarAta){
+      Promise.all(linhasPorAta.map(function(x){return descontarPedidoDaAta(x.ata,x.linhas);})).catch(function(e){setMsg('e:Pedido impresso, mas houve erro ao atualizar o saldo de uma das ATAs: '+e.message);});
+    }
   }
 
 
@@ -6931,11 +6971,15 @@ function TabPrevisao(props){
         {/* Botões exportar */}
         <div style={{background:'#F8FAFC',borderRadius:10,border:'1px solid #E2E8F0',padding:'12px 14px',marginBottom:12}}>
           <div style={{fontSize:12,fontWeight:700,color:'#1E293B',marginBottom:8}}>Dados do Pedido Oficial</div>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
-            <div><div style={{fontSize:11,color:'#64748B',marginBottom:3}}>Nº do Pedido</div><input value={numPedido} onChange={function(e){setNumPedido(e.target.value);}} placeholder="Ex: 171/2026" className="inp" style={{marginBottom:0,fontSize:13}}/></div>
-            <div><div style={{fontSize:11,color:'#64748B',marginBottom:3}}>CNPJ Fornecedor</div><input value={cnpjEmpresa} onChange={function(e){setCnpjEmpresa(e.target.value);}} placeholder="00.000.000/0000-00" className="inp" style={{marginBottom:0,fontSize:13}}/></div>
-          </div>
-          <div><div style={{fontSize:11,color:'#64748B',marginBottom:3}}>Nome da Empresa</div><input value={empresa} onChange={function(e){setEmpresa(e.target.value);}} placeholder="Nome da empresa..." className="inp" style={{marginBottom:0,fontSize:13}}/></div>
+          {tenantDe(user)==='itaquitinga-pe'?
+            <div><div style={{fontSize:11,color:'#64748B',marginBottom:3}}>Nº do Pedido</div><input value={numPedido} onChange={function(e){setNumPedido(e.target.value);}} placeholder="Ex: 171/2026" className="inp" style={{marginBottom:8,fontSize:13}}/></div>
+          :<>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+              <div><div style={{fontSize:11,color:'#64748B',marginBottom:3}}>Nº do Pedido</div><input value={numPedido} onChange={function(e){setNumPedido(e.target.value);}} placeholder="Ex: 171/2026" className="inp" style={{marginBottom:0,fontSize:13}}/></div>
+              <div><div style={{fontSize:11,color:'#64748B',marginBottom:3}}>CNPJ Fornecedor</div><input value={cnpjEmpresa} onChange={function(e){setCnpjEmpresa(e.target.value);}} placeholder="00.000.000/0000-00" className="inp" style={{marginBottom:0,fontSize:13}}/></div>
+            </div>
+            <div><div style={{fontSize:11,color:'#64748B',marginBottom:3}}>Nome da Empresa</div><input value={empresa} onChange={function(e){setEmpresa(e.target.value);}} placeholder="Nome da empresa..." className="inp" style={{marginBottom:0,fontSize:13}}/></div>
+          </>}
           <div style={{display:'flex',gap:8,marginTop:10}}><button onClick={exportarExcel} className="bg" style={{flex:1}}>📥 Excel</button><button onClick={exportarPDF} className="bp" style={{flex:1,background:'#DC2626'}}>📄 PDF Pedido</button></div>
         </div>
 
