@@ -13,7 +13,7 @@
 // ser a data/hora atual em segundos, ex.: no terminal `date +%s`) — sem isso, o auto-update não
 // detecta a mudança e navegadores/ícones de tela inicial com cache antigo continuam presos até
 // alguém limpar o cache manualmente (foi exatamente isso que causou o incidente de 18/09/2026).
-window.__FC_VERSION=1790027658;
+window.__FC_VERSION=1790030887;
 (function(){
   try{
     fetch(location.pathname+'?_vcheck='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(html){
@@ -6159,6 +6159,8 @@ function TabPrevisao(props){
   var _importNome=useState('');var importNome=_importNome[0];var setImportNome=_importNome[1];
   var _importCat=useState('controlado');var importCat=_importCat[0];var setImportCat=_importCat[1];
   var _importando=useState(false);var importando=_importando[0];var setImportando=_importando[1];
+  var _editItemIdx=useState(-1);var editItemIdx=_editItemIdx[0];var setEditItemIdx=_editItemIdx[1];
+  var _editItemDraft=useState(null);var editItemDraft=_editItemDraft[0];var setEditItemDraft=_editItemDraft[1];
   var _ataDetalhe=useState(null);var ataDetalhe=_ataDetalhe[0];var setAtaDetalhe=_ataDetalhe[1];
   var _pastasAbertas=useState({});var pastasAbertas=_pastasAbertas[0];var setPastasAbertas=_pastasAbertas[1];
   var _buscaItemMed=useState({});var buscaItemMed=_buscaItemMed[0];var setBuscaItemMed=_buscaItemMed[1];
@@ -6395,10 +6397,14 @@ function TabPrevisao(props){
             var col0N='';
             for(var _ci0=0;_ci0<cs.length;_ci0++){var _v0=_norm(tx(_ci0));if(_v0){col0N=_v0;break;}}
 
-            // Linha de cabeçalho (1ª célula não vazia é "Item"/"Nº"/"Descrição") — extrai o mapa de
-            // colunas em vez de simplesmente descartar a linha, pra usar de verdade a ordem real deste
-            // documento.
-            if(col0N==='item'||/^n[o°.]{0,2}$/.test(col0N)||col0N.indexOf('descri')>=0){
+            // Linha de cabeçalho (1ª célula não vazia COMEÇA COM "Item"/"Nº"/"Descrição") — extrai o
+            // mapa de colunas em vez de simplesmente descartar a linha, pra usar de verdade a ordem
+            // real deste documento. IMPORTANTE: usa indexOf(...)===0 (começa com), não >=0 (contém) —
+            // descrições reais de produto às vezes têm "Descrição"/"total"/"marca" NO MEIO do texto
+            // (ex.: "...suporte total de nutrição", "Marca-Aptamil, Fabricante..." dentro da própria
+            // bula) e um "contém" fazia esses itens reais serem confundidos com linha de cabeçalho/
+            // rótulo e descartados por engano.
+            if(col0N==='item'||/^n[o°.]{0,2}$/.test(col0N)||col0N.indexOf('descri')===0){
               var mapa={};
               for(var ci=0;ci<cs.length;ci++){
                 var h=_norm(tx(ci));if(!h)continue;
@@ -6413,7 +6419,7 @@ function TabPrevisao(props){
               if(mapa.desc!==undefined&&(mapa.vUnit!==undefined||mapa.qtd!==undefined)){colMap=mapa;colMapOk=true;}
               return; // linha de cabeçalho nunca é item
             }
-            if(col0N.indexOf('lote')>=0||col0N.indexOf('marca')>=0||col0N.indexOf('total')>=0)return;
+            if(col0N.indexOf('lote')===0||col0N.indexOf('marca')===0||col0N.indexOf('total')===0)return;
 
             var n='',desc='',marca='',qtd='',unid='',vU='';
 
@@ -6469,12 +6475,37 @@ function TabPrevisao(props){
   }
   function salvarAtaImportada(){
     if(!importPreview||!importNome.trim()){setMsg('e:Dê um nome à ata antes de salvar');return;}
+    if(importPreview.length===0){setMsg('e:Não há itens para salvar. Adicione algum item ou cancele a importação.');return;}
     var vTot=importPreview.reduce(function(a,it){return a+(it.vUnit*it.qtdTeto);},0);
+    var qtdItens=importPreview.length;
     db.collection('atas').add({nome:importNome.trim(),categoria:importCat,limite:0,valorTotal:parseFloat(vTot.toFixed(2)),itens:importPreview,criadoEm:new Date().toISOString(),criadoPor:user.name||'',tenant_id:tenantDe(user)}).then(function(){
-      setImportPreview(null);setImportNome('');
-      setMsg('ok:Ata "'+importNome+'" importada com '+importPreview.length+' itens!');
+      setImportPreview(null);setImportNome('');setEditItemIdx(-1);setEditItemDraft(null);
+      setMsg('ok:Ata "'+importNome+'" importada com '+qtdItens+' itens!');
       setTimeout(function(){setMsg('');},4000);
     }).catch(function(e){setMsg('e:'+e.message);});
+  }
+  function iniciarEdicaoItemImport(i){
+    var it=importPreview[i];
+    setEditItemIdx(i);
+    setEditItemDraft({descricao:it.descricao,qtdTeto:String(it.qtdTeto),unidade:it.unidade||'',vUnit:it.vUnit?String(it.vUnit).replace('.',','):''});
+  }
+  function cancelarEdicaoItemImport(){setEditItemIdx(-1);setEditItemDraft(null);}
+  function salvarEdicaoItemImport(){
+    if(editItemIdx<0||!editItemDraft)return;
+    var qN=parseInt((editItemDraft.qtdTeto||'').replace(/[^0-9]/g,''))||0;
+    if(!editItemDraft.descricao.trim()||qN<=0){setMsg('e:Descrição e quantidade são obrigatórias');return;}
+    var vUN=parseFloat((editItemDraft.vUnit||'').replace(/[^0-9,]/g,'').replace(',','.'))||0;
+    setImportPreview(function(arr){
+      var novo=arr.slice();
+      novo[editItemIdx]=Object.assign({},novo[editItemIdx],{descricao:editItemDraft.descricao.trim(),qtdTeto:qN,unidade:editItemDraft.unidade,vUnit:vUN});
+      return novo;
+    });
+    setEditItemIdx(-1);setEditItemDraft(null);
+  }
+  function excluirItemImport(i){
+    if(!window.confirm('Remover este item da lista importada?'))return;
+    setImportPreview(function(arr){return arr.filter(function(_,idx){return idx!==i;});});
+    if(editItemIdx===i){setEditItemIdx(-1);setEditItemDraft(null);}
   }
   function atualizarItemAta(ataId,itens,novoItem,idxIt){
     var novos=itens.map(function(x,j){return j===idxIt?Object.assign({},x,novoItem):x;});
@@ -7051,15 +7082,35 @@ function TabPrevisao(props){
               {Object.keys(LBL).map(function(k){return(<button key={k} onClick={function(){setImportCat(k);}} style={{padding:'5px 11px',borderRadius:20,border:'1.5px solid '+(importCat===k?COR[k]:'#E2E8F0'),background:importCat===k?COR[k]:'#fff',color:importCat===k?'#fff':COR[k],fontWeight:600,fontSize:11,cursor:'pointer'}}>{ICO[k]} {LBL[k]}</button>);})}
             </div>
             <div style={{fontSize:12,fontWeight:700,color:'#0C6B3E',marginBottom:6}}>{importPreview.length} itens lidos — confira:</div>
-            <div style={{maxHeight:220,overflowY:'auto',background:'#fff',borderRadius:8,border:'1px solid #E2E8F0',marginBottom:10}}>
+            <div style={{maxHeight:320,overflowY:'auto',background:'#fff',borderRadius:8,border:'1px solid #E2E8F0',marginBottom:10}}>
               {importPreview.map(function(it,i){
                 var vTit=it.vUnit*it.qtdTeto;
+                if(editItemIdx===i){
+                  return(<div key={i} style={{padding:'8px 10px',borderBottom:'1px solid #F1F5F9',background:'#F8FAFC'}}>
+                    <textarea value={editItemDraft.descricao} onChange={function(e){setEditItemDraft(Object.assign({},editItemDraft,{descricao:e.target.value}));}} placeholder="Descrição" className="inp" style={{minHeight:50,marginBottom:6}}/>
+                    <div style={{display:'flex',gap:6,marginBottom:6}}>
+                      <input value={editItemDraft.qtdTeto} onChange={function(e){setEditItemDraft(Object.assign({},editItemDraft,{qtdTeto:e.target.value}));}} placeholder="Quantidade" className="inp" style={{margin:0,flex:1}}/>
+                      <input value={editItemDraft.unidade} onChange={function(e){setEditItemDraft(Object.assign({},editItemDraft,{unidade:e.target.value}));}} placeholder="Unidade" className="inp" style={{margin:0,flex:1}}/>
+                      <input value={editItemDraft.vUnit} onChange={function(e){setEditItemDraft(Object.assign({},editItemDraft,{vUnit:e.target.value}));}} placeholder="Vl. unit." className="inp" style={{margin:0,flex:1}}/>
+                    </div>
+                    <div style={{display:'flex',gap:6}}>
+                      <button onClick={cancelarEdicaoItemImport} className="bs" style={{flex:1,padding:'6px'}}>Cancelar</button>
+                      <button onClick={salvarEdicaoItemImport} className="bg" style={{flex:1,padding:'6px'}}>✅ Salvar item</button>
+                    </div>
+                  </div>);
+                }
                 return(<div key={i} style={{padding:'8px 10px',borderBottom:'1px solid #F1F5F9'}}>
                   <div style={{display:'flex',justifyContent:'space-between',gap:8,fontSize:12}}>
                     <span style={{fontWeight:700,color:'#1E293B',flex:1}}>#{it.num} {it.descricao}</span>
                     <span style={{color:'#0C6B3E',fontWeight:700,whiteSpace:'nowrap'}}>Teto: {it.qtdTeto} {it.unidade}</span>
                   </div>
-                  {it.vUnit>0&&<div style={{fontSize:11,color:'#94A3B8'}}>R$ {it.vUnit.toFixed(2)}/un · total R$ {vTit.toFixed(2)}</div>}
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,marginTop:4}}>
+                    {it.vUnit>0?<div style={{fontSize:11,color:'#94A3B8'}}>R$ {it.vUnit.toFixed(2)}/un · total R$ {vTit.toFixed(2)}</div>:<div/>}
+                    <div style={{display:'flex',gap:4}}>
+                      <button onClick={function(){iniciarEdicaoItemImport(i);}} title="Editar" style={{background:'#EFF6FF',border:'none',borderRadius:6,width:26,height:26,cursor:'pointer',fontSize:12}}>✏️</button>
+                      <button onClick={function(){excluirItemImport(i);}} title="Excluir" style={{background:'#FEE2E2',border:'none',borderRadius:6,width:26,height:26,cursor:'pointer',fontSize:12}}>🗑</button>
+                    </div>
+                  </div>
                 </div>);
               })}
             </div>
@@ -7067,8 +7118,8 @@ function TabPrevisao(props){
               Valor total da ata: <strong>R$ {importPreview.reduce(function(a,it){return a+(it.vUnit*it.qtdTeto);},0).toFixed(2)}</strong>
             </div>
             <div style={{display:'flex',gap:8}}>
-              <button onClick={function(){setImportPreview(null);setImportNome('');}} className="bs" style={{flex:1}}>Cancelar</button>
-              <button onClick={salvarAtaImportada} className="bg" style={{flex:2}}>✅ Salvar Ata Importada</button>
+              <button onClick={function(){setImportPreview(null);setImportNome('');setEditItemIdx(-1);setEditItemDraft(null);}} className="bs" style={{flex:1}}>Cancelar</button>
+              <button onClick={salvarAtaImportada} className="bg" style={{flex:2}}>✅ Salvar Ata Importada ({importPreview.length} {importPreview.length===1?'item':'itens'})</button>
             </div>
           </div>}
         </div>
