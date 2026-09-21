@@ -14,7 +14,12 @@ service cloud.firestore {
     // ao banco — ver scripts/set_tenant_claims.js), e só cai pro get() do Firestore se a claim
     // ainda não tiver sido gravada pra essa conta (conta muito nova, ou script ainda não rodado
     // pra ela) — plano B automático, garante que ninguém fica travado sem acesso por causa disso.
-    function userTenant() { return request.auth.token.tenant_id != null ? request.auth.token.tenant_id : meuPerfil().tenant_id; }
+    // FIX (19/09/2026): request.auth.token.tenant_id (acesso direto) dava erro de avaliação — não
+    // "null" — quando a claim nunca tinha sido gravada pra aquela conta (ex.: conta recém-aprovada
+    // de uma prefeitura nova, como Itaquitinga), derrubando a regra inteira com "Missing or
+    // insufficient permissions" mesmo pra uma leitura simples. .get(chave, padrão) é a forma segura
+    // de ler uma claim que pode não existir — nunca dá erro, só devolve o padrão informado.
+    function userTenant() { return request.auth.token.get('tenant_id', null) != null ? request.auth.token.get('tenant_id', null) : meuPerfil().tenant_id; }
     // NOVO: dono do documento (create) tem que já vir com o tenant certo, senão a escrita é recusada.
     function tenantOk(data) { return data.tenant_id == userTenant(); }
     // NOVO (Opção 2, escolhida): poder cross-tenant travado por CONTA específica, não por cargo —
