@@ -13,7 +13,7 @@
 // ser a data/hora atual em segundos, ex.: no terminal `date +%s`) — sem isso, o auto-update não
 // detecta a mudança e navegadores/ícones de tela inicial com cache antigo continuam presos até
 // alguém limpar o cache manualmente (foi exatamente isso que causou o incidente de 18/09/2026).
-window.__FC_VERSION=1789959244;
+window.__FC_VERSION=1790027658;
 (function(){
   try{
     fetch(location.pathname+'?_vcheck='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(html){
@@ -6387,10 +6387,17 @@ function TabPrevisao(props){
             if(cs.length<2)return;
             var tx=function(i){return cs[i]?cs[i].textContent.trim():'';};
             var col0=tx(0);
-            var col0N=_norm(col0);
+            // O Word às vezes insere uma célula vazia extra no início da linha (artefato de quebra de
+            // página no meio de uma tabela) — isso empurra todo o conteúdo uma coluna pra direita. Usar a
+            // 1ª célula NÃO VAZIA (em vez de sempre a célula 0) pra reconhecer cabeçalho/rótulos evita que
+            // essas linhas deslocadas passem despercebidas e "desatualizem" o colMap (fazendo os itens
+            // reais seguintes serem lidos da coluna errada — sempre vazia — e descartados em silêncio).
+            var col0N='';
+            for(var _ci0=0;_ci0<cs.length;_ci0++){var _v0=_norm(tx(_ci0));if(_v0){col0N=_v0;break;}}
 
-            // Linha de cabeçalho (1ª célula é "Item"/"Nº"/"Descrição") — extrai o mapa de colunas em vez
-            // de simplesmente descartar a linha, pra usar de verdade a ordem real deste documento.
+            // Linha de cabeçalho (1ª célula não vazia é "Item"/"Nº"/"Descrição") — extrai o mapa de
+            // colunas em vez de simplesmente descartar a linha, pra usar de verdade a ordem real deste
+            // documento.
             if(col0N==='item'||/^n[o°.]{0,2}$/.test(col0N)||col0N.indexOf('descri')>=0){
               var mapa={};
               for(var ci=0;ci<cs.length;ci++){
