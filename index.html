@@ -13,7 +13,7 @@
 // ser a data/hora atual em segundos, ex.: no terminal `date +%s`) — sem isso, o auto-update não
 // detecta a mudança e navegadores/ícones de tela inicial com cache antigo continuam presos até
 // alguém limpar o cache manualmente (foi exatamente isso que causou o incidente de 18/09/2026).
-window.__FC_VERSION=1790039223;
+window.__FC_VERSION=1790088684;
 (function(){
   try{
     fetch(location.pathname+'?_vcheck='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(html){
@@ -6704,10 +6704,9 @@ function TabPrevisao(props){
     setMsg('ok:Excel exportado!');setTimeout(function(){setMsg('');},2500);
   }
 
-  // Identidade visual do pedido por tenant (logo/cor/nome do órgão). Vicência mantém o texto
-  // fixo de sempre (nenhuma mudança de comportamento); Itaquitinga usa a bandeira/brasão do
-  // município e a cor de destaque do brasão. CNPJ e endereço oficiais de Itaquitinga ainda não
-  // foram informados — quando a usuária mandar, é só preencher o campo `rodape` abaixo.
+  // Identidade visual do pedido por tenant (logo/cor/nome do órgão). CNPJ e endereço oficiais de
+  // Itaquitinga ainda não foram informados — quando a usuária mandar, é só preencher o campo
+  // `rodape` abaixo.
   function infoPedidoTenant(){
     if(tenantDe(user)==='itaquitinga-pe'){
       return {
@@ -6719,11 +6718,12 @@ function TabPrevisao(props){
         rodape:'Secretaria Municipal de Saúde de Itaquitinga - PE',
         assinatura:'COORDENADOR DA FARMÁCIA',
         mostrarBoxEmpresa:false,
-        autoDescontarAta:true
+        autoDescontarAta:true,
+        mostrarColunaMarca:true
       };
     }
     return {
-      logo:'',
+      logo:location.origin+'/assets/vicencia-brasao.png',
       cor:'#1351B4',
       orgLinha1:'SECRETARIA DE SAÚDE E DEPARTAMENTO DE COMPRAS',
       orgLinha2:'Fundo Municipal de Saúde — CAF-Unidade Hospitalar',
@@ -6731,7 +6731,8 @@ function TabPrevisao(props){
       rodape:'Fundo Municipal de Saúde de Vicência - CNPJ: 10.566.414/0001-36<br>Rua José Candido de Oliveira, 79 - Centro - Vicência - PE; CEP: 558580-000',
       assinatura:'COORDENADORA DA FARMÁCIA',
       mostrarBoxEmpresa:true,
-      autoDescontarAta:false
+      autoDescontarAta:false,
+      mostrarColunaMarca:false
     };
   }
   // Marca d'água (SÓ quando o tenant tem logo configurado): usa <img>, não background-image, porque
@@ -6787,7 +6788,7 @@ function TabPrevisao(props){
         '</td><td style="padding:6px 8px;border:1px solid #ddd;text-align:center">'+saldo+
         '</td><td style="padding:6px 8px;border:1px solid #ddd;text-align:right">'+(vU>0?'R$ '+vU.toFixed(2).replace('.',','):'—')+
         '</td><td style="padding:6px 8px;border:1px solid #ddd;text-align:right">'+(vT>0?'R$ '+vT.toFixed(2).replace('.',','):'—')+
-        (info.logo?'</td><td style="padding:6px 8px;border:1px solid #ddd">'+(x.marca||''):'')+
+        (info.mostrarColunaMarca?'</td><td style="padding:6px 8px;border:1px solid #ddd">'+(x.marca||''):'')+
         '</td></tr>';
     }).join('');
     if(grupoPedir.length===0){setMsg('e:Nenhum medicamento com pedido > 0 nesta ata. Ajuste as quantidades antes de exportar.');return;}
@@ -6806,7 +6807,7 @@ function TabPrevisao(props){
       '<table><thead><tr>'+
       '<th style="width:50px">Item</th><th>Descrição</th><th style="width:60px">Unid.</th>'+
       '<th style="width:70px">Qtd. Pedir</th><th style="width:70px">Saldo ATA</th>'+
-      '<th style="width:80px">V. Unit.</th><th style="width:90px">V. Total</th>'+(info.logo?'<th style="width:100px">Marca</th>':'')+'</tr></thead>'+
+      '<th style="width:80px">V. Unit.</th><th style="width:90px">V. Total</th>'+(info.mostrarColunaMarca?'<th style="width:100px">Marca</th>':'')+'</tr></thead>'+
       '<tbody>'+linhas+'</tbody>'+
       '<tfoot><tr class="total">'+
       '<td colspan="3" style="padding:7px 8px;border:1px solid #ddd;text-align:right">TOTAL</td>'+
@@ -6814,7 +6815,7 @@ function TabPrevisao(props){
       '<td style="padding:7px 8px;border:1px solid #ddd">—</td>'+
       '<td style="padding:7px 8px;border:1px solid #ddd"></td>'+
       '<td style="padding:7px 8px;border:1px solid #ddd;text-align:right">R$ '+totalVal.toFixed(2).replace('.',',')+
-      '</td>'+(info.logo?'<td style="padding:7px 8px;border:1px solid #ddd"></td>':'')+
+      '</td>'+(info.mostrarColunaMarca?'<td style="padding:7px 8px;border:1px solid #ddd"></td>':'')+
       '</tr></tfoot></table></body></html>';
     if(!_imprimirDoc(html)){setMsg('e:Não foi possível abrir a impressão. Tente de novo.');return;}
     if(info.autoDescontarAta)descontarPedidoDaAta(ata,grupoPedir).catch(function(e){setMsg('e:Pedido impresso, mas houve erro ao atualizar o saldo da ATA: '+e.message);});
@@ -6880,13 +6881,13 @@ function TabPrevisao(props){
     // tem coluna extra de MARCA, entra uma célula vazia depois pra fechar a linha (senão a marca
     // empurraria o valor pra baixo da coluna errada).
     var colspanTotal=3;
-    var celExtraTotal=info.logo?'<td></td>':'';
+    var celExtraTotal=info.mostrarColunaMarca?'<td></td>':'';
     var grandTotalVal=0;
     secoes.forEach(function(sec){
       var totalVal=sec.itens.reduce(function(a,it){return a+it.vTotal;},0);
       grandTotalVal+=totalVal;
       html+='<div class="section-title">'+sec.titulo+'</div>';
-      html+='<table><thead><tr><th style="width:90px">QUANT</th><th>DISCRIMINAÇÃO</th><th style="width:80px">V.UNIT</th><th style="width:90px">V.TOTAL</th>'+(info.logo?'<th style="width:110px">MARCA</th>':'')+'</tr></thead><tbody>';
+      html+='<table><thead><tr><th style="width:90px">QUANT</th><th>DISCRIMINAÇÃO</th><th style="width:80px">V.UNIT</th><th style="width:90px">V.TOTAL</th>'+(info.mostrarColunaMarca?'<th style="width:110px">MARCA</th>':'')+'</tr></thead><tbody>';
       sec.itens.forEach(function(it){
         // Mudança 4: aviso "NÃO VINCULADO" só na tela — não aparece no PDF oficial.
         html+='<tr>';
@@ -6894,7 +6895,7 @@ function TabPrevisao(props){
         html+='<td>'+it.desc+'</td>';
         html+='<td class="vunit">'+(it.vUnit>0?'R$ '+it.vUnit.toFixed(2).replace('.',','):'—')+'</td>';
         html+='<td class="vtotal">'+(it.vTotal>0?'R$ '+it.vTotal.toFixed(2).replace('.',','):'—')+'</td>';
-        if(info.logo)html+='<td class="marca">'+(it.marca||'—')+'</td>';
+        if(info.mostrarColunaMarca)html+='<td class="marca">'+(it.marca||'—')+'</td>';
         html+='</tr>';
       });
       html+='</tbody></table>';
