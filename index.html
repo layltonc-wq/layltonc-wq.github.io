@@ -13,7 +13,7 @@
 // ser a data/hora atual em segundos, ex.: no terminal `date +%s`) — sem isso, o auto-update não
 // detecta a mudança e navegadores/ícones de tela inicial com cache antigo continuam presos até
 // alguém limpar o cache manualmente (foi exatamente isso que causou o incidente de 18/09/2026).
-window.__FC_VERSION=1790034905;
+window.__FC_VERSION=1790039223;
 (function(){
   try{
     fetch(location.pathname+'?_vcheck='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(html){
@@ -10162,6 +10162,14 @@ if(pendingInvite)return <InviteScreen invite={pendingInvite} onConfirm={handleCo
 var isManagerRole=(user.role==='gestor'||user.role==='tecnico');
 var canMove=isManagerRole||!isGuest;
 var badge=pending+alertCount+solicitCount;
+// Para gestor/técnico em Itaquitinga, o slot de maior destaque da navegação (sempre visível) troca
+// ATB por Pedidos Judiciais — é o que essa cidade usa no dia a dia (tratamento de antibiótico é um
+// fluxo específico do hospital de Vicência, inclusive com mensagens de WhatsApp com "Hospital de
+// Vicência" no texto). Vicência, e os outros papéis em Itaquitinga (que nunca tiveram acesso a
+// Pedidos Judiciais — só aparecia no menu lateral, restrito a gestor/técnico), continuam vendo ATB
+// nesse slot exatamente como antes.
+var navPrincipal=[{id:'dashboard',icon:'🏠',label:'Início'},{id:'saida',icon:'💊',label:'Saída'},{id:'entrada',icon:'📥',label:'Entrada'},
+  (tenantDe(user)==='itaquitinga-pe'&&isManagerRole?{id:'pedidosjudiciais',icon:'⚖️',label:'Judicial'}:{id:'antibiotico',icon:'🧬',label:'ATB'})];
 return(
 <div style={{minHeight:'100vh',background:'#EEF2F7',position:'relative',overflow:'hidden'}}>
   {/* MARCA D'ÁGUA BACKGROUND */}
@@ -10283,7 +10291,7 @@ return(
         {tab==='previsao'&&(user.role==='gestor'||user.role==='tecnico')&&<ErrBoundary><TabPrevisao user={user} entries={entries} medications={meds} stock={stock} db={db}/></ErrBoundary>}
         {tab==='histcontas'&&can(user.role,'log')&&<TabHistContas user={user}/>}
         {tab==='antibiotico'&&<TabAntibiotico user={user} medications={meds} stock={stock} allUsers={allUsers}/>}
-        {tab==='pedidosjudiciais'&&tenantDe(user)==='itaquitinga-pe'&&<ErrBoundary><TabPedidosJudiciais user={user} medications={meds} stock={stock} entries={entries} onSave={addEntryStable} confirm2={confirm2} alert2={alert2}/></ErrBoundary>}
+        {tab==='pedidosjudiciais'&&tenantDe(user)==='itaquitinga-pe'&&isManagerRole&&<ErrBoundary><TabPedidosJudiciais user={user} medications={meds} stock={stock} entries={entries} onSave={addEntryStable} confirm2={confirm2} alert2={alert2}/></ErrBoundary>}
         {tab==='recebimento'&&<ErrBoundary><TabRecebimento user={user} medications={meds} onSave={addEntry} stock={stock}/></ErrBoundary>}
         {tab==='pacientes'&&<ErrBoundary><TabPacientes user={user} entries={entries}/></ErrBoundary>}
         {tab==='leites'&&<ErrBoundary><TabLeites user={user} medications={meds} stock={stock} onSave={addEntry} confirm2={confirm2} alert2={alert2}/></ErrBoundary>}
@@ -10338,7 +10346,6 @@ return(
               {id:'histnotas',icon:'🗂️',label:'Histórico de Notas',show:isManagerRole},
               {id:'previsao',icon:'📋',label:'Previsão / Pedido',show:isManagerRole},
               {id:'histcontas',icon:'📋',label:'Hist. de Contas',show:can(user.role,'log')},
-              {id:'pedidosjudiciais',icon:'⚖️',label:'Pedidos Judiciais',show:tenantDe(user)==='itaquitinga-pe'},
               {id:'admin',icon:'🔧',label:'Painel Admin',show:user.role==='tecnico'},
             ].filter(function(t){return t.show;}).map(function(t){return(
               <button key={t.id} data-tour={'nav-'+t.id} onClick={function(){setTab(t.id);setMenuAberto(false);}} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'13px 20px',border:'none',background:tab===t.id?'#EFF6FF':'transparent',cursor:'pointer',position:'relative',borderLeft:tab===t.id?'3px solid #1351B4':'3px solid transparent',transition:'background .15s'}}>
@@ -10356,7 +10363,7 @@ return(
           </div>
         </div>
         <div style={{display:'flex',justifyContent:'space-around',alignItems:'center',padding:'8px 8px 0'}}>
-          {[{id:'dashboard',icon:'🏠',label:'Início'},{id:'saida',icon:'💊',label:'Saída'},{id:'entrada',icon:'📥',label:'Entrada'},{id:'antibiotico',icon:'🧬',label:'ATB'}].map(function(t){return(
+          {navPrincipal.map(function(t){return(
             <button key={t.id} data-tour={'nav-'+t.id} className={'nb'+(tab===t.id?' on':'')} onClick={function(){setTab(t.id);setMenuAberto(false);}}>
               <span className="ni">{t.icon}</span>
               <span className="nl">{t.label}</span>
@@ -10393,7 +10400,7 @@ return(
           </div>
         </div>
         <div style={{display:'flex',justifyContent:'space-around',alignItems:'center',padding:'8px 8px 0'}}>
-          {[{id:'dashboard',icon:'🏠',label:'Início'},{id:'saida',icon:'💊',label:'Saída'},{id:'entrada',icon:'📥',label:'Entrada'},{id:'antibiotico',icon:'🧬',label:'ATB'}].map(function(t){return(
+          {navPrincipal.map(function(t){return(
             <button key={t.id} data-tour={'nav-'+t.id} className={'nb'+(tab===t.id?' on':'')} onClick={function(){setTab(t.id);setMenuAberto(false);}}>
               <span className="ni">{t.icon}</span>
               <span className="nl">{t.label}</span>
