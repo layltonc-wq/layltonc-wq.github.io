@@ -13,7 +13,7 @@
 // ser a data/hora atual em segundos, ex.: no terminal `date +%s`) — sem isso, o auto-update não
 // detecta a mudança e navegadores/ícones de tela inicial com cache antigo continuam presos até
 // alguém limpar o cache manualmente (foi exatamente isso que causou o incidente de 18/09/2026).
-window.__FC_VERSION=1790128015;
+window.__FC_VERSION=1790128513;
 (function(){
   try{
     fetch(location.pathname+'?_vcheck='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(html){
@@ -6381,19 +6381,38 @@ function TabPrevisao(props){
   // a lógica de quantidade. Escreve o array `itens` inteiro DE UMA VEZ (uma única atualização no
   // Firestore) em vez de uma chamada por item — evita corrida entre updates concorrentes, já que
   // atualizarItemAta() sobrescreve o array inteiro a cada chamada.
+  // Também grava `ultimoPedido` (quais itens/quanto foi descontado) pra dar pra DESFAZER só essa
+  // última operação depois (ex.: usuária imprime o pedido, percebe que faltou/errou um item, e quer
+  // voltar o saldo restante ao que estava antes, sem ter que recalcular à mão item por item).
   function descontarPedidoDaAta(ata,linhas){
     if(!ata||!ata.itens||!linhas||linhas.length===0)return Promise.resolve();
     var novos=ata.itens.map(function(it){return Object.assign({},it);});
-    var mudou=false;
+    var deltas=[];
     linhas.forEach(function(l){
       if(!l.item||l.qtd<=0)return; // item sem vínculo na própria ATA: não há saldo pra descontar
       var idx=ata.itens.indexOf(l.item);
       if(idx<0)return;
       novos[idx].pedidoAcumulado=(novos[idx].pedidoAcumulado||0)+l.qtd;
-      mudou=true;
+      deltas.push({idx:idx,qtd:l.qtd});
     });
-    if(!mudou)return Promise.resolve();
-    return db.collection('atas').doc(ata.id).update({itens:novos});
+    if(deltas.length===0)return Promise.resolve();
+    return db.collection('atas').doc(ata.id).update({itens:novos,ultimoPedido:{deltas:deltas,em:new Date().toISOString()}});
+  }
+  // Desfaz exatamente o último pedido gerado desta ATA (reverte só os deltas gravados por
+  // descontarPedidoDaAta, não zera o histórico inteiro do item). Depois de desfeito, `ultimoPedido`
+  // é apagado — não dá pra desfazer a mesma operação duas vezes.
+  function desfazerUltimoPedido(ata){
+    if(!ata||!ata.ultimoPedido||!ata.itens)return;
+    var qtdTotal=ata.ultimoPedido.deltas.reduce(function(s,d){return s+d.qtd;},0);
+    if(!window.confirm('Desfazer o último pedido desta ATA ("'+ata.nome+'")? '+qtdTotal+' unidade(s) voltam pro saldo restante.'))return;
+    var novos=ata.itens.map(function(it){return Object.assign({},it);});
+    ata.ultimoPedido.deltas.forEach(function(d){
+      if(!novos[d.idx])return;
+      novos[d.idx].pedidoAcumulado=Math.max(0,(novos[d.idx].pedidoAcumulado||0)-d.qtd);
+    });
+    db.collection('atas').doc(ata.id).update({itens:novos,ultimoPedido:firebase.firestore.FieldValue.delete()}).then(function(){
+      setMsg('ok:Último pedido desfeito — saldo restante voltou ao que estava antes.');setTimeout(function(){setMsg('');},3500);
+    }).catch(function(e){setMsg('e:Não foi possível desfazer: '+e.message);});
   }
 
   // ── AÇÕES ────────────────────────────────────────────────────
@@ -7493,10 +7512,13 @@ function TabPrevisao(props){
               var vTot=ata.itens.reduce(function(a,it){return a+(it.vUnit*(it.qtdTeto||0));},0);
               var vGasto=ata.itens.reduce(function(a,it){return a+(it.vUnit*(it.pedidoAcumulado||0));},0);
               var vRestante=vTot-vGasto;
-              return(<div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10,fontSize:12}}>
-                <span style={{color:'#64748B',fontWeight:600}}>Saldo restante da ata:</span>
-                <strong style={{color:vRestante<0?'#DC2626':cor}}>R$ {vRestante.toFixed(2).replace('.',',')}</strong>
-                <span style={{fontSize:10,color:'#94A3B8'}}>(controle interno — não aparece no pedido impresso)</span>
+              return(<div style={{marginBottom:10}}>
+                <div style={{display:'flex',alignItems:'center',gap:8,fontSize:12,flexWrap:'wrap'}}>
+                  <span style={{color:'#64748B',fontWeight:600}}>Saldo restante da ata:</span>
+                  <strong style={{color:vRestante<0?'#DC2626':cor}}>R$ {vRestante.toFixed(2).replace('.',',')}</strong>
+                  <span style={{fontSize:10,color:'#94A3B8'}}>(controle interno — não aparece no pedido impresso)</span>
+                </div>
+                {ata.ultimoPedido&&<button onClick={function(){desfazerUltimoPedido(ata);}} style={{marginTop:6,background:'#FEF3C7',border:'1px solid #FCD34D',borderRadius:8,padding:'5px 10px',fontSize:11,color:'#92400E',fontWeight:700,cursor:'pointer'}}>↩️ Desfazer último pedido ({fmtD(ata.ultimoPedido.em)} {fmtT(ata.ultimoPedido.em)})</button>}
               </div>);
             })()}
             {(function(){
