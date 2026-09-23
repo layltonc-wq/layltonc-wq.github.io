@@ -13,7 +13,7 @@
 // ser a data/hora atual em segundos, ex.: no terminal `date +%s`) — sem isso, o auto-update não
 // detecta a mudança e navegadores/ícones de tela inicial com cache antigo continuam presos até
 // alguém limpar o cache manualmente (foi exatamente isso que causou o incidente de 18/09/2026).
-window.__FC_VERSION=1790127135;
+window.__FC_VERSION=1790127580;
 (function(){
   try{
     fetch(location.pathname+'?_vcheck='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(html){
@@ -6703,9 +6703,6 @@ function TabPrevisao(props){
   function desvincular(medId){
     db.collection('medicamentos').doc(medId).update({ataId:''}).catch(function(){});
   }
-  function setLimite(ataId,val){
-    db.collection('atas').doc(ataId).update({limite:parseInt(val)||0}).catch(function(){});
-  }
   // ── EDIÇÃO DE ATA EM RASCUNHO (não grava no Firestore até clicar Salvar) ──
   // Abre o editor copiando os medicamentos atuais da ata para o rascunho local.
   function abrirEditAta(ata){
@@ -6871,7 +6868,7 @@ function TabPrevisao(props){
       rodape:'Fundo Municipal de Saúde de Vicência - CNPJ: 10.566.414/0001-36<br>Rua José Candido de Oliveira, 79 - Centro - Vicência - PE; CEP: 558580-000',
       assinatura:'COORDENADORA DA FARMÁCIA',
       mostrarBoxEmpresa:true,
-      autoDescontarAta:false,
+      autoDescontarAta:true,
       mostrarColunaMarca:false
     };
   }
@@ -6914,18 +6911,17 @@ function TabPrevisao(props){
     var totalUn=grupoPedir.reduce(function(s,x){return s+x.qtd;},0);
     var totalVal=grupoPedir.reduce(function(s,x){return s+x.vTotal;},0);
     var linhas=grupoPedir.map(function(x){
-      var item=x.item;
       var qtd=x.qtd;
-      var saldo=item?(item.qtdTeto-((item.pedidoAcumulado)||0)):'-';
       var vU=x.vUnit;
       var vT=x.vTotal;
       // Mudança 4: o aviso "NÃO VINCULADO" fica só na tela (Gerenciar Atas) — o PDF é documento oficial
       // e não precisa expor esse detalhe interno de cadastro.
+      // Saldo ATA (quanto ainda resta do contrato) também fica só na tela — é controle interno da
+      // farmácia, não algo pra expor no documento oficial que vai pro fornecedor/central de compras.
       return '<tr><td style="padding:6px 8px;border:1px solid #ddd">'+(x.num||'')+
         '</td><td style="padding:6px 8px;border:1px solid #ddd">'+x.desc+
         '</td><td style="padding:6px 8px;border:1px solid #ddd;text-align:center">'+x.unidade+
         '</td><td style="padding:6px 8px;border:1px solid #ddd;text-align:center">'+qtd+
-        '</td><td style="padding:6px 8px;border:1px solid #ddd;text-align:center">'+saldo+
         '</td><td style="padding:6px 8px;border:1px solid #ddd;text-align:right">'+(vU>0?'R$ '+vU.toFixed(2).replace('.',','):'—')+
         '</td><td style="padding:6px 8px;border:1px solid #ddd;text-align:right">'+(vT>0?'R$ '+vT.toFixed(2).replace('.',','):'—')+
         (info.mostrarColunaMarca?'</td><td style="padding:6px 8px;border:1px solid #ddd">'+(x.marca||''):'')+
@@ -6946,13 +6942,12 @@ function TabPrevisao(props){
       '<div style="text-align:center;font-size:13px;font-weight:900;padding:8px;border:1px solid #222;background:#f0f0f0;margin-top:16px;margin-bottom:8px;letter-spacing:.05em">'+nomeAta.toUpperCase()+'</div>'+
       '<table><thead><tr>'+
       '<th style="width:50px">Item</th><th>Descrição</th><th style="width:60px">Unid.</th>'+
-      '<th style="width:70px">Qtd. Pedir</th><th style="width:70px">Saldo ATA</th>'+
+      '<th style="width:70px">Qtd. Pedir</th>'+
       '<th style="width:80px">V. Unit.</th><th style="width:90px">V. Total</th>'+(info.mostrarColunaMarca?'<th style="width:100px">Marca</th>':'')+'</tr></thead>'+
       '<tbody>'+linhas+'</tbody>'+
       '<tfoot><tr class="total">'+
       '<td colspan="3" style="padding:7px 8px;border:1px solid #ddd;text-align:right">TOTAL</td>'+
       '<td style="padding:7px 8px;border:1px solid #ddd;text-align:center">'+totalUn+'</td>'+
-      '<td style="padding:7px 8px;border:1px solid #ddd">—</td>'+
       '<td style="padding:7px 8px;border:1px solid #ddd"></td>'+
       '<td style="padding:7px 8px;border:1px solid #ddd;text-align:right">R$ '+totalVal.toFixed(2).replace('.',',')+
       '</td>'+(info.mostrarColunaMarca?'<td style="padding:7px 8px;border:1px solid #ddd"></td>':'')+
@@ -7478,11 +7473,20 @@ function TabPrevisao(props){
                 {Object.keys(LBL).map(function(k){return(<button key={k} onClick={function(){setEditCat(k);}} style={{padding:'5px 11px',borderRadius:20,border:'1.5px solid '+(editCat===k?COR[k]:'#E2E8F0'),background:editCat===k?COR[k]:'#fff',color:editCat===k?'#fff':COR[k],fontWeight:600,fontSize:11,cursor:'pointer'}}>{ICO[k]} {LBL[k]}</button>);})}
               </div>
             </div>}
-            <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
-              <span style={{fontSize:12,color:'#64748B',fontWeight:600}}>Limite da ata:</span>
-              <input type="number" defaultValue={ata.limite||''} onBlur={function(e){setLimite(ata.id,e.target.value);}} placeholder="sem limite" style={{width:120,padding:'6px 10px',border:'1.5px solid #CBD5E1',borderRadius:8,fontSize:13,outline:'none'}}/>
-              <span style={{fontSize:11,color:'#94A3B8'}}>unid./período</span>
-            </div>
+            {/* O campo antigo "Limite da ata" (número digitado à mão) nunca alimentava nenhum cálculo —
+                era só guardado, sem efeito nenhum no app. O saldo real, que já é descontado sozinho a
+                cada pedido gerado, vem da soma dos itens do contrato (qtdTeto - pedidoAcumulado). Isso
+                é só controle interno da farmácia — não aparece no pedido impresso. */}
+            {ata.itens&&ata.itens.length>0&&(function(){
+              var vTot=ata.itens.reduce(function(a,it){return a+(it.vUnit*(it.qtdTeto||0));},0);
+              var vGasto=ata.itens.reduce(function(a,it){return a+(it.vUnit*(it.pedidoAcumulado||0));},0);
+              var vRestante=vTot-vGasto;
+              return(<div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10,fontSize:12}}>
+                <span style={{color:'#64748B',fontWeight:600}}>Saldo restante da ata:</span>
+                <strong style={{color:vRestante<0?'#DC2626':cor}}>R$ {vRestante.toFixed(2).replace('.',',')}</strong>
+                <span style={{fontSize:10,color:'#94A3B8'}}>(controle interno — não aparece no pedido impresso)</span>
+              </div>);
+            })()}
             {(function(){
               var editando=editAta===ata.id;
               var chipMeds=editando?((editDraft||[]).map(function(id){return medications.find(function(m){return m.id===id;});}).filter(Boolean)):meds;
