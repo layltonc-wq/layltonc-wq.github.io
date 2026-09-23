@@ -13,7 +13,7 @@
 // ser a data/hora atual em segundos, ex.: no terminal `date +%s`) — sem isso, o auto-update não
 // detecta a mudança e navegadores/ícones de tela inicial com cache antigo continuam presos até
 // alguém limpar o cache manualmente (foi exatamente isso que causou o incidente de 18/09/2026).
-window.__FC_VERSION=1790123850;
+window.__FC_VERSION=1790127135;
 (function(){
   try{
     fetch(location.pathname+'?_vcheck='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(html){
@@ -6169,6 +6169,7 @@ function TabPrevisao(props){
   var _importandoXlsx=useState(false);var importandoXlsx=_importandoXlsx[0];var setImportandoXlsx=_importandoXlsx[1];
   var _ataDetalhe=useState(null);var ataDetalhe=_ataDetalhe[0];var setAtaDetalhe=_ataDetalhe[1];
   var _pastasAbertas=useState({});var pastasAbertas=_pastasAbertas[0];var setPastasAbertas=_pastasAbertas[1];
+  var _buscaGestAta=useState('');var buscaGestAta=_buscaGestAta[0];var setBuscaGestAta=_buscaGestAta[1];
   var _buscaItemMed=useState({});var buscaItemMed=_buscaItemMed[0];var setBuscaItemMed=_buscaItemMed[1];
   var _editAta=useState(null);var editAta=_editAta[0];var setEditAta=_editAta[1];// ata em edição (busca fuzzy)
   var _editBusca=useState('');var editBusca=_editBusca[0];var setEditBusca=_editBusca[1];
@@ -6313,6 +6314,17 @@ function TabPrevisao(props){
   },[medications,atas]);
   // Medicamentos de uma ata (lookup O(1) no mapa memoizado)
   function medsDaAta(ataId){return medsPorAta[ataId]||[];}
+  // Usado pelo filtro de busca em Gerenciar Atas: acha por nome da ata, por nome de medicamento
+  // vinculado, ou por descrição de item do contrato (útil pra achar uma ata específica sem ter que
+  // abrir uma por uma numa lista com centenas de itens).
+  function ataCombinaComBusca(ata,termoNorm){
+    if(!termoNorm)return true;
+    if(_norm(ata.nome||'').indexOf(termoNorm)>=0)return true;
+    var meds=medsDaAta(ata.id);
+    for(var i=0;i<meds.length;i++){if(_norm(meds[i].nome||'').indexOf(termoNorm)>=0)return true;}
+    if(ata.itens){for(var j=0;j<ata.itens.length;j++){if(_norm(ata.itens[j].descricao||'').indexOf(termoNorm)>=0)return true;}}
+    return false;
+  }
   // Medicamentos vinculados via itens de ata (memoizado — usado no filtro do render a cada tecla)
   var medVinculadosViaItens=useMemo(function(){var mv={};atas.forEach(function(a){if(a.itens)a.itens.forEach(function(it){if(it.medicamentoId)mv[it.medicamentoId]=true;});});return mv;},[atas]);
   var medsSemAta=useMemo(function(){return medications.filter(function(m){return !m.ataId&&!medVinculadosViaItens[m.id];});},[medications,medVinculadosViaItens]);
@@ -7418,12 +7430,16 @@ function TabPrevisao(props){
 
         {/* Lista de atas existentes */}
         <div style={{fontWeight:700,fontSize:14,color:'#1E293B',marginBottom:10}}>Atas Cadastradas ({atas.length})</div>
+        <input value={buscaGestAta} onChange={function(e){setBuscaGestAta(e.target.value);}} placeholder="🔍 Buscar por ata ou por medicamento..." className="inp" style={{marginBottom:12}}/>
         {atas.length===0&&<div style={{textAlign:'center',padding:'24px 0',color:'#94A3B8',fontSize:13}}>Nenhuma ata criada ainda</div>}
         {(function(){
+          var termoBusca=_norm(buscaGestAta.trim());
           var categorias=Object.keys(LBL);
-          return categorias.map(function(catKey){
-            var atasDaCat=atas.filter(function(a){return (a.categoria||'medicamento')===catKey;});
+          var algumaAta=false;
+          var secoes=categorias.map(function(catKey){
+            var atasDaCat=atas.filter(function(a){return (a.categoria||'medicamento')===catKey&&ataCombinaComBusca(a,termoBusca);});
             if(atasDaCat.length===0)return null;
+            algumaAta=true;
             var pastaGestAberta=pastasAbertas['gest_'+catKey]!==false;
             return(<div key={catKey} style={{marginBottom:12}}>
               <button onClick={function(){setPastasAbertas(function(p){var n=Object.assign({},p);n['gest_'+catKey]=!pastaGestAberta;return n;});}} style={{width:'100%',background:COR[catKey]||'#475569',border:'none',borderRadius:pastaGestAberta?'12px 12px 0 0':'12px',padding:'10px 14px',cursor:'pointer',display:'flex',alignItems:'center',gap:10,textAlign:'left',marginBottom:0}}>
@@ -7475,14 +7491,24 @@ function TabPrevisao(props){
                 {chipMeds.map(function(m){return(<span key={m.id} style={{background:'#F1F5F9',borderRadius:16,padding:'4px 10px',fontSize:11,color:'#475569',display:'flex',alignItems:'center',gap:6}}>{m.nome}<button onClick={function(){if(editando){removeMedDraft(m.id);}else{desvincular(m.id);}}} style={{background:'none',border:'none',color:'#94A3B8',cursor:'pointer',fontSize:13,padding:0,lineHeight:1}}>×</button></span>);})}
               </div>);
             })()}
-            {/* Definir quantidades/valores do pedido DIRETO na Gerenciar Atas (mesmo estado do consolidado) */}
+            {/* Definir quantidades/valores do pedido DIRETO na Gerenciar Atas (mesmo estado do consolidado).
+                Fechado por padrão (uma ata com centenas de itens deixava a página enorme, com as
+                outras atas "perdidas" lá embaixo) — abre com um clique, ou automático quando uma
+                busca está filtrando a lista. */}
             {editAta!==ata.id&&(meds.length>0||(ata.itens&&ata.itens.length>0))&&(function(){
               var itensPorMed={};if(ata.itens)ata.itens.forEach(function(it){if(it.medicamentoId)itensPorMed[it.medicamentoId]=it;});
               // Itens da ATA SEM medicamento vinculado (Mudança 4): sem medicamentoId ou vínculo órfão.
               var naoVinc=[];if(ata.itens)ata.itens.forEach(function(it,idx){var m=it.medicamentoId?medications.find(function(x){return x.id===it.medicamentoId;}):null;if(!m)naoVinc.push({it:it,idx:idx});});
               var totalAtaPedido=linhasPedidoAta(ata).reduce(function(s,x){return s+x.vTotal;},0);
+              var totalItensPedido=meds.length+naoVinc.length;
+              var pedidoAberto=!!termoBusca||pastasAbertas['pedido_'+ata.id]===true;
               return(<div style={{marginTop:10,background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:10,padding:'10px'}}>
-                <div style={{fontSize:11,fontWeight:700,color:'#475569',marginBottom:8,textTransform:'uppercase',letterSpacing:'.03em'}}>Definir pedido desta ata</div>
+                <button onClick={function(){setPastasAbertas(function(p){var n=Object.assign({},p);n['pedido_'+ata.id]=!pedidoAberto;return n;});}} style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'space-between',background:'none',border:'none',padding:0,cursor:'pointer',marginBottom:pedidoAberto?8:0}}>
+                  <span style={{fontSize:11,fontWeight:700,color:'#475569',textTransform:'uppercase',letterSpacing:'.03em'}}>Definir pedido desta ata ({totalItensPedido} {totalItensPedido===1?'item':'itens'})</span>
+                  <span style={{fontSize:13,color:'#94A3B8'}}>{pedidoAberto?'▲':'▼'}</span>
+                </button>
+                {!pedidoAberto&&totalAtaPedido>0&&<div style={{fontSize:11,color:cor,fontWeight:700}}>Total do pedido: R$ {totalAtaPedido.toFixed(2).replace('.',',')}</div>}
+                {pedidoAberto&&<React.Fragment>
                 {meds.slice().sort(function(a,b){return (a.nome||'').localeCompare(b.nome||'');}).map(function(m){
                   var it=itensPorMed[m.id]||null;
                   var pAuto=calcularPrevisao(m).pedir;
@@ -7527,6 +7553,7 @@ function TabPrevisao(props){
                   </div>);
                 })}
                 {totalAtaPedido>0&&<div style={{marginTop:8,paddingTop:8,borderTop:'1px solid #E2E8F0',textAlign:'right',fontSize:12,fontWeight:800,color:cor}}>Total do pedido: R$ {totalAtaPedido.toFixed(2).replace('.',',')}</div>}
+                </React.Fragment>}
               </div>);
             })()}
             {editAta===ata.id&&editItens&&editItens.length>0&&(function(){
@@ -7655,6 +7682,8 @@ function TabPrevisao(props){
               </div>}
             </div>);
           });
+          if(!algumaAta&&termoBusca)return <div style={{textAlign:'center',padding:'24px 0',color:'#94A3B8',fontSize:13}}>Nenhuma ata ou medicamento encontrado para "{buscaGestAta}".</div>;
+          return secoes;
         })()}
       </div>}
 
