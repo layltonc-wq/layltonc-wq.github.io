@@ -13,7 +13,7 @@
 // ser a data/hora atual em segundos, ex.: no terminal `date +%s`) — sem isso, o auto-update não
 // detecta a mudança e navegadores/ícones de tela inicial com cache antigo continuam presos até
 // alguém limpar o cache manualmente (foi exatamente isso que causou o incidente de 18/09/2026).
-window.__FC_VERSION=1790122724;
+window.__FC_VERSION=1790123444;
 (function(){
   try{
     fetch(location.pathname+'?_vcheck='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(html){
@@ -3363,12 +3363,16 @@ var _toursErro=useState('');var toursErro=_toursErro[0];var setToursErro=_toursE
 // O callback de erro do onSnapshot ficava vazio (function(){}) — se a LEITURA de config/tours falhasse
 // (ex: regra do Firestore ausente/errada), o estado ficava travado no {} inicial pra sempre, SEM nenhum
 // aviso, e todo tour aparecia "Desativado" mesmo que a gravação tivesse funcionado. Agora mostra o erro.
-useEffect(function(){var ut=db.collection('config').doc('tours').onSnapshot(function(s){var d=s.exists?s.data():{};setToursAtivos(d.ativos||{});setToursErro('');},function(e){setToursErro('Erro ao LER as configurações de tutoriais: '+((e&&e.message)||e)+' — as regras do Firestore podem estar faltando para a coleção "config".');});return ut;},[]);
+// IMPORTANTE: o doc é por tenant ('tours__'+tenant_id) — antes era um único doc 'tours' global, então
+// ativar um tutorial em Vicência acendia o mesmo tutorial em Itaquitinga (e vice-versa). Ver auditoria
+// original (Achado #9 de AUDIT_MULTITENANT.md), que na época deixou isso global de propósito por falta
+// de decisão de produto; a usuária confirmou na prática que quer por tenant.
+useEffect(function(){var ut=db.collection('config').doc('tours__'+tenantDe(currentUser)).onSnapshot(function(s){var d=s.exists?s.data():{};setToursAtivos(d.ativos||{});setToursErro('');},function(e){setToursErro('Erro ao LER as configurações de tutoriais: '+((e&&e.message)||e)+' — as regras do Firestore podem estar faltando para a coleção "config".');});return ut;},[]);
 function toggleTour(id,val){
   var anterior=toursAtivos;
   var novo=Object.assign({},toursAtivos);novo[id]=val;
   setToursAtivos(novo);setToursErro(''); // otimista — desfeito abaixo se a gravação falhar
-  db.collection('config').doc('tours').set({ativos:novo,atualizadoEm:new Date().toISOString(),atualizadoPor:(currentUser&&currentUser.name)||''},{merge:true})
+  db.collection('config').doc('tours__'+tenantDe(currentUser)).set({ativos:novo,atualizadoEm:new Date().toISOString(),atualizadoPor:(currentUser&&currentUser.name)||'',tenant_id:tenantDe(currentUser)},{merge:true})
     .catch(function(e){
       setToursAtivos(anterior); // desfaz o toggle visual — sem isso a tela mentia "Ativo" mesmo sem salvar
       var msg='Não foi possível salvar: '+((e&&e.message)||'verifique as permissões do Firestore.');
@@ -8472,7 +8476,7 @@ function TourEngine(props){
   useEffect(function(){
     if(!user||!user.uid)return;
     var u1=db.collection('users').doc(user.uid).onSnapshot(function(s){var d=s.exists?s.data():{};setVistos(d.tutoriaisVistos||[]);},function(){setVistos([]);});
-    var u2=db.collection('config').doc('tours').onSnapshot(function(s){var d=s.exists?s.data():{};setAtivos(d.ativos||{});},function(){setAtivos({});});
+    var u2=db.collection('config').doc('tours__'+tenantDe(user)).onSnapshot(function(s){var d=s.exists?s.data():{};setAtivos(d.ativos||{});},function(){setAtivos({});});
     return function(){try{u1();}catch(e){}try{u2();}catch(e){}};
   },[user&&user.uid]);
 
@@ -10163,7 +10167,12 @@ useEffect(function(){if(!ready||!user)return;
   // Convites de plantão do usuário atual (fora do callback de users p/ não recriar/vazar). user.uid: currentUser não existe no escopo do App.
   unsubs.push(db.collection('plantao_convites').where('tenant_id','==',tenantDe(user)).where('para','==',user.uid).where('status','==','pendente').onSnapshot(function(s){setConvites(s.docs.map(function(d){return Object.assign({id:d.id},d.data());}));}));
   // Estoque mínimo - só gestor/técnico
-  if(user.role==='gestor'||user.role==='tecnico'){unsubs.push(db.collection('medications').onSnapshot(function(s){var mds=s.docs.map(function(d){return Object.assign({id:d.id},d.data());});setLowStock(mds.filter(function(m){return m.estoqueMin&&m.estoqueMin>0;}));}));}
+  // "medications" (em inglês) é uma coleção órfã — nenhum cadastro real grava nela hoje (todo
+  // medicamento de verdade vai pra "medicamentos"), então esse alerta nunca mostra nada na prática.
+  // Mesmo assim, faltava o filtro por tenant_id aqui — como toda outra leitura do app já é isolada
+  // por tenant, deixamos essa também, pra não sobrar nenhuma leitura "global" caso essa coleção
+  // algum dia volte a receber dado.
+  if(user.role==='gestor'||user.role==='tecnico'){unsubs.push(db.collection('medications').where('tenant_id','==',tenantDe(user)).onSnapshot(function(s){var mds=s.docs.map(function(d){return Object.assign({id:d.id},d.data());});setLowStock(mds.filter(function(m){return m.estoqueMin&&m.estoqueMin>0;}));}));}
   if(can(user.role,'gestao')){
     unsubs.push(db.collection('users').where('tenant_id','==',tenantDe(user)).where('status','==','pending').onSnapshot(function(s){setPending(s.size);}));
     unsubs.push(db.collection('alertas').where('tenant_id','==',tenantDe(user)).where('lido','==',false).where('tipo','==','saida_excessiva').onSnapshot(function(s){setAlertCount(s.size);}));
