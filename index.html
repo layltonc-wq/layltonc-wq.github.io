@@ -13,7 +13,7 @@
 // ser a data/hora atual em segundos, ex.: no terminal `date +%s`) — sem isso, o auto-update não
 // detecta a mudança e navegadores/ícones de tela inicial com cache antigo continuam presos até
 // alguém limpar o cache manualmente (foi exatamente isso que causou o incidente de 18/09/2026).
-window.__FC_VERSION=1790088684;
+window.__FC_VERSION=1790122724;
 (function(){
   try{
     fetch(location.pathname+'?_vcheck='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(html){
@@ -6161,6 +6161,8 @@ function TabPrevisao(props){
   var _importando=useState(false);var importando=_importando[0];var setImportando=_importando[1];
   var _editItemIdx=useState(-1);var editItemIdx=_editItemIdx[0];var setEditItemIdx=_editItemIdx[1];
   var _editItemDraft=useState(null);var editItemDraft=_editItemDraft[0];var setEditItemDraft=_editItemDraft[1];
+  var _importXlsxPreview=useState(null);var importXlsxPreview=_importXlsxPreview[0];var setImportXlsxPreview=_importXlsxPreview[1];
+  var _importandoXlsx=useState(false);var importandoXlsx=_importandoXlsx[0];var setImportandoXlsx=_importandoXlsx[1];
   var _ataDetalhe=useState(null);var ataDetalhe=_ataDetalhe[0];var setAtaDetalhe=_ataDetalhe[1];
   var _pastasAbertas=useState({});var pastasAbertas=_pastasAbertas[0];var setPastasAbertas=_pastasAbertas[1];
   var _buscaItemMed=useState({});var buscaItemMed=_buscaItemMed[0];var setBuscaItemMed=_buscaItemMed[1];
@@ -6527,6 +6529,91 @@ function TabPrevisao(props){
     if(!window.confirm('Remover este item da lista importada?'))return;
     setImportPreview(function(arr){return arr.filter(function(_,idx){return idx!==i;});});
     if(editItemIdx===i){setEditItemIdx(-1);setEditItemDraft(null);}
+  }
+  // Importa VÁRIAS ATAs de uma vez a partir de uma planilha Excel que já vem organizada com uma aba
+  // por fornecedor/ATA (formato observado: aba "Planilha Geral" com o total consolidado + uma aba
+  // por fornecedor, cada uma com um título na linha 1, uma linha em branco, o cabeçalho de colunas
+  // (ITEM/DESCRIÇÃO/PREÇO UNITÁRIO/QUANT./UND. MEDIDA/VALOR TOTAL/MARCA/EMPRESA VENCEDORA) e uma
+  // linha "TOTAL" no final). A aba "Planilha Geral" é ignorada de propósito — ela só repete, somados
+  // numa tabela só, os mesmos itens que já vêm separados nas outras abas; importar as duas geraria
+  // ATA duplicada.
+  function importarAtasExcel(file){
+    if(!file)return;
+    setImportandoXlsx(true);
+    var reader=new FileReader();
+    reader.onload=function(ev){
+      try{
+        if(typeof XLSX==='undefined'){setMsg('e:Biblioteca de planilha não carregou. Recarregue.');setImportandoXlsx(false);return;}
+        var wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array'});
+        var atasDetectadas=[];
+        wb.SheetNames.forEach(function(sn){
+          if(_norm(sn).indexOf('geral')>=0)return; // planilha consolidada — já coberta pelas abas por fornecedor
+          var rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:''});
+          var colMap=null,headerIdx=-1;
+          for(var i=0;i<rows.length;i++){
+            var cells=rows[i].map(function(c){return _norm(String(c==null?'':c));});
+            if(cells.indexOf('item')>=0){
+              var mapa={};
+              for(var ci=0;ci<cells.length;ci++){
+                var h=cells[ci];if(!h)continue;
+                if(h==='item')mapa.num=ci;
+                else if(h.indexOf('descri')>=0)mapa.desc=ci;
+                else if(h.indexOf('unit')>=0)mapa.vUnit=ci;
+                else if(h.indexOf('quant')>=0)mapa.qtd=ci;
+                else if(h.indexOf('und')===0||h.indexOf('unid')===0)mapa.unid=ci;
+                else if(h.indexOf('marca')>=0)mapa.marca=ci;
+              }
+              colMap=mapa;headerIdx=i;
+              break;
+            }
+          }
+          if(!colMap||colMap.desc===undefined)return; // aba sem o formato esperado — pula
+          var itens=[];
+          for(var r=headerIdx+1;r<rows.length;r++){
+            var row=rows[r];
+            var desc=String(row[colMap.desc]==null?'':row[colMap.desc]).trim();
+            if(!desc)continue; // pula a linha "TOTAL" (descrição vazia) e linhas em branco
+            var qtd=parseInt(String(colMap.qtd!==undefined?row[colMap.qtd]:'').replace(/[^0-9]/g,''))||0;
+            if(qtd<=0)continue;
+            var vU=parseFloat(String(colMap.vUnit!==undefined?row[colMap.vUnit]:'').replace(',','.'))||0;
+            var unid=colMap.unid!==undefined?String(row[colMap.unid]==null?'':row[colMap.unid]).trim():'';
+            var marca=colMap.marca!==undefined?String(row[colMap.marca]==null?'':row[colMap.marca]).trim():'';
+            var num=colMap.num!==undefined?String(row[colMap.num]==null?'':row[colMap.num]).trim():'';
+            itens.push({num:num,descricao:desc,marca:marca,qtdTeto:qtd,unidade:unid,vUnit:vU,pedidoAcumulado:0,medicamentoId:''});
+          }
+          if(itens.length>0)atasDetectadas.push({sheetName:sn,nome:sn,itens:itens,incluir:true});
+        });
+        if(atasDetectadas.length===0){setMsg('e:Nenhuma ATA reconhecida na planilha. Verifique se cada aba tem uma linha de cabeçalho com "ITEM"/"DESCRIÇÃO".');setImportandoXlsx(false);return;}
+        setImportXlsxPreview(atasDetectadas);
+        setImportandoXlsx(false);
+        setMsg('ok:'+atasDetectadas.length+' ATA(s) encontrada(s)! Confira abaixo e salve.');
+        setTimeout(function(){setMsg('');},4000);
+      }catch(e){setMsg('e:Erro ao ler planilha: '+e.message);setImportandoXlsx(false);}
+    };
+    reader.onerror=function(){setMsg('e:Erro ao abrir arquivo');setImportandoXlsx(false);};
+    reader.readAsArrayBuffer(file);
+  }
+  function toggleAtaExcelPreview(i){setImportXlsxPreview(function(arr){var novo=arr.slice();novo[i]=Object.assign({},novo[i],{incluir:!novo[i].incluir});return novo;});}
+  function renomearAtaExcelPreview(i,nome){setImportXlsxPreview(function(arr){var novo=arr.slice();novo[i]=Object.assign({},novo[i],{nome:nome});return novo;});}
+  function excluirItemAtaExcelPreview(ataIdx,itemIdx){
+    setImportXlsxPreview(function(arr){
+      var novo=arr.slice();
+      novo[ataIdx]=Object.assign({},novo[ataIdx],{itens:novo[ataIdx].itens.filter(function(_,j){return j!==itemIdx;})});
+      return novo;
+    });
+  }
+  function salvarAtasExcelImportadas(){
+    var selecionadas=(importXlsxPreview||[]).filter(function(a){return a.incluir&&a.nome.trim()&&a.itens.length>0;});
+    if(selecionadas.length===0){setMsg('e:Nenhuma ATA selecionada pra salvar (marque ao menos uma).');return;}
+    var qtdAtas=selecionadas.length;
+    Promise.all(selecionadas.map(function(a){
+      var vTot=a.itens.reduce(function(s,it){return s+(it.vUnit*it.qtdTeto);},0);
+      return db.collection('atas').add({nome:a.nome.trim(),categoria:importCat,limite:0,valorTotal:parseFloat(vTot.toFixed(2)),itens:a.itens,criadoEm:new Date().toISOString(),criadoPor:user.name||'',tenant_id:tenantDe(user)});
+    })).then(function(){
+      setImportXlsxPreview(null);
+      setMsg('ok:'+qtdAtas+' ATA(s) importada(s) com sucesso!');
+      setTimeout(function(){setMsg('');},4000);
+    }).catch(function(e){setMsg('e:'+e.message);});
   }
   function atualizarItemAta(ataId,itens,novoItem,idxIt){
     var novos=itens.map(function(x,j){return j===idxIt?Object.assign({},x,novoItem):x;});
@@ -7213,6 +7300,50 @@ function TabPrevisao(props){
             <div style={{display:'flex',gap:8}}>
               <button onClick={function(){setImportPreview(null);setImportNome('');setEditItemIdx(-1);setEditItemDraft(null);}} className="bs" style={{flex:1}}>Cancelar</button>
               <button onClick={salvarAtaImportada} className="bg" style={{flex:2}}>✅ Salvar Ata Importada ({importPreview.length} {importPreview.length===1?'item':'itens'})</button>
+            </div>
+          </div>}
+        </div>
+        {/* Importar várias ATAs de uma vez, de uma planilha Excel com uma aba por fornecedor */}
+        <div style={{background:'#EFF6FF',borderRadius:14,border:'1.5px solid #93C5FD',padding:16,marginBottom:16}}>
+          <div style={{fontWeight:700,fontSize:14,color:'#1E3A8A',marginBottom:4}}>📊 Importar várias ATAs de uma planilha Excel (.xlsx)</div>
+          <div style={{fontSize:12,color:'#475569',marginBottom:10}}>Pra planilhas com uma aba por fornecedor (ex.: "SEND PHARMA", "MONTE"...) — cada aba vira uma ATA separada. Uma aba chamada "Planilha Geral" (ou parecido) é ignorada de propósito: ela só repete, somados numa tabela só, os mesmos itens que já vêm separados nas outras abas.</div>
+          <label style={{display:'block',cursor:'pointer'}}>
+            <div style={{border:'2px dashed #2563EB',borderRadius:10,padding:'16px',textAlign:'center',background:'#EFF6FF',cursor:'pointer',marginBottom:8}}>
+              <div style={{fontSize:28,marginBottom:4}}>📂</div>
+              <div style={{fontWeight:700,fontSize:13,color:'#1E3A8A',marginBottom:2}}>Clique aqui para selecionar a planilha .xlsx</div>
+              <div style={{fontSize:11,color:'#64748B'}}>Excel com uma aba por fornecedor/ATA</div>
+            </div>
+            <input type="file" accept=".xlsx,.xls" onChange={function(e){var f=e.target.files&&e.target.files[0];if(f)importarAtasExcel(f);e.target.value='';}} style={{display:'none'}}/>
+          </label>
+          {importandoXlsx&&<div className="inf" style={{marginBottom:8}}>⏳ Lendo planilha...</div>}
+          {importXlsxPreview&&<div style={{marginTop:8}}>
+            <div style={{fontSize:11,fontWeight:600,color:'#64748B',marginBottom:6}}>Categoria (aplicada a todas as ATAs selecionadas):</div>
+            <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:10}}>
+              {Object.keys(LBL).map(function(k){return(<button key={k} onClick={function(){setImportCat(k);}} style={{padding:'5px 11px',borderRadius:20,border:'1.5px solid '+(importCat===k?COR[k]:'#E2E8F0'),background:importCat===k?COR[k]:'#fff',color:importCat===k?'#fff':COR[k],fontWeight:600,fontSize:11,cursor:'pointer'}}>{ICO[k]} {LBL[k]}</button>);})}
+            </div>
+            <div style={{fontSize:12,fontWeight:700,color:'#1E3A8A',marginBottom:6}}>{importXlsxPreview.length} ATA(s) encontrada(s) — confira, ajuste o nome e desmarque as que não quiser importar:</div>
+            <div style={{maxHeight:440,overflowY:'auto',display:'flex',flexDirection:'column',gap:8,marginBottom:10}}>
+              {importXlsxPreview.map(function(a,ai){
+                var vTot=a.itens.reduce(function(s,it){return s+(it.vUnit*it.qtdTeto);},0);
+                return(<div key={ai} style={{background:'#fff',borderRadius:8,border:'1px solid '+(a.incluir?'#BFDBFE':'#E2E8F0'),padding:10,opacity:a.incluir?1:0.55}}>
+                  <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
+                    <input type="checkbox" checked={a.incluir} onChange={function(){toggleAtaExcelPreview(ai);}} style={{width:18,height:18,cursor:'pointer',flexShrink:0}}/>
+                    <input value={a.nome} onChange={function(e){renomearAtaExcelPreview(ai,e.target.value);}} className="inp" style={{margin:0,flex:1,fontWeight:700,fontSize:13}}/>
+                  </div>
+                  <div style={{fontSize:11,color:'#64748B',marginBottom:6}}>{a.itens.length} {a.itens.length===1?'item':'itens'} · R$ {vTot.toFixed(2)}</div>
+                  <div style={{maxHeight:140,overflowY:'auto',border:'1px solid #F1F5F9',borderRadius:6}}>
+                    {a.itens.map(function(it,ii){return(<div key={ii} style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6,padding:'5px 8px',borderBottom:'1px solid #F8FAFC',fontSize:11}}>
+                      <span style={{flex:1,color:'#1E293B'}}>{it.descricao}</span>
+                      <span style={{color:'#0C6B3E',fontWeight:700,whiteSpace:'nowrap'}}>{it.qtdTeto} {it.unidade}</span>
+                      <button onClick={function(){excluirItemAtaExcelPreview(ai,ii);}} title="Excluir item" style={{background:'#FEE2E2',border:'none',borderRadius:5,width:20,height:20,cursor:'pointer',fontSize:10,flexShrink:0}}>🗑</button>
+                    </div>);})}
+                  </div>
+                </div>);
+              })}
+            </div>
+            <div style={{display:'flex',gap:8}}>
+              <button onClick={function(){setImportXlsxPreview(null);}} className="bs" style={{flex:1}}>Cancelar</button>
+              <button onClick={salvarAtasExcelImportadas} className="bg" style={{flex:2}}>✅ Salvar {importXlsxPreview.filter(function(a){return a.incluir;}).length} ATA(s) selecionada(s)</button>
             </div>
           </div>}
         </div>
