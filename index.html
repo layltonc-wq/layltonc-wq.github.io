@@ -13,7 +13,7 @@
 // ser a data/hora atual em segundos, ex.: no terminal `date +%s`) — sem isso, o auto-update não
 // detecta a mudança e navegadores/ícones de tela inicial com cache antigo continuam presos até
 // alguém limpar o cache manualmente (foi exatamente isso que causou o incidente de 18/09/2026).
-window.__FC_VERSION=1790123444;
+window.__FC_VERSION=1790123850;
 (function(){
   try{
     fetch(location.pathname+'?_vcheck='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(html){
@@ -6173,6 +6173,7 @@ function TabPrevisao(props){
   var _editAta=useState(null);var editAta=_editAta[0];var setEditAta=_editAta[1];// ata em edição (busca fuzzy)
   var _editBusca=useState('');var editBusca=_editBusca[0];var setEditBusca=_editBusca[1];
   var _editDraft=useState(null);var editDraft=_editDraft[0];var setEditDraft=_editDraft[1];// rascunho: IDs dos medicamentos da ata em edição (não gravado até Salvar)
+  var _editCat=useState('');var editCat=_editCat[0];var setEditCat=_editCat[1];// rascunho: categoria da ata em edição
   var _editItens=useState(null);var editItens=_editItens[0];var setEditItens=_editItens[1];// rascunho dos itens da ata (medicamentoId por item), p/ atas importadas
   // Sugestões automáticas de vínculo: para a ata em edição, casa cada item (nome+mg+siglas) com o estoque.
   // Calculado uma vez por (ata em edição, estoque) — não recomputa a cada tecla.
@@ -6699,10 +6700,36 @@ function TabPrevisao(props){
     setEditAta(ata.id);
     setEditDraft(medsDaAta(ata.id).map(function(m){return m.id;}));
     setEditItens(ata.itens&&ata.itens.length?ata.itens.map(function(it){return Object.assign({},it);}):null);
+    setEditCat(ata.categoria||'controlado');
     setEditBusca('');
   }
   // Fecha o editor DESCARTANDO o rascunho (não grava nada).
-  function fecharEditAta(){setEditAta(null);setEditDraft(null);setEditItens(null);setEditBusca('');}
+  function fecharEditAta(){setEditAta(null);setEditDraft(null);setEditItens(null);setEditCat('');setEditBusca('');}
+  // Adiciona um item NOVO em branco ao rascunho de itens da ata (rascunho local, só grava ao Salvar).
+  function adicionarItemEditDraft(){
+    setEditItens(function(prev){
+      var arr=prev?prev.slice():[];
+      arr.push({num:'',descricao:'',marca:'',qtdTeto:0,unidade:'',vUnit:0,pedidoAcumulado:0,medicamentoId:''});
+      return arr;
+    });
+  }
+  // Remove um item do rascunho de itens da ata (rascunho local).
+  function removerItemEditDraft(idx){
+    if(!window.confirm('Remover este item da ata?'))return;
+    setEditItens(function(prev){return prev?prev.filter(function(_,i){return i!==idx;}):prev;});
+  }
+  // Edita um campo (descricao/qtdTeto/unidade/vUnit) de um item do rascunho.
+  function editarCampoItemDraft(idx,campo,valor){
+    setEditItens(function(prev){
+      if(!prev)return prev;
+      return prev.map(function(it,i){
+        if(i!==idx)return it;
+        var novo=Object.assign({},it);
+        novo[campo]=valor;
+        return novo;
+      });
+    });
+  }
   // Adiciona um medicamento ao rascunho (só estado local). Bloqueia duplicata.
   function addMedDraft(med){
     if((editDraft||[]).indexOf(med.id)>=0){setMsg('e:"'+med.nome+'" já está nesta ata.');setTimeout(function(){setMsg('');},2500);return;}
@@ -6741,14 +6768,24 @@ function TabPrevisao(props){
     setEditDraft(function(prev){var s=(prev||[]).slice();novos.forEach(function(id){if(s.indexOf(id)<0)s.push(id);});return s;});
     setMsg('ok:'+novos.length+' item(ns) vinculado(s) no rascunho. Toque em ✅ Salvar para gravar.');setTimeout(function(){setMsg('');},3000);
   }
-  // Grava o rascunho inteiro no Firestore de uma vez: itens (medicamentoId) + reconcilia ataId dos medicamentos.
+  // Grava o rascunho inteiro no Firestore de uma vez: itens (medicamentoId, add/edit/remover), categoria
+  // + reconcilia ataId dos medicamentos vinculados.
   function salvarEditAta(ata){
     var original=medsDaAta(ata.id).map(function(m){return m.id;});
     var draft=editDraft||[];
     var adicionar=draft.filter(function(id){return original.indexOf(id)<0;});
     var remover=original.filter(function(id){return draft.indexOf(id)<0;});
     var ops=[];
-    if(editItens){ops.push(db.collection('atas').doc(ata.id).update({itens:editItens}));}
+    var ataUpdate={};
+    if(editItens){
+      // Normaliza número/valor dos itens editados manualmente (os campos chegam como string do <input>).
+      ataUpdate.itens=editItens.map(function(it){return Object.assign({},it,{
+        qtdTeto:parseInt(it.qtdTeto)||0,
+        vUnit:parseFloat(String(it.vUnit).replace(',','.'))||0
+      });});
+    }
+    if(editCat&&editCat!==ata.categoria)ataUpdate.categoria=editCat;
+    if(Object.keys(ataUpdate).length>0)ops.push(db.collection('atas').doc(ata.id).update(ataUpdate));
     adicionar.forEach(function(id){ops.push(db.collection('medicamentos').doc(id).update({ataId:ata.id}));});
     remover.forEach(function(id){ops.push(db.collection('medicamentos').doc(id).update({ataId:''}));});
     Promise.all(ops).then(function(){
@@ -7419,6 +7456,12 @@ function TabPrevisao(props){
               <button onClick={function(){exportarPDF([ata]);}} style={{background:'#FEE2E2',border:'none',borderRadius:8,padding:'6px 12px',fontSize:12,color:'#DC2626',fontWeight:700,cursor:'pointer'}}>📄 PDF</button>
               <button onClick={function(){exportarExcel([ata]);}} style={{background:'#DCFCE7',border:'none',borderRadius:8,padding:'6px 12px',fontSize:12,color:'#0C6B3E',fontWeight:700,cursor:'pointer'}}>📊 Excel</button>
             </div>
+            {editAta===ata.id&&<div style={{marginBottom:10}}>
+              <div style={{fontSize:11,fontWeight:600,color:'#64748B',marginBottom:4}}>Categoria:</div>
+              <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                {Object.keys(LBL).map(function(k){return(<button key={k} onClick={function(){setEditCat(k);}} style={{padding:'5px 11px',borderRadius:20,border:'1.5px solid '+(editCat===k?COR[k]:'#E2E8F0'),background:editCat===k?COR[k]:'#fff',color:editCat===k?'#fff':COR[k],fontWeight:600,fontSize:11,cursor:'pointer'}}>{ICO[k]} {LBL[k]}</button>);})}
+              </div>
+            </div>}
             <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
               <span style={{fontSize:12,color:'#64748B',fontWeight:600}}>Limite da ata:</span>
               <input type="number" defaultValue={ata.limite||''} onBlur={function(e){setLimite(ata.id,e.target.value);}} placeholder="sem limite" style={{width:120,padding:'6px 10px',border:'1.5px solid #CBD5E1',borderRadius:8,fontSize:13,outline:'none'}}/>
@@ -7521,6 +7564,26 @@ function TabPrevisao(props){
                 })}
               </div>);
             })()}
+            {editAta===ata.id&&<div style={{marginTop:10,background:'#fff',border:'1.5px solid '+cor,borderRadius:12,padding:'12px'}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8,gap:8,flexWrap:'wrap'}}>
+                <div style={{fontWeight:700,fontSize:12,color:'#1E293B'}}>✏️ Itens do contrato ({(editItens||[]).length})</div>
+                <button onClick={adicionarItemEditDraft} style={{background:cor,border:'none',borderRadius:8,padding:'6px 12px',fontSize:11,color:'#fff',fontWeight:700,cursor:'pointer'}}>+ Adicionar item</button>
+              </div>
+              {(!editItens||editItens.length===0)&&<div style={{fontSize:11,color:'#94A3B8',fontStyle:'italic'}}>Nenhum item cadastrado nesta ata ainda — use "+ Adicionar item" pra incluir um.</div>}
+              <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                {(editItens||[]).map(function(it,idx){return(<div key={idx} style={{background:'#F8FAFC',borderRadius:8,border:'1px solid #E2E8F0',padding:8}}>
+                  <textarea value={it.descricao} onChange={function(e){editarCampoItemDraft(idx,'descricao',e.target.value);}} placeholder="Descrição do medicamento" className="inp" style={{minHeight:44,marginBottom:6,fontSize:12}}/>
+                  <div style={{display:'flex',gap:6,marginBottom:6}}>
+                    <input value={it.qtdTeto} onChange={function(e){editarCampoItemDraft(idx,'qtdTeto',e.target.value.replace(/[^0-9]/g,''));}} placeholder="Qtd. contrato" className="inp" style={{margin:0,flex:1,fontSize:12}}/>
+                    <input value={it.unidade} onChange={function(e){editarCampoItemDraft(idx,'unidade',e.target.value);}} placeholder="Unidade" className="inp" style={{margin:0,flex:1,fontSize:12}}/>
+                    <input value={it.vUnit} onChange={function(e){editarCampoItemDraft(idx,'vUnit',e.target.value);}} placeholder="Vl. unit." className="inp" style={{margin:0,flex:1,fontSize:12}}/>
+                  </div>
+                  <div style={{display:'flex',justifyContent:'flex-end'}}>
+                    <button onClick={function(){removerItemEditDraft(idx);}} style={{background:'#FEE2E2',border:'none',borderRadius:6,padding:'5px 10px',fontSize:11,color:'#DC2626',fontWeight:700,cursor:'pointer'}}>🗑 Remover item</button>
+                  </div>
+                </div>);})}
+              </div>
+            </div>}
             {editAta===ata.id&&(function(){
               var linkedIds={};(editDraft||[]).forEach(function(id){linkedIds[id]=true;});
               var sugestoes=editBusca.trim()?_fuzzyMeds(editBusca,medications,8):[];
