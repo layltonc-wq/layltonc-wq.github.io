@@ -13,7 +13,7 @@
 // ser a data/hora atual em segundos, ex.: no terminal `date +%s`) — sem isso, o auto-update não
 // detecta a mudança e navegadores/ícones de tela inicial com cache antigo continuam presos até
 // alguém limpar o cache manualmente (foi exatamente isso que causou o incidente de 18/09/2026).
-window.__FC_VERSION=1790128513;
+window.__FC_VERSION=1790129205;
 (function(){
   try{
     fetch(location.pathname+'?_vcheck='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(html){
@@ -6135,6 +6135,7 @@ function TabHistoricoNotas(props){
 
 function TabPrevisao(props){
   var user=props.user;var entries=props.entries;var medications=props.medications;var stock=props.stock;var db=props.db;
+  var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};
   var isMan=user.role==='gestor'||user.role==='tecnico';
   var _atas=useState([]);var atas=_atas[0];var setAtas=_atas[1];
   var _sub=useState('previsao');var sub=_sub[0];var setSub=_sub[1];
@@ -6404,15 +6405,16 @@ function TabPrevisao(props){
   function desfazerUltimoPedido(ata){
     if(!ata||!ata.ultimoPedido||!ata.itens)return;
     var qtdTotal=ata.ultimoPedido.deltas.reduce(function(s,d){return s+d.qtd;},0);
-    if(!window.confirm('Desfazer o último pedido desta ATA ("'+ata.nome+'")? '+qtdTotal+' unidade(s) voltam pro saldo restante.'))return;
-    var novos=ata.itens.map(function(it){return Object.assign({},it);});
-    ata.ultimoPedido.deltas.forEach(function(d){
-      if(!novos[d.idx])return;
-      novos[d.idx].pedidoAcumulado=Math.max(0,(novos[d.idx].pedidoAcumulado||0)-d.qtd);
-    });
-    db.collection('atas').doc(ata.id).update({itens:novos,ultimoPedido:firebase.firestore.FieldValue.delete()}).then(function(){
-      setMsg('ok:Último pedido desfeito — saldo restante voltou ao que estava antes.');setTimeout(function(){setMsg('');},3500);
-    }).catch(function(e){setMsg('e:Não foi possível desfazer: '+e.message);});
+    confirm2('Desfazer último pedido','Desfazer o último pedido desta ATA ("'+ata.nome+'")? '+qtdTotal+' unidade(s) voltam pro saldo restante.',function(){
+      var novos=ata.itens.map(function(it){return Object.assign({},it);});
+      ata.ultimoPedido.deltas.forEach(function(d){
+        if(!novos[d.idx])return;
+        novos[d.idx].pedidoAcumulado=Math.max(0,(novos[d.idx].pedidoAcumulado||0)-d.qtd);
+      });
+      db.collection('atas').doc(ata.id).update({itens:novos,ultimoPedido:firebase.firestore.FieldValue.delete()}).then(function(){
+        setMsg('ok:Último pedido desfeito — saldo restante voltou ao que estava antes.');setTimeout(function(){setMsg('');},3500);
+      }).catch(function(e){setMsg('e:Não foi possível desfazer: '+e.message);});
+    },'warning','Desfazer');
   }
 
   // ── AÇÕES ────────────────────────────────────────────────────
@@ -6951,32 +6953,38 @@ function TabPrevisao(props){
         '</td></tr>';
     }).join('');
     if(grupoPedir.length===0){setMsg('e:Nenhum medicamento com pedido > 0 nesta ata. Ajuste as quantidades antes de exportar.');return;}
-    if(info.autoDescontarAta&&!window.confirm('Confirmar este pedido de "'+nomeAta+'"? '+totalUn+' unidade(s) serão descontadas do saldo da ATA.'))return;
-    var html='<!DOCTYPE html><html><head><meta charset="utf-8">'+
-      '<style>body{font-family:Arial,sans-serif;padding:24px;font-size:12px}'+
-      'h2{color:'+info.cor+';margin-bottom:4px}h3{color:#475569;margin-bottom:16px;font-size:13px}'+
-      'table{width:100%;border-collapse:collapse;margin-top:12px}'+
-      'th{background:'+info.cor+';color:#fff;padding:7px 8px;text-align:left;border:1px solid '+info.cor+';font-size:11px}'+
-      '.total{background:#F8FAFC;font-weight:700}'+
-      '.info{display:flex;gap:24px;margin-bottom:12px;font-size:11px;color:#475569}'+
-      '.info b{color:#1E293B}</style></head><body>'+
-      marcaDaguaPedido(info)+
-      montarCabecalhoPedido()+
-      '<div style="text-align:center;font-size:13px;font-weight:900;padding:8px;border:1px solid #222;background:#f0f0f0;margin-top:16px;margin-bottom:8px;letter-spacing:.05em">'+nomeAta.toUpperCase()+'</div>'+
-      '<table><thead><tr>'+
-      '<th style="width:50px">Item</th><th>Descrição</th><th style="width:60px">Unid.</th>'+
-      '<th style="width:70px">Qtd. Pedir</th>'+
-      '<th style="width:80px">V. Unit.</th><th style="width:90px">V. Total</th>'+(info.mostrarColunaMarca?'<th style="width:100px">Marca</th>':'')+'</tr></thead>'+
-      '<tbody>'+linhas+'</tbody>'+
-      '<tfoot><tr class="total">'+
-      '<td colspan="3" style="padding:7px 8px;border:1px solid #ddd;text-align:right">TOTAL</td>'+
-      '<td style="padding:7px 8px;border:1px solid #ddd;text-align:center">'+totalUn+'</td>'+
-      '<td style="padding:7px 8px;border:1px solid #ddd"></td>'+
-      '<td style="padding:7px 8px;border:1px solid #ddd;text-align:right">R$ '+totalVal.toFixed(2).replace('.',',')+
-      '</td>'+(info.mostrarColunaMarca?'<td style="padding:7px 8px;border:1px solid #ddd"></td>':'')+
-      '</tr></tfoot></table></body></html>';
-    if(!_imprimirDoc(html)){setMsg('e:Não foi possível abrir a impressão. Tente de novo.');return;}
-    if(info.autoDescontarAta)descontarPedidoDaAta(ata,grupoPedir).catch(function(e){setMsg('e:Pedido impresso, mas houve erro ao atualizar o saldo da ATA: '+e.message);});
+    function gerar(){
+      var html='<!DOCTYPE html><html><head><meta charset="utf-8">'+
+        '<style>body{font-family:Arial,sans-serif;padding:24px;font-size:12px}'+
+        'h2{color:'+info.cor+';margin-bottom:4px}h3{color:#475569;margin-bottom:16px;font-size:13px}'+
+        'table{width:100%;border-collapse:collapse;margin-top:12px}'+
+        'th{background:'+info.cor+';color:#fff;padding:7px 8px;text-align:left;border:1px solid '+info.cor+';font-size:11px}'+
+        '.total{background:#F8FAFC;font-weight:700}'+
+        '.info{display:flex;gap:24px;margin-bottom:12px;font-size:11px;color:#475569}'+
+        '.info b{color:#1E293B}</style></head><body>'+
+        marcaDaguaPedido(info)+
+        montarCabecalhoPedido()+
+        '<div style="text-align:center;font-size:13px;font-weight:900;padding:8px;border:1px solid #222;background:#f0f0f0;margin-top:16px;margin-bottom:8px;letter-spacing:.05em">'+nomeAta.toUpperCase()+'</div>'+
+        '<table><thead><tr>'+
+        '<th style="width:50px">Item</th><th>Descrição</th><th style="width:60px">Unid.</th>'+
+        '<th style="width:70px">Qtd. Pedir</th>'+
+        '<th style="width:80px">V. Unit.</th><th style="width:90px">V. Total</th>'+(info.mostrarColunaMarca?'<th style="width:100px">Marca</th>':'')+'</tr></thead>'+
+        '<tbody>'+linhas+'</tbody>'+
+        '<tfoot><tr class="total">'+
+        '<td colspan="3" style="padding:7px 8px;border:1px solid #ddd;text-align:right">TOTAL</td>'+
+        '<td style="padding:7px 8px;border:1px solid #ddd;text-align:center">'+totalUn+'</td>'+
+        '<td style="padding:7px 8px;border:1px solid #ddd"></td>'+
+        '<td style="padding:7px 8px;border:1px solid #ddd;text-align:right">R$ '+totalVal.toFixed(2).replace('.',',')+
+        '</td>'+(info.mostrarColunaMarca?'<td style="padding:7px 8px;border:1px solid #ddd"></td>':'')+
+        '</tr></tfoot></table></body></html>';
+      if(!_imprimirDoc(html)){setMsg('e:Não foi possível abrir a impressão. Tente de novo.');return;}
+      if(info.autoDescontarAta)descontarPedidoDaAta(ata,grupoPedir).catch(function(e){setMsg('e:Pedido impresso, mas houve erro ao atualizar o saldo da ATA: '+e.message);});
+    }
+    if(info.autoDescontarAta){
+      confirm2('Confirmar pedido','Confirmar este pedido de "'+nomeAta+'"? '+totalUn+' unidade(s) serão descontadas do saldo da ATA.',gerar,'warning','Confirmar');
+    }else{
+      gerar();
+    }
   }
 
   // atasFiltro (opcional): array de ATAs para gerar o pedido SÓ delas (pedido unitário por ata),
@@ -7004,8 +7012,8 @@ function TabPrevisao(props){
     // Medicamentos sem ata não entram no PDF oficial
 
     if(secoes.length===0){setMsg('e:Nenhum medicamento com pedido > 0. Ajuste as quantidades antes de exportar.');return;}
-    if(info.autoDescontarAta&&!window.confirm('Confirmar este pedido? '+totalUnGeral+' unidade(s), no total, serão descontadas do saldo das ATAs envolvidas.'))return;
 
+    function gerar(){
     var css='<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;font-size:11px;color:#111;padding:20px}'+
       '.header{border-bottom:3px solid '+info.cor+';padding-bottom:8px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:flex-start}'+
       '.title-block .main{font-size:14px;font-weight:700;color:'+info.cor+'}.title-block .sub{font-size:11px;color:#444;margin-top:2px}'+
@@ -7073,6 +7081,12 @@ function TabPrevisao(props){
     if(!_imprimirDoc(html)){setMsg('e:Não foi possível abrir a impressão. Tente de novo.');return;}
     if(info.autoDescontarAta){
       Promise.all(linhasPorAta.map(function(x){return descontarPedidoDaAta(x.ata,x.linhas);})).catch(function(e){setMsg('e:Pedido impresso, mas houve erro ao atualizar o saldo de uma das ATAs: '+e.message);});
+    }
+    }
+    if(info.autoDescontarAta){
+      confirm2('Confirmar pedido','Confirmar este pedido? '+totalUnGeral+' unidade(s), no total, serão descontadas do saldo das ATAs envolvidas.',gerar,'warning','Confirmar');
+    }else{
+      gerar();
     }
   }
 
@@ -10559,7 +10573,7 @@ return(
         {tab==='gestao'&&can(user.role,'gestao')&&<TabGestao currentUser={user} entries={entries}/>}
         {tab==='log'&&can(user.role,'log')&&<TabLog user={user}/>}
         {tab==='histnotas'&&(user.role==='gestor'||user.role==='tecnico')&&<ErrBoundary><TabHistoricoNotas user={user} entries={entries} medications={meds} db={db}/></ErrBoundary>}
-        {tab==='previsao'&&(user.role==='gestor'||user.role==='tecnico')&&<ErrBoundary><TabPrevisao user={user} entries={entries} medications={meds} stock={stock} db={db}/></ErrBoundary>}
+        {tab==='previsao'&&(user.role==='gestor'||user.role==='tecnico')&&<ErrBoundary><TabPrevisao user={user} entries={entries} medications={meds} stock={stock} db={db} confirm2={confirm2}/></ErrBoundary>}
         {tab==='histcontas'&&can(user.role,'log')&&<TabHistContas user={user}/>}
         {tab==='antibiotico'&&<TabAntibiotico user={user} medications={meds} stock={stock} allUsers={allUsers}/>}
         {tab==='pedidosjudiciais'&&tenantDe(user)==='itaquitinga-pe'&&isManagerRole&&<ErrBoundary><TabPedidosJudiciais user={user} medications={meds} stock={stock} entries={entries} onSave={addEntryStable} confirm2={confirm2} alert2={alert2}/></ErrBoundary>}
