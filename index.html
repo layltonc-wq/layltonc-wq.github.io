@@ -13,7 +13,7 @@
 // ser a data/hora atual em segundos, ex.: no terminal `date +%s`) — sem isso, o auto-update não
 // detecta a mudança e navegadores/ícones de tela inicial com cache antigo continuam presos até
 // alguém limpar o cache manualmente (foi exatamente isso que causou o incidente de 18/09/2026).
-window.__FC_VERSION=1790127580;
+window.__FC_VERSION=1790128015;
 (function(){
   try{
     fetch(location.pathname+'?_vcheck='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(html){
@@ -6175,6 +6175,7 @@ function TabPrevisao(props){
   var _editBusca=useState('');var editBusca=_editBusca[0];var setEditBusca=_editBusca[1];
   var _editDraft=useState(null);var editDraft=_editDraft[0];var setEditDraft=_editDraft[1];// rascunho: IDs dos medicamentos da ata em edição (não gravado até Salvar)
   var _editCat=useState('');var editCat=_editCat[0];var setEditCat=_editCat[1];// rascunho: categoria da ata em edição
+  var _editValorTotal=useState('');var editValorTotal=_editValorTotal[0];var setEditValorTotal=_editValorTotal[1];// rascunho: valor total do contrato (sobe com aditivo)
   var _editItens=useState(null);var editItens=_editItens[0];var setEditItens=_editItens[1];// rascunho dos itens da ata (medicamentoId por item), p/ atas importadas
   // Sugestões automáticas de vínculo: para a ata em edição, casa cada item (nome+mg+siglas) com o estoque.
   // Calculado uma vez por (ata em edição, estoque) — não recomputa a cada tecla.
@@ -6710,10 +6711,11 @@ function TabPrevisao(props){
     setEditDraft(medsDaAta(ata.id).map(function(m){return m.id;}));
     setEditItens(ata.itens&&ata.itens.length?ata.itens.map(function(it){return Object.assign({},it);}):null);
     setEditCat(ata.categoria||'controlado');
+    setEditValorTotal(ata.valorTotal!=null?String(ata.valorTotal).replace('.',','):'');
     setEditBusca('');
   }
   // Fecha o editor DESCARTANDO o rascunho (não grava nada).
-  function fecharEditAta(){setEditAta(null);setEditDraft(null);setEditItens(null);setEditCat('');setEditBusca('');}
+  function fecharEditAta(){setEditAta(null);setEditDraft(null);setEditItens(null);setEditCat('');setEditValorTotal('');setEditBusca('');}
   // Adiciona um item NOVO em branco ao rascunho de itens da ata (rascunho local, só grava ao Salvar).
   function adicionarItemEditDraft(){
     setEditItens(function(prev){
@@ -6794,6 +6796,8 @@ function TabPrevisao(props){
       });});
     }
     if(editCat&&editCat!==ata.categoria)ataUpdate.categoria=editCat;
+    var novoValorTotal=parseFloat(String(editValorTotal).replace(',','.'));
+    if(!isNaN(novoValorTotal)&&novoValorTotal!==(ata.valorTotal||0))ataUpdate.valorTotal=novoValorTotal;
     if(Object.keys(ataUpdate).length>0)ops.push(db.collection('atas').doc(ata.id).update(ataUpdate));
     adicionar.forEach(function(id){ops.push(db.collection('medicamentos').doc(id).update({ataId:ata.id}));});
     remover.forEach(function(id){ops.push(db.collection('medicamentos').doc(id).update({ataId:''}));});
@@ -7472,6 +7476,14 @@ function TabPrevisao(props){
               <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
                 {Object.keys(LBL).map(function(k){return(<button key={k} onClick={function(){setEditCat(k);}} style={{padding:'5px 11px',borderRadius:20,border:'1.5px solid '+(editCat===k?COR[k]:'#E2E8F0'),background:editCat===k?COR[k]:'#fff',color:editCat===k?'#fff':COR[k],fontWeight:600,fontSize:11,cursor:'pointer'}}>{ICO[k]} {LBL[k]}</button>);})}
               </div>
+            </div>}
+            {editAta===ata.id&&<div style={{marginBottom:10}}>
+              <div style={{fontSize:11,fontWeight:600,color:'#64748B',marginBottom:4}}>Valor total do contrato (R$) — ajuste aqui se houver aditivo:</div>
+              <input type="text" inputMode="decimal" value={editValorTotal} onChange={function(e){setEditValorTotal(e.target.value);}} placeholder="Ex: 50000,00" className="inp" style={{marginBottom:0,maxWidth:200}}/>
+            </div>}
+            {ata.valorTotal!=null&&<div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6,fontSize:12}}>
+              <span style={{color:'#64748B',fontWeight:600}}>Valor total do contrato:</span>
+              <strong style={{color:cor}}>R$ {Number(ata.valorTotal).toFixed(2).replace('.',',')}</strong>
             </div>}
             {/* O campo antigo "Limite da ata" (número digitado à mão) nunca alimentava nenhum cálculo —
                 era só guardado, sem efeito nenhum no app. O saldo real, que já é descontado sozinho a
