@@ -13,7 +13,7 @@
 // ser a data/hora atual em segundos, ex.: no terminal `date +%s`) — sem isso, o auto-update não
 // detecta a mudança e navegadores/ícones de tela inicial com cache antigo continuam presos até
 // alguém limpar o cache manualmente (foi exatamente isso que causou o incidente de 18/09/2026).
-window.__FC_VERSION=1790129205;
+window.__FC_VERSION=1790208727;
 (function(){
   try{
     fetch(location.pathname+'?_vcheck='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(html){
@@ -6953,38 +6953,47 @@ function TabPrevisao(props){
         '</td></tr>';
     }).join('');
     if(grupoPedir.length===0){setMsg('e:Nenhum medicamento com pedido > 0 nesta ata. Ajuste as quantidades antes de exportar.');return;}
-    function gerar(){
-      var html='<!DOCTYPE html><html><head><meta charset="utf-8">'+
-        '<style>body{font-family:Arial,sans-serif;padding:24px;font-size:12px}'+
-        'h2{color:'+info.cor+';margin-bottom:4px}h3{color:#475569;margin-bottom:16px;font-size:13px}'+
-        'table{width:100%;border-collapse:collapse;margin-top:12px}'+
-        'th{background:'+info.cor+';color:#fff;padding:7px 8px;text-align:left;border:1px solid '+info.cor+';font-size:11px}'+
-        '.total{background:#F8FAFC;font-weight:700}'+
-        '.info{display:flex;gap:24px;margin-bottom:12px;font-size:11px;color:#475569}'+
-        '.info b{color:#1E293B}</style></head><body>'+
-        marcaDaguaPedido(info)+
-        montarCabecalhoPedido()+
-        '<div style="text-align:center;font-size:13px;font-weight:900;padding:8px;border:1px solid #222;background:#f0f0f0;margin-top:16px;margin-bottom:8px;letter-spacing:.05em">'+nomeAta.toUpperCase()+'</div>'+
-        '<table><thead><tr>'+
-        '<th style="width:50px">Item</th><th>Descrição</th><th style="width:60px">Unid.</th>'+
-        '<th style="width:70px">Qtd. Pedir</th>'+
-        '<th style="width:80px">V. Unit.</th><th style="width:90px">V. Total</th>'+(info.mostrarColunaMarca?'<th style="width:100px">Marca</th>':'')+'</tr></thead>'+
-        '<tbody>'+linhas+'</tbody>'+
-        '<tfoot><tr class="total">'+
-        '<td colspan="3" style="padding:7px 8px;border:1px solid #ddd;text-align:right">TOTAL</td>'+
-        '<td style="padding:7px 8px;border:1px solid #ddd;text-align:center">'+totalUn+'</td>'+
-        '<td style="padding:7px 8px;border:1px solid #ddd"></td>'+
-        '<td style="padding:7px 8px;border:1px solid #ddd;text-align:right">R$ '+totalVal.toFixed(2).replace('.',',')+
-        '</td>'+(info.mostrarColunaMarca?'<td style="padding:7px 8px;border:1px solid #ddd"></td>':'')+
-        '</tr></tfoot></table></body></html>';
-      if(!_imprimirDoc(html)){setMsg('e:Não foi possível abrir a impressão. Tente de novo.');return;}
-      if(info.autoDescontarAta)descontarPedidoDaAta(ata,grupoPedir).catch(function(e){setMsg('e:Pedido impresso, mas houve erro ao atualizar o saldo da ATA: '+e.message);});
-    }
-    if(info.autoDescontarAta){
-      confirm2('Confirmar pedido','Confirmar este pedido de "'+nomeAta+'"? '+totalUn+' unidade(s) serão descontadas do saldo da ATA.',gerar,'warning','Confirmar');
-    }else{
-      gerar();
-    }
+    // Gerar/imprimir o PDF NUNCA desconta o saldo da ATA — só serve pra visualizar/imprimir o
+    // documento. O desconto só acontece quando a usuária clica em "🔒 Fechar Pedido" (fecharPedidoAta),
+    // de propósito: antes, imprimir já descontava, e se ela cancelava a impressão (ex.: percebeu que
+    // faltava 1 item), o saldo já tinha sido mexido sem o pedido ter sido realmente fechado.
+    var html='<!DOCTYPE html><html><head><meta charset="utf-8">'+
+      '<style>body{font-family:Arial,sans-serif;padding:24px;font-size:12px}'+
+      'h2{color:'+info.cor+';margin-bottom:4px}h3{color:#475569;margin-bottom:16px;font-size:13px}'+
+      'table{width:100%;border-collapse:collapse;margin-top:12px}'+
+      'th{background:'+info.cor+';color:#fff;padding:7px 8px;text-align:left;border:1px solid '+info.cor+';font-size:11px}'+
+      '.total{background:#F8FAFC;font-weight:700}'+
+      '.info{display:flex;gap:24px;margin-bottom:12px;font-size:11px;color:#475569}'+
+      '.info b{color:#1E293B}</style></head><body>'+
+      marcaDaguaPedido(info)+
+      montarCabecalhoPedido()+
+      '<div style="text-align:center;font-size:13px;font-weight:900;padding:8px;border:1px solid #222;background:#f0f0f0;margin-top:16px;margin-bottom:8px;letter-spacing:.05em">'+nomeAta.toUpperCase()+'</div>'+
+      '<table><thead><tr>'+
+      '<th style="width:50px">Item</th><th>Descrição</th><th style="width:60px">Unid.</th>'+
+      '<th style="width:70px">Qtd. Pedir</th>'+
+      '<th style="width:80px">V. Unit.</th><th style="width:90px">V. Total</th>'+(info.mostrarColunaMarca?'<th style="width:100px">Marca</th>':'')+'</tr></thead>'+
+      '<tbody>'+linhas+'</tbody>'+
+      '<tfoot><tr class="total">'+
+      '<td colspan="3" style="padding:7px 8px;border:1px solid #ddd;text-align:right">TOTAL</td>'+
+      '<td style="padding:7px 8px;border:1px solid #ddd;text-align:center">'+totalUn+'</td>'+
+      '<td style="padding:7px 8px;border:1px solid #ddd"></td>'+
+      '<td style="padding:7px 8px;border:1px solid #ddd;text-align:right">R$ '+totalVal.toFixed(2).replace('.',',')+
+      '</td>'+(info.mostrarColunaMarca?'<td style="padding:7px 8px;border:1px solid #ddd"></td>':'')+
+      '</tr></tfoot></table></body></html>';
+    if(!_imprimirDoc(html)){setMsg('e:Não foi possível abrir a impressão. Tente de novo.');return;}
+  }
+  // Fecha (desconta do saldo) o pedido de UMA ata — ação explícita e separada de gerar/imprimir o PDF.
+  // Usa a MESMA fonte de linhas (linhasPedidoAta) pra garantir que o que é descontado é exatamente o
+  // que está configurado na tela agora, sem exigir que a usuária tenha gerado o PDF antes.
+  function fecharPedidoAta(ata){
+    var linhas=linhasPedidoAta(ata);
+    if(linhas.length===0){setMsg('e:Nenhum medicamento com pedido > 0 nesta ata. Ajuste as quantidades antes de fechar.');return;}
+    var totalUn=linhas.reduce(function(s,x){return s+x.qtd;},0);
+    confirm2('Fechar pedido','Fechar este pedido de "'+(ata.nome||'')+'"? '+totalUn+' unidade(s) serão descontadas do saldo da ATA. (Dá pra desfazer depois, se precisar.)',function(){
+      descontarPedidoDaAta(ata,linhas).then(function(){
+        setMsg('ok:Pedido de "'+(ata.nome||'')+'" fechado — saldo da ATA atualizado.');setTimeout(function(){setMsg('');},3500);
+      }).catch(function(e){setMsg('e:Não foi possível fechar o pedido: '+e.message);});
+    },'warning','Fechar pedido');
   }
 
   // atasFiltro (opcional): array de ATAs para gerar o pedido SÓ delas (pedido unitário por ata),
@@ -7013,7 +7022,6 @@ function TabPrevisao(props){
 
     if(secoes.length===0){setMsg('e:Nenhum medicamento com pedido > 0. Ajuste as quantidades antes de exportar.');return;}
 
-    function gerar(){
     var css='<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;font-size:11px;color:#111;padding:20px}'+
       '.header{border-bottom:3px solid '+info.cor+';padding-bottom:8px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:flex-start}'+
       '.title-block .main{font-size:14px;font-weight:700;color:'+info.cor+'}.title-block .sub{font-size:11px;color:#444;margin-top:2px}'+
@@ -7079,21 +7087,29 @@ function TabPrevisao(props){
     html+='</body></html>';
 
     if(!_imprimirDoc(html)){setMsg('e:Não foi possível abrir a impressão. Tente de novo.');return;}
-    if(info.autoDescontarAta){
-      Promise.all(linhasPorAta.map(function(x){return descontarPedidoDaAta(x.ata,x.linhas);})).catch(function(e){setMsg('e:Pedido impresso, mas houve erro ao atualizar o saldo de uma das ATAs: '+e.message);});
-    }
-    }
-    if(info.autoDescontarAta){
-      confirm2('Confirmar pedido','Confirmar este pedido? '+totalUnGeral+' unidade(s), no total, serão descontadas do saldo das ATAs envolvidas.',gerar,'warning','Confirmar');
-    }else{
-      gerar();
-    }
+  }
+  // Fecha (desconta do saldo) o pedido consolidado — todas as ATAs com pedido > 0 (ou só as de
+  // atasFiltro, se passado). Ação explícita e separada de gerar/imprimir o PDF (ver fecharPedidoAta).
+  function fecharPedidoConsolidado(atasFiltro){
+    var listaAtas=Array.isArray(atasFiltro)?atasFiltro:atas;
+    var linhasPorAta=[];var totalUn=0;
+    listaAtas.forEach(function(ata){
+      var linhas=linhasPedidoAta(ata);
+      if(linhas.length>0){linhasPorAta.push({ata:ata,linhas:linhas});totalUn+=linhas.reduce(function(s,x){return s+x.qtd;},0);}
+    });
+    if(linhasPorAta.length===0){setMsg('e:Nenhum medicamento com pedido > 0. Ajuste as quantidades antes de fechar.');return;}
+    confirm2('Fechar pedido','Fechar este pedido? '+totalUn+' unidade(s), no total, serão descontadas do saldo das ATAs envolvidas. (Dá pra desfazer cada ATA depois, se precisar.)',function(){
+      Promise.all(linhasPorAta.map(function(x){return descontarPedidoDaAta(x.ata,x.linhas);})).then(function(){
+        setMsg('ok:Pedido fechado — saldo das ATAs atualizado.');setTimeout(function(){setMsg('');},3500);
+      }).catch(function(e){setMsg('e:Pedido fechado, mas houve erro ao atualizar o saldo de uma das ATAs: '+e.message);});
+    },'warning','Fechar pedido');
   }
 
 
   var dias=diasHistorico();
   var faseGlobal=dias<25?1:(dias<55?2:3);
   var faseInfo={1:{txt:'Baseado no estoque mínimo',cor:'#D97706',ico:'📊'},2:{txt:'Baseado no consumo médio',cor:'#1351B4',ico:'📉'},3:{txt:'Baseado em tendência de consumo',cor:'#0C6B3E',ico:'📈'}};
+  var infoTenant=infoPedidoTenant();
 
   return(
     <div style={{maxWidth:760,margin:'0 auto',padding:'16px 12px 90px'}}>
@@ -7153,7 +7169,8 @@ function TabPrevisao(props){
             </div>
             <div><div style={{fontSize:11,color:'#64748B',marginBottom:3}}>Nome da Empresa</div><input value={empresa} onChange={function(e){setEmpresa(e.target.value);}} placeholder="Nome da empresa..." className="inp" style={{marginBottom:0,fontSize:13}}/></div>
           </>}
-          <div style={{display:'flex',gap:8,marginTop:10}}><button onClick={exportarExcel} className="bg" style={{flex:1}}>📥 Excel</button><button onClick={exportarPDF} className="bp" style={{flex:1,background:'#DC2626'}}>📄 PDF Pedido</button></div>
+          <div style={{display:'flex',gap:8,marginTop:10,flexWrap:'wrap'}}><button onClick={exportarExcel} className="bg" style={{flex:1}}>📥 Excel</button><button onClick={exportarPDF} className="bp" style={{flex:1,background:'#DC2626'}}>📄 PDF Pedido</button>{infoTenant.autoDescontarAta&&<button onClick={function(){fecharPedidoConsolidado();}} className="bp" style={{flex:1,background:'#0C6B3E'}}>🔒 Fechar Pedido</button>}</div>
+          {infoTenant.autoDescontarAta&&<div style={{fontSize:10,color:'#94A3B8',marginTop:6}}>Gerar o PDF só imprime — o saldo das ATAs só é descontado quando você clicar em "🔒 Fechar Pedido".</div>}
         </div>
 
         {/* Lista de medicamentos por categoria */}
@@ -7229,6 +7246,9 @@ function TabPrevisao(props){
                   {saldoAta!==null&&<div style={{fontSize:11,marginTop:2,fontWeight:600,color:excede?'#DC2626':'#0C6B3E'}}>
                     Saldo ATA: {saldoAta} {item.unidade||''}{excede?' ⚠️ excede saldo!':''}
                   </div>}
+                  {item&&item.qtdTeto>0&&<div style={{fontSize:10,color:'#94A3B8',marginTop:2}}>
+                    Teto do contrato: {item.qtdTeto} {item.unidade||''}{item.vUnit>0?' · R$ '+(item.qtdTeto*item.vUnit).toFixed(2).replace('.',',')+' no total':''}
+                  </div>}
                 </div>
                 <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:3}}>
                   <div style={{fontSize:10,color:'#94A3B8',fontWeight:600}}>PEDIR</div>
@@ -7283,6 +7303,8 @@ function TabPrevisao(props){
                       </div>
                       {/* Botão PDF desta ATA */}
                       <button onClick={function(e){e.stopPropagation();gerarPDFAta(ata,grupo.meds,catKey);}} style={{background:cor,border:'none',borderRadius:8,padding:'7px 12px',color:'#fff',fontWeight:700,fontSize:11,cursor:'pointer',flexShrink:0,marginLeft:4}}>📄 PDF</button>
+                      {/* Fechar pedido direto daqui — sem precisar clicar em PDF/imprimir antes */}
+                      {infoTenant.autoDescontarAta&&<button onClick={function(e){e.stopPropagation();fecharPedidoAta(ata);}} style={{background:'#0C6B3E',border:'none',borderRadius:8,padding:'7px 12px',color:'#fff',fontWeight:700,fontSize:11,cursor:'pointer',flexShrink:0,marginLeft:4}}>🔒 Fechar</button>}
                       <span style={{fontSize:14,color:cor,marginLeft:4}}>{ataAberta?'▲':'▼'}</span>
                     </div>
                     {ataAberta&&<div style={{padding:'8px 10px 10px',background:'#fff'}}>
@@ -7554,6 +7576,18 @@ function TabPrevisao(props){
               var totalAtaPedido=linhasPedidoAta(ata).reduce(function(s,x){return s+x.vTotal;},0);
               var totalItensPedido=meds.length+naoVinc.length;
               var pedidoAberto=!!termoBusca||pastasAbertas['pedido_'+ata.id]===true;
+              // Quando a busca achou esta ata por causa de um medicamento/item específico (não pelo
+              // nome da própria ata), mostra só o(s) item(ns) que combinam — evita ter que rolar uma
+              // ata com centenas de itens pra achar o que interessa. "ver todos" desliga o filtro.
+              var ataNomeMatch=!!termoBusca&&_norm(ata.nome||'').indexOf(termoBusca)>=0;
+              var verTodosForcado=pastasAbertas['vertodositens_'+ata.id]===true;
+              var filtrarItens=!!termoBusca&&!ataNomeMatch&&!verTodosForcado;
+              var medsFiltrados=filtrarItens?meds.filter(function(m){
+                if(_norm(m.nome||'').indexOf(termoBusca)>=0)return true;
+                var it=itensPorMed[m.id];
+                return it&&_norm(it.descricao||'').indexOf(termoBusca)>=0;
+              }):meds;
+              var naoVincFiltrados=filtrarItens?naoVinc.filter(function(o){return _norm(o.it.descricao||'').indexOf(termoBusca)>=0;}):naoVinc;
               return(<div style={{marginTop:10,background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:10,padding:'10px'}}>
                 <button onClick={function(){setPastasAbertas(function(p){var n=Object.assign({},p);n['pedido_'+ata.id]=!pedidoAberto;return n;});}} style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'space-between',background:'none',border:'none',padding:0,cursor:'pointer',marginBottom:pedidoAberto?8:0}}>
                   <span style={{fontSize:11,fontWeight:700,color:'#475569',textTransform:'uppercase',letterSpacing:'.03em'}}>Definir pedido desta ata ({totalItensPedido} {totalItensPedido===1?'item':'itens'})</span>
@@ -7561,7 +7595,11 @@ function TabPrevisao(props){
                 </button>
                 {!pedidoAberto&&totalAtaPedido>0&&<div style={{fontSize:11,color:cor,fontWeight:700}}>Total do pedido: R$ {totalAtaPedido.toFixed(2).replace('.',',')}</div>}
                 {pedidoAberto&&<React.Fragment>
-                {meds.slice().sort(function(a,b){return (a.nome||'').localeCompare(b.nome||'');}).map(function(m){
+                {filtrarItens&&<div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,flexWrap:'wrap',background:'#EFF6FF',border:'1px solid #BFDBFE',borderRadius:8,padding:'6px 10px',marginBottom:6}}>
+                  <span style={{fontSize:11,color:'#1E40AF'}}>🔍 Mostrando {medsFiltrados.length+naoVincFiltrados.length} de {totalItensPedido} item(ns) que combinam com "{buscaGestAta}"</span>
+                  <button onClick={function(){setPastasAbertas(function(p){var n=Object.assign({},p);n['vertodositens_'+ata.id]=true;return n;});}} style={{background:'none',border:'none',color:'#1351B4',fontSize:11,fontWeight:700,cursor:'pointer',textDecoration:'underline',whiteSpace:'nowrap'}}>ver todos</button>
+                </div>}
+                {medsFiltrados.slice().sort(function(a,b){return (a.nome||'').localeCompare(b.nome||'');}).map(function(m){
                   var it=itensPorMed[m.id]||null;
                   var pAuto=calcularPrevisao(m).pedir;
                   var val=valorPedido(m);var edu=ajustes[m.id]!==undefined;
@@ -7569,6 +7607,7 @@ function TabPrevisao(props){
                   var vt=val*valorUnit(m.id,it);
                   return(<div key={m.id} style={{padding:'8px 0',borderTop:'1px solid #EEF2F8'}}>
                     <div style={{fontSize:12,fontWeight:600,color:'#1E293B',wordBreak:'break-word',marginBottom:2}}>{m.nome}</div>
+                    {it&&it.qtdTeto>0&&<div style={{fontSize:10,color:'#64748B',marginBottom:2}}>Teto do contrato: {it.qtdTeto} {it.unidade||''}{it.vUnit>0?' · R$ '+(it.qtdTeto*it.vUnit).toFixed(2).replace('.',',')+' no total':''}</div>}
                     <div style={{display:'flex',alignItems:'center',gap:8}}>
                       <div style={{fontSize:10,color:'#94A3B8',flex:1,minWidth:0}}>sugestão: {pAuto}{vt>0?' · total: R$ '+vt.toFixed(2).replace('.',','):''}</div>
                       <div style={{display:'flex',flexDirection:'column',alignItems:'center',flexShrink:0}}>
@@ -7583,13 +7622,14 @@ function TabPrevisao(props){
                   </div>);
                 })}
                 {/* Mudança 4: itens da ATA ainda SEM medicamento vinculado — usa o nome da própria ATA */}
-                {naoVinc.map(function(o){
+                {naoVincFiltrados.map(function(o){
                   var it=o.it;var uKey=itemAtaKey(ata.id,o.idx);
                   var val=ajustes[uKey]!==undefined?ajustes[uKey]:'';var edu=ajustes[uKey]!==undefined;
                   var vUnitStr=precos[uKey]!==undefined?precos[uKey]:(it.vUnit?String(it.vUnit).replace('.',','):'');
                   var carregando=vincItemLoading===uKey;
                   return(<div key={uKey} style={{padding:'8px 0',borderTop:'1px solid #EEF2F8'}}>
                     <div style={{fontSize:12,fontWeight:600,color:'#1E293B',wordBreak:'break-word',marginBottom:2}}>{it.descricao||'(sem descrição)'}</div>
+                    {it.qtdTeto>0&&<div style={{fontSize:10,color:'#64748B',marginBottom:4}}>Teto do contrato: {it.qtdTeto} {it.unidade||''}{it.vUnit>0?' · R$ '+(it.qtdTeto*it.vUnit).toFixed(2).replace('.',',')+' no total':''}</div>}
                     <div style={{marginBottom:6}}><span style={{display:'inline-block',fontSize:9,fontWeight:800,color:'#B45309',background:'#FEF3C7',border:'1px solid #FCD34D',borderRadius:6,padding:'1px 6px'}}>⚠️ NÃO VINCULADO</span></div>
                     <div style={{display:'flex',alignItems:'center',gap:8,justifyContent:'flex-end'}}>
                       <div style={{display:'flex',flexDirection:'column',alignItems:'center',flexShrink:0}}>
@@ -7604,7 +7644,10 @@ function TabPrevisao(props){
                     <button onClick={function(){vincularItemAutomatico(ata,o.idx);}} disabled={carregando} style={{marginTop:6,width:'100%',padding:'7px',background:carregando?'#CBD5E1':'#0C6B3E',border:'none',borderRadius:8,color:'#fff',fontWeight:700,fontSize:11,cursor:carregando?'default':'pointer'}}>{carregando?'Cadastrando...':'🔗 Vincular automaticamente (cadastra com o nome da ATA)'}</button>
                   </div>);
                 })}
-                {totalAtaPedido>0&&<div style={{marginTop:8,paddingTop:8,borderTop:'1px solid #E2E8F0',textAlign:'right',fontSize:12,fontWeight:800,color:cor}}>Total do pedido: R$ {totalAtaPedido.toFixed(2).replace('.',',')}</div>}
+                {totalAtaPedido>0&&<div style={{marginTop:8,paddingTop:8,borderTop:'1px solid #E2E8F0',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+                  <span style={{fontSize:12,fontWeight:800,color:cor}}>Total do pedido: R$ {totalAtaPedido.toFixed(2).replace('.',',')}</span>
+                  {infoTenant.autoDescontarAta&&<button onClick={function(){fecharPedidoAta(ata);}} style={{background:'#0C6B3E',border:'none',borderRadius:8,padding:'6px 12px',fontSize:11,color:'#fff',fontWeight:700,cursor:'pointer'}}>🔒 Fechar Pedido</button>}
+                </div>}
                 </React.Fragment>}
               </div>);
             })()}
