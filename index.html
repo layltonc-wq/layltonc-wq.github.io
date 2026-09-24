@@ -19,7 +19,7 @@
 // caso a página NUNCA recarrega sozinha, então sem isso ela ficava presa na versão antiga até
 // fechar e abrir o app de verdade), e (3) a cada 5 minutos enquanto ficar aberta, pro caso raro
 // de o próprio celular manter a aba viva em segundo plano por muito tempo sem trocar de app.
-window.__FC_VERSION=1790257225;
+window.__FC_VERSION=1790260666;
 (function(){
   function checarVersaoNova(){
     try{
@@ -6216,16 +6216,18 @@ function TabPrevisao(props){
   var COR={medicamento:'#1351B4',controlado:'#DC2626',injetavel:'#7C3AED',leite:'#D97706',penso:'#0C6B3E'};
   var ICO={medicamento:'💊',controlado:'🔒',injetavel:'💉',leite:'🍼',penso:'🩹'};
   var LBL={medicamento:'Farm. Básica',controlado:'Controlado',injetavel:'Injetável',leite:'Leite',penso:'Penso/Material'};
-  // As 6 "Ordens de Fornecimento" oficiais de Itaquitinga (Hospital/Atenção Básica/Farmácia Básica,
-  // cada uma podendo ser "controlados" ou não) — usado pra classificar cada item do contrato e pra
-  // montar os títulos das seções em gerarOrdensFornecimento(). Ordem da lista = ordem de impressão.
+  // As "Ordens de Fornecimento" oficiais de Itaquitinga (Hospital/Atenção Básica/Farmácia Básica,
+  // cada uma podendo ser "controlados" ou não, + Recurso Próprio) — usado pra classificar cada item
+  // do contrato e pra montar os títulos das seções em gerarOrdensFornecimento(). Ordem da lista =
+  // ordem de impressão.
   var ORDENS_FORNECIMENTO=[
     {v:'hospital_controlado',lbl:'Hospital — Controlados',titulo:'MEDICAMENTOS CONTROLADOS - HOSPITAL'},
     {v:'hospital',lbl:'Hospital',titulo:'MEDICAMENTOS - HOSPITAL'},
     {v:'atencao_basica_controlado',lbl:'Atenção Básica — Controlados',titulo:'MEDICAMENTOS CONTROLADOS - ATENÇÃO BÁSICA'},
     {v:'atencao_basica',lbl:'Atenção Básica',titulo:'MEDICAMENTOS - ATENÇÃO BÁSICA'},
     {v:'farmacia_basica_controlado',lbl:'Farmácia Básica — Controlados',titulo:'MEDICAMENTOS CONTROLADOS - FARMÁCIA BÁSICA'},
-    {v:'farmacia_basica',lbl:'Farmácia Básica',titulo:'MEDICAMENTOS - FARMÁCIA BÁSICA'}
+    {v:'farmacia_basica',lbl:'Farmácia Básica',titulo:'MEDICAMENTOS - FARMÁCIA BÁSICA'},
+    {v:'recurso_proprio',lbl:'Recurso Próprio',titulo:'MEDICAMENTOS - RECURSO PRÓPRIO'}
   ];
 
   // Carregar atas do Firebase
@@ -6446,11 +6448,32 @@ function TabPrevisao(props){
     var novos=itensAta.map(function(it){return Object.assign({},it);});
     var deltas=[];
     linhas.forEach(function(l){
-      if(!l.item||l.qtd<=0)return; // item sem vínculo na própria ATA: não há saldo pra descontar
-      var idx=itensAta.indexOf(l.item);
-      if(idx<0)return;
-      novos[idx].pedidoAcumulado=(novos[idx].pedidoAcumulado||0)+l.qtd;
-      deltas.push({idx:idx,qtd:l.qtd});
+      if(l.qtd<=0)return;
+      // Uma ATA pode ter MAIS DE UM item de contrato pro mesmo medicamento (ex.: dois lotes/linhas
+      // diferentes) — linhasPedidoAta só usa um deles pra mostrar a tela (não dá pra pedir os dois
+      // separadamente hoje), mas cada um tem seu PRÓPRIO teto. Bug corrigido aqui: antes descontava
+      // só do item que a tela mostrava, e o(s) outro(s) nunca tinham o teto abatido, mesmo pedindo
+      // repetidas vezes. Agora preenche em ordem (FIFO): primeiro item com saldo restante recebe a
+      // quantidade, e só passa pro próximo quando o de cima já não tem mais capacidade — igual uma
+      // conta indo pro próximo "balde" quando o de cima enche.
+      // Ordem dos candidatos = ordem em que aparecem no contrato (não a ordem em que a tela escolheu
+      // qual mostrar) — senão o "preenche o de cima primeiro" ficaria embaralhado.
+      var candidatos=[];
+      itensAta.forEach(function(it,idx){
+        if(l.med?(it.medicamentoId===l.med.id):(it===l.item))candidatos.push(idx);
+      });
+      if(candidatos.length===0)return; // item sem vínculo na própria ATA: não há saldo pra descontar
+      var restante=l.qtd;
+      for(var i=0;i<candidatos.length&&restante>0;i++){
+        var idx=candidatos[i];
+        var ultimo=(i===candidatos.length-1);
+        var capacidade=Math.max(0,(novos[idx].qtdTeto||0)-(novos[idx].pedidoAcumulado||0));
+        if(capacidade<=0&&!ultimo)continue; // sem espaço aqui — tenta o próximo item
+        var aplicar=ultimo?restante:Math.min(restante,capacidade);
+        novos[idx].pedidoAcumulado=(novos[idx].pedidoAcumulado||0)+aplicar;
+        deltas.push({idx:idx,qtd:aplicar});
+        restante-=aplicar;
+      }
     });
     if(deltas.length===0)return Promise.resolve({deltas:0});
     var registro={id:Date.now()+'_'+Math.random().toString(36).slice(2,7),deltas:deltas,em:new Date().toISOString()};
