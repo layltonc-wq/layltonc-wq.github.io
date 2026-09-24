@@ -19,7 +19,7 @@
 // caso a página NUNCA recarrega sozinha, então sem isso ela ficava presa na versão antiga até
 // fechar e abrir o app de verdade), e (3) a cada 5 minutos enquanto ficar aberta, pro caso raro
 // de o próprio celular manter a aba viva em segundo plano por muito tempo sem trocar de app.
-window.__FC_VERSION=1790217536;
+window.__FC_VERSION=1790255351;
 (function(){
   function checarVersaoNova(){
     try{
@@ -6183,6 +6183,12 @@ function TabPrevisao(props){
   var _importandoXlsx=useState(false);var importandoXlsx=_importandoXlsx[0];var setImportandoXlsx=_importandoXlsx[1];
   var _ataDetalhe=useState(null);var ataDetalhe=_ataDetalhe[0];var setAtaDetalhe=_ataDetalhe[1];
   var _pastasAbertas=useState({});var pastasAbertas=_pastasAbertas[0];var setPastasAbertas=_pastasAbertas[1];
+  // ID da ATA cujo "Definir pedido"/grupo está aberto agora — usado pra mostrar uma barra flutuante
+  // fixa (position:fixed, não sticky) com PDF/Fechar Pedido sempre alcançável, mesmo rolando uma
+  // lista de itens enorme. Criado como alternativa ao cabeçalho sticky: em telas/navegadores que não
+  // respeitam position:sticky direito (ex.: Chrome desatualizado em máquina antiga), o sticky não
+  // acompanha a rolagem nenhum pouco — fixed não depende disso, funciona em qualquer navegador.
+  var _flutuante=useState(null);var flutuante=_flutuante[0];var setFlutuante=_flutuante[1];
   var _buscaGestAta=useState('');var buscaGestAta=_buscaGestAta[0];var setBuscaGestAta=_buscaGestAta[1];
   var _buscaItemMed=useState({});var buscaItemMed=_buscaItemMed[0];var setBuscaItemMed=_buscaItemMed[1];
   var _editAta=useState(null);var editAta=_editAta[0];var setEditAta=_editAta[1];// ata em edição (busca fuzzy)
@@ -7329,7 +7335,7 @@ function TabPrevisao(props){
                         fica bonito sobre o fundo fixo da pasta, mas por cima de itens rolando por baixo
                         (uma vez grudado no topo) deixa o texto de trás transparecendo, virando uma bagunça
                         ilegível. Sólido + faixa colorida à esquerda resolve sem perder a identidade da cor. */}
-                    <div role="button" onClick={function(){setPastasAbertas(function(p){var n=Object.assign({},p);n[aKey]=!ataAberta;return n;});}} style={{width:'100%',background:ataAberta?'#fff':cor+'22',borderLeft:ataAberta?'4px solid '+cor:'none',border:'none',padding:ataAberta?'10px 14px 10px 10px':'10px 14px',cursor:'pointer',display:'flex',alignItems:'center',gap:8,textAlign:'left',boxSizing:'border-box',borderRadius:ataAberta?'12px 12px 0 0':12,position:ataAberta?'sticky':'static',top:ataAberta?56:'auto',zIndex:ataAberta?6:'auto',boxShadow:ataAberta?'0 2px 10px rgba(0,0,0,0.15)':'none'}}>
+                    <div role="button" onClick={function(){var abrindo=!ataAberta;setPastasAbertas(function(p){var n=Object.assign({},p);n[aKey]=abrindo;return n;});setFlutuante(function(f){return abrindo?ata.id:(f===ata.id?null:f);});}} style={{width:'100%',background:ataAberta?'#fff':cor+'22',borderLeft:ataAberta?'4px solid '+cor:'none',border:'none',padding:ataAberta?'10px 14px 10px 10px':'10px 14px',cursor:'pointer',display:'flex',alignItems:'center',gap:8,textAlign:'left',boxSizing:'border-box',borderRadius:ataAberta?'12px 12px 0 0':12,position:ataAberta?'sticky':'static',top:ataAberta?56:'auto',zIndex:ataAberta?6:'auto',boxShadow:ataAberta?'0 2px 10px rgba(0,0,0,0.15)':'none'}}>
                       <div style={{flex:1,minWidth:0}}>
                         <div style={{fontWeight:700,fontSize:13,color:cor,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>📋 {ata.nome}</div>
                         {/* Some quando aberta/sticky — espaço é pouco ali e essa info já aparece nos itens abaixo */}
@@ -7654,7 +7660,7 @@ function TabPrevisao(props){
                     Fica "grudado" logo abaixo da barra do app enquanto aberto, com PDF e Fechar Pedido
                     já ali: numa ata com muitos itens, dá pra fechar o pedido sem precisar rolar até o
                     fim — o cabeçalho acompanha a rolagem e some sozinho quando a ata termina. */}
-                <div role="button" onClick={function(){setPastasAbertas(function(p){var n=Object.assign({},p);n['pedido_'+ata.id]=!pedidoAberto;return n;});}} style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,background:pedidoAberto?'#F8FAFC':'none',border:'none',padding:pedidoAberto?'6px 4px':0,marginBottom:pedidoAberto?8:0,cursor:'pointer',position:pedidoAberto?'sticky':'static',top:pedidoAberto?56:'auto',zIndex:pedidoAberto?6:'auto',boxShadow:pedidoAberto?'0 2px 10px rgba(0,0,0,0.10)':'none',borderRadius:pedidoAberto?8:0}}>
+                <div role="button" onClick={function(){var abrindo=!pedidoAberto;setPastasAbertas(function(p){var n=Object.assign({},p);n['pedido_'+ata.id]=abrindo;return n;});setFlutuante(function(f){return abrindo?ata.id:(f===ata.id?null:f);});}} style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,background:pedidoAberto?'#F8FAFC':'none',border:'none',padding:pedidoAberto?'6px 4px':0,marginBottom:pedidoAberto?8:0,cursor:'pointer',position:pedidoAberto?'sticky':'static',top:pedidoAberto?56:'auto',zIndex:pedidoAberto?6:'auto',boxShadow:pedidoAberto?'0 2px 10px rgba(0,0,0,0.10)':'none',borderRadius:pedidoAberto?8:0}}>
                   <span style={{fontSize:11,fontWeight:700,color:'#475569',textTransform:'uppercase',letterSpacing:'.03em',flex:1,minWidth:0,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>Definir pedido {pedidoAberto?'':'desta ata '}({totalItensPedido} {totalItensPedido===1?'item':'itens'})</span>
                   {pedidoAberto&&qtdAtaPedido>0&&<button onClick={function(e){e.stopPropagation();exportarPDF([ata]);}} style={{background:'#DC2626',border:'none',borderRadius:8,padding:'6px 10px',fontSize:11,color:'#fff',fontWeight:700,cursor:'pointer',flexShrink:0,whiteSpace:'nowrap'}}>📄 PDF</button>}
                   {pedidoAberto&&qtdAtaPedido>0&&infoTenant.autoDescontarAta&&<button onClick={function(e){e.stopPropagation();fecharPedidoAta(ata);}} style={{background:'#0C6B3E',border:'none',borderRadius:8,padding:'6px 10px',fontSize:11,color:'#fff',fontWeight:700,cursor:'pointer',flexShrink:0,whiteSpace:'nowrap'}}>🔒 Fechar</button>}
@@ -7886,6 +7892,28 @@ function TabPrevisao(props){
           </div>);
         })}
       </div>}
+
+      {/* Barra flutuante fixa (position:fixed) com PDF/Fechar Pedido da ATA aberta no momento —
+          aparece em cima da navegação inferior, independente de rolagem ou de cabeçalho sticky.
+          Criada porque position:sticky não funciona igual em todo navegador (em especial em
+          Chrome desatualizado de máquinas antigas): fixed é suportado universalmente, então
+          garante o acesso ao "Fechar Pedido" numa ATA grande mesmo quando sticky não acompanha. */}
+      {flutuante&&(sub==='previsao'||sub==='atas')&&(function(){
+        var ataF=atas.find(function(a){return a.id===flutuante;});
+        if(!ataF)return null;
+        var corF=COR[ataF.categoria]||'#1351B4';
+        var linhasF=linhasPedidoAta(ataF);
+        var qtdF=linhasF.reduce(function(s,x){return s+x.qtd;},0);
+        return(<div style={{position:'fixed',left:12,right:12,bottom:76,zIndex:60,background:'#fff',borderRadius:14,boxShadow:'0 8px 28px rgba(0,0,0,0.24)',border:'1.5px solid '+corF+'60',padding:'10px 10px 10px 12px',display:'flex',alignItems:'center',gap:8,maxWidth:520,margin:'0 auto'}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:12,fontWeight:700,color:corF,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>📋 {ataF.nome}</div>
+            <div style={{fontSize:10,color:'#64748B'}}>{qtdF>0?qtdF+' un. a pedir':'nenhum item com pedido definido'}</div>
+          </div>
+          <button onClick={function(){exportarPDF([ataF]);}} style={{background:corF,border:'none',borderRadius:8,padding:'8px 10px',color:'#fff',fontWeight:700,fontSize:11,cursor:'pointer',flexShrink:0,whiteSpace:'nowrap'}}>📄 PDF</button>
+          {infoTenant.autoDescontarAta&&<button onClick={function(){fecharPedidoAta(ataF);}} style={{background:'#0C6B3E',border:'none',borderRadius:8,padding:'8px 10px',color:'#fff',fontWeight:700,fontSize:11,cursor:'pointer',flexShrink:0,whiteSpace:'nowrap'}}>🔒 Fechar</button>}
+          <button onClick={function(){setFlutuante(null);}} style={{background:'#F1F5F9',border:'none',borderRadius:8,padding:'8px 10px',color:'#64748B',fontWeight:700,fontSize:13,cursor:'pointer',flexShrink:0}}>✕</button>
+        </div>);
+      })()}
     </div>
   );
 }
