@@ -19,7 +19,7 @@
 // caso a página NUNCA recarrega sozinha, então sem isso ela ficava presa na versão antiga até
 // fechar e abrir o app de verdade), e (3) a cada 5 minutos enquanto ficar aberta, pro caso raro
 // de o próprio celular manter a aba viva em segundo plano por muito tempo sem trocar de app.
-window.__FC_VERSION=1790255624;
+window.__FC_VERSION=1790256135;
 (function(){
   function checarVersaoNova(){
     try{
@@ -6418,21 +6418,28 @@ function TabPrevisao(props){
   // pra dar pra escolher e DESFAZER qualquer pedido já feito depois (ex.: usuária imprime o pedido,
   // percebe que faltou/errou um item, e quer voltar o saldo restante ao que estava antes, sem ter
   // que recalcular à mão item por item).
+  // Resolve sempre com {deltas:N} (N=0 quando não havia nada rastreável) — quem chama usa isso pra
+  // avisar direito quando "fechar" não teve efeito nenhum no saldo (ver fecharPedidoAta).
   function descontarPedidoDaAta(ata,linhas){
-    if(!ata||!ata.itens||!linhas||linhas.length===0)return Promise.resolve();
-    var novos=ata.itens.map(function(it){return Object.assign({},it);});
+    if(!ata||!linhas||linhas.length===0)return Promise.resolve({deltas:0});
+    var itensAta=ata.itens||[];
+    // ATA sem nenhum item de contrato cadastrado (ex.: criada só com "Criar Ata" + medicamento
+    // vinculado direto por ataId, sem itens importados/adicionados em ✏️ Editar) não tem onde
+    // guardar qtdTeto/pedidoAcumulado — não há saldo pra descontar nem histórico pra desfazer.
+    if(itensAta.length===0)return Promise.resolve({deltas:0});
+    var novos=itensAta.map(function(it){return Object.assign({},it);});
     var deltas=[];
     linhas.forEach(function(l){
       if(!l.item||l.qtd<=0)return; // item sem vínculo na própria ATA: não há saldo pra descontar
-      var idx=ata.itens.indexOf(l.item);
+      var idx=itensAta.indexOf(l.item);
       if(idx<0)return;
       novos[idx].pedidoAcumulado=(novos[idx].pedidoAcumulado||0)+l.qtd;
       deltas.push({idx:idx,qtd:l.qtd});
     });
-    if(deltas.length===0)return Promise.resolve();
+    if(deltas.length===0)return Promise.resolve({deltas:0});
     var registro={id:Date.now()+'_'+Math.random().toString(36).slice(2,7),deltas:deltas,em:new Date().toISOString()};
     var novoHistorico=historicoPedidosDaAta(ata).concat([registro]);
-    return db.collection('atas').doc(ata.id).update({itens:novos,historicoPedidos:novoHistorico,ultimoPedido:firebase.firestore.FieldValue.delete()});
+    return db.collection('atas').doc(ata.id).update({itens:novos,historicoPedidos:novoHistorico,ultimoPedido:firebase.firestore.FieldValue.delete()}).then(function(){return {deltas:deltas.length};});
   }
   // Desfaz exatamente UM pedido específico do histórico desta ATA (reverte só os deltas gravados
   // naquele registro, não zera o histórico inteiro do item). Depois de desfeito, o registro some da
@@ -7032,9 +7039,21 @@ function TabPrevisao(props){
     var linhas=linhasPedidoAta(ata);
     if(linhas.length===0){setMsg('e:Nenhum medicamento com pedido > 0 nesta ata. Ajuste as quantidades antes de fechar.');return;}
     var totalUn=linhas.reduce(function(s,x){return s+x.qtd;},0);
-    confirm2('Fechar pedido','Fechar este pedido de "'+(ata.nome||'')+'"? '+totalUn+' unidade(s) serão descontadas do saldo da ATA. (Dá pra desfazer depois, se precisar.)',function(){
-      descontarPedidoDaAta(ata,linhas).then(function(){
-        setMsg('ok:Pedido de "'+(ata.nome||'')+'" fechado — saldo da ATA atualizado.');setTimeout(function(){setMsg('');},3500);
+    // Só há saldo/histórico pra atualizar se pelo menos um item do pedido está de fato vinculado a
+    // um item de contrato da ATA (ata.itens) — atas criadas só com "Criar Ata" + medicamento vinculado
+    // por ataId (sem itens importados/adicionados em ✏️ Editar) não têm onde guardar isso. Avisa ANTES
+    // de fechar, pra não passar a falsa impressão de que o saldo foi atualizado quando não foi.
+    var rastreavel=linhas.some(function(l){return !!l.item;});
+    var msgConfirm=rastreavel
+      ?'Fechar este pedido de "'+(ata.nome||'')+'"? '+totalUn+' unidade(s) serão descontadas do saldo da ATA. (Dá pra desfazer depois, se precisar.)'
+      :'Esta ATA não tem itens de contrato cadastrados (sem "teto" pra controlar saldo) — fechar aqui não vai atualizar saldo nem dar pra desfazer depois. Quer fechar mesmo assim?';
+    confirm2('Fechar pedido',msgConfirm,function(){
+      descontarPedidoDaAta(ata,linhas).then(function(res){
+        if(res.deltas>0){
+          setMsg('ok:Pedido de "'+(ata.nome||'')+'" fechado — saldo da ATA atualizado.');setTimeout(function(){setMsg('');},3500);
+        }else{
+          setMsg('ok:Pedido de "'+(ata.nome||'')+'" considerado fechado. Essa ATA não tem itens de contrato cadastrados, então não há saldo pra atualizar nem histórico pra desfazer — vá em ✏️ Editar → "+ Adicionar item" (preencha o teto do contrato) e depois vincule o item ao medicamento em "📋 Itens" pra ativar esse controle.');setTimeout(function(){setMsg('');},9000);
+        }
       }).catch(function(e){setMsg('e:Não foi possível fechar o pedido: '+e.message);});
     },'warning','Fechar pedido');
   }
@@ -7142,8 +7161,13 @@ function TabPrevisao(props){
     });
     if(linhasPorAta.length===0){setMsg('e:Nenhum medicamento com pedido > 0. Ajuste as quantidades antes de fechar.');return;}
     confirm2('Fechar pedido','Fechar este pedido? '+totalUn+' unidade(s), no total, serão descontadas do saldo das ATAs envolvidas. (Dá pra desfazer cada ATA depois, se precisar.)',function(){
-      Promise.all(linhasPorAta.map(function(x){return descontarPedidoDaAta(x.ata,x.linhas);})).then(function(){
-        setMsg('ok:Pedido fechado — saldo das ATAs atualizado.');setTimeout(function(){setMsg('');},3500);
+      Promise.all(linhasPorAta.map(function(x){return descontarPedidoDaAta(x.ata,x.linhas);})).then(function(resultados){
+        var semRastreio=linhasPorAta.filter(function(x,i){return resultados[i].deltas===0;}).map(function(x){return x.ata.nome;});
+        if(semRastreio.length===0){
+          setMsg('ok:Pedido fechado — saldo das ATAs atualizado.');setTimeout(function(){setMsg('');},3500);
+        }else{
+          setMsg('ok:Pedido fechado. Atenção: '+semRastreio.join(', ')+' não tem itens de contrato cadastrados, então o saldo dessa(s) ATA(s) não foi atualizado (e não vai dar pra desfazer) — vá em ✏️ Editar → "+ Adicionar item" e depois vincule ao medicamento em "📋 Itens" se quiser ativar esse controle.');setTimeout(function(){setMsg('');},9500);
+        }
       }).catch(function(e){setMsg('e:Pedido fechado, mas houve erro ao atualizar o saldo de uma das ATAs: '+e.message);});
     },'warning','Fechar pedido');
   }
