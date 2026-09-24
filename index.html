@@ -13,7 +13,7 @@
 // ser a data/hora atual em segundos, ex.: no terminal `date +%s`) — sem isso, o auto-update não
 // detecta a mudança e navegadores/ícones de tela inicial com cache antigo continuam presos até
 // alguém limpar o cache manualmente (foi exatamente isso que causou o incidente de 18/09/2026).
-window.__FC_VERSION=1790213906;
+window.__FC_VERSION=1790214933;
 (function(){
   try{
     fetch(location.pathname+'?_vcheck='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(html){
@@ -7305,9 +7305,14 @@ function TabPrevisao(props){
                   var qtdTotalAta=grupo.meds.reduce(function(s,x){return s+valorPedido(x.med);},0);
                   var saldoTotalAta=grupo.meds.reduce(function(s,x){return s+(x.item?(x.item.qtdTeto-(x.item.pedidoAcumulado||0)):0);},0);
                   var corAta=cor+'CC';
-                  return(<div key={ata.id} style={{marginBottom:8,borderRadius:12,overflow:'hidden',border:'1.5px solid '+cor+'40'}}>
-                    {/* Cabeçalho da ATA — div clicável (não <button>) para permitir o botão PDF aninhado (HTML válido) */}
-                    <div role="button" onClick={function(){setPastasAbertas(function(p){var n=Object.assign({},p);n[aKey]=!ataAberta;return n;});}} style={{width:'100%',background:cor+'22',border:'none',padding:'10px 14px',cursor:'pointer',display:'flex',alignItems:'center',gap:8,textAlign:'left',boxSizing:'border-box'}}>
+                  return(<div key={ata.id} style={{marginBottom:8,borderRadius:12,border:'1.5px solid '+cor+'40'}}>
+                    {/* Cabeçalho da ATA — div clicável (não <button>) para permitir o botão PDF aninhado (HTML válido).
+                        Fica "grudado" (sticky) logo abaixo da barra do app enquanto a ATA está aberta, pra "Fechar"
+                        e "PDF" continuarem alcançáveis mesmo rolando uma lista de itens grande — some sozinho
+                        quando o cartão desta ATA termina de rolar, sem precisar de nenhum JS de scroll.
+                        Cantos arredondados aplicados direto aqui (em vez de overflow:hidden no card) porque
+                        overflow:hidden num ancestral do elemento sticky pode cortar/quebrar o sticky. */}
+                    <div role="button" onClick={function(){setPastasAbertas(function(p){var n=Object.assign({},p);n[aKey]=!ataAberta;return n;});}} style={{width:'100%',background:cor+'22',border:'none',padding:'10px 14px',cursor:'pointer',display:'flex',alignItems:'center',gap:8,textAlign:'left',boxSizing:'border-box',borderRadius:ataAberta?'12px 12px 0 0':12,position:ataAberta?'sticky':'static',top:ataAberta?56:'auto',zIndex:ataAberta?6:'auto',boxShadow:ataAberta?'0 2px 10px rgba(0,0,0,0.10)':'none'}}>
                       <div style={{flex:1}}>
                         <div style={{fontWeight:700,fontSize:13,color:cor}}>📋 {ata.nome}</div>
                         <div style={{fontSize:11,color:'#64748B'}}>{grupo.meds.length} item(ns) · Saldo total ATA: {saldoTotalAta} un.</div>
@@ -7322,7 +7327,7 @@ function TabPrevisao(props){
                       {infoTenant.autoDescontarAta&&<button onClick={function(e){e.stopPropagation();fecharPedidoAta(ata);}} style={{background:'#0C6B3E',border:'none',borderRadius:8,padding:'7px 12px',color:'#fff',fontWeight:700,fontSize:11,cursor:'pointer',flexShrink:0,marginLeft:4}}>🔒 Fechar</button>}
                       <span style={{fontSize:14,color:cor,marginLeft:4}}>{ataAberta?'▲':'▼'}</span>
                     </div>
-                    {ataAberta&&<div style={{padding:'8px 10px 10px',background:'#fff'}}>
+                    {ataAberta&&<div style={{padding:'8px 10px 10px',background:'#fff',borderRadius:'0 0 12px 12px'}}>
                       {grupo.meds.map(function(x){return renderMedCard(x.med,x.item,cor);})}
                     </div>}
                   </div>);
@@ -7627,10 +7632,16 @@ function TabPrevisao(props){
               }):meds;
               var naoVincFiltrados=filtrarItens?naoVinc.filter(function(o){return _norm(o.it.descricao||'').indexOf(termoBusca)>=0;}):naoVinc;
               return(<div style={{marginTop:10,background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:10,padding:'10px'}}>
-                <button onClick={function(){setPastasAbertas(function(p){var n=Object.assign({},p);n['pedido_'+ata.id]=!pedidoAberto;return n;});}} style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'space-between',background:'none',border:'none',padding:0,cursor:'pointer',marginBottom:pedidoAberto?8:0}}>
-                  <span style={{fontSize:11,fontWeight:700,color:'#475569',textTransform:'uppercase',letterSpacing:'.03em'}}>Definir pedido desta ata ({totalItensPedido} {totalItensPedido===1?'item':'itens'})</span>
-                  <span style={{fontSize:13,color:'#94A3B8'}}>{pedidoAberto?'▲':'▼'}</span>
-                </button>
+                {/* Cabeçalho — div clicável (não <button>) pra poder aninhar PDF/Fechar dentro dele.
+                    Fica "grudado" logo abaixo da barra do app enquanto aberto, com PDF e Fechar Pedido
+                    já ali: numa ata com muitos itens, dá pra fechar o pedido sem precisar rolar até o
+                    fim — o cabeçalho acompanha a rolagem e some sozinho quando a ata termina. */}
+                <div role="button" onClick={function(){setPastasAbertas(function(p){var n=Object.assign({},p);n['pedido_'+ata.id]=!pedidoAberto;return n;});}} style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,background:pedidoAberto?'#F8FAFC':'none',border:'none',padding:pedidoAberto?'6px 4px':0,marginBottom:pedidoAberto?8:0,cursor:'pointer',position:pedidoAberto?'sticky':'static',top:pedidoAberto?56:'auto',zIndex:pedidoAberto?6:'auto',boxShadow:pedidoAberto?'0 2px 10px rgba(0,0,0,0.10)':'none',borderRadius:pedidoAberto?8:0}}>
+                  <span style={{fontSize:11,fontWeight:700,color:'#475569',textTransform:'uppercase',letterSpacing:'.03em',flex:1,minWidth:0}}>Definir pedido desta ata ({totalItensPedido} {totalItensPedido===1?'item':'itens'})</span>
+                  {pedidoAberto&&qtdAtaPedido>0&&<button onClick={function(e){e.stopPropagation();exportarPDF([ata]);}} style={{background:'#DC2626',border:'none',borderRadius:8,padding:'6px 10px',fontSize:11,color:'#fff',fontWeight:700,cursor:'pointer',flexShrink:0,whiteSpace:'nowrap'}}>📄 PDF</button>}
+                  {pedidoAberto&&qtdAtaPedido>0&&infoTenant.autoDescontarAta&&<button onClick={function(e){e.stopPropagation();fecharPedidoAta(ata);}} style={{background:'#0C6B3E',border:'none',borderRadius:8,padding:'6px 10px',fontSize:11,color:'#fff',fontWeight:700,cursor:'pointer',flexShrink:0,whiteSpace:'nowrap'}}>🔒 Fechar</button>}
+                  <span style={{fontSize:13,color:'#94A3B8',flexShrink:0}}>{pedidoAberto?'▲':'▼'}</span>
+                </div>
                 {!pedidoAberto&&qtdAtaPedido>0&&<div style={{fontSize:11,color:cor,fontWeight:700}}>{totalAtaPedido>0?'Total do pedido: R$ '+totalAtaPedido.toFixed(2).replace('.',','):qtdAtaPedido+' unidade(s) a pedir'}</div>}
                 {pedidoAberto&&<React.Fragment>
                 {filtrarItens&&<div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,flexWrap:'wrap',background:'#EFF6FF',border:'1px solid #BFDBFE',borderRadius:8,padding:'6px 10px',marginBottom:6}}>
