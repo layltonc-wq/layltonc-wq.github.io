@@ -6384,7 +6384,7 @@ function TabPrevisao(props){
   function valorUnit(medId,item){
     var pm=precos[medId];
     if(pm!==undefined&&pm!==''){var n=parseFloat(String(pm).replace(',','.'));if(!isNaN(n))return n;}
-    return item&&item.vUnit?item.vUnit:0;
+    return item&&item.vUnit?(Number(item.vUnit)||0):0;
   }
   // FONTE ÚNICA das linhas de pedido de uma ATA — usada por PDF consolidado, PDF por ATA e Excel.
   // Corrige o bug em que só os medicamentos presentes em ata.itens eram considerados: aqui percorremos
@@ -6410,7 +6410,7 @@ function TabPrevisao(props){
       var aj=ajustes[uKey];
       var qtd=aj!==undefined?(parseInt(aj)||0):0;
       if(qtd<=0)return;
-      var pm=precos[uKey];var vU=(pm!==undefined&&pm!=='')?(parseFloat(String(pm).replace(',','.'))||0):(it.vUnit||0);
+      var pm=precos[uKey];var vU=(pm!==undefined&&pm!=='')?(parseFloat(String(pm).replace(',','.'))||0):(Number(it.vUnit)||0);
       linhas.push({med:null,item:it,qtd:qtd,vUnit:vU,vTotal:qtd*vU,
         desc:it.descricao||'(sem descrição)',unidade:it.unidade||'UN',num:it.num||'',marca:it.marca||'',naoVinculado:true});
     });
@@ -6471,10 +6471,10 @@ function TabPrevisao(props){
       for(var i=0;i<candidatos.length&&restante>0;i++){
         var idx=candidatos[i];
         var ultimo=(i===candidatos.length-1);
-        var capacidade=Math.max(0,(novos[idx].qtdTeto||0)-(novos[idx].pedidoAcumulado||0));
+        var capacidade=Math.max(0,(Number(novos[idx].qtdTeto)||0)-(Number(novos[idx].pedidoAcumulado)||0));
         if(capacidade<=0&&!ultimo)continue; // sem espaço aqui — tenta o próximo item
         var aplicar=ultimo?restante:Math.min(restante,capacidade);
-        novos[idx].pedidoAcumulado=(novos[idx].pedidoAcumulado||0)+aplicar;
+        novos[idx].pedidoAcumulado=(Number(novos[idx].pedidoAcumulado)||0)+aplicar;
         deltas.push({idx:idx,qtd:aplicar});
         restante-=aplicar;
       }
@@ -7045,6 +7045,16 @@ function TabPrevisao(props){
   // confirmar o painel, pra não depender do onSnapshot do Firestore já ter voltado com o que acabou
   // de ser salvo (evita corrida/atraso).
   function gerarOrdensFornecimento(listaAtasIn,classificacoesExtras){
+    // Rede de segurança: qualquer erro inesperado aqui dentro (ex.: dado antigo com tipo diferente
+    // do esperado) NÃO pode resultar em "clicar e não acontecer nada" sem explicação — sempre avisa.
+    try{
+      return _gerarOrdensFornecimentoImpl(listaAtasIn,classificacoesExtras);
+    }catch(e){
+      setMsg('e:Não foi possível gerar a Ordem de Fornecimento ('+((e&&e.message)||e)+'). Avise o suporte com o nome da ATA.');
+      return;
+    }
+  }
+  function _gerarOrdensFornecimentoImpl(listaAtasIn,classificacoesExtras){
     var extras=classificacoesExtras||{};
     var listaAtas=Array.isArray(listaAtasIn)?listaAtasIn:[listaAtasIn];
     var faltando=[]; // itens com pedido>0 mas sem ordemFornecimento definida (nem no extras)
@@ -7123,9 +7133,10 @@ function TabPrevisao(props){
         html+='<div class="titulo">'+numeroOrdem+' Ordem de Fornecimento — '+of.titulo+'</div>';
         html+='<table><thead><tr><th style="width:40px">ITEM</th><th>DESCRIÇÃO</th><th style="width:70px">CATMAT</th><th style="width:60px">QUANT.</th><th style="width:80px">UND. MEDIDA</th><th style="width:80px">VALOR UNITÁRIO</th><th style="width:85px">VALOR TOTAL</th><th style="width:110px">MARCA/FABRICANTE</th></tr></thead><tbody>';
         linhasSecao.forEach(function(l){
+          var lvU=Number(l.vUnit)||0,lvT=Number(l.vTotal)||0;
           html+='<tr><td>'+_escHtml(l.num||'')+'</td><td class="desc">'+_escHtml(l.desc)+'</td><td>'+_escHtml(l.item&&l.item.catmat||'')+'</td>'+
             '<td>'+l.qtd+'</td><td>'+_escHtml(l.unidade||'')+'</td>'+
-            '<td>R$ '+l.vUnit.toFixed(2).replace('.',',')+'</td><td>R$ '+l.vTotal.toFixed(2).replace('.',',')+'</td>'+
+            '<td>R$ '+lvU.toFixed(2).replace('.',',')+'</td><td>R$ '+lvT.toFixed(2).replace('.',',')+'</td>'+
             '<td>'+_escHtml(l.marca||'')+'</td></tr>';
         });
         html+='</tbody><tfoot><tr class="total-row"><td colspan="6">TOTAL</td><td colspan="2">R$ '+totalVal.toFixed(2).replace('.',',')+'</td></tr></tfoot></table>';
@@ -7151,21 +7162,26 @@ function TabPrevisao(props){
     if(!ofModal)return;
     var semEscolha=ofModal.itens.some(function(f){return !ofModal.escolhas[f.ataId+'#'+f.idx];});
     if(semEscolha){setMsg('e:Escolha a Ordem de Fornecimento de todos os itens listados antes de continuar.');return;}
-    var porAtaId={};
-    ofModal.itens.forEach(function(f){
-      var chave=f.ataId+'#'+f.idx;
-      if(!porAtaId[f.ataId])porAtaId[f.ataId]=[];
-      porAtaId[f.ataId].push({idx:f.idx,valor:ofModal.escolhas[chave]});
-    });
-    var extras={};
-    ofModal.itens.forEach(function(f){extras[f.ataId+'#'+f.idx]=ofModal.escolhas[f.ataId+'#'+f.idx];});
-    Object.keys(porAtaId).forEach(function(ataId){
-      var ata=atas.find(function(a){return a.id===ataId;});
-      if(!ata||!ata.itens)return;
-      var novos=ata.itens.map(function(it){return Object.assign({},it);});
-      porAtaId[ataId].forEach(function(x){if(novos[x.idx])novos[x.idx].ordemFornecimento=x.valor;});
-      db.collection('atas').doc(ataId).update({itens:novos}).catch(function(){});
-    });
+    try{
+      var porAtaId={};
+      ofModal.itens.forEach(function(f){
+        var chave=f.ataId+'#'+f.idx;
+        if(!porAtaId[f.ataId])porAtaId[f.ataId]=[];
+        porAtaId[f.ataId].push({idx:f.idx,valor:ofModal.escolhas[chave]});
+      });
+      var extras={};
+      ofModal.itens.forEach(function(f){extras[f.ataId+'#'+f.idx]=ofModal.escolhas[f.ataId+'#'+f.idx];});
+      Object.keys(porAtaId).forEach(function(ataId){
+        var ata=atas.find(function(a){return a.id===ataId;});
+        if(!ata||!ata.itens)return;
+        var novos=ata.itens.map(function(it){return Object.assign({},it);});
+        porAtaId[ataId].forEach(function(x){if(novos[x.idx])novos[x.idx].ordemFornecimento=x.valor;});
+        db.collection('atas').doc(ataId).update({itens:novos}).catch(function(){});
+      });
+    }catch(e){
+      setMsg('e:Não foi possível salvar a classificação ('+((e&&e.message)||e)+').');
+      return;
+    }
     var listaParaGerar=ofModal.listaAtas;
     setOfModal(null);
     gerarOrdensFornecimento(listaParaGerar,extras);
