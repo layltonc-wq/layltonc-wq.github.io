@@ -13,16 +13,29 @@
 // ser a data/hora atual em segundos, ex.: no terminal `date +%s`) — sem isso, o auto-update não
 // detecta a mudança e navegadores/ícones de tela inicial com cache antigo continuam presos até
 // alguém limpar o cache manualmente (foi exatamente isso que causou o incidente de 18/09/2026).
-window.__FC_VERSION=1790216290;
+//
+// A checagem roda: (1) uma vez já ao carregar, (2) de novo sempre que a aba/app volta a ficar
+// visível (ex.: a pessoa troca de app pra responder uma mensagem e volta pro navegador — nesse
+// caso a página NUNCA recarrega sozinha, então sem isso ela ficava presa na versão antiga até
+// fechar e abrir o app de verdade), e (3) a cada 5 minutos enquanto ficar aberta, pro caso raro
+// de o próprio celular manter a aba viva em segundo plano por muito tempo sem trocar de app.
+window.__FC_VERSION=1790217536;
 (function(){
-  try{
-    fetch(location.pathname+'?_vcheck='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(html){
-      var m=html.match(/window\.__FC_VERSION=(\d+)/);
-      if(m&&parseInt(m[1],10)!==window.__FC_VERSION){
-        location.href=location.pathname+'?_v='+Date.now();
-      }
-    }).catch(function(){});
-  }catch(e){}
+  function checarVersaoNova(){
+    try{
+      fetch(location.pathname+'?_vcheck='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(html){
+        var m=html.match(/window\.__FC_VERSION=(\d+)/);
+        if(m&&parseInt(m[1],10)!==window.__FC_VERSION){
+          location.href=location.pathname+'?_v='+Date.now();
+        }
+      }).catch(function(){});
+    }catch(e){}
+  }
+  checarVersaoNova();
+  setInterval(checarVersaoNova,5*60*1000);
+  document.addEventListener('visibilitychange',function(){
+    if(document.visibilityState==='visible')checarVersaoNova();
+  });
 })();
 </script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
