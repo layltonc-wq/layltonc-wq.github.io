@@ -19,7 +19,7 @@
 // caso a página NUNCA recarrega sozinha, então sem isso ela ficava presa na versão antiga até
 // fechar e abrir o app de verdade), e (3) a cada 5 minutos enquanto ficar aberta, pro caso raro
 // de o próprio celular manter a aba viva em segundo plano por muito tempo sem trocar de app.
-window.__FC_VERSION=1790255351;
+window.__FC_VERSION=1790255624;
 (function(){
   function checarVersaoNova(){
     try{
@@ -6195,6 +6195,8 @@ function TabPrevisao(props){
   var _editBusca=useState('');var editBusca=_editBusca[0];var setEditBusca=_editBusca[1];
   var _editDraft=useState(null);var editDraft=_editDraft[0];var setEditDraft=_editDraft[1];// rascunho: IDs dos medicamentos da ata em edição (não gravado até Salvar)
   var _editCat=useState('');var editCat=_editCat[0];var setEditCat=_editCat[1];// rascunho: categoria da ata em edição
+  var _editNome=useState('');var editNome=_editNome[0];var setEditNome=_editNome[1];// rascunho: nome da ata (editável — útil quando duas atas de empresas diferentes têm o mesmo nome)
+  var _editCnpj=useState('');var editCnpj=_editCnpj[0];var setEditCnpj=_editCnpj[1];// rascunho: CNPJ da empresa/fornecedor desta ata
   var _editValorTotal=useState('');var editValorTotal=_editValorTotal[0];var setEditValorTotal=_editValorTotal[1];// rascunho: valor total do contrato (sobe com aditivo)
   var _editItens=useState(null);var editItens=_editItens[0];var setEditItens=_editItens[1];// rascunho dos itens da ata (medicamentoId por item), p/ atas importadas
   // Sugestões automáticas de vínculo: para a ata em edição, casa cada item (nome+mg+siglas) com o estoque.
@@ -6766,11 +6768,13 @@ function TabPrevisao(props){
     setEditDraft(medsDaAta(ata.id).map(function(m){return m.id;}));
     setEditItens(ata.itens&&ata.itens.length?ata.itens.map(function(it){return Object.assign({},it);}):null);
     setEditCat(ata.categoria||'controlado');
+    setEditNome(ata.nome||'');
+    setEditCnpj(ata.cnpj||'');
     setEditValorTotal(ata.valorTotal!=null?String(ata.valorTotal).replace('.',','):'');
     setEditBusca('');
   }
   // Fecha o editor DESCARTANDO o rascunho (não grava nada).
-  function fecharEditAta(){setEditAta(null);setEditDraft(null);setEditItens(null);setEditCat('');setEditValorTotal('');setEditBusca('');}
+  function fecharEditAta(){setEditAta(null);setEditDraft(null);setEditItens(null);setEditCat('');setEditNome('');setEditCnpj('');setEditValorTotal('');setEditBusca('');}
   // Adiciona um item NOVO em branco ao rascunho de itens da ata (rascunho local, só grava ao Salvar).
   function adicionarItemEditDraft(){
     setEditItens(function(prev){
@@ -6837,6 +6841,7 @@ function TabPrevisao(props){
   // Grava o rascunho inteiro no Firestore de uma vez: itens (medicamentoId, add/edit/remover), categoria
   // + reconcilia ataId dos medicamentos vinculados.
   function salvarEditAta(ata){
+    if(!editNome||!editNome.trim()){setMsg('e:O nome da ata não pode ficar em branco.');setTimeout(function(){setMsg('');},2800);return;}
     var original=medsDaAta(ata.id).map(function(m){return m.id;});
     var draft=editDraft||[];
     var adicionar=draft.filter(function(id){return original.indexOf(id)<0;});
@@ -6851,6 +6856,10 @@ function TabPrevisao(props){
       });});
     }
     if(editCat&&editCat!==ata.categoria)ataUpdate.categoria=editCat;
+    // Nome e CNPJ editáveis — útil pra diferenciar duas atas da mesma empresa que ficaram com o
+    // mesmo nome (ex.: "MEDIAL" 2024 e "MEDIAL" 2025), sem precisar excluir e recriar a ata.
+    if(editNome.trim()!==ata.nome)ataUpdate.nome=editNome.trim();
+    if((editCnpj||'').trim()!==(ata.cnpj||''))ataUpdate.cnpj=(editCnpj||'').trim();
     var novoValorTotal=parseFloat(String(editValorTotal).replace(',','.'));
     if(!isNaN(novoValorTotal)&&novoValorTotal!==(ata.valorTotal||0))ataUpdate.valorTotal=novoValorTotal;
     if(Object.keys(ataUpdate).length>0)ops.push(db.collection('atas').doc(ata.id).update(ataUpdate));
@@ -7571,6 +7580,12 @@ function TabPrevisao(props){
               <button onClick={function(){exportarExcel([ata]);}} style={{background:'#DCFCE7',border:'none',borderRadius:8,padding:'6px 12px',fontSize:12,color:'#0C6B3E',fontWeight:700,cursor:'pointer'}}>📊 Excel</button>
             </div>
             {editAta===ata.id&&<div style={{marginBottom:10}}>
+              <div style={{fontSize:11,fontWeight:600,color:'#64748B',marginBottom:4}}>Nome da ata:</div>
+              <input type="text" value={editNome} onChange={function(e){setEditNome(e.target.value);}} placeholder="Ex: MEDIAL 2025" className="inp" style={{marginBottom:8}}/>
+              <div style={{fontSize:11,fontWeight:600,color:'#64748B',marginBottom:4}}>CNPJ da empresa (opcional — ajuda a diferenciar atas com o mesmo nome):</div>
+              <input type="text" value={editCnpj} onChange={function(e){setEditCnpj(e.target.value);}} placeholder="00.000.000/0000-00" className="inp" style={{marginBottom:0,maxWidth:220}}/>
+            </div>}
+            {editAta===ata.id&&<div style={{marginBottom:10}}>
               <div style={{fontSize:11,fontWeight:600,color:'#64748B',marginBottom:4}}>Categoria:</div>
               <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
                 {Object.keys(LBL).map(function(k){return(<button key={k} onClick={function(){setEditCat(k);}} style={{padding:'5px 11px',borderRadius:20,border:'1.5px solid '+(editCat===k?COR[k]:'#E2E8F0'),background:editCat===k?COR[k]:'#fff',color:editCat===k?'#fff':COR[k],fontWeight:600,fontSize:11,cursor:'pointer'}}>{ICO[k]} {LBL[k]}</button>);})}
@@ -7579,6 +7594,10 @@ function TabPrevisao(props){
             {editAta===ata.id&&<div style={{marginBottom:10}}>
               <div style={{fontSize:11,fontWeight:600,color:'#64748B',marginBottom:4}}>Valor total do contrato (R$) — ajuste aqui se houver aditivo:</div>
               <input type="text" inputMode="decimal" value={editValorTotal} onChange={function(e){setEditValorTotal(e.target.value);}} placeholder="Ex: 50000,00" className="inp" style={{marginBottom:0,maxWidth:200}}/>
+            </div>}
+            {ata.cnpj&&editAta!==ata.id&&<div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6,fontSize:12}}>
+              <span style={{color:'#64748B',fontWeight:600}}>CNPJ:</span>
+              <strong style={{color:'#475569'}}>{ata.cnpj}</strong>
             </div>}
             {ata.valorTotal!=null&&<div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6,fontSize:12}}>
               <span style={{color:'#64748B',fontWeight:600}}>Valor total do contrato:</span>
