@@ -13,7 +13,7 @@
 // ser a data/hora atual em segundos, ex.: no terminal `date +%s`) — sem isso, o auto-update não
 // detecta a mudança e navegadores/ícones de tela inicial com cache antigo continuam presos até
 // alguém limpar o cache manualmente (foi exatamente isso que causou o incidente de 18/09/2026).
-window.__FC_VERSION=1790209776;
+window.__FC_VERSION=1790213906;
 (function(){
   try{
     fetch(location.pathname+'?_vcheck='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(html){
@@ -6376,15 +6376,27 @@ function TabPrevisao(props){
   // Chave sintética para ajuste manual de item de ATA ainda sem medicamento vinculado (Mudança 4).
   function itemAtaKey(ataId,idx){return 'ITEM__'+ataId+'__'+idx;}
 
+  // Histórico de pedidos fechados desta ATA, pra exibir/desfazer qualquer um deles (não só o último).
+  // Migração transparente: ATAs de antes desta versão só tinham o campo antigo `ultimoPedido` (um
+  // único slot, sobrescrito a cada pedido). Se `historicoPedidos` ainda não existe mas `ultimoPedido`
+  // existe, ele é tratado como o único item do histórico (ganha um id sintético 'legacy' só pra
+  // identificação na tela/no desfazer) — nada se perde pras ATAs que já tinham um pedido pendente
+  // de desfazer no momento do deploy.
+  function historicoPedidosDaAta(ata){
+    if(ata&&ata.historicoPedidos&&ata.historicoPedidos.length)return ata.historicoPedidos;
+    if(ata&&ata.ultimoPedido)return [Object.assign({id:'legacy'},ata.ultimoPedido)];
+    return [];
+  }
   // Desconta do saldo da ATA a quantidade de cada item de um pedido recém-gerado (soma no
   // pedidoAcumulado de cada item, que é exatamente o mesmo campo já usado pelo ajuste manual em
   // "Já pedido"). Recebe `linhas` = resultado já calculado de linhasPedidoAta(ata), pra não duplicar
   // a lógica de quantidade. Escreve o array `itens` inteiro DE UMA VEZ (uma única atualização no
   // Firestore) em vez de uma chamada por item — evita corrida entre updates concorrentes, já que
   // atualizarItemAta() sobrescreve o array inteiro a cada chamada.
-  // Também grava `ultimoPedido` (quais itens/quanto foi descontado) pra dar pra DESFAZER só essa
-  // última operação depois (ex.: usuária imprime o pedido, percebe que faltou/errou um item, e quer
-  // voltar o saldo restante ao que estava antes, sem ter que recalcular à mão item por item).
+  // Também acrescenta um registro em `historicoPedidos` (quais itens/quanto foi descontado, e quando)
+  // pra dar pra escolher e DESFAZER qualquer pedido já feito depois (ex.: usuária imprime o pedido,
+  // percebe que faltou/errou um item, e quer voltar o saldo restante ao que estava antes, sem ter
+  // que recalcular à mão item por item).
   function descontarPedidoDaAta(ata,linhas){
     if(!ata||!ata.itens||!linhas||linhas.length===0)return Promise.resolve();
     var novos=ata.itens.map(function(it){return Object.assign({},it);});
@@ -6397,22 +6409,25 @@ function TabPrevisao(props){
       deltas.push({idx:idx,qtd:l.qtd});
     });
     if(deltas.length===0)return Promise.resolve();
-    return db.collection('atas').doc(ata.id).update({itens:novos,ultimoPedido:{deltas:deltas,em:new Date().toISOString()}});
+    var registro={id:Date.now()+'_'+Math.random().toString(36).slice(2,7),deltas:deltas,em:new Date().toISOString()};
+    var novoHistorico=historicoPedidosDaAta(ata).concat([registro]);
+    return db.collection('atas').doc(ata.id).update({itens:novos,historicoPedidos:novoHistorico,ultimoPedido:firebase.firestore.FieldValue.delete()});
   }
-  // Desfaz exatamente o último pedido gerado desta ATA (reverte só os deltas gravados por
-  // descontarPedidoDaAta, não zera o histórico inteiro do item). Depois de desfeito, `ultimoPedido`
-  // é apagado — não dá pra desfazer a mesma operação duas vezes.
-  function desfazerUltimoPedido(ata){
-    if(!ata||!ata.ultimoPedido||!ata.itens)return;
-    var qtdTotal=ata.ultimoPedido.deltas.reduce(function(s,d){return s+d.qtd;},0);
-    confirm2('Desfazer último pedido','Desfazer o último pedido desta ATA ("'+ata.nome+'")? '+qtdTotal+' unidade(s) voltam pro saldo restante.',function(){
+  // Desfaz exatamente UM pedido específico do histórico desta ATA (reverte só os deltas gravados
+  // naquele registro, não zera o histórico inteiro do item). Depois de desfeito, o registro some da
+  // lista — não dá pra desfazer a mesma operação duas vezes.
+  function desfazerPedido(ata,registro){
+    if(!ata||!registro||!ata.itens)return;
+    var qtdTotal=registro.deltas.reduce(function(s,d){return s+d.qtd;},0);
+    confirm2('Desfazer pedido','Desfazer o pedido de '+fmtD(registro.em)+' às '+fmtT(registro.em)+' desta ATA ("'+(ata.nome||'')+'")? '+qtdTotal+' unidade(s) voltam pro saldo restante.',function(){
       var novos=ata.itens.map(function(it){return Object.assign({},it);});
-      ata.ultimoPedido.deltas.forEach(function(d){
+      registro.deltas.forEach(function(d){
         if(!novos[d.idx])return;
         novos[d.idx].pedidoAcumulado=Math.max(0,(novos[d.idx].pedidoAcumulado||0)-d.qtd);
       });
-      db.collection('atas').doc(ata.id).update({itens:novos,ultimoPedido:firebase.firestore.FieldValue.delete()}).then(function(){
-        setMsg('ok:Último pedido desfeito — saldo restante voltou ao que estava antes.');setTimeout(function(){setMsg('');},3500);
+      var novoHistorico=historicoPedidosDaAta(ata).filter(function(r){return r.id!==registro.id;});
+      db.collection('atas').doc(ata.id).update({itens:novos,historicoPedidos:novoHistorico,ultimoPedido:firebase.firestore.FieldValue.delete()}).then(function(){
+        setMsg('ok:Pedido desfeito — saldo restante voltou ao que estava antes.');setTimeout(function(){setMsg('');},3500);
       }).catch(function(e){setMsg('e:Não foi possível desfazer: '+e.message);});
     },'warning','Desfazer');
   }
@@ -7554,7 +7569,28 @@ function TabPrevisao(props){
                   <strong style={{color:vRestante<0?'#DC2626':cor}}>R$ {vRestante.toFixed(2).replace('.',',')}</strong>
                   <span style={{fontSize:10,color:'#94A3B8'}}>(controle interno — não aparece no pedido impresso)</span>
                 </div>
-                {ata.ultimoPedido&&<button onClick={function(){desfazerUltimoPedido(ata);}} style={{marginTop:6,background:'#FEF3C7',border:'1px solid #FCD34D',borderRadius:8,padding:'5px 10px',fontSize:11,color:'#92400E',fontWeight:700,cursor:'pointer'}}>↩️ Desfazer último pedido ({fmtD(ata.ultimoPedido.em)} {fmtT(ata.ultimoPedido.em)})</button>}
+                {(function(){
+                  var historico=historicoPedidosDaAta(ata);
+                  if(historico.length===0)return null;
+                  var histAberto=pastasAbertas['historico_'+ata.id]===true;
+                  var historicoOrdenado=historico.slice().sort(function(a,b){return new Date(b.em)-new Date(a.em);});
+                  return(<div style={{marginTop:6}}>
+                    <button onClick={function(){setPastasAbertas(function(p){var n=Object.assign({},p);n['historico_'+ata.id]=!histAberto;return n;});}} style={{background:'#FEF3C7',border:'1px solid #FCD34D',borderRadius:8,padding:'5px 10px',fontSize:11,color:'#92400E',fontWeight:700,cursor:'pointer'}}>↩️ Pedidos feitos nesta ATA ({historico.length}) {histAberto?'▲':'▼'}</button>
+                    {histAberto&&<div style={{marginTop:6,background:'#fff',border:'1px solid #FCD34D',borderRadius:8,padding:'2px 10px'}}>
+                      {historicoOrdenado.map(function(registro,i){
+                        var qtdTotal=registro.deltas.reduce(function(s,d){return s+d.qtd;},0);
+                        var vTotalReg=registro.deltas.reduce(function(s,d){var it=ata.itens[d.idx];return s+(it?(it.vUnit||0)*d.qtd:0);},0);
+                        return(<div key={registro.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,padding:'8px 0',borderTop:i>0?'1px solid #FEF3C7':'none',flexWrap:'wrap'}}>
+                          <div style={{fontSize:11,color:'#78350F'}}>
+                            <div style={{fontWeight:700}}>{fmtD(registro.em)} {fmtT(registro.em)}</div>
+                            <div style={{color:'#92400E'}}>{qtdTotal} unidade(s){vTotalReg>0?' · ≈ R$ '+vTotalReg.toFixed(2).replace('.',',')+' (preço atual)':''}</div>
+                          </div>
+                          <button onClick={function(){desfazerPedido(ata,registro);}} style={{background:'#FDE68A',border:'none',borderRadius:6,padding:'5px 10px',fontSize:11,color:'#78350F',fontWeight:700,cursor:'pointer',flexShrink:0}}>↩️ Desfazer</button>
+                        </div>);
+                      })}
+                    </div>}
+                  </div>);
+                })()}
               </div>);
             })()}
             {(function(){
