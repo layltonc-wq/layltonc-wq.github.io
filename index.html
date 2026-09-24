@@ -19,7 +19,7 @@
 // caso a página NUNCA recarrega sozinha, então sem isso ela ficava presa na versão antiga até
 // fechar e abrir o app de verdade), e (3) a cada 5 minutos enquanto ficar aberta, pro caso raro
 // de o próprio celular manter a aba viva em segundo plano por muito tempo sem trocar de app.
-window.__FC_VERSION=1790260666;
+window.__FC_VERSION=1790261417;
 (function(){
   function checarVersaoNova(){
     try{
@@ -6189,6 +6189,10 @@ function TabPrevisao(props){
   // respeitam position:sticky direito (ex.: Chrome desatualizado em máquina antiga), o sticky não
   // acompanha a rolagem nenhum pouco — fixed não depende disso, funciona em qualquer navegador.
   var _flutuante=useState(null);var flutuante=_flutuante[0];var setFlutuante=_flutuante[1];
+  // Modal de classificação de Ordem de Fornecimento (só Itaquitinga) — abre na hora de gerar o PDF
+  // quando algum item do pedido ainda não tem Ordem definida, em vez de simplesmente bloquear.
+  // Formato: {itens:[{ataId,idx,desc,qtd,ataNome}], listaAtas:[...], escolhas:{'ataId#idx':valor}}.
+  var _ofModal=useState(null);var ofModal=_ofModal[0];var setOfModal=_ofModal[1];
   var _buscaGestAta=useState('');var buscaGestAta=_buscaGestAta[0];var setBuscaGestAta=_buscaGestAta[1];
   var _buscaItemMed=useState({});var buscaItemMed=_buscaItemMed[0];var setBuscaItemMed=_buscaItemMed[1];
   var _editAta=useState(null);var editAta=_editAta[0];var setEditAta=_editAta[1];// ata em edição (busca fuzzy)
@@ -7033,31 +7037,54 @@ function TabPrevisao(props){
   // Por decisão explícita da usuária, isso SUBSTITUI o pedido genérico (carta pra central de compras)
   // pra esse tenant — Vicência não é afetada, continua exatamente como antes.
   // Nunca "adivinha" pra onde um item vai: se algum item do pedido não tem a Ordem de Fornecimento
-  // definida (campo em ✏️ Editar → Itens do contrato), a geração inteira é BLOQUEADA e a mensagem
-  // lista exatamente quais itens faltam classificar — mais seguro que mandar pro lugar errado.
-  function gerarOrdensFornecimento(listaAtasIn){
+  // definida, abre um painel (ofModal, ver renderização no fim do componente) pra classificar ali na
+  // hora — bem mais rápido que ter que ir em ✏️ Editar item por item antes. A escolha é salva no
+  // próprio item (mesmo campo de sempre), então da próxima vez só os itens ainda não classificados
+  // aparecem no painel.
+  // `classificacoesExtras` (opcional): {'ataId#idx':valor} — usado só na REGERAÇÃO logo depois de
+  // confirmar o painel, pra não depender do onSnapshot do Firestore já ter voltado com o que acabou
+  // de ser salvo (evita corrida/atraso).
+  function gerarOrdensFornecimento(listaAtasIn,classificacoesExtras){
+    var extras=classificacoesExtras||{};
     var listaAtas=Array.isArray(listaAtasIn)?listaAtasIn:[listaAtasIn];
-    var faltando=[]; // itens com pedido>0 mas sem ordemFornecimento definida
+    var faltando=[]; // itens com pedido>0 mas sem ordemFornecimento definida (nem no extras)
+    var semVinculo=[]; // itens sem vínculo de contrato na própria ATA — não tem onde salvar a escolha
     var porAta=[]; // {ata, grupos:{ordemKey:[linha,...]}}
     listaAtas.forEach(function(ata){
       var linhas=linhasPedidoAta(ata);
       if(linhas.length===0)return;
+      var itensAta=ata.itens||[];
       var grupos={};
       linhas.forEach(function(l){
-        var of=l.item&&l.item.ordemFornecimento;
-        if(!of){faltando.push({ataNome:ata.nome||'ATA',desc:l.desc});return;}
+        var idx=l.item?itensAta.indexOf(l.item):-1;
+        var chave=idx>=0?(ata.id+'#'+idx):null;
+        var of=(chave&&extras[chave])||(l.item&&l.item.ordemFornecimento);
+        if(!of){
+          if(idx<0){semVinculo.push({ataNome:ata.nome||'ATA',desc:l.desc});}
+          else{faltando.push({ataId:ata.id,ataNome:ata.nome||'ATA',idx:idx,desc:l.desc,qtd:l.qtd});}
+          return;
+        }
         if(!grupos[of])grupos[of]=[];
         grupos[of].push(l);
       });
       if(Object.keys(grupos).length>0)porAta.push({ata:ata,grupos:grupos});
     });
-    if(faltando.length===0&&porAta.length===0){setMsg('e:Nenhum medicamento com pedido > 0. Ajuste as quantidades antes de gerar.');return;}
-    if(faltando.length>0){
-      var nomes=faltando.slice(0,6).map(function(f){return f.desc+' ('+f.ataNome+')';}).join('; ');
-      var resto=faltando.length>6?'; e mais '+(faltando.length-6)+' item(ns)':'';
-      setMsg('e:'+faltando.length+' item(ns) sem "Ordem de Fornecimento" definida — nada foi gerado, pra não mandar medicamento pro lugar errado. Defina em ✏️ Editar → Itens do contrato: '+nomes+resto+'.');
+    if(faltando.length===0&&semVinculo.length===0&&porAta.length===0){setMsg('e:Nenhum medicamento com pedido > 0. Ajuste as quantidades antes de gerar.');return;}
+    if(semVinculo.length>0){
+      var nomesSV=semVinculo.slice(0,6).map(function(f){return f.desc+' ('+f.ataNome+')';}).join('; ');
+      var restoSV=semVinculo.length>6?'; e mais '+(semVinculo.length-6)+' item(ns)':'';
+      setMsg('e:'+semVinculo.length+' item(ns) sem vínculo de contrato nesta ATA — não dá pra salvar a Ordem de Fornecimento pra eles. Vincule em ✏️ Editar antes de gerar: '+nomesSV+restoSV+'.');
       return;
     }
+    if(faltando.length>0){
+      setOfModal({itens:faltando,listaAtas:listaAtas,escolhas:{}});
+      return;
+    }
+    _imprimirOrdensFornecimento(porAta);
+  }
+  // Monta e imprime o(s) documento(s) já com tudo classificado — separado só pra poder ser chamado
+  // de novo, direto, depois que o painel ofModal confirma as escolhas.
+  function _imprimirOrdensFornecimento(porAta){
     var css='<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;font-size:12px;color:#111}'+
       '.pagina{padding:26px 30px;page-break-after:always}.pagina:last-child{page-break-after:auto}'+
       '.cab{text-align:center;margin-bottom:14px}.cab img{height:64px;margin-bottom:4px}'+
@@ -7116,6 +7143,32 @@ function TabPrevisao(props){
     if(!_imprimirDoc(html)){setMsg('e:Não foi possível abrir a impressão. Tente de novo.');return;}
     // Sobe o contador de cada ATA envolvida, pra próxima geração já vir com o número seguinte.
     atasParaAtualizarContador.forEach(function(x){db.collection('atas').doc(x.id).update({ordemFornecimentoContador:x.novo}).catch(function(){});});
+  }
+  // Confirma o painel de classificação (ofModal): valida que toda linha tem uma Ordem escolhida,
+  // salva a escolha no item de cada ATA (fica valendo pros próximos pedidos também) e já gera o
+  // documento na sequência, sem esperar o Firestore confirmar de volta (usa `extras` pra isso).
+  function confirmarClassificacaoOrdens(){
+    if(!ofModal)return;
+    var semEscolha=ofModal.itens.some(function(f){return !ofModal.escolhas[f.ataId+'#'+f.idx];});
+    if(semEscolha){setMsg('e:Escolha a Ordem de Fornecimento de todos os itens listados antes de continuar.');return;}
+    var porAtaId={};
+    ofModal.itens.forEach(function(f){
+      var chave=f.ataId+'#'+f.idx;
+      if(!porAtaId[f.ataId])porAtaId[f.ataId]=[];
+      porAtaId[f.ataId].push({idx:f.idx,valor:ofModal.escolhas[chave]});
+    });
+    var extras={};
+    ofModal.itens.forEach(function(f){extras[f.ataId+'#'+f.idx]=ofModal.escolhas[f.ataId+'#'+f.idx];});
+    Object.keys(porAtaId).forEach(function(ataId){
+      var ata=atas.find(function(a){return a.id===ataId;});
+      if(!ata||!ata.itens)return;
+      var novos=ata.itens.map(function(it){return Object.assign({},it);});
+      porAtaId[ataId].forEach(function(x){if(novos[x.idx])novos[x.idx].ordemFornecimento=x.valor;});
+      db.collection('atas').doc(ataId).update({itens:novos}).catch(function(){});
+    });
+    var listaParaGerar=ofModal.listaAtas;
+    setOfModal(null);
+    gerarOrdensFornecimento(listaParaGerar,extras);
   }
   function gerarPDFAta(ata,grupoMeds,catKey){
     // Itaquitinga usa as Ordens de Fornecimento oficiais (ver gerarOrdensFornecimento) no lugar
@@ -8127,6 +8180,34 @@ function TabPrevisao(props){
           <button onClick={function(){setFlutuante(null);}} style={{background:'#F1F5F9',border:'none',borderRadius:8,padding:'8px 10px',color:'#64748B',fontWeight:700,fontSize:13,cursor:'pointer',flexShrink:0}}>✕</button>
         </div>);
       })()}
+
+      {/* Painel de classificação de Ordem de Fornecimento (só Itaquitinga) — abre sozinho ao clicar
+          em "PDF" quando algum item do pedido ainda não tem Ordem definida. A escolha fica salva no
+          item (mesmo campo do seletor em ✏️ Editar), então da próxima vez só aparece o que ainda
+          não foi classificado. */}
+      {ofModal&&<div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.6)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={function(){setOfModal(null);}}>
+        <div style={{background:'#fff',borderRadius:20,padding:20,maxWidth:480,width:'100%',maxHeight:'85vh',display:'flex',flexDirection:'column',boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}} onClick={function(e){e.stopPropagation();}}>
+          <div style={{fontWeight:800,fontSize:16,color:'#1E293B',marginBottom:4}}>📦 Classificar Ordem de Fornecimento</div>
+          <div style={{fontSize:12,color:'#64748B',marginBottom:14}}>{ofModal.itens.length} item(ns) deste pedido ainda não têm Ordem de Fornecimento definida. Escolha pra cada um — fica salvo, não pergunta de novo da próxima vez que pedir o mesmo item.</div>
+          <div style={{overflowY:'auto',flex:1,display:'flex',flexDirection:'column',gap:8,marginBottom:16,paddingRight:2}}>
+            {ofModal.itens.map(function(f){
+              var chave=f.ataId+'#'+f.idx;
+              return(<div key={chave} style={{background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:10,padding:10}}>
+                <div style={{fontSize:12,fontWeight:700,color:'#1E293B',marginBottom:2}}>{f.desc}</div>
+                <div style={{fontSize:10,color:'#94A3B8',marginBottom:6}}>{f.qtd} un. · {f.ataNome}</div>
+                <select value={ofModal.escolhas[chave]||''} onChange={function(e){var v=e.target.value;setOfModal(function(m){var n=Object.assign({},m);n.escolhas=Object.assign({},m.escolhas);n.escolhas[chave]=v;return n;});}} className="inp" style={{marginBottom:0,fontSize:12,borderColor:ofModal.escolhas[chave]?'#CBD5E1':'#FCD34D'}}>
+                  <option value="">Selecione...</option>
+                  {ORDENS_FORNECIMENTO.map(function(o){return <option key={o.v} value={o.v}>{o.lbl}</option>;})}
+                </select>
+              </div>);
+            })}
+          </div>
+          <div style={{display:'flex',gap:10}}>
+            <button onClick={function(){setOfModal(null);}} style={{flex:1,padding:'12px',background:'#F1F5F9',border:'none',borderRadius:12,fontWeight:700,fontSize:14,color:'#64748B',cursor:'pointer'}}>Cancelar</button>
+            <button onClick={confirmarClassificacaoOrdens} style={{flex:1,padding:'12px',background:'#15803D',border:'none',borderRadius:12,fontWeight:700,fontSize:14,color:'#fff',cursor:'pointer'}}>✅ Confirmar e Gerar</button>
+          </div>
+        </div>
+      </div>}
     </div>
   );
 }
