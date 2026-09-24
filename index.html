@@ -13,7 +13,7 @@
 // ser a data/hora atual em segundos, ex.: no terminal `date +%s`) — sem isso, o auto-update não
 // detecta a mudança e navegadores/ícones de tela inicial com cache antigo continuam presos até
 // alguém limpar o cache manualmente (foi exatamente isso que causou o incidente de 18/09/2026).
-window.__FC_VERSION=1790208727;
+window.__FC_VERSION=1790209776;
 (function(){
   try{
     fetch(location.pathname+'?_vcheck='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(html){
@@ -7573,7 +7573,9 @@ function TabPrevisao(props){
               var itensPorMed={};if(ata.itens)ata.itens.forEach(function(it){if(it.medicamentoId)itensPorMed[it.medicamentoId]=it;});
               // Itens da ATA SEM medicamento vinculado (Mudança 4): sem medicamentoId ou vínculo órfão.
               var naoVinc=[];if(ata.itens)ata.itens.forEach(function(it,idx){var m=it.medicamentoId?medications.find(function(x){return x.id===it.medicamentoId;}):null;if(!m)naoVinc.push({it:it,idx:idx});});
-              var totalAtaPedido=linhasPedidoAta(ata).reduce(function(s,x){return s+x.vTotal;},0);
+              var linhasAtaPedido=linhasPedidoAta(ata);
+              var totalAtaPedido=linhasAtaPedido.reduce(function(s,x){return s+x.vTotal;},0);
+              var qtdAtaPedido=linhasAtaPedido.reduce(function(s,x){return s+x.qtd;},0);
               var totalItensPedido=meds.length+naoVinc.length;
               var pedidoAberto=!!termoBusca||pastasAbertas['pedido_'+ata.id]===true;
               // Quando a busca achou esta ata por causa de um medicamento/item específico (não pelo
@@ -7593,7 +7595,7 @@ function TabPrevisao(props){
                   <span style={{fontSize:11,fontWeight:700,color:'#475569',textTransform:'uppercase',letterSpacing:'.03em'}}>Definir pedido desta ata ({totalItensPedido} {totalItensPedido===1?'item':'itens'})</span>
                   <span style={{fontSize:13,color:'#94A3B8'}}>{pedidoAberto?'▲':'▼'}</span>
                 </button>
-                {!pedidoAberto&&totalAtaPedido>0&&<div style={{fontSize:11,color:cor,fontWeight:700}}>Total do pedido: R$ {totalAtaPedido.toFixed(2).replace('.',',')}</div>}
+                {!pedidoAberto&&qtdAtaPedido>0&&<div style={{fontSize:11,color:cor,fontWeight:700}}>{totalAtaPedido>0?'Total do pedido: R$ '+totalAtaPedido.toFixed(2).replace('.',','):qtdAtaPedido+' unidade(s) a pedir'}</div>}
                 {pedidoAberto&&<React.Fragment>
                 {filtrarItens&&<div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,flexWrap:'wrap',background:'#EFF6FF',border:'1px solid #BFDBFE',borderRadius:8,padding:'6px 10px',marginBottom:6}}>
                   <span style={{fontSize:11,color:'#1E40AF'}}>🔍 Mostrando {medsFiltrados.length+naoVincFiltrados.length} de {totalItensPedido} item(ns) que combinam com "{buscaGestAta}"</span>
@@ -7644,8 +7646,8 @@ function TabPrevisao(props){
                     <button onClick={function(){vincularItemAutomatico(ata,o.idx);}} disabled={carregando} style={{marginTop:6,width:'100%',padding:'7px',background:carregando?'#CBD5E1':'#0C6B3E',border:'none',borderRadius:8,color:'#fff',fontWeight:700,fontSize:11,cursor:carregando?'default':'pointer'}}>{carregando?'Cadastrando...':'🔗 Vincular automaticamente (cadastra com o nome da ATA)'}</button>
                   </div>);
                 })}
-                {totalAtaPedido>0&&<div style={{marginTop:8,paddingTop:8,borderTop:'1px solid #E2E8F0',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,flexWrap:'wrap'}}>
-                  <span style={{fontSize:12,fontWeight:800,color:cor}}>Total do pedido: R$ {totalAtaPedido.toFixed(2).replace('.',',')}</span>
+                {qtdAtaPedido>0&&<div style={{marginTop:8,paddingTop:8,borderTop:'1px solid #E2E8F0',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+                  <span style={{fontSize:12,fontWeight:800,color:cor}}>{totalAtaPedido>0?'Total do pedido: R$ '+totalAtaPedido.toFixed(2).replace('.',','):qtdAtaPedido+' unidade(s) a pedir'}</span>
                   {infoTenant.autoDescontarAta&&<button onClick={function(){fecharPedidoAta(ata);}} style={{background:'#0C6B3E',border:'none',borderRadius:8,padding:'6px 12px',fontSize:11,color:'#fff',fontWeight:700,cursor:'pointer'}}>🔒 Fechar Pedido</button>}
                 </div>}
                 </React.Fragment>}
