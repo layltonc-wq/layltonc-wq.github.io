@@ -7998,9 +7998,16 @@ function TabPrevisao(props){
                   var val=valorPedido(m);var edu=ajustes[m.id]!==undefined;
                   var vUnitStr=precos[m.id]!==undefined?precos[m.id]:(it&&it.vUnit?String(it.vUnit).replace('.',','):'');
                   var vt=val*valorUnit(m.id,it);
+                  // Saldo que ainda resta do teto do contrato (já descontando pedidos fechados
+                  // anteriores) e quanto sobraria SE este pedido em andamento fosse fechado agora —
+                  // pra dar noção, ENQUANTO digita, de até quanto ainda dá pra pedir.
+                  var saldoDisp=it?(Number(it.qtdTeto)||0)-(Number(it.pedidoAcumulado)||0):null;
+                  var saldoApos=saldoDisp!==null?saldoDisp-val:null;
+                  var excedeTeto=saldoDisp!==null&&val>saldoDisp;
                   return(<div key={m.id} style={{padding:'8px 0',borderTop:'1px solid #EEF2F8'}}>
                     <div style={{fontSize:12,fontWeight:600,color:'#1E293B',wordBreak:'break-word',marginBottom:2}}>{m.nome}</div>
                     {it&&it.qtdTeto>0&&<div style={{fontSize:10,color:'#64748B',marginBottom:2}}>Teto do contrato: {it.qtdTeto} {it.unidade||''}{it.vUnit>0?' · R$ '+(it.qtdTeto*it.vUnit).toFixed(2).replace('.',',')+' no total':''}</div>}
+                    {saldoDisp!==null&&<div style={{fontSize:11,fontWeight:700,marginBottom:4,color:excedeTeto?'#DC2626':'#0C6B3E'}}>Saldo disponível: {saldoDisp} {it.unidade||''}{val>0?' · após este pedido: '+saldoApos+' '+(it.unidade||''):''}{excedeTeto?' ⚠️ excede o saldo!':''}</div>}
                     <div style={{display:'flex',alignItems:'center',gap:8}}>
                       <div style={{fontSize:10,color:'#94A3B8',flex:1,minWidth:0}}>sugestão: {pAuto}{vt>0?' · total: R$ '+vt.toFixed(2).replace('.',','):''}</div>
                       <div style={{display:'flex',flexDirection:'column',alignItems:'center',flexShrink:0}}>
@@ -8020,10 +8027,17 @@ function TabPrevisao(props){
                   var val=ajustes[uKey]!==undefined?ajustes[uKey]:'';var edu=ajustes[uKey]!==undefined;
                   var vUnitStr=precos[uKey]!==undefined?precos[uKey]:(it.vUnit?String(it.vUnit).replace('.',','):'');
                   var carregando=vincItemLoading===uKey;
-                  var vtNV=(parseInt(val)||0)*valorUnit(uKey,it);
+                  var valNum=parseInt(val)||0;
+                  var vtNV=valNum*valorUnit(uKey,it);
+                  // Mesmo raciocínio do bloco de medicamentos vinculados: saldo restante do teto do
+                  // contrato, considerando o que já foi fechado antes + o que está sendo digitado agora.
+                  var saldoDispNV=(Number(it.qtdTeto)||0)-(Number(it.pedidoAcumulado)||0);
+                  var saldoAposNV=saldoDispNV-valNum;
+                  var excedeTetoNV=valNum>saldoDispNV;
                   return(<div key={uKey} style={{padding:'8px 0',borderTop:'1px solid #EEF2F8'}}>
                     <div style={{fontSize:12,fontWeight:600,color:'#1E293B',wordBreak:'break-word',marginBottom:2}}>{it.descricao||'(sem descrição)'}</div>
                     {it.qtdTeto>0&&<div style={{fontSize:10,color:'#64748B',marginBottom:4}}>Teto do contrato: {it.qtdTeto} {it.unidade||''}{it.vUnit>0?' · R$ '+(it.qtdTeto*it.vUnit).toFixed(2).replace('.',',')+' no total':''}</div>}
+                    {it.qtdTeto>0&&<div style={{fontSize:11,fontWeight:700,marginBottom:4,color:excedeTetoNV?'#DC2626':'#0C6B3E'}}>Saldo disponível: {saldoDispNV} {it.unidade||''}{valNum>0?' · após este pedido: '+saldoAposNV+' '+(it.unidade||''):''}{excedeTetoNV?' ⚠️ excede o saldo!':''}</div>}
                     <div style={{marginBottom:6}}><span style={{display:'inline-block',fontSize:9,fontWeight:800,color:'#B45309',background:'#FEF3C7',border:'1px solid #FCD34D',borderRadius:6,padding:'1px 6px'}}>⚠️ NÃO VINCULADO</span></div>
                     <div style={{display:'flex',alignItems:'center',gap:8}}>
                       <div style={{fontSize:10,color:'#94A3B8',flex:1,minWidth:0}}>{vtNV>0?'total deste pedido: R$ '+vtNV.toFixed(2).replace('.',','):''}</div>
