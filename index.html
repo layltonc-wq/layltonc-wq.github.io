@@ -6193,6 +6193,11 @@ function TabPrevisao(props){
   // quando algum item do pedido ainda não tem Ordem definida, em vez de simplesmente bloquear.
   // Formato: {itens:[{ataId,idx,desc,qtd,ataNome}], listaAtas:[...], escolhas:{'ataId#idx':valor}}.
   var _ofModal=useState(null);var ofModal=_ofModal[0];var setOfModal=_ofModal[1];
+  // Painel pra escolher qual farmacêutico(a) assina o pedido de Itaquitinga (nome+CRF), aberto ao
+  // clicar em PDF, antes de gerar o documento. Pré-preenchido com o último usado (localStorage) pra
+  // não precisar redigitar toda vez, mas sempre editável — outro farmacêutico pode estar de plantão.
+  // Formato quando aberto: {alvo:ata|listaAtas, nome:'', crf:''}.
+  var _farmModal=useState(null);var farmModal=_farmModal[0];var setFarmModal=_farmModal[1];
   var _buscaGestAta=useState('');var buscaGestAta=_buscaGestAta[0];var setBuscaGestAta=_buscaGestAta[1];
   var _buscaItemMed=useState({});var buscaItemMed=_buscaItemMed[0];var setBuscaItemMed=_buscaItemMed[1];
   var _editAta=useState(null);var editAta=_editAta[0];var setEditAta=_editAta[1];// ata em edição (busca fuzzy)
@@ -7028,6 +7033,30 @@ function TabPrevisao(props){
   }
   // Ordinal em português ("1ª", "2ª"...) — usado no número da Ordem de Fornecimento.
   function _ordinalFem(n){return n+'ª';}
+  // Farmacêutico(a) que assina o documento — lido do que foi usado da última vez, pra pré-preencher
+  // o painel (abrirFarmModal) sem obrigar a redigitar toda vez.
+  function _farmSalvo(){
+    try{
+      return {nome:localStorage.getItem('fc_farm_nome')||'',crf:localStorage.getItem('fc_farm_crf')||''};
+    }catch(e){return {nome:'',crf:''};}
+  }
+  // Abre o painel pra escolher/confirmar o farmacêutico responsável antes de gerar o(s) documento(s)
+  // de Ordem de Fornecimento (alvo = uma ata ou a lista inteira, repassado direto pra
+  // gerarOrdensFornecimento depois de confirmado).
+  function abrirFarmModal(alvo){
+    var salvo=_farmSalvo();
+    setFarmModal({alvo:alvo,nome:salvo.nome,crf:salvo.crf});
+  }
+  function confirmarFarmModal(){
+    if(!farmModal)return;
+    var nome=(farmModal.nome||'').trim();
+    var crf=(farmModal.crf||'').trim();
+    if(!nome||!crf){setMsg('e:Preencha o nome do farmacêutico e o CRF antes de gerar.');return;}
+    try{localStorage.setItem('fc_farm_nome',nome);localStorage.setItem('fc_farm_crf',crf);}catch(e){}
+    var alvo=farmModal.alvo;
+    setFarmModal(null);
+    gerarOrdensFornecimento(alvo,undefined,{nome:nome,crf:crf});
+  }
   // ── ORDENS DE FORNECIMENTO (só Itaquitinga) ─────────────────────────────
   // Documento oficial que a Coordenação de Assistência Farmacêutica de Itaquitinga já usa em papel:
   // separa o pedido de cada ATA em até 6 seções — Hospital / Atenção Básica / Farmácia Básica, cada
@@ -7044,17 +7073,17 @@ function TabPrevisao(props){
   // `classificacoesExtras` (opcional): {'ataId#idx':valor} — usado só na REGERAÇÃO logo depois de
   // confirmar o painel, pra não depender do onSnapshot do Firestore já ter voltado com o que acabou
   // de ser salvo (evita corrida/atraso).
-  function gerarOrdensFornecimento(listaAtasIn,classificacoesExtras){
+  function gerarOrdensFornecimento(listaAtasIn,classificacoesExtras,farmInfo){
     // Rede de segurança: qualquer erro inesperado aqui dentro (ex.: dado antigo com tipo diferente
     // do esperado) NÃO pode resultar em "clicar e não acontecer nada" sem explicação — sempre avisa.
     try{
-      return _gerarOrdensFornecimentoImpl(listaAtasIn,classificacoesExtras);
+      return _gerarOrdensFornecimentoImpl(listaAtasIn,classificacoesExtras,farmInfo);
     }catch(e){
       setMsg('e:Não foi possível gerar a Ordem de Fornecimento ('+((e&&e.message)||e)+'). Avise o suporte com o nome da ATA.');
       return;
     }
   }
-  function _gerarOrdensFornecimentoImpl(listaAtasIn,classificacoesExtras){
+  function _gerarOrdensFornecimentoImpl(listaAtasIn,classificacoesExtras,farmInfo){
     var extras=classificacoesExtras||{};
     var listaAtas=Array.isArray(listaAtasIn)?listaAtasIn:[listaAtasIn];
     var faltando=[]; // itens com pedido>0 mas sem ordemFornecimento definida (nem no extras)
@@ -7087,14 +7116,14 @@ function TabPrevisao(props){
       return;
     }
     if(faltando.length>0){
-      setOfModal({itens:faltando,listaAtas:listaAtas,escolhas:{}});
+      setOfModal({itens:faltando,listaAtas:listaAtas,escolhas:{},farmInfo:farmInfo});
       return;
     }
-    _imprimirOrdensFornecimento(porAta);
+    _imprimirOrdensFornecimento(porAta,farmInfo);
   }
   // Monta e imprime o(s) documento(s) já com tudo classificado — separado só pra poder ser chamado
   // de novo, direto, depois que o painel ofModal confirma as escolhas.
-  function _imprimirOrdensFornecimento(porAta){
+  function _imprimirOrdensFornecimento(porAta,farmInfo){
     var css='<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;font-size:12px;color:#111}'+
       '.pagina{padding:26px 30px;page-break-after:always}.pagina:last-child{page-break-after:auto}'+
       '.cab{text-align:center;margin-bottom:14px}.cab img{height:64px;margin-bottom:4px}'+
@@ -7146,7 +7175,7 @@ function TabPrevisao(props){
           'Rua da União, nº 347, Centro - Itaquitinga -PE, CEP: 55.950-000<br>Horário para entrega: de segunda a sexta-feira das 08h00 às 14h00.<br>'+
           '<b>DADOS PARA CONTATO:</b><br>E-mail: cafitaquitinga@hotmail.com<br>Fones: (81) 9.9168-8103</div>';
         html+='<div style="margin-top:30px;font-size:12px">Atenciosamente,</div>';
-        html+='<div class="assin"><div class="linha">Laylton Carlos<br>Farmacêutico CRF: 17361</div></div>';
+        html+='<div class="assin"><div class="linha">'+_escHtml(farmInfo&&farmInfo.nome||'')+'<br>Farmacêutico(a) CRF: '+_escHtml(farmInfo&&farmInfo.crf||'')+'</div></div>';
         html+='</div>';
       });
     });
@@ -7183,13 +7212,15 @@ function TabPrevisao(props){
       return;
     }
     var listaParaGerar=ofModal.listaAtas;
+    var farmInfoAtual=ofModal.farmInfo;
     setOfModal(null);
-    gerarOrdensFornecimento(listaParaGerar,extras);
+    gerarOrdensFornecimento(listaParaGerar,extras,farmInfoAtual);
   }
   function gerarPDFAta(ata,grupoMeds,catKey){
     // Itaquitinga usa as Ordens de Fornecimento oficiais (ver gerarOrdensFornecimento) no lugar
-    // deste formato genérico — substituição completa, por pedido explícito da usuária.
-    if(tenantDe(user)==='itaquitinga-pe')return gerarOrdensFornecimento(ata);
+    // deste formato genérico — substituição completa, por pedido explícito da usuária. Antes de gerar,
+    // abre o painel pra escolher o farmacêutico que assina (ver abrirFarmModal).
+    if(tenantDe(user)==='itaquitinga-pe')return abrirFarmModal(ata);
     var hoje=new Date().toLocaleDateString('pt-BR');
     var nomeAta=ata.nome||'ATA';
     var info=infoPedidoTenant();
@@ -7277,8 +7308,9 @@ function TabPrevisao(props){
   function exportarPDF(atasFiltro){
     var listaAtas=Array.isArray(atasFiltro)?atasFiltro:atas;
     // Itaquitinga usa as Ordens de Fornecimento oficiais (ver gerarOrdensFornecimento) no lugar
-    // deste formato genérico — substituição completa, por pedido explícito da usuária.
-    if(tenantDe(user)==='itaquitinga-pe')return gerarOrdensFornecimento(listaAtas);
+    // deste formato genérico — substituição completa, por pedido explícito da usuária. Antes de gerar,
+    // abre o painel pra escolher o farmacêutico que assina (ver abrirFarmModal).
+    if(tenantDe(user)==='itaquitinga-pe')return abrirFarmModal(listaAtas);
     var hoje=new Date();
     var dataHoje=hoje.toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'}).replace(' de ',' DE ').toUpperCase();
     var numPedidoDoc=numPedido.trim()||('N/'+new Date().getFullYear());
@@ -8198,6 +8230,27 @@ function TabPrevisao(props){
           <button onClick={function(){setFlutuante(null);}} style={{background:'#F1F5F9',border:'none',borderRadius:8,padding:'8px 10px',color:'#64748B',fontWeight:700,fontSize:13,cursor:'pointer',flexShrink:0}}>✕</button>
         </div>);
       })()}
+
+      {/* Painel pra escolher o farmacêutico responsável (só Itaquitinga) — abre ao clicar em "PDF",
+          antes de gerar a Ordem de Fornecimento. Pré-preenchido com o último usado. */}
+      {farmModal&&<div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.6)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={function(){setFarmModal(null);}}>
+        <div style={{background:'#fff',borderRadius:20,padding:20,maxWidth:420,width:'100%',boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}} onClick={function(e){e.stopPropagation();}}>
+          <div style={{fontWeight:800,fontSize:16,color:'#1E293B',marginBottom:4}}>🧑‍⚕️ Farmacêutico(a) responsável</div>
+          <div style={{fontSize:12,color:'#64748B',marginBottom:14}}>Quem está assinando este pedido? Fica salvo pra próxima vez, mas pode trocar quando quiser.</div>
+          <div style={{marginBottom:10}}>
+            <div style={{fontSize:10,color:'#94A3B8',fontWeight:700,marginBottom:4}}>NOME</div>
+            <input type="text" autoFocus value={farmModal.nome} onChange={function(e){var v=e.target.value;setFarmModal(function(m){return Object.assign({},m,{nome:v});});}} placeholder="Nome completo" className="inp" style={{marginBottom:0}}/>
+          </div>
+          <div style={{marginBottom:16}}>
+            <div style={{fontSize:10,color:'#94A3B8',fontWeight:700,marginBottom:4}}>CRF</div>
+            <input type="text" value={farmModal.crf} onChange={function(e){var v=e.target.value;setFarmModal(function(m){return Object.assign({},m,{crf:v});});}} placeholder="Número do CRF" className="inp" style={{marginBottom:0}}/>
+          </div>
+          <div style={{display:'flex',gap:10}}>
+            <button onClick={function(){setFarmModal(null);}} style={{flex:1,padding:'12px',background:'#F1F5F9',border:'none',borderRadius:12,fontWeight:700,fontSize:14,color:'#64748B',cursor:'pointer'}}>Cancelar</button>
+            <button onClick={confirmarFarmModal} style={{flex:1,padding:'12px',background:'#15803D',border:'none',borderRadius:12,fontWeight:700,fontSize:14,color:'#fff',cursor:'pointer'}}>✅ Continuar</button>
+          </div>
+        </div>
+      </div>}
 
       {/* Painel de classificação de Ordem de Fornecimento (só Itaquitinga) — abre sozinho ao clicar
           em "PDF" quando algum item do pedido ainda não tem Ordem definida. A escolha fica salva no
