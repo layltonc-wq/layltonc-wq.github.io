@@ -406,6 +406,12 @@ function _bumpEntriesVersion(user){try{if(db&&tenantDe(user))db.collection('_met
 // próprio conteúdo, sem pop-up, sem travar o app; é removido depois. Fallback para window.open se
 // o iframe falhar. Retorna false se nada funcionou (para o chamador avisar o usuário).
 function _escHtml(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+// Remove qualquer campo `undefined` (inclusive dentro de objetos/arrays aninhados) antes de escrever
+// no Firestore — o SDK lança uma exceção SÍNCRONA (não uma promise rejeitada) quando encontra
+// `undefined` em qualquer profundidade, o que escapava do try/catch/then de quem chamava e resultava
+// em "clicar e não acontecer nada" sem nenhum aviso. Dado antigo (de antes de algum campo existir,
+// ex.: ordemFornecimento/catmat) é o caso mais provável de trazer isso escondido num item.
+function _semUndefined(obj){try{return JSON.parse(JSON.stringify(obj));}catch(e){return obj;}}
 function _imprimirDoc(html){
   try{
     var f=document.createElement('iframe');
@@ -6447,7 +6453,12 @@ function TabPrevisao(props){
   // que recalcular à mão item por item).
   // Resolve sempre com {deltas:N} (N=0 quando não havia nada rastreável) — quem chama usa isso pra
   // avisar direito quando "fechar" não teve efeito nenhum no saldo (ver fecharPedidoAta).
+  // Tudo dentro é protegido por try/catch (ver retorno no fim): o SDK do Firestore lança uma exceção
+  // SÍNCRONA (não uma promise rejeitada) ao gravar um campo `undefined` em qualquer profundidade do
+  // objeto — sem o try/catch aqui, isso escapava do .then/.catch de quem chama (fecharPedidoAta) e o
+  // clique em "Fechar Pedido" não dava nenhum retorno visível (nem sucesso, nem erro).
   function descontarPedidoDaAta(ata,linhas){
+   try{
     if(!ata||!linhas||linhas.length===0)return Promise.resolve({deltas:0});
     var itensAta=ata.itens||[];
     // ATA sem nenhum item de contrato cadastrado (ex.: criada só com "Criar Ata" + medicamento
@@ -6487,7 +6498,10 @@ function TabPrevisao(props){
     if(deltas.length===0)return Promise.resolve({deltas:0});
     var registro={id:Date.now()+'_'+Math.random().toString(36).slice(2,7),deltas:deltas,em:new Date().toISOString()};
     var novoHistorico=historicoPedidosDaAta(ata).concat([registro]);
-    return db.collection('atas').doc(ata.id).update({itens:novos,historicoPedidos:novoHistorico,ultimoPedido:firebase.firestore.FieldValue.delete()}).then(function(){return {deltas:deltas.length};});
+    return db.collection('atas').doc(ata.id).update({itens:_semUndefined(novos),historicoPedidos:_semUndefined(novoHistorico),ultimoPedido:firebase.firestore.FieldValue.delete()}).then(function(){return {deltas:deltas.length};});
+   }catch(e){
+    return Promise.reject(e);
+   }
   }
   // Desfaz exatamente UM pedido específico do histórico desta ATA (reverte só os deltas gravados
   // naquele registro, não zera o histórico inteiro do item). Depois de desfeito, o registro some da
@@ -6496,15 +6510,21 @@ function TabPrevisao(props){
     if(!ata||!registro||!ata.itens)return;
     var qtdTotal=registro.deltas.reduce(function(s,d){return s+d.qtd;},0);
     confirm2('Desfazer pedido','Desfazer o pedido de '+fmtD(registro.em)+' às '+fmtT(registro.em)+' desta ATA ("'+(ata.nome||'')+'")? '+qtdTotal+' unidade(s) voltam pro saldo restante.',function(){
-      var novos=ata.itens.map(function(it){return Object.assign({},it);});
-      registro.deltas.forEach(function(d){
-        if(!novos[d.idx])return;
-        novos[d.idx].pedidoAcumulado=Math.max(0,(novos[d.idx].pedidoAcumulado||0)-d.qtd);
-      });
-      var novoHistorico=historicoPedidosDaAta(ata).filter(function(r){return r.id!==registro.id;});
-      db.collection('atas').doc(ata.id).update({itens:novos,historicoPedidos:novoHistorico,ultimoPedido:firebase.firestore.FieldValue.delete()}).then(function(){
-        setMsg('ok:Pedido desfeito — saldo restante voltou ao que estava antes.');setTimeout(function(){setMsg('');},3500);
-      }).catch(function(e){setMsg('e:Não foi possível desfazer: '+e.message);});
+      // try/catch: mesmo motivo de descontarPedidoDaAta — uma exceção síncrona aqui (ex.: undefined
+      // em algum campo) não pode passar batido sem avisar a usuária.
+      try{
+        var novos=ata.itens.map(function(it){return Object.assign({},it);});
+        registro.deltas.forEach(function(d){
+          if(!novos[d.idx])return;
+          novos[d.idx].pedidoAcumulado=Math.max(0,(Number(novos[d.idx].pedidoAcumulado)||0)-d.qtd);
+        });
+        var novoHistorico=historicoPedidosDaAta(ata).filter(function(r){return r.id!==registro.id;});
+        db.collection('atas').doc(ata.id).update({itens:_semUndefined(novos),historicoPedidos:_semUndefined(novoHistorico),ultimoPedido:firebase.firestore.FieldValue.delete()}).then(function(){
+          setMsg('ok:Pedido desfeito — saldo restante voltou ao que estava antes.');setTimeout(function(){setMsg('');},3500);
+        }).catch(function(e){setMsg('e:Não foi possível desfazer: '+e.message);});
+      }catch(e){
+        setMsg('e:Não foi possível desfazer: '+((e&&e.message)||e));
+      }
     },'warning','Desfazer');
   }
 
@@ -7299,7 +7319,7 @@ function TabPrevisao(props){
         }else{
           setMsg('ok:Pedido de "'+(ata.nome||'')+'" considerado fechado. Essa ATA não tem itens de contrato cadastrados, então não há saldo pra atualizar nem histórico pra desfazer — vá em ✏️ Editar → "+ Adicionar item" (preencha o teto do contrato) e depois vincule o item ao medicamento em "📋 Itens" pra ativar esse controle.');setTimeout(function(){setMsg('');},9000);
         }
-      }).catch(function(e){setMsg('e:Não foi possível fechar o pedido: '+e.message);});
+      }).catch(function(e){setMsg('e:Não foi possível fechar o pedido: '+((e&&e.message)||e));});
     },'warning','Fechar pedido');
   }
 
@@ -7417,7 +7437,7 @@ function TabPrevisao(props){
         }else{
           setMsg('ok:Pedido fechado. Atenção: '+semRastreio.join(', ')+' não tem itens de contrato cadastrados, então o saldo dessa(s) ATA(s) não foi atualizado (e não vai dar pra desfazer) — vá em ✏️ Editar → "+ Adicionar item" e depois vincule ao medicamento em "📋 Itens" se quiser ativar esse controle.');setTimeout(function(){setMsg('');},9500);
         }
-      }).catch(function(e){setMsg('e:Pedido fechado, mas houve erro ao atualizar o saldo de uma das ATAs: '+e.message);});
+      }).catch(function(e){setMsg('e:Pedido fechado, mas houve erro ao atualizar o saldo de uma das ATAs: '+((e&&e.message)||e));});
     },'warning','Fechar pedido');
   }
 
