@@ -536,13 +536,24 @@ s[e.medicamentoId]-=(Number(e.quantidade)||0);}}return s;}
 function calcLatest(entries){var info={};var sorted=[];for(var i=0;i<entries.length;i++){if(entries[i].tipo==='entrada')sorted.push(entries[i]);}sorted.sort(function(a,b){return (a.criadoEm||'').localeCompare(b.criadoEm||'');});for(var j=0;j<sorted.length;j++){var e=sorted[j];if(e.medicamentoId)info[e.medicamentoId]={lote:e.lote||'',validade:e.validade||''};}return info;}
 // Converte um ano em 2 dígitos para 4: <=50 -> 20XX (ex: 28->2028); >50 -> 19XX (ex: 98->1998). Ano já com 3+ dígitos passa direto.
 function _anoVal(y){var n=parseInt(y,10);if(isNaN(n))return NaN;if(n<100)return n<=50?2000+n:1900+n;return n;}
-// Normaliza uma validade "MM/AA" ou "MM/AAAA" para "MM/AAAA" (mês com 2 dígitos). Devolve o valor original (aparado) se não for parseável.
-function _normValidade(val){if(!val)return '';var s=String(val).trim();var p=s.split('/');if(p.length!==2)return s;var mes=parseInt(p[0],10),ano=_anoVal(p[1]);if(isNaN(mes)||isNaN(ano))return s;return (mes<10?'0'+mes:''+mes)+'/'+ano;}
+// Normaliza uma validade "MM/AA", "MM/AAAA" ou "DD/MM/AAAA" (dia é ignorado — o app só controla
+// mês/ano de validade) para "MM/AAAA" (mês com 2 dígitos). Devolve o valor original (aparado) se
+// não for parseável. Aceitar o formato com dia evita que uma validade digitada/importada como data
+// completa (ex.: de um Excel que formata datas assim) fique salva num formato que _dataValidade não
+// reconhece — o que fazia esse lote sumir silenciosamente do cálculo de vencimento (ver _dataValidade).
+function _normValidade(val){if(!val)return '';var s=String(val).trim();var p=s.split('/');var mes,ano;if(p.length===3){mes=parseInt(p[1],10);ano=_anoVal(p[2]);}else if(p.length===2){mes=parseInt(p[0],10);ano=_anoVal(p[1]);}else return s;if(isNaN(mes)||isNaN(ano))return s;return (mes<10?'0'+mes:''+mes)+'/'+ano;}
 // Máscara ao digitar: insere "/" sozinho depois dos 2 dígitos do mês (ex: digita "032027" -> mostra "03/2027").
 // Baseado só nos dígitos já digitados — funciona bem mesmo apagando/editando no meio.
 function _maskValidade(v){var d=(v||'').replace(/\D/g,'').slice(0,6);return d.length<=2?d:d.slice(0,2)+'/'+d.slice(2);}
-// Data do ÚLTIMO dia do mês de uma validade "MM/AA" ou "MM/AAAA". null se inválida. Fonte única de parsing de validade.
-function _dataValidade(val){if(!val)return null;var p=String(val).trim().split('/');if(p.length!==2)return null;var mes=parseInt(p[0],10),ano=_anoVal(p[1]);if(isNaN(mes)||isNaN(ano))return null;return new Date(ano,mes,0);}
+// Data do ÚLTIMO dia do mês de uma validade "MM/AA", "MM/AAAA" ou "DD/MM/AAAA" (dia ignorado).
+// null se inválida. Fonte única de parsing de validade.
+// Aceitar 3 partes (com dia) é o que corrige o bug de vencimento "fantasma": um lote com validade
+// gravada como data completa (3 partes) sempre retornava null aqui, então NUNCA contava como "lote
+// com validade" no cálculo de vencimento (computeVencimentos) — o alerta então caía no fallback do
+// lote mais RECENTEMENTE CADASTRADO no sistema (não o que realmente ainda tem saldo), gerando um
+// aviso de vencimento apontando pra um lote já totalmente consumido, com a quantidade TOTAL do
+// medicamento (não a do lote) grudada nele.
+function _dataValidade(val){if(!val)return null;var p=String(val).trim().split('/');var mes,ano;if(p.length===3){mes=parseInt(p[1],10);ano=_anoVal(p[2]);}else if(p.length===2){mes=parseInt(p[0],10);ano=_anoVal(p[1]);}else return null;if(isNaN(mes)||isNaN(ano))return null;return new Date(ano,mes,0);}
 function getDiasVal(val,hoje){var d=_dataValidade(val);if(!d)return null;return Math.ceil((d-(hoje||new Date()))/86400000);}
 function computeVencimentos(medications,entries,stock){
   var hoje=new Date();
