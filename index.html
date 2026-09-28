@@ -10740,8 +10740,16 @@ useEffect(function(){var cfg=loadCfg();if(cfg&&initFB(cfg)){setReady(true);
 useEffect(function(){function on(){setOnline(true);}function off(){setOnline(false);}window.addEventListener('online',on);window.addEventListener('offline',off);return function(){window.removeEventListener('online',on);window.removeEventListener('offline',off);};},[]);
 useEffect(function(){if(!user)return;var stored=localStorage.getItem('fc_last_act');if(stored)lastAct.current=parseInt(stored);var timeout=(user.sessionTimeout||12)*3600000;function reset(){lastAct.current=Date.now();localStorage.setItem('fc_last_act',String(Date.now()));}function check(){if(Date.now()-lastAct.current>timeout){localStorage.removeItem('fc_last_act');logout();}}document.addEventListener('touchstart',reset);document.addEventListener('click',reset);var t=setInterval(check,60000);return function(){document.removeEventListener('touchstart',reset);document.removeEventListener('click',reset);clearInterval(t);};},[user]);
 useEffect(function(){
-  // Ao entrar no plantão (isGuest vira false), verificar medicamentos próximos ao vencimento
+  // Ao entrar no plantão (isGuest vira false), verificar medicamentos próximos ao vencimento.
   if(isGuest||!meds||!entries)return;
+  // BUG CORRIGIDO: `entries` muda de referência a cada entrada/saída registrada por QUALQUER pessoa
+  // no tenant inteiro (não só quem está vendo o popup) — como esse efeito depende de `entries`, ele
+  // reabria o popup TODA HORA, mesmo pra quem já tinha clicado "Fechar" segundos antes, sempre que
+  // alguém em qualquer lugar da farmácia registrava algo. Agora só reabre automaticamente 1x por dia
+  // (chave por data no localStorage) — fechar guarda essa marca; um lote novo vencendo continua
+  // avisando no dia seguinte normalmente.
+  var chaveDispensa='fc_alertavenc_fechado_'+todayStr();
+  if(localStorage.getItem(chaveDispensa))return;
   var hoje=new Date();
   var criticos=[];
   // Calcular estoque por lote a partir de entries
@@ -11098,12 +11106,12 @@ return(
       </div>
       {dandomBaixaVenc&&<div style={{textAlign:'center',padding:'8px',color:'#1351B4',fontWeight:600,marginBottom:8}}>⏳ Registrando saídas...</div>}
       <div style={{display:'flex',gap:8}}>
-        <button onClick={function(){setShowAlertaVenc(false);}} className="bs" style={{flex:1,padding:'12px 0'}}>Fechar</button>
+        <button onClick={function(){try{localStorage.setItem('fc_alertavenc_fechado_'+todayStr(),'1');}catch(e){}setShowAlertaVenc(false);}} className="bs" style={{flex:1,padding:'12px 0'}}>Fechar</button>
         <button disabled={dandomBaixaVenc} onClick={function(){
           setDandoBaixaVenc(true);
           var lista=alertaVenc.slice();var i=0;
           function nx(){
-            if(i>=lista.length){setDandoBaixaVenc(false);setShowAlertaVenc(false);setAlertaVenc([]);return;}
+            if(i>=lista.length){try{localStorage.setItem('fc_alertavenc_fechado_'+todayStr(),'1');}catch(e){}setDandoBaixaVenc(false);setShowAlertaVenc(false);setAlertaVenc([]);return;}
             var it=lista[i++];
             if(it.qty<=0){nx();return;}
             // BUG FIX: faltava descarte:true (por isso essas baixas nunca apareciam na aba 🗑️ Descartes)
