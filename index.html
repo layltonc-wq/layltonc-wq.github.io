@@ -7132,14 +7132,20 @@ function TabPrevisao(props){
     setFarmModal({alvo:alvo,nome:salvo.nome,crf:salvo.crf});
   }
   function confirmarFarmModal(){
-    if(!farmModal)return;
-    var nome=(farmModal.nome||'').trim();
-    var crf=(farmModal.crf||'').trim();
-    if(!nome||!crf){setMsg('e:Preencha o nome do farmacêutico e o CRF antes de gerar.');return;}
-    try{localStorage.setItem('fc_farm_nome',nome);localStorage.setItem('fc_farm_crf',crf);}catch(e){}
-    var alvo=farmModal.alvo;
-    setFarmModal(null);
-    gerarOrdensFornecimento(alvo,undefined,{nome:nome,crf:crf});
+    // try/catch: mesmo motivo de gerarOrdensFornecimento — nenhum clique deste fluxo pode falhar
+    // em silêncio sem avisar a usuária (ver PR da falha silenciosa no PDF, mesma causa raiz possível).
+    try{
+      if(!farmModal)return;
+      var nome=(farmModal.nome||'').trim();
+      var crf=(farmModal.crf||'').trim();
+      if(!nome||!crf){setMsg('e:Preencha o nome do farmacêutico e o CRF antes de gerar.');return;}
+      try{localStorage.setItem('fc_farm_nome',nome);localStorage.setItem('fc_farm_crf',crf);}catch(e){}
+      var alvo=farmModal.alvo;
+      setFarmModal(null);
+      gerarOrdensFornecimento(alvo,undefined,{nome:nome,crf:crf});
+    }catch(e){
+      setMsg('e:Não foi possível continuar ('+((e&&e.message)||e)+'). Avise o suporte com o nome da ATA.');
+    }
   }
   // ── ORDENS DE FORNECIMENTO (só Itaquitinga) ─────────────────────────────
   // Documento oficial que a Coordenação de Assistência Farmacêutica de Itaquitinga já usa em papel:
