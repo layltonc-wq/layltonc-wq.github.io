@@ -10752,11 +10752,18 @@ useEffect(function(){
   if(localStorage.getItem(chaveDispensa))return;
   var hoje=new Date();
   var criticos=[];
-  // Calcular estoque por lote a partir de entries
+  // Calcular estoque por lote a partir de entries.
+  // Chave só por medicamento+lote (SEM a validade) — mesma convenção já usada em computeVencimentos/
+  // HistModal/TabEstoque. Chavear também pela validade (como esse cálculo fazia antes) quebra quando
+  // a entrada original tem a validade num formato antigo (ex.: "09/26") e a saída/descarte, gravada
+  // depois, é normalizada pra "09/2026" por addEntry — aí a saída caía numa chave DIFERENTE da
+  // entrada e nunca abatia o lote de verdade, fazendo o alerta continuar aparecendo pra sempre mesmo
+  // depois de dar baixa/descarte nele.
   var lotesMap={};
   entries.forEach(function(e){
-    var key=e.medicamentoId+'|'+(e.lote||'')+'|'+(e.validade||'');
+    var key=e.medicamentoId+'|'+(e.lote||'');
     if(!lotesMap[key])lotesMap[key]={medId:e.medicamentoId,medNome:e.medicamentoNome||'',lote:e.lote||'',validade:e.validade||'',qty:0};
+    if(e.validade&&!lotesMap[key].validade)lotesMap[key].validade=e.validade;
     if(e.tipo==='entrada')lotesMap[key].qty+=(Number(e.quantidade)||0);
     else if(e.tipo==='saida')lotesMap[key].qty-=(Number(e.quantidade)||0);
   });
