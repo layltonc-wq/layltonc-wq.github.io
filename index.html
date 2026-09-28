@@ -2657,6 +2657,17 @@ var faltas=medList.filter(function(m){return m.minEstoque>0&&m.est<=m.minEstoque
 function exportXL(){var rows=[['Tipo','Medicamento','EAN','Estoque','Lote','Validade','Minimo']];medList.forEach(function(m){var t=TIPOS[m.cat]||TIPOS.medicamento;rows.push([t.label,m.nome,m.ean||'',m.est,m.info.lote||'',m.info.validade||'',m.minEstoque||0]);});var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'Estoque');XLSX.writeFile(wb,'estoque_'+todayStr()+'.xlsx');}
 function exportAlertasXL(){var rows=[['Tipo','Medicamento','Estoque','Min','Validade','Lote','Dias']];vencidos.forEach(function(m){rows.push(['VENCIDO',m.nome,m.est,'',m.validade,m.lote,m.dias]);});venc30.forEach(function(m){rows.push(['Vence 30d',m.nome,m.est,'',m.validade,m.lote,m.dias]);});zerados.forEach(function(m){rows.push(['Zerado',m.nome,m.est,m.minEstoque,'','',0]);});baixos.forEach(function(m){rows.push(['Baixo',m.nome,m.est,m.minEstoque,'','',0]);});var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'Alertas');XLSX.writeFile(wb,'alertas_'+todayStr()+'.xlsx');}
 function saveNew(){if(!newNome.trim())return;setSaving(true);db.collection('medicamentos').add({nome:newNome.trim(),ean:newEan.trim(),minEstoque:parseInt(newMin)||0,categoria:newTipo,criadoEm:new Date().toISOString(),tenant_id:tenantDe(user)}).then(function(){setShowAdd(false);setNewNome('');setNewEan('');setNewMin('');setNewTipo('medicamento');setSaving(false);});}
+  // Exclui um lançamento de descarte por engano/duplicado (ex.: tentativas repetidas de "resolver" um
+  // alerta de vencimento que não sumia por causa de um bug). Some do histórico e do cálculo de estoque
+  // (a quantidade volta pro saldo) — não é um estorno visível, é remoção mesmo. Só técnico/gestor.
+  function excluirDescarte(e){
+    if(!e||!e.id)return;
+    if(!window.confirm('Excluir este descarte de '+(e.quantidade||0)+'x '+(e.medicamentoNome||'')+'? A quantidade volta pro estoque.'))return;
+    db.collection('entries').doc(e.id).delete().then(function(){
+      try{db.collection('logs_acesso').add({uid:user.uid||'',nome:user.name||'',cargo:user.role||'',acao:'descarte_excluido',detalhe:(e.quantidade||0)+'x '+(e.medicamentoNome||'')+(e.lote?' lote '+e.lote:'')+(e.observacao?' — '+e.observacao:'')+' (entryId '+e.id+')',criadoEm:new Date().toISOString(),tenant_id:tenantDe(user)}).catch(function(){});}catch(_){}
+      _bumpEntriesVersion(user);
+    }).catch(function(err){alert('Erro ao excluir: '+(err&&err.message?err.message:err));});
+  }
 function saveEdit(){setSaving(true);db.collection('medicamentos').doc(editId).update({nome:editNome.trim(),minEstoque:parseInt(editMin)||0,categoria:editTipo}).then(function(){setEditId(null);setSaving(false);});}
 function delMed(id){if(!confirm('Excluir medicamento?'))return;db.collection('medicamentos').doc(id).delete();}
 function salvarEditLote(){if(!editLote)return;setSaving(true);var ps=[];if(editLote.medId)ps.push(db.collection('medicamentos').doc(editLote.medId).update({loteAtual:editLoteVal.trim(),validadeAtual:_normValidade(editLoteData)}));if(editLote.entryId)ps.push(db.collection('entries').doc(editLote.entryId).update({lote:editLoteVal.trim(),validade:_normValidade(editLoteData)}).catch(function(){}));var _hadEntry=!!editLote.entryId;Promise.all(ps).then(function(){if(_hadEntry)_bumpEntriesVersion(user);setEditLote(null);setSaving(false);}).catch(function(e){alert('Erro: '+e.message);setSaving(false);});}
@@ -2876,6 +2887,7 @@ function darBaixaVencido(){
           <div style={{textAlign:'center',flexShrink:0}}>
             <div style={{fontWeight:800,fontSize:20,color:'#DC2626'}}>-{e.quantidade}</div>
             <div style={{fontSize:10,color:'#94A3B8'}}>descartado</div>
+            {isManager&&<button onClick={function(){excluirDescarte(e);}} title="Excluir este descarte" style={{marginTop:6,background:'none',border:'1px solid #FCA5A5',borderRadius:6,padding:'3px 8px',color:'#DC2626',fontSize:10,fontWeight:700,cursor:'pointer'}}>🗑️ Excluir</button>}
           </div>
         </div>
       </div>);})}
