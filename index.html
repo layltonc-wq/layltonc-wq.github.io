@@ -555,6 +555,33 @@ function _maskValidade(v){var d=(v||'').replace(/\D/g,'').slice(0,6);return d.le
 // medicamento (não a do lote) grudada nele.
 function _dataValidade(val){if(!val)return null;var p=String(val).trim().split('/');var mes,ano;if(p.length===3){mes=parseInt(p[1],10);ano=_anoVal(p[2]);}else if(p.length===2){mes=parseInt(p[0],10);ano=_anoVal(p[1]);}else return null;if(isNaN(mes)||isNaN(ano))return null;return new Date(ano,mes,0);}
 function getDiasVal(val,hoje){var d=_dataValidade(val);if(!d)return null;return Math.ceil((d-(hoje||new Date()))/86400000);}
+// FEFO (First-Expired-First-Out): acha o lote com validade mais próxima que ainda tem saldo positivo
+// pra um medicamento, buscando direto no Firestore (em vez de depender do array `entries` inteiro já
+// carregado no cliente — nem todo componente recebe esse array, ex.: entrega de leite pra paciente).
+// Mesma lógica/regras já usadas ao selecionar medicamento em "Registrar Saída" (TabSaida): entrada
+// conta se não for divergência de nota; saída conta se não for saída fictícia de divergência.
+// Usado pra corrigir o bug em que a entrega de leite (Retirada de Leite/Pedidos Judiciais) não
+// registrava de qual lote a saída tinha sido — sem saber o lote, o cálculo de vencimento nunca
+// conseguia abater aquele lote específico, e o alerta de "vencendo" ficava aparecendo pra sempre,
+// mesmo com entregas reais acontecendo.
+function _loteFEFOAsync(medicamentoId,tenantId){
+  if(!medicamentoId)return Promise.resolve(null);
+  return db.collection('entries').where('medicamentoId','==',medicamentoId).get().then(function(snap){
+    var lotesMap={};
+    snap.forEach(function(d){
+      var e=d.data();
+      if(e.tenant_id!==tenantId||!e.lote)return;
+      var key=e.lote+'|'+(e.validade||'');
+      if(!lotesMap[key])lotesMap[key]={lote:e.lote,validade:e.validade||'',entrada:0,saida:0};
+      if(e.tipo==='entrada'){if(e.divergenciaTipo!=='nota')lotesMap[key].entrada+=(Number(e.quantidade)||0);}
+      else if(e.tipo==='saida'){if(!e.ficticioDiv)lotesMap[key].saida+=(Number(e.quantidade)||0);}
+    });
+    var lotes=Object.keys(lotesMap).map(function(k){var l=lotesMap[k];return Object.assign({},l,{qty:l.entrada-l.saida});}).filter(function(l){return l.qty>0;});
+    if(lotes.length===0)return null;
+    lotes.sort(function(a,b){function toDate(v){return _dataValidade(v)||new Date(9999,11,31);}return toDate(a.validade)-toDate(b.validade);});
+    return {lote:lotes[0].lote,validade:lotes[0].validade};
+  }).catch(function(){return null;});
+}
 function computeVencimentos(medications,entries,stock){
   var hoje=new Date();
   var medList=medications.map(function(m){
@@ -3937,18 +3964,32 @@ function TabLeites(props){
     };
     db.collection('retiradas_leite').add(retObj).then(function(){
       // 2. cria entries de saida (um por leite entregue + materiais >0)
-      var promises=[];
       var obsBase='Entrega paciente: '+showBaixa.nome+(showBaixa.responsavel?' (resp: '+showBaixa.responsavel+')':'');
-      entregas.forEach(function(l){
-        var extra=l.avulsa?' — leite AVULSO ('+l.qtdEntregue+')':(l.substituto?' — leite substituto ('+l.qtdEntregue+'/'+l.qtdPrescrita+')':' — leite ('+l.qtdEntregue+'/'+l.qtdPrescrita+')');
-        promises.push(onSave({medicamentoId:l.leiteId,medicamentoNome:l.nome,tipo:'saida',quantidade:l.qtdEntregue,observacao:obsBase+extra,viaLeitePac:true,pacienteLeiteId:showBaixa.id,leiteAvulso:l.avulsa}));
+      var tenantId=tenantDe(user);
+      // Descobre o lote mais próximo de vencer (FEFO) de cada medicamento envolvido ANTES de gravar as
+      // saídas — sem isso, a saída nunca informava de qual lote tinha saído, e o cálculo de vencimento
+      // daquele lote nunca abatia (o alerta de "vencendo" ficava aparecendo pra sempre, mesmo com
+      // entregas reais acontecendo). Ver _loteFEFOAsync.
+      var medIds=[];
+      entregas.forEach(function(l){if(medIds.indexOf(l.leiteId)<0)medIds.push(l.leiteId);});
+      matsBaixa.forEach(function(m){if(m.qtdEntregue>0&&medIds.indexOf(m.medId)<0)medIds.push(m.medId);});
+      return Promise.all(medIds.map(function(id){return _loteFEFOAsync(id,tenantId).then(function(r){return {id:id,fefo:r};});})).then(function(resultados){
+        var fefoPorMed={};
+        resultados.forEach(function(r){fefoPorMed[r.id]=r.fefo;});
+        var promises=[];
+        entregas.forEach(function(l){
+          var extra=l.avulsa?' — leite AVULSO ('+l.qtdEntregue+')':(l.substituto?' — leite substituto ('+l.qtdEntregue+'/'+l.qtdPrescrita+')':' — leite ('+l.qtdEntregue+'/'+l.qtdPrescrita+')');
+          var fefo=fefoPorMed[l.leiteId];
+          promises.push(onSave({medicamentoId:l.leiteId,medicamentoNome:l.nome,tipo:'saida',quantidade:l.qtdEntregue,lote:fefo?fefo.lote:'',validade:fefo?fefo.validade:'',observacao:obsBase+extra,viaLeitePac:true,pacienteLeiteId:showBaixa.id,leiteAvulso:l.avulsa}));
+        });
+        matsBaixa.forEach(function(m){
+          if(m.qtdEntregue>0){
+            var fefoM=fefoPorMed[m.medId];
+            promises.push(onSave({medicamentoId:m.medId,medicamentoNome:m.nome,tipo:'saida',quantidade:m.qtdEntregue,lote:fefoM?fefoM.lote:'',validade:fefoM?fefoM.validade:'',observacao:obsBase+' — material ('+m.qtdEntregue+'/'+m.qtdPrescrita+')',viaLeitePac:true,pacienteLeiteId:showBaixa.id}));
+          }
+        });
+        return Promise.all(promises);
       });
-      matsBaixa.forEach(function(m){
-        if(m.qtdEntregue>0){
-          promises.push(onSave({medicamentoId:m.medId,medicamentoNome:m.nome,tipo:'saida',quantidade:m.qtdEntregue,observacao:obsBase+' — material ('+m.qtdEntregue+'/'+m.qtdPrescrita+')',viaLeitePac:true,pacienteLeiteId:showBaixa.id}));
-        }
-      });
-      return Promise.all(promises);
     }).then(function(){
       // 3. paciente volta pra "falta" (NÃO altera o cadastro de leites)
       return db.collection('pacientes_leite').doc(showBaixa.id).update({status:'falta',ultimaRetirada:bData,atualizadoEm:new Date().toISOString(),atualizadoPor:user.name||user.email});
