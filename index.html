@@ -10721,7 +10721,7 @@ var _convites=useState([]);var convites=_convites[0];var setConvites=_convites[1
 var _lowStock=useState([]);var lowStock=_lowStock[0];var setLowStock=_lowStock[1];var _solicitCount=useState(0);var solicitCount=_solicitCount[0];var setSolicitCount=_solicitCount[1];var _online=useState(navigator.onLine);var online=_online[0];var setOnline=_online[1];var _busca=useState(false);var busca=_busca[0];var setBusca=_busca[1];var _showSolicit=useState(false);var showSolicit=_showSolicit[0];var setShowSolicit=_showSolicit[1];var _showShift=useState(false);var showShift=_showShift[0];var setShowShift=_showShift[1];var _showShiftModal=useState(false);var showShiftModal=_showShiftModal[0];var setShowShiftModal=_showShiftModal[1];
 var _alertaVenc=useState([]);var alertaVenc=_alertaVenc[0];var setAlertaVenc=_alertaVenc[1];
 var _showAlertaVenc=useState(false);var showAlertaVenc=_showAlertaVenc[0];var setShowAlertaVenc=_showAlertaVenc[1];
-var _dandomBaixaVenc=useState(false);var dandomBaixaVenc=_dandomBaixaVenc[0];var setDandoBaixaVenc=_dandomBaixaVenc[1];var _pendingInvite=useState(null);var pendingInvite=_pendingInvite[0];var setPendingInvite=_pendingInvite[1];var _plantao=useState(null);var plantao=_plantao[0];var setPlantao=_plantao[1];var _isGuest=useState(false);var isGuest=_isGuest[0];var setIsGuest=_isGuest[1];var _allUsers=useState([]);var allUsers=_allUsers[0];var setAllUsers=_allUsers[1];var _shiftChecked=useState(false);var shiftChecked=_shiftChecked[0];var setShiftChecked=_shiftChecked[1];var _shiftId=useState(null);var shiftId=_shiftId[0];var setShiftId=_shiftId[1];var _solicitacoesPlantao=useState([]);var solicitacoesPlantao=_solicitacoesPlantao[0];var setSolicitacoesPlantao=_solicitacoesPlantao[1];var lastAct=useRef(Date.now());
+var _pendingInvite=useState(null);var pendingInvite=_pendingInvite[0];var setPendingInvite=_pendingInvite[1];var _plantao=useState(null);var plantao=_plantao[0];var setPlantao=_plantao[1];var _isGuest=useState(false);var isGuest=_isGuest[0];var setIsGuest=_isGuest[1];var _allUsers=useState([]);var allUsers=_allUsers[0];var setAllUsers=_allUsers[1];var _shiftChecked=useState(false);var shiftChecked=_shiftChecked[0];var setShiftChecked=_shiftChecked[1];var _shiftId=useState(null);var shiftId=_shiftId[0];var setShiftId=_shiftId[1];var _solicitacoesPlantao=useState([]);var solicitacoesPlantao=_solicitacoesPlantao[0];var setSolicitacoesPlantao=_solicitacoesPlantao[1];var lastAct=useRef(Date.now());
 useEffect(function(){var cfg=loadCfg();if(cfg&&initFB(cfg)){setReady(true);
   // Só usa a cópia local (fc_user) pra abrir mais rápido se ela já tiver tenant_id — uma cópia
   // salva ANTES da migração multi-tenant não tem esse campo, e usá-la faria o app filtrar por um
@@ -11108,28 +11108,12 @@ return(
         </div>);
       })}
       <div style={{background:'#FFF7ED',border:'1.5px solid #FCD34D',borderRadius:12,padding:'12px 14px',marginBottom:16,fontSize:13,color:'#92400E'}}>
-        <strong>Dar saída como vencidos?</strong><br/>
-        Isso vai registrar saída do lote completo de cada medicamento acima com observação "Vencido — baixa automática".
+        <strong>Isso é só um aviso.</strong><br/>
+        Pra dar baixa como descarte, vá em 🗑️ Estoque → Vencimentos e use "♻️ Descarte" no item.
       </div>
-      {dandomBaixaVenc&&<div style={{textAlign:'center',padding:'8px',color:'#1351B4',fontWeight:600,marginBottom:8}}>⏳ Registrando saídas...</div>}
-      <div style={{display:'flex',gap:8}}>
-        <button onClick={function(){try{localStorage.setItem('fc_alertavenc_fechado_'+todayStr(),'1');}catch(e){}setShowAlertaVenc(false);}} className="bs" style={{flex:1,padding:'12px 0'}}>Fechar</button>
-        <button disabled={dandomBaixaVenc} onClick={function(){
-          setDandoBaixaVenc(true);
-          var lista=alertaVenc.slice();var i=0;
-          function nx(){
-            if(i>=lista.length){try{localStorage.setItem('fc_alertavenc_fechado_'+todayStr(),'1');}catch(e){}setDandoBaixaVenc(false);setShowAlertaVenc(false);setAlertaVenc([]);return;}
-            var it=lista[i++];
-            if(it.qty<=0){nx();return;}
-            // BUG FIX: faltava descarte:true (por isso essas baixas nunca apareciam na aba 🗑️ Descartes)
-            // e o campo era "obs" em vez de "observacao" (o campo que o resto do app realmente lê/exibe).
-            addEntry({tipo:'saida',medicamentoId:it.medId,medicamentoNome:it.nome,quantidade:it.qty,lote:it.lote,validade:it.validade,observacao:'Vencido — baixa automática (alerta de vencimento)',descarte:true,autorNome:user.name,autorCor:user.color||B}).then(nx).catch(nx);
-          }
-          nx();
-        }} style={{flex:2,padding:'12px 0',background:'#DC2626',color:'#fff',border:'none',borderRadius:12,fontWeight:700,fontSize:14,cursor:'pointer',opacity:dandomBaixaVenc?0.6:1}}>
-          ✅ Dar saída como vencidos
-        </button>
-      </div>
+      <button onClick={function(){try{localStorage.setItem('fc_alertavenc_fechado_'+todayStr(),'1');}catch(e){}setShowAlertaVenc(false);}} style={{width:'100%',padding:'12px 0',background:'#1351B4',color:'#fff',border:'none',borderRadius:12,fontWeight:700,fontSize:14,cursor:'pointer'}}>
+        Entendi
+      </button>
     </div>
   </div>}
 
