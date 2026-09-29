@@ -10725,8 +10725,6 @@ var {confirm2,alert2,ModalRender,modal}=useModal();
 var _ready=useState(false);var ready=_ready[0];var setReady=_ready[1];var _user=useState(null);var user=_user[0];var setUser=_user[1];var _histEntries=useState([]);var histEntries=_histEntries[0];var setHistEntries=_histEntries[1];var _recentEntries=useState([]);var recentEntries=_recentEntries[0];var setRecentEntries=_recentEntries[1];var _fcWinStart=useRef(null);if(!_fcWinStart.current){var _w0=new Date();_w0.setDate(_w0.getDate()-3);_fcWinStart.current=_w0.toISOString();}var _meds=useState([]);var meds=_meds[0];var setMeds=_meds[1];var _loading=useState(true);var loading=_loading[0];var setLoading=_loading[1];var _tab=useState('dashboard');var tab=_tab[0];var setTab=_tab[1];var _menuAberto=useState(false);var menuAberto=_menuAberto[0];var setMenuAberto=_menuAberto[1];var _showSairModal=useState(false);var showSairModal=_showSairModal[0];var setShowSairModal=_showSairModal[1];var _pending=useState(0);var pending=_pending[0];var setPending=_pending[1];var _alertCount=useState(0);var alertCount=_alertCount[0];var setAlertCount=_alertCount[1];
 var _convites=useState([]);var convites=_convites[0];var setConvites=_convites[1];
 var _lowStock=useState([]);var lowStock=_lowStock[0];var setLowStock=_lowStock[1];var _solicitCount=useState(0);var solicitCount=_solicitCount[0];var setSolicitCount=_solicitCount[1];var _online=useState(navigator.onLine);var online=_online[0];var setOnline=_online[1];var _busca=useState(false);var busca=_busca[0];var setBusca=_busca[1];var _showSolicit=useState(false);var showSolicit=_showSolicit[0];var setShowSolicit=_showSolicit[1];var _showShift=useState(false);var showShift=_showShift[0];var setShowShift=_showShift[1];var _showShiftModal=useState(false);var showShiftModal=_showShiftModal[0];var setShowShiftModal=_showShiftModal[1];
-var _alertaVenc=useState([]);var alertaVenc=_alertaVenc[0];var setAlertaVenc=_alertaVenc[1];
-var _showAlertaVenc=useState(false);var showAlertaVenc=_showAlertaVenc[0];var setShowAlertaVenc=_showAlertaVenc[1];
 var _pendingInvite=useState(null);var pendingInvite=_pendingInvite[0];var setPendingInvite=_pendingInvite[1];var _plantao=useState(null);var plantao=_plantao[0];var setPlantao=_plantao[1];var _isGuest=useState(false);var isGuest=_isGuest[0];var setIsGuest=_isGuest[1];var _allUsers=useState([]);var allUsers=_allUsers[0];var setAllUsers=_allUsers[1];var _shiftChecked=useState(false);var shiftChecked=_shiftChecked[0];var setShiftChecked=_shiftChecked[1];var _shiftId=useState(null);var shiftId=_shiftId[0];var setShiftId=_shiftId[1];var _solicitacoesPlantao=useState([]);var solicitacoesPlantao=_solicitacoesPlantao[0];var setSolicitacoesPlantao=_solicitacoesPlantao[1];var lastAct=useRef(Date.now());
 useEffect(function(){var cfg=loadCfg();if(cfg&&initFB(cfg)){setReady(true);
   // Só usa a cópia local (fc_user) pra abrir mais rápido se ela já tiver tenant_id — uma cópia
@@ -10745,46 +10743,13 @@ useEffect(function(){var cfg=loadCfg();if(cfg&&initFB(cfg)){setReady(true);
     });}});}},[] );
 useEffect(function(){function on(){setOnline(true);}function off(){setOnline(false);}window.addEventListener('online',on);window.addEventListener('offline',off);return function(){window.removeEventListener('online',on);window.removeEventListener('offline',off);};},[]);
 useEffect(function(){if(!user)return;var stored=localStorage.getItem('fc_last_act');if(stored)lastAct.current=parseInt(stored);var timeout=(user.sessionTimeout||12)*3600000;function reset(){lastAct.current=Date.now();localStorage.setItem('fc_last_act',String(Date.now()));}function check(){if(Date.now()-lastAct.current>timeout){localStorage.removeItem('fc_last_act');logout();}}document.addEventListener('touchstart',reset);document.addEventListener('click',reset);var t=setInterval(check,60000);return function(){document.removeEventListener('touchstart',reset);document.removeEventListener('click',reset);clearInterval(t);};},[user]);
-useEffect(function(){
-  // Ao entrar no plantão (isGuest vira false), verificar medicamentos próximos ao vencimento.
-  if(isGuest||!meds||!entries)return;
-  // BUG CORRIGIDO: `entries` muda de referência a cada entrada/saída registrada por QUALQUER pessoa
-  // no tenant inteiro (não só quem está vendo o popup) — como esse efeito depende de `entries`, ele
-  // reabria o popup TODA HORA, mesmo pra quem já tinha clicado "Fechar" segundos antes, sempre que
-  // alguém em qualquer lugar da farmácia registrava algo. Agora só reabre automaticamente 1x por dia
-  // (chave por data no localStorage) — fechar guarda essa marca; um lote novo vencendo continua
-  // avisando no dia seguinte normalmente.
-  var chaveDispensa='fc_alertavenc_fechado_'+todayStr();
-  if(localStorage.getItem(chaveDispensa))return;
-  var hoje=new Date();
-  var criticos=[];
-  // Calcular estoque por lote a partir de entries.
-  // Chave só por medicamento+lote (SEM a validade) — mesma convenção já usada em computeVencimentos/
-  // HistModal/TabEstoque. Chavear também pela validade (como esse cálculo fazia antes) quebra quando
-  // a entrada original tem a validade num formato antigo (ex.: "09/26") e a saída/descarte, gravada
-  // depois, é normalizada pra "09/2026" por addEntry — aí a saída caía numa chave DIFERENTE da
-  // entrada e nunca abatia o lote de verdade, fazendo o alerta continuar aparecendo pra sempre mesmo
-  // depois de dar baixa/descarte nele.
-  var lotesMap={};
-  entries.forEach(function(e){
-    var key=e.medicamentoId+'|'+(e.lote||'');
-    if(!lotesMap[key])lotesMap[key]={medId:e.medicamentoId,medNome:e.medicamentoNome||'',lote:e.lote||'',validade:e.validade||'',qty:0};
-    if(e.validade&&!lotesMap[key].validade)lotesMap[key].validade=e.validade;
-    if(e.tipo==='entrada')lotesMap[key].qty+=(Number(e.quantidade)||0);
-    else if(e.tipo==='saida')lotesMap[key].qty-=(Number(e.quantidade)||0);
-  });
-  Object.values(lotesMap).forEach(function(l){
-    if(!l.validade||l.qty<=0)return;
-    var dVenc=_dataValidade(l.validade);
-    if(!dVenc)return;
-    var dias=Math.ceil((dVenc-hoje)/86400000);
-    if(dias>=0&&dias<=3){
-      criticos.push({medId:l.medId,nome:l.medNome,lote:l.lote,validade:l.validade,dias:dias,qty:l.qty});
-    }
-  });
-  if(criticos.length>0){setAlertaVenc(criticos);setShowAlertaVenc(true);}
-},[isGuest,meds,entries]);
-
+// Popup automático "MEDICAMENTOS VENCENDO!" REMOVIDO por pedido explícito da usuária (28/09/2026):
+// mesmo depois de 3 correções seguidas (reabrindo toda hora, não reconhecendo descarte já feito,
+// virando só informativo), ainda apareceu pelo menos uma vez em Itaquitinga mostrando um item que
+// pertencia à Vicência — sinal de que o problema é mais profundo (provável resíduo de estado entre
+// trocas de sessão/tenant no mesmo navegador) e não vale o risco de continuar tentando remendar um
+// popup automático. O alerta de vencimento continua disponível, sob demanda, em Estoque → Vencimentos
+// (aba read-only, sem ação de descarte — descarte é feito ali mesmo em "♻️ Descarte" por item).
 useEffect(function(){
   if(!user||!ready)return;
   function verificarHorarioPlantao(){
@@ -11095,33 +11060,8 @@ return(
   {showSolicit&&<SolicitModal user={user} medications={meds} onClose={function(){setShowSolicit(false);}}/>}
   {user&&user.role==='farmaceutico'&&solicitacoesPlantao.length>0&&<SolicitacoesPlantaoModal list={solicitacoesPlantao} onApprove={aprovarEntradaPlantao} onDeny={recusarEntradaPlantao} onClose={function(){setSolicitacoesPlantao([]);}}/>}
 
-  {/* Modal alerta medicamentos próximos ao vencimento */}
-  {showAlertaVenc&&alertaVenc.length>0&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
-    <div style={{background:'#fff',borderRadius:20,padding:24,maxWidth:480,width:'100%',maxHeight:'80vh',overflowY:'auto'}}>
-      <div style={{textAlign:'center',marginBottom:16}}>
-        <div style={{fontSize:48,marginBottom:8}}>⚠️</div>
-        <div style={{fontWeight:900,fontSize:20,color:'#DC2626',marginBottom:4}}>ATENÇÃO — MEDICAMENTOS VENCENDO!</div>
-        <div style={{fontSize:13,color:'#64748B'}}>{alertaVenc.length} medicamento(s) vencem em até 3 dias</div>
-      </div>
-      {alertaVenc.map(function(it,i){
-        var cor=it.dias===0?'#DC2626':it.dias<=1?'#B91C1C':'#D97706';
-        return(<div key={i} style={{background:'#FEF2F2',border:'1.5px solid #FCA5A5',borderRadius:12,padding:'12px 14px',marginBottom:8}}>
-          <div style={{fontWeight:700,fontSize:14,color:'#1E293B'}}>{it.nome}</div>
-          <div style={{fontSize:12,color:'#64748B',marginTop:2}}>Lote: {it.lote||'—'} · Val: {it.validade} · Estoque: {it.qty} unid.</div>
-          <div style={{fontSize:13,fontWeight:800,color:cor,marginTop:4}}>
-            {it.dias===0?'🚨 VENCE HOJE!':it.dias===1?'🚨 VENCE AMANHÃ!':'⚠️ Vence em '+it.dias+' dias — CUIDADO!'}
-          </div>
-        </div>);
-      })}
-      <div style={{background:'#FFF7ED',border:'1.5px solid #FCD34D',borderRadius:12,padding:'12px 14px',marginBottom:16,fontSize:13,color:'#92400E'}}>
-        <strong>Isso é só um aviso.</strong><br/>
-        Pra dar baixa como descarte, vá em 🗑️ Estoque → Vencimentos e use "♻️ Descarte" no item.
-      </div>
-      <button onClick={function(){try{localStorage.setItem('fc_alertavenc_fechado_'+todayStr(),'1');}catch(e){}setShowAlertaVenc(false);}} style={{width:'100%',padding:'12px 0',background:'#1351B4',color:'#fff',border:'none',borderRadius:12,fontWeight:700,fontSize:14,cursor:'pointer'}}>
-        Entendi
-      </button>
-    </div>
-  </div>}
+  {/* Popup automático de vencimento REMOVIDO — ver comentário no useEffect correspondente.
+      O alerta continua disponível sob demanda em Estoque → Vencimentos. */}
 
   {/* NAVBAR */}
   <div style={{background:'linear-gradient(135deg,#0A2D6E 0%,#1351B4 100%)',padding:'0 16px',display:'flex',alignItems:'center',justifyContent:'space-between',position:'sticky',top:0,zIndex:10,boxShadow:'0 2px 20px rgba(10,45,110,.35)',height:56}}>
