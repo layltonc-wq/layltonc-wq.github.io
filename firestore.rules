@@ -91,8 +91,14 @@ service cloud.firestore {
     }
 
     // ===== CONFERÊNCIA =====
+    // FIX (01/10/2026): o doc de hoje (ID = tenant_id+'__'+data) só é criado na primeira escrita do
+    // dia. Antes disso, resource é null pra quem abre a aba primeiro — e resource.data.tenant_id
+    // falha a avaliação da regra (não existe .data em null), o que o Firestore trata como acesso
+    // negado: "Missing or insufficient permissions", mesmo sem nenhum dado real pra proteger. Isso
+    // travava a Conferência de Estoque pro primeiro acesso do dia. resource==null também é seguro:
+    // não existe dado nenhum de nenhum tenant pra vazar quando o doc ainda não existe.
     match /conferencias/{id} {
-      allow read: if logado() && resource.data.tenant_id == userTenant();
+      allow read: if logado() && (resource == null || resource.data.tenant_id == userTenant());
       allow create: if logado() && tenantOk(request.resource.data);
       allow update: if logado() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
     }
@@ -133,8 +139,12 @@ service cloud.firestore {
     }
 
     // ===== PLANTÃO ===== (o ID do documento muda de esquema — ver seção 4 — mas a regra em si é igual às outras)
+    // FIX (01/10/2026): mesmo problema do /conferencias logo acima — o doc de hoje só existe depois
+    // que alguém abre o plantão; antes disso resource==null e a leitura falhava silenciosamente
+    // (esse onSnapshot não tem callback de erro, então ninguém via o aviso, mas o listener em tempo
+    // real morria sem avisar). resource==null é seguro de liberar: não há dado nenhum pra vazar.
     match /plantoes/{id} {
-      allow read: if logado() && resource.data.tenant_id == userTenant();
+      allow read: if logado() && (resource == null || resource.data.tenant_id == userTenant());
       allow create: if logado() && tenantOk(request.resource.data);
       allow update: if logado() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
     }
