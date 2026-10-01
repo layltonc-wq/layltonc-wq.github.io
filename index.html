@@ -3989,7 +3989,7 @@ return(
       </div>
     </div>
   </div>}
-  {(function(){var td=todayStr();var flag=localStorage.getItem('fc_shift_enc_'+td)||localStorage.getItem('fc_shift_saiu_'+td);if(!flag)return null;return(<button onClick={function(){localStorage.removeItem('fc_shift_enc_'+td);localStorage.removeItem('fc_shift_saiu_'+td);window.location.reload();}} style={{width:'100%',padding:'12px',background:'#EFF6FF',border:'1.5px solid #BFDBFE',borderRadius:12,color:'#1351B4',fontWeight:700,fontSize:13,cursor:'pointer',marginBottom:10}}>🔓 Voltar ao Plantão de hoje</button>);})()}
+  {(function(){var td=tenantDe(user)+'_'+todayStr();var flag=localStorage.getItem('fc_shift_enc_'+td)||localStorage.getItem('fc_shift_saiu_'+td);if(!flag)return null;return(<button onClick={function(){localStorage.removeItem('fc_shift_enc_'+td);localStorage.removeItem('fc_shift_saiu_'+td);window.location.reload();}} style={{width:'100%',padding:'12px',background:'#EFF6FF',border:'1.5px solid #BFDBFE',borderRadius:12,color:'#1351B4',fontWeight:700,fontSize:13,cursor:'pointer',marginBottom:10}}>🔓 Voltar ao Plantão de hoje</button>);})()}
   <button onClick={function(){setShowLogoutConfirm(true);}} style={{width:'100%',padding:'14px',background:'#FEF2F2',border:'1.5px solid #FECACA',borderRadius:12,color:'#DC2626',fontWeight:700,fontSize:14,cursor:'pointer',marginBottom:12}}>👋 Sair da conta</button>
   {(user.role==='gestor'||user.role==='tecnico')&&<div style={{textAlign:'center',fontSize:10,color:'#CBD5E1',marginBottom:12}}>Cache: {(typeof window!=='undefined'&&window.__fcPersist)||'verificando…'}</div>}
 </div>);}
@@ -6731,7 +6731,8 @@ function TabPrevisao(props){
   // o painel (abrirFarmModal) sem obrigar a redigitar toda vez.
   function _farmSalvo(){
     try{
-      return {nome:localStorage.getItem('fc_farm_nome')||'',crf:localStorage.getItem('fc_farm_crf')||''};
+      var tid=tenantDe(user);
+      return {nome:localStorage.getItem('fc_farm_nome_'+tid)||'',crf:localStorage.getItem('fc_farm_crf_'+tid)||''};
     }catch(e){return {nome:'',crf:''};}
   }
   // Abre o painel pra escolher/confirmar o farmacêutico responsável antes de gerar o(s) documento(s)
@@ -6749,7 +6750,7 @@ function TabPrevisao(props){
       var nome=(farmModal.nome||'').trim();
       var crf=(farmModal.crf||'').trim();
       if(!nome||!crf){setMsg('e:Preencha o nome do farmacêutico e o CRF antes de gerar.');return;}
-      try{localStorage.setItem('fc_farm_nome',nome);localStorage.setItem('fc_farm_crf',crf);}catch(e){}
+      try{var tid=tenantDe(user);localStorage.setItem('fc_farm_nome_'+tid,nome);localStorage.setItem('fc_farm_crf_'+tid,crf);}catch(e){}
       var alvo=farmModal.alvo;
       setFarmModal(null);
       gerarOrdensFornecimento(alvo,undefined,{nome:nome,crf:crf});
@@ -10367,7 +10368,7 @@ useEffect(function(){
     var min=new Date().getMinutes();
     // Diaristas saem automaticamente às 14h
     if(user.role==='diarista'&&h>=14&&!isGuest){
-      var key='fc_shift_saiu_'+todayStr();
+      var key='fc_shift_saiu_'+tenantDe(user)+'_'+todayStr();
       if(!localStorage.getItem(key)){
         localStorage.setItem(key,'auto');
         if(shiftId&&plantao){
@@ -10383,7 +10384,7 @@ useEffect(function(){
     }
     // Plantão encerra automaticamente às 20h (gestor/tecnico encerra, outros saem)
     if(h>=20&&shiftId){
-      var keyEnc='fc_shift_enc_'+todayStr();
+      var keyEnc='fc_shift_enc_'+tenantDe(user)+'_'+todayStr();
       if(!localStorage.getItem(keyEnc)){
         localStorage.setItem(keyEnc,'auto');
         if(user.role==='gestor'||user.role==='tecnico'){
@@ -10391,7 +10392,7 @@ useEffect(function(){
             setPlantao(null);setIsGuest(true);setShiftId(null);
           }).catch(function(){});
         } else {
-          localStorage.setItem('fc_shift_saiu_'+todayStr(),'auto');
+          localStorage.setItem('fc_shift_saiu_'+tenantDe(user)+'_'+todayStr(),'auto');
           setIsGuest(true);
         }
       }
@@ -10437,8 +10438,8 @@ useEffect(function(){
     }
     // Se o usuario saiu/encerrou neste dispositivo MAS foi readicionado ao plantao pelo lider,
     // limpar a flag e reintegrar (respeitar a decisao do lider de trazer a pessoa de volta).
-    var leftKey='fc_shift_saiu_'+today;
-    var encKey='fc_shift_enc_'+today;
+    var leftKey='fc_shift_saiu_'+tenantDe(user)+'_'+today;
+    var encKey='fc_shift_enc_'+tenantDe(user)+'_'+today;
     var leftToday=localStorage.getItem(encKey)||localStorage.getItem(leftKey);
     if(leftToday&&inTeam&&meuStatus==='confirmado'){
       // Foi readicionado -> limpar flag e voltar ao plantao
@@ -10542,7 +10543,7 @@ var stock=useMemo(function(){var s={};meds.forEach(function(m){var v=m.estoqueAt
 var estoqueBruto=useMemo(function(){var s={};meds.forEach(function(m){s[m.id]=m.estoqueAtual||0;});return s;},[meds]);
 var latest=useMemo(function(){var l=calcLatest(entries);for(var k in l){if((stock[k]||0)<=0)l[k]={lote:'',validade:''};}return l;},[entries,stock]);
 var lowCount=useMemo(function(){var c=0;meds.forEach(function(m){if(m.minEstoque&&(stock[m.id]||0)<=m.minEstoque&&(stock[m.id]||0)>0)c++;});return c;},[meds,stock]);
-function checkShift(u){if(shiftChecked)return;setShiftChecked(true);autoFecharPlantoesAntigos(u);var today=todayStr();var role=u.role;if(role==='gestor'||role==='tecnico'){setIsGuest(false);db.collection('plantoes').doc(plantaoDocId(u,today)).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);}else{setPlantao(null);setShiftId(null);}}).catch(function(){});return;}if(!isShiftTime()){setIsGuest(true);return;}var leftKey='fc_shift_saiu_'+today;var encKey='fc_shift_enc_'+today;var leftToday=localStorage.getItem(encKey)||localStorage.getItem(leftKey);if(leftToday){db.collection('plantoes').doc(plantaoDocId(u,today)).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);var readicionado=false;if(p.iniciadoPor===u.uid){readicionado=true;}else if(p.equipe){for(var j=0;j<p.equipe.length;j++){if(p.equipe[j].id===u.uid&&p.equipe[j].status==='confirmado'){readicionado=true;break;}}}if(readicionado){localStorage.removeItem(leftKey);localStorage.removeItem(encKey);setIsGuest(false);}else{setIsGuest(true);}}else{setIsGuest(true);}}).catch(function(){setIsGuest(true);});return;}db.collection('plantao_convites').where('tenant_id','==',tenantDe(u)).where('para','==',u.uid).where('status','==','pendente').get().then(function(invSnap){var todayInvite=null;for(var i=0;i<invSnap.docs.length;i++){var d=invSnap.docs[i].data();if(d.data===today){var o={id:invSnap.docs[i].id};for(var k in d)o[k]=d[k];todayInvite=o;break;}}if(todayInvite){setPendingInvite(todayInvite);return;}db.collection('plantoes').doc(plantaoDocId(u,today)).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);var inTeam=false;
+function checkShift(u){if(shiftChecked)return;setShiftChecked(true);autoFecharPlantoesAntigos(u);var today=todayStr();var role=u.role;if(role==='gestor'||role==='tecnico'){setIsGuest(false);db.collection('plantoes').doc(plantaoDocId(u,today)).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);}else{setPlantao(null);setShiftId(null);}}).catch(function(){});return;}if(!isShiftTime()){setIsGuest(true);return;}var leftKey='fc_shift_saiu_'+tenantDe(u)+'_'+today;var encKey='fc_shift_enc_'+tenantDe(u)+'_'+today;var leftToday=localStorage.getItem(encKey)||localStorage.getItem(leftKey);if(leftToday){db.collection('plantoes').doc(plantaoDocId(u,today)).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);var readicionado=false;if(p.iniciadoPor===u.uid){readicionado=true;}else if(p.equipe){for(var j=0;j<p.equipe.length;j++){if(p.equipe[j].id===u.uid&&p.equipe[j].status==='confirmado'){readicionado=true;break;}}}if(readicionado){localStorage.removeItem(leftKey);localStorage.removeItem(encKey);setIsGuest(false);}else{setIsGuest(true);}}else{setIsGuest(true);}}).catch(function(){setIsGuest(true);});return;}db.collection('plantao_convites').where('tenant_id','==',tenantDe(u)).where('para','==',u.uid).where('status','==','pendente').get().then(function(invSnap){var todayInvite=null;for(var i=0;i<invSnap.docs.length;i++){var d=invSnap.docs[i].data();if(d.data===today){var o={id:invSnap.docs[i].id};for(var k in d)o[k]=d[k];todayInvite=o;break;}}if(todayInvite){setPendingInvite(todayInvite);return;}db.collection('plantoes').doc(plantaoDocId(u,today)).get().then(function(snap){if(snap.exists&&snap.data().ativo!==false){var p=snap.data();setPlantao(p);setShiftId(today);var inTeam=false;
               // Quem iniciou o plantão nunca é convidado
               if(p.iniciadoPor===u.uid){inTeam=true;}
               // Verificar na equipe (confirmado ou próprio farmacêutico que abriu)
@@ -10556,8 +10557,8 @@ function handleDenyInvite(invite){db.collection('plantao_convites').doc(invite.i
 function solicitarEntradaPlantao(){if(!plantao||!shiftId)return;if(!confirm('Solicitar entrada no plantao?'))return;var hoje=todayStr();db.collection('plantao_solicitacoes').where('tenant_id','==',tenantDe(user)).where('de','==',user.uid).where('data','==',hoje).where('status','==','pendente').get().then(function(s){if(!s.empty){alert('Solicitação ja enviada.');return;}db.collection('plantao_solicitacoes').add({de:user.uid,deNome:user.name,deCargo:user.role,deColor:user.color,para:plantao.iniciadoPor,paraNome:plantao.iniciadoPorNome,data:hoje,status:'pendente',criadoEm:new Date().toISOString(),tenant_id:tenantDe(user)}).then(function(){playSound('success');alert('Solicitação enviada!');});});}
 function aprovarEntradaPlantao(sol){var hoje=todayStr();var novoMembro={id:sol.de,nome:sol.deNome,cargo:sol.deCargo,color:sol.deColor,status:'confirmado'};var equipeAtual=plantao?plantao.equipe||[]:[];var jaEsta=equipeAtual.some(function(m){return m.id===sol.de;});var novaEquipe=jaEsta?equipeAtual:equipeAtual.concat([novoMembro]);db.collection('plantoes').doc(plantaoDocId(user,hoje)).update({equipe:novaEquipe}).then(function(){db.collection('plantao_solicitacoes').doc(sol.id).update({status:'aprovado'});if(plantao){var p={};for(var k in plantao)p[k]=plantao[k];p.equipe=novaEquipe;setPlantao(p);}playSound('success');});}
 function recusarEntradaPlantao(sol){db.collection('plantao_solicitacoes').doc(sol.id).update({status:'recusado'}).catch(function(){});}
-function encerrarPlantao(){if(!shiftId)return;if(!confirm('Encerrar o plantao de hoje?'))return;db.collection('plantoes').doc(plantaoDocId(user,shiftId)).update({ativo:false,encerradoEm:new Date().toISOString()}).then(function(){localStorage.setItem('fc_shift_enc_'+todayStr(),'1');setPlantao(null);setIsGuest(true);setShiftId(null);}).catch(function(e){alert('Erro: '+e.message);});}
-function sairDoPlantao(){if(!confirm('Sair do plantao?'))return;localStorage.setItem('fc_shift_saiu_'+todayStr(),'1');if(shiftId&&plantao){var eq=(plantao.equipe||[]).map(function(m){if(m.id===user.uid){var o={};for(var k in m)o[k]=m[k];o.status='saiu';return o;}return m;});db.collection('plantoes').doc(plantaoDocId(user,shiftId)).update({equipe:eq}).catch(function(){});}setIsGuest(true);}
+function encerrarPlantao(){if(!shiftId)return;if(!confirm('Encerrar o plantao de hoje?'))return;db.collection('plantoes').doc(plantaoDocId(user,shiftId)).update({ativo:false,encerradoEm:new Date().toISOString()}).then(function(){localStorage.setItem('fc_shift_enc_'+tenantDe(user)+'_'+todayStr(),'1');setPlantao(null);setIsGuest(true);setShiftId(null);}).catch(function(e){alert('Erro: '+e.message);});}
+function sairDoPlantao(){if(!confirm('Sair do plantao?'))return;localStorage.setItem('fc_shift_saiu_'+tenantDe(user)+'_'+todayStr(),'1');if(shiftId&&plantao){var eq=(plantao.equipe||[]).map(function(m){if(m.id===user.uid){var o={};for(var k in m)o[k]=m[k];o.status='saiu';return o;}return m;});db.collection('plantoes').doc(plantaoDocId(user,shiftId)).update({equipe:eq}).catch(function(){});}setIsGuest(true);}
 function addSolicitacao(data){var obj={medicamentoId:data.medicamentoId,medicamentoNome:data.medicamentoNome,ean:data.ean||'',tipo:data.tipo,quantidade:data.quantidade,lote:data.lote||'',validade:_normValidade(data.validade||''),observacao:data.observação||'',solicitanteId:user.uid,solicitanteNome:user.name,solicitanteCargo:user.role,solicitanteColor:user.color||B,status:'pendente',criadoEm:new Date().toISOString(),origem:'convidado',tenant_id:tenantDe(user)};return db.collection('solicitacoes').add(obj);}
 function addEntry(data){try{var obj={criadoEm:new Date().toISOString(),date:todayStr(),autorId:user.uid,autorNome:user.name||user.email,autorCargo:user.role||'',autorColor:user.color||B,tenant_id:tenantDe(user)};for(var k in data)obj[k]=data[k];if(obj.quantidade!==undefined)obj.quantidade=Number(obj.quantidade)||0;
   if(obj.validade)obj.validade=_normValidade(obj.validade);// normaliza MM/AA -> MM/AAAA
