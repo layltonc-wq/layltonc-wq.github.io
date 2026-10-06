@@ -228,7 +228,8 @@ service cloud.firestore {
       allow read: if logado() && resource.data.tenant_id == userTenant();
       allow create: if logado() && tenantOk(request.resource.data);
       allow update: if false;
-      allow delete: if ehTecnico() && resource.data.tenant_id == userTenant();
+      // Gestor e técnico podem apagar (06/10/2026 — ex: saída de teste registrada por engano).
+      allow delete: if ehAdmin() && resource.data.tenant_id == userTenant();
     }
 
     // ===== LOGS (auditoria — nunca apagáveis) =====
