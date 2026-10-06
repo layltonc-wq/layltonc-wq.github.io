@@ -10531,6 +10531,9 @@ function TabRecebimento(props){
 // ===== Aba de Pacientes (controlados): lista + busca + histórico de saídas vinculadas =====
 function TabPacientes(props){
   var user=props.user;
+  var onSave=props.onSave;
+  var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};
+  var alert2=props.alert2||function(m){window.alert(m);};
   var podeExcluir=user.role==='tecnico'||user.role==='gestor';
   var _pacientes=useState([]);var pacientes=_pacientes[0];var setPacientes=_pacientes[1];
   var _saidas=useState([]);var saidas=_saidas[0];var setSaidas=_saidas[1];
@@ -10599,6 +10602,19 @@ function TabPacientes(props){
       .catch(function(e){window.alert('Erro ao excluir: '+((e&&e.message)||e));});
   }
 
+  // Apagar uma saída de controlado lançada errada (gestor ou técnico) — devolve a quantidade ao
+  // estoque (a saída original já tinha debitado em "entries") antes de remover o registro de
+  // auditoria, senão o estoque fica errado pra sempre.
+  function apagarSaidaControlada(s){
+    if(!podeExcluir)return;
+    confirm2('Apagar saída','Apagar esta saída de '+s.quantidade+'x '+s.medicamentoNome+' ('+fD(s.dataSaida)+', paciente: '+s.pacienteNome+')? O estoque será devolvido. Esta ação não pode ser desfeita.',function(){
+      onSave({tipo:'entrada',medicamentoId:s.medicamentoId,medicamentoNome:s.medicamentoNome,quantidade:s.quantidade,observacao:'Estorno — exclusão de saída controlada (paciente: '+s.pacienteNome+', médico: '+(s.medicoNome||'')+')'})
+        .then(function(){return db.collection('saidas_controladas').doc(s.id).delete();})
+        .then(function(){alert2('Saída apagada e estoque devolvido.');})
+        .catch(function(e){alert2('Erro: '+((e&&e.message)||e));});
+    });
+  }
+
   return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
     <div className="card" style={{marginBottom:14}}>
       <div className="ch"><div className="ch-title"><div style={{width:3,height:16,background:'#7C3AED',borderRadius:2,flexShrink:0}}/><span>🔒 Pacientes — Controlados</span></div><span style={{fontSize:12,color:'#94A3B8',fontWeight:500}}>{listaPacientes.length} cadastrado{listaPacientes.length!==1?'s':''}</span></div>
@@ -10663,7 +10679,10 @@ function TabPacientes(props){
                 </div>
                 <div style={{fontSize:11,color:'#64748B',marginBottom:2}}>{fD(s.dataSaida)} · Médico: {s.medicoNome||'—'}{s.medicoCrm?' (CRM '+s.medicoCrm+')':''}</div>
                 {s.observacao&&<div style={{fontSize:11,color:'#475569',marginBottom:2}}>Obs: {s.observacao}</div>}
-                <div style={{fontSize:11,color:'#94A3B8'}}>Liberado por: {s.liberadoPorNome||'—'}</div>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+                  <div style={{fontSize:11,color:'#94A3B8'}}>Liberado por: {s.liberadoPorNome||'—'}</div>
+                  {podeExcluir&&<button onClick={function(){apagarSaidaControlada(s);}} style={{padding:'4px 10px',background:'#FEF2F2',border:'none',borderRadius:8,color:'#DC2626',fontSize:11,fontWeight:700,cursor:'pointer',flexShrink:0}}>🗑️ Apagar</button>}
+                </div>
               </div>);})}
             </div>
           }
@@ -11085,7 +11104,7 @@ return(
         {tab==='antibiotico'&&<TabAntibiotico user={user} medications={meds} stock={stock} allUsers={allUsers}/>}
         {tab==='pedidosjudiciais'&&tenantDe(user)==='itaquitinga-pe'&&isManagerRole&&<ErrBoundary><TabPedidosJudiciais user={user} medications={meds} stock={stock} entries={entries} onSave={addEntryStable} confirm2={confirm2} alert2={alert2} allUsers={allUsers}/></ErrBoundary>}
         {tab==='recebimento'&&<ErrBoundary><TabRecebimento user={user} medications={meds} onSave={addEntry} stock={stock}/></ErrBoundary>}
-        {tab==='pacientes'&&tenantDe(user)!=='itaquitinga-pe'&&<ErrBoundary><TabPacientes user={user} entries={entries}/></ErrBoundary>}
+        {tab==='pacientes'&&tenantDe(user)!=='itaquitinga-pe'&&<ErrBoundary><TabPacientes user={user} entries={entries} onSave={addEntryStable} confirm2={confirm2} alert2={alert2}/></ErrBoundary>}
         {tab==='leites'&&<ErrBoundary><TabLeites user={user} medications={meds} stock={stock} onSave={addEntry} confirm2={confirm2} alert2={alert2}/></ErrBoundary>}
         {tab==='admin'&&user.role==='tecnico'&&<TabAdmin user={user} entries={entries} medications={meds} db={db}/>}
         {tab==='perfil'&&<TabPerfil user={user} onUpdate={function(u){setUser(u);}} onLogout={logout} entries={entries} medications={meds} stock={stock}/>}
