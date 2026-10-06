@@ -10568,7 +10568,11 @@ function TabPacientes(props){
       setPacientes(arr);
     },function(){});
     var u2=db.collection('saidas_controladas').where('tenant_id','==',tenantDe(user)).limit(1000).onSnapshot(function(snap){
-      var list=snap.docs.map(function(d){return Object.assign({id:d.id},d.data());});
+      // Filtra pelo critério ATUAL de controlado (_ehMedControlado) — não só pra saídas novas:
+      // Tramadol comprimido (ou qualquer item que deixe de ser controlado no futuro) some daqui
+      // mesmo em registros antigos, já que não é mais pra contar nessa tela nem no relatório
+      // (pedido da usuária, 06/10/2026).
+      var list=snap.docs.map(function(d){return Object.assign({id:d.id},d.data());}).filter(function(s){return _ehMedControlado(s.medicamentoNome);});
       list.sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});
       setSaidas(list);
     },function(){});
