@@ -135,7 +135,10 @@ service cloud.firestore {
     match /saidas_controladas/{id} {
       allow read: if logado() && resource.data.tenant_id == userTenant();
       allow create: if logado() && tenantOk(request.resource.data);
-      allow update, delete: if false;
+      allow update: if false;
+      // Gestor e técnico podem apagar uma saída lançada errada (06/10/2026) — a UI sempre devolve
+      // a quantidade ao estoque (entrada de estorno) antes de apagar o registro de auditoria.
+      allow delete: if ehAdmin() && resource.data.tenant_id == userTenant();
     }
 
     // ===== PLANTÃO ===== (o ID do documento muda de esquema — ver seção 4 — mas a regra em si é igual às outras)
