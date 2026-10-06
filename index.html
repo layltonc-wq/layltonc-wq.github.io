@@ -624,7 +624,17 @@ function computeVencimentos(medications,entries,stock){
 function _norm(s){return (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');}
 // Controle rigoroso de controlados (por enquanto só Morfina e Tramal/Tramadol) — saída exige paciente/médico/CRM.
 // Cobre nome de marca e nome genérico, já que "tramadol" NÃO contém a substring "tramal" (e vice-versa).
-function _ehMedControlado(nome){var n=_norm(nome||'');return n.indexOf('morfina')>=0||n.indexOf('dimorf')>=0||n.indexOf('tramal')>=0||n.indexOf('tramadol')>=0;}
+function _ehMedControlado(nome){
+  var n=_norm(nome||'');
+  if(n.indexOf('morfina')>=0||n.indexOf('dimorf')>=0)return true;
+  var ehTramal=n.indexOf('tramal')>=0||n.indexOf('tramadol')>=0;
+  if(!ehTramal)return false;
+  // Tramadol/Tramal em COMPRIMIDO não entra no controle rigoroso (popup obrigatório de
+  // paciente/médico/CRM) — pedido explícito da usuária (06/10/2026): só as outras apresentações
+  // (ex.: injetável) continuam exigindo o popup.
+  if(n.indexOf('comprimido')>=0)return false;
+  return true;
+}
 // Pontuação fuzzy de um alvo contra uma busca (0 = sem relação; maior = melhor).
 // Tolera ordem de palavras (tokens) e erros de digitação (subsequência de caracteres).
 // Ex.: "ringer" casa "Soro Ringer", "Soro Fisiológico Ringer"; "rnger" ainda casa por subsequência.
