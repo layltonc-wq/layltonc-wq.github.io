@@ -4507,168 +4507,234 @@ function TabNotas({user,medications}){
 }
 
 
-// ===== PEDIDOS JUDICIAIS (só Itaquitinga por enquanto — ver tenant_id==='itaquitinga-pe' no App) =====
-// Fornecimento obrigatório por decisão judicial — medicamentos, fórmulas e fraldas. Cada documento
-// em pedidos_judiciais representa a NECESSIDADE CONTÍNUA de um paciente, com um ou mais itens (um
-// paciente pode receber fórmula + fralda + medicamento no mesmo processo). "status" acompanha se a
-// entrega deste mês já foi feita; "próxima entrega" = última entrega + 1 mês (calculado — não é
-// mais um prazo fixo cadastrado, foi removido a pedido). A sub-aba Estoque Judicial soma a
-// quantidade mensal de TODOS os pedidos (qualquer status, por ser necessidade contínua) por
-// medicamento, e projeta 1/2/3 meses à frente comparado ao estoque atual.
-var PJ_CATEGORIAS={medicamento:{label:'Medicamentos',icon:'💊'},formula:{label:'Fórmulas',icon:'🍼'},fralda:{label:'Fraldas',icon:'🧷'}};
+// ===== PACIENTES JUDICIAIS (só Itaquitinga por enquanto — ver tenant_id==='itaquitinga-pe' no App) =====
+// Fornecimento obrigatório por decisão judicial — medicamentos, fórmulas, fraldas etc. Redesenhado
+// (06/10/2026) pra ser cadastro de PACIENTE (não de "pedido"), no mesmo espírito da aba Leites:
+// cadastro único por paciente com os itens que ele precisa receber todo mês, status simples
+// pendente/separado trocado manualmente, e "Dar Saída" abrindo TODOS os itens do paciente de uma vez
+// (não só os da categoria aberta no momento) — importante porque um mesmo paciente comum tem
+// medicamento + fralda + fórmula ao mesmo tempo, e a entrega é um ato só. Categorias reaproveitam
+// TIPOS (igual Estoque/Recebimento) em vez de uma lista própria do Judicial.
 var PJ_PARENTESCOS=['Mãe','Pai','Irmão(ã)','Avô(ó)','Tio(a)','Cônjuge','Procurador(a)','Outro'];
-function pjProximaEntrega(iso){var d=new Date(iso);d.setMonth(d.getMonth()+1);return d;}
+var PJ_TIPOS_KEYS=Object.keys(TIPOS);
+function pjCategoriaDoMed(m){return (m&&(m.categoria||m.cat))||'medicamento';}
 function TabPedidosJudiciais(props){
-  var user=props.user,medications=props.medications,stock=props.stock,entries=props.entries||[],onSave=props.onSave;
+  var user=props.user,medications=props.medications||[],stock=props.stock||{},onSave=props.onSave;
   var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};
   var alert2=props.alert2||function(m){window.alert(m);};
-  var _sub=useState('medicamento');var sub=_sub[0],setSub=_sub[1]; // 'medicamento'|'formula'|'fralda'|'estoque'|'saidas'
-  var _pedidos=useState([]);var pedidos=_pedidos[0],setPedidos=_pedidos[1];
+  var _sub=useState('medicamento');var sub=_sub[0],setSub=_sub[1]; // categoria ativa | 'estoque' | 'saidas'
+  var _subStatus=useState('pendente');var subStatus=_subStatus[0],setSubStatus=_subStatus[1]; // 'pendente'|'separado' dentro da categoria
+  var _pacientes=useState([]);var pacientes=_pacientes[0],setPacientes=_pacientes[1];
+  var _retiradas=useState([]);var retiradasJud=_retiradas[0],setRetiradasJud=_retiradas[1];
   var _busca=useState('');var busca=_busca[0],setBusca=_busca[1];
   var _showForm=useState(false);var showForm=_showForm[0],setShowForm=_showForm[1];
   var _editId=useState(null);var editId=_editId[0],setEditId=_editId[1];
-  var _histPaciente=useState(null);var histPaciente=_histPaciente[0],setHistPaciente=_histPaciente[1];
-  var formInicial={processoNumero:'',pacienteNome:'',responsavelNome:'',parentesco:'',dataPedido:todayStr(),status:'pendente',itens:[]};
-  var _form=useState(formInicial);var form=_form[0],setForm=_form[1];
-  var _itemMed=useState('');var itemMed=_itemMed[0],setItemMed=_itemMed[1];
-  var _itemCat=useState('medicamento');var itemCat=_itemCat[0],setItemCat=_itemCat[1];
-  var _itemQtd=useState('');var itemQtd=_itemQtd[0],setItemQtd=_itemQtd[1];
+  var _showBaixa=useState(null);var showBaixa=_showBaixa[0],setShowBaixa=_showBaixa[1];
+  var _showHist=useState(null);var showHist=_showHist[0],setShowHist=_showHist[1];
   var _horizonte=useState(1);var horizonte=_horizonte[0],setHorizonte=_horizonte[1];
   var _saving=useState(false);var saving=_saving[0],setSaving=_saving[1];
+  var _bSaving=useState(false);var bSaving=_bSaving[0],setBSaving=_bSaving[1];
+  // form (cadastro/edição)
+  var formInicial={processoNumero:'',nome:'',responsavel:'',parentesco:'',dataDisponivel:todayStr(),itens:[],observacao:''};
+  var _form=useState(formInicial);var form=_form[0],setForm=_form[1];
+  var _fItemCat=useState('medicamento');var fItemCat=_fItemCat[0],setFItemCat=_fItemCat[1];
+  var _fItemBusca=useState('');var fItemBusca=_fItemBusca[0],setFItemBusca=_fItemBusca[1];
+  var _fItemSel=useState(null);var fItemSel=_fItemSel[0],setFItemSel=_fItemSel[1];
+  var _fItemQtd=useState('');var fItemQtd=_fItemQtd[0],setFItemQtd=_fItemQtd[1];
+  // baixa (dar saída)
+  var _bItens=useState([]);var bItens=_bItens[0],setBItens=_bItens[1];
+  var _bData=useState(todayStr());var bData=_bData[0],setBData=_bData[1];
+  var _bTrocaIdx=useState(null);var bTrocaIdx=_bTrocaIdx[0],setBTrocaIdx=_bTrocaIdx[1]; // idx da linha com busca de troca aberta
+  var _bTrocaBusca=useState('');var bTrocaBusca=_bTrocaBusca[0],setBTrocaBusca=_bTrocaBusca[1];
 
   useEffect(function(){
-    var unsub=db.collection('pedidos_judiciais').where('tenant_id','==',tenantDe(user)).onSnapshot(function(s){
-      setPedidos(s.docs.map(function(d){return Object.assign({id:d.id},d.data());}));
+    var u1=db.collection('pacientes_judiciais').where('tenant_id','==',tenantDe(user)).onSnapshot(function(s){
+      var arr=[];s.forEach(function(d){arr.push(Object.assign({id:d.id},d.data()));});
+      arr.sort(function(a,b){return (a.nome||'').localeCompare(b.nome||'');});
+      setPacientes(arr);
     },function(){});
-    return unsub;
+    var u2=db.collection('retiradas_judiciais').where('tenant_id','==',tenantDe(user)).limit(1000).onSnapshot(function(s){
+      var arr=[];s.forEach(function(d){arr.push(Object.assign({id:d.id},d.data()));});
+      arr.sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});
+      setRetiradasJud(arr);
+    },function(){});
+    return function(){try{u1();}catch(e){}try{u2();}catch(e){}};
   },[user]);
 
-  function abrirNovo(){setForm(formInicial);setItemMed('');setItemCat('medicamento');setItemQtd('');setEditId(null);setShowForm(true);}
-  function abrirEditar(p){setForm({processoNumero:p.processoNumero||'',pacienteNome:p.pacienteNome||'',responsavelNome:p.responsavelNome||'',parentesco:p.parentesco||'',dataPedido:p.dataPedido||todayStr(),status:p.status||'pendente',itens:(p.itens||[]).slice()});setItemMed('');setItemCat('medicamento');setItemQtd('');setEditId(p.id);setShowForm(true);}
+  function resetForm(){setForm(formInicial);setFItemCat('medicamento');setFItemBusca('');setFItemSel(null);setFItemQtd('');setEditId(null);}
+  function abrirNovo(){resetForm();setShowForm(true);}
+  function abrirEditar(p){
+    setForm({processoNumero:p.processoNumero||'',nome:p.nome||'',responsavel:p.responsavel||'',parentesco:p.parentesco||'',dataDisponivel:p.dataDisponivel||todayStr(),itens:(p.itens||[]).slice(),observacao:p.observacao||''});
+    setFItemCat('medicamento');setFItemBusca('');setFItemSel(null);setFItemQtd('');
+    setEditId(p.id);setShowForm(true);
+  }
 
-  function adicionarItem(){
-    if(!itemMed||!itemQtd){alert2('Escolha o item e a quantidade mensal antes de adicionar.');return;}
-    var med=medications.find(function(m){return m.id===itemMed;});
-    setForm(function(f){return Object.assign({},f,{itens:f.itens.concat([{medicamentoId:itemMed,medicamentoNome:med?med.nome:'',categoria:itemCat,quantidadeMensal:parseInt(itemQtd)||0}])});});
-    setItemMed('');setItemQtd('');
+  var medsDaCategoriaForm=medications.filter(function(m){return pjCategoriaDoMed(m)===fItemCat;});
+  var sugestoesForm=(!fItemSel&&fItemBusca.trim())?_fuzzyMeds(fItemBusca,medsDaCategoriaForm,8):[];
+
+  function adicionarItemForm(){
+    if(!fItemSel||!fItemQtd){alert2('Escolha o item e a quantidade mensal antes de adicionar.');return;}
+    setForm(function(f){return Object.assign({},f,{itens:f.itens.concat([{medId:fItemSel.id,medNome:fItemSel.nome,categoria:fItemCat,qtd:parseInt(fItemQtd)||0}])});});
+    setFItemBusca('');setFItemSel(null);setFItemQtd('');
   }
-  function removerItem(idx){
-    setForm(function(f){return Object.assign({},f,{itens:f.itens.filter(function(_,i){return i!==idx;})});});
-  }
+  function removerItemForm(idx){setForm(function(f){return Object.assign({},f,{itens:f.itens.filter(function(_,i){return i!==idx;})});});}
 
   function salvar(){
-    if(!form.processoNumero.trim()||!form.pacienteNome.trim()){alert2('Preencha o nº do processo e o nome do paciente.');return;}
-    if(form.itens.length===0){alert2('Adicione pelo menos um item (medicamento, fórmula ou fralda).');return;}
+    if(!form.processoNumero.trim()||!form.nome.trim()){alert2('Preencha o nº do processo e o nome do paciente.');return;}
+    if(form.itens.length===0){alert2('Adicione pelo menos um item (medicamento, fórmula, fralda...).');return;}
     setSaving(true);
-    var dados={processoNumero:form.processoNumero.trim(),pacienteNome:form.pacienteNome.trim(),responsavelNome:form.responsavelNome.trim(),parentesco:form.parentesco,dataPedido:form.dataPedido,status:form.status,itens:form.itens,tenant_id:tenantDe(user)};
+    var dados={processoNumero:form.processoNumero.trim(),nome:form.nome.trim(),responsavel:form.responsavel.trim(),parentesco:form.parentesco,dataDisponivel:form.dataDisponivel,itens:form.itens,observacao:form.observacao.trim(),tenant_id:tenantDe(user),atualizadoEm:new Date().toISOString(),atualizadoPor:user.name||user.email};
     var p2;
-    if(editId){p2=db.collection('pedidos_judiciais').doc(editId).update(dados);}
-    else{dados.criadoEm=new Date().toISOString();dados.criadoPor=user.name||'';p2=db.collection('pedidos_judiciais').add(dados);}
-    p2.then(function(){setShowForm(false);setSaving(false);}).catch(function(e){alert2('Erro: '+e.message);setSaving(false);});
+    if(editId){p2=db.collection('pacientes_judiciais').doc(editId).update(dados);}
+    else{dados.status='pendente';dados.criadoEm=new Date().toISOString();dados.criadoPor=user.name||user.email;p2=db.collection('pacientes_judiciais').add(dados);}
+    p2.then(function(){setShowForm(false);resetForm();setSaving(false);}).catch(function(e){alert2('Erro: '+e.message);setSaving(false);});
   }
 
-  function excluir(id){
-    confirm2('Excluir pedido judicial','Essa ação não pode ser desfeita. Confirma a exclusão?',function(){
-      db.collection('pedidos_judiciais').doc(id).delete();
+  function excluir(p){
+    confirm2('Excluir paciente','Excluir '+p.nome+' do cadastro judicial? O histórico de retiradas será mantido.',function(){
+      db.collection('pacientes_judiciais').doc(p.id).delete().catch(function(e){alert2('Erro ao excluir: '+((e&&e.message)||e));});
     },'danger');
   }
 
-  function atender(p){
-    var faltando=(p.itens||[]).filter(function(it){return (stock[it.medicamentoId]||0)<it.quantidadeMensal;});
-    if(faltando.length>0){
-      alert2('Estoque insuficiente para liberar este pedido: '+faltando.map(function(it){return it.medicamentoNome+' (precisa '+it.quantidadeMensal+', tem '+(stock[it.medicamentoId]||0)+')';}).join(', ')+'.','Não é possível liberar','danger');
-      return;
-    }
-    confirm2('Confirmar entrega','Registrar saída de todos os itens deste pedido para '+p.pacienteNome+'?',function(){
-      Promise.all((p.itens||[]).map(function(it){
-        return onSave({tipo:'saida',medicamentoId:it.medicamentoId,medicamentoNome:it.medicamentoNome,quantidade:it.quantidadeMensal,observacao:'Pedido judicial nº '+p.processoNumero+' — paciente: '+p.pacienteNome,pedidoJudicialId:p.id,pacienteNome:p.pacienteNome});
-      })).then(function(){
-        return db.collection('pedidos_judiciais').doc(p.id).update({status:'atendido',ultimaEntregaEm:new Date().toISOString()});
-      }).catch(function(e){alert2('Erro ao registrar saída: '+e.message);});
+  function mudarStatus(p,novo){
+    db.collection('pacientes_judiciais').doc(p.id).update({status:novo,atualizadoEm:new Date().toISOString(),atualizadoPor:user.name||user.email}).catch(function(e){alert2('Erro: '+((e&&e.message)||e));});
+  }
+
+  // ===== Dar Saída (baixa) — mostra TODOS os itens do paciente, de qualquer categoria, numa ação só =====
+  function abrirBaixa(p){
+    setShowBaixa(p);
+    setBItens((p.itens||[]).map(function(it){return{medId:it.medId,medNome:it.medNome,medIdOriginal:it.medId,medNomeOriginal:it.medNome,categoria:it.categoria,qtdPrescrita:it.qtd,qtdEntregue:String(it.qtd||''),trocado:false};}));
+    setBData(todayStr());setBTrocaIdx(null);setBTrocaBusca('');
+  }
+  function updQtdBaixa(i,v){setBItens(function(arr){var n=arr.slice();n[i]=Object.assign({},n[i],{qtdEntregue:v});return n;});}
+  function abrirTrocaBaixa(i){setBTrocaIdx(i);setBTrocaBusca('');}
+  function confirmarTrocaBaixa(i,m){
+    setBItens(function(arr){var n=arr.slice();n[i]=Object.assign({},n[i],{medId:m.id,medNome:m.nome,categoria:pjCategoriaDoMed(m),trocado:true});return n;});
+    setBTrocaIdx(null);setBTrocaBusca('');
+  }
+  function desfazerTrocaBaixa(i){
+    setBItens(function(arr){var n=arr.slice();n[i]=Object.assign({},n[i],{medId:n[i].medIdOriginal,medNome:n[i].medNomeOriginal,categoria:(function(){var mo=medications.find(function(m){return m.id===n[i].medIdOriginal;});return mo?pjCategoriaDoMed(mo):n[i].categoria;})(),trocado:false});return n;});
+  }
+  function removerItemBaixa(i){setBItens(function(arr){return arr.filter(function(_,ii){return ii!==i;});});}
+
+  function confirmarBaixa(){
+    if(!showBaixa)return;
+    var entregas=bItens.filter(function(it){return it.medId&&(parseInt(it.qtdEntregue)||0)>0;});
+    if(entregas.length===0){alert2('Informe ao menos um item com quantidade entregue (maior que zero).');return;}
+    var bloqueios=[];
+    entregas.forEach(function(it){
+      var disp=stock[it.medId]||0;var qtd=parseInt(it.qtdEntregue)||0;
+      if(disp<=0)bloqueios.push(it.medNome+': estoque zerado (0 disponível)');
+      else if(qtd>disp)bloqueios.push(it.medNome+': quantidade ('+qtd+') maior que disponível ('+disp+')');
+    });
+    if(bloqueios.length>0){alert2('Estoque insuficiente:\n'+bloqueios.join('\n')+'\n\nAjuste as quantidades para no máximo o disponível.');return;}
+    setBSaving(true);
+    var tenantId=tenantDe(user);
+    var medIds=[];entregas.forEach(function(it){if(medIds.indexOf(it.medId)<0)medIds.push(it.medId);});
+    Promise.all(medIds.map(function(id){return _loteFEFOAsync(id,tenantId).then(function(r){return{id:id,fefo:r};});})).then(function(resultados){
+      var fefoPorMed={};resultados.forEach(function(r){fefoPorMed[r.id]=r.fefo;});
+      var retObj={
+        pacienteId:showBaixa.id,pacienteNome:showBaixa.nome,processoNumero:showBaixa.processoNumero||'',
+        responsavelPaciente:showBaixa.responsavel||'',
+        itens:entregas.map(function(it){return{medId:it.medId,medNome:it.medNome,categoria:it.categoria,qtdPrescrita:it.trocado?0:(parseInt(it.qtdPrescrita)||0),qtdEntregue:parseInt(it.qtdEntregue)||0,trocado:!!it.trocado,medIdOriginal:it.medIdOriginal,medNomeOriginal:it.medNomeOriginal};}),
+        data:bData,liberadoPor:user.name||user.email,liberadoPorUid:user.uid,criadoEm:new Date().toISOString(),tenant_id:tenantId
+      };
+      return db.collection('retiradas_judiciais').add(retObj).then(function(){
+        var obsBase='Pedido judicial nº '+(showBaixa.processoNumero||'')+' — paciente: '+showBaixa.nome;
+        return Promise.all(entregas.map(function(it){
+          var fefo=fefoPorMed[it.medId];
+          var extra=it.trocado?' — trocado por '+it.medNome+' (prescrito: '+it.medNomeOriginal+')':' ('+it.qtdEntregue+'/'+it.qtdPrescrita+')';
+          return onSave({tipo:'saida',medicamentoId:it.medId,medicamentoNome:it.medNome,quantidade:parseInt(it.qtdEntregue)||0,lote:fefo?fefo.lote:'',validade:fefo?fefo.validade:'',observacao:obsBase+extra,pedidoJudicialId:showBaixa.id,pacienteNome:showBaixa.nome});
+        }));
+      });
+    }).then(function(){
+      return db.collection('pacientes_judiciais').doc(showBaixa.id).update({status:'pendente',ultimaRetirada:bData,atualizadoEm:new Date().toISOString(),atualizadoPor:user.name||user.email});
+    }).then(function(){
+      setBSaving(false);setShowBaixa(null);alert2('Saída registrada! Paciente voltou para "Pendente".');
+    }).catch(function(e){setBSaving(false);alert2('Erro: '+(e&&e.message?e.message:'verifique a conexão'));});
+  }
+
+  // ===== Listagem / filtros =====
+  var q=busca.toLowerCase().trim();
+  function filtrarPorCategoria(cat,status){
+    return pacientes.filter(function(p){
+      if(!(p.itens||[]).some(function(it){return it.categoria===cat;}))return false;
+      if((p.status||'pendente')!==status)return false;
+      if(q&&(p.nome+' '+(p.responsavel||'')+' '+(p.processoNumero||'')).toLowerCase().indexOf(q)<0)return false;
+      return true;
     });
   }
-
-  function reabrir(p){
-    db.collection('pedidos_judiciais').doc(p.id).update({status:'pendente'});
-  }
-
-  var listaFiltrada=useMemo(function(){
-    return pedidos.filter(function(p){
-      if(busca.trim()&&p.pacienteNome.toLowerCase().indexOf(busca.trim().toLowerCase())<0)return false;
-      return (p.itens||[]).some(function(it){return it.categoria===sub;});
-    }).sort(function(a,b){return a.pacienteNome.localeCompare(b.pacienteNome);});
-  },[pedidos,busca,sub]);
 
   var necessidadePorMed=useMemo(function(){
     var m={};
-    pedidos.forEach(function(p){
+    pacientes.forEach(function(p){
       (p.itens||[]).forEach(function(it){
-        if(!it.medicamentoId||!it.quantidadeMensal)return;
-        if(!m[it.medicamentoId])m[it.medicamentoId]={medicamentoId:it.medicamentoId,medicamentoNome:it.medicamentoNome,categoria:it.categoria,mensal:0,pacientes:0};
-        m[it.medicamentoId].mensal+=it.quantidadeMensal;
-        m[it.medicamentoId].pacientes+=1;
+        if(!it.medId||!it.qtd)return;
+        if(!m[it.medId])m[it.medId]={medId:it.medId,medNome:it.medNome,categoria:it.categoria,mensal:0,pacientes:0};
+        m[it.medId].mensal+=it.qtd;m[it.medId].pacientes+=1;
       });
     });
-    return Object.keys(m).map(function(k){return m[k];}).sort(function(a,b){return a.medicamentoNome.localeCompare(b.medicamentoNome);});
-  },[pedidos]);
+    return Object.keys(m).map(function(k){return m[k];}).sort(function(a,b){return a.medNome.localeCompare(b.medNome);});
+  },[pacientes]);
 
-  var saidasJudiciais=useMemo(function(){
-    return entries.filter(function(e){return e.tipo==='saida'&&e.pedidoJudicialId;}).sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});
-  },[entries]);
+  function fD(d){if(!d)return'-';try{return new Date(d+'T00:00:00').toLocaleDateString('pt-BR');}catch(e){return d;}}
 
-  var historicoPaciente=useMemo(function(){
-    if(!histPaciente)return [];
-    return saidasJudiciais.filter(function(e){return e.pacienteNome===histPaciente;});
-  },[saidasJudiciais,histPaciente]);
+  function renderCard(p){
+    var itensCat=(p.itens||[]).filter(function(it){return it.categoria===sub;});
+    var atrasado=p.status==='pendente'&&p.ultimaRetirada&&((new Date()-new Date(p.ultimaRetirada+'T00:00:00'))/86400000)>35;
+    return(<div key={p.id} style={{background:'#fff',border:'1.5px solid '+(atrasado?'#FCA5A5':'#E2E8F0'),borderRadius:14,padding:14,marginBottom:10,boxShadow:atrasado?'0 2px 10px rgba(220,38,38,.15)':'none'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:6,gap:8}}>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontWeight:800,fontSize:14,color:'#1E293B'}}>{p.nome}</div>
+          <div style={{fontSize:12,color:'#64748B'}}>Processo nº {p.processoNumero}</div>
+          {p.responsavel&&<div style={{fontSize:11,color:'#94A3B8'}}>Retirado por: {p.responsavel}{p.parentesco?' ('+p.parentesco+')':''}</div>}
+        </div>
+        <span style={{fontSize:10,fontWeight:800,padding:'4px 9px',borderRadius:20,whiteSpace:'nowrap',background:atrasado?'#FEE2E2':p.status==='separado'?'#DCFCE7':'#FEF3C7',color:atrasado?'#B91C1C':p.status==='separado'?'#16A34A':'#92400E'}}>
+          {atrasado?'⚠️ Atrasado':p.status==='separado'?'✅ Separado':'⏳ Pendente'}
+        </span>
+      </div>
+      {itensCat.map(function(it,i){return(<div key={i} style={{fontSize:13,color:'#1E293B',marginBottom:2}}>{it.medNome} — {it.qtd} un./mês <span style={{color:'#94A3B8',fontSize:11}}>(estoque: {stock[it.medId]||0})</span></div>);})}
+      {p.observacao&&<div style={{fontSize:12,color:'#B45309',marginTop:6,background:'#FFFBEB',borderRadius:6,padding:'4px 8px'}}>📝 {p.observacao}</div>}
+      <div style={{fontSize:11,color:'#94A3B8',margin:'8px 0'}}>
+        {p.ultimaRetirada?'Última retirada: '+fD(p.ultimaRetirada):'Disponível para retirada em: '+fD(p.dataDisponivel)}
+      </div>
+      <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+        {p.status!=='pendente'&&<button onClick={function(){mudarStatus(p,'pendente');}} style={{padding:'8px 12px',background:'#FEF3C7',border:'none',borderRadius:8,color:'#92400E',fontSize:11,fontWeight:700,cursor:'pointer'}}>↩️ Pendente</button>}
+        {p.status!=='separado'&&<button onClick={function(){mudarStatus(p,'separado');}} style={{padding:'8px 12px',background:'#DCFCE7',border:'none',borderRadius:8,color:'#0C6B3E',fontSize:11,fontWeight:700,cursor:'pointer'}}>✅ Separado</button>}
+        {p.status==='separado'&&can(user.role,'saida')&&<button onClick={function(){abrirBaixa(p);}} style={{padding:'8px 14px',background:'#0C6B3E',border:'none',borderRadius:8,color:'#fff',fontSize:12,fontWeight:800,cursor:'pointer',marginLeft:'auto'}}>♻️ Dar Saída</button>}
+        <button onClick={function(){setShowHist(p);}} style={{padding:'8px 12px',background:'#EFF6FF',border:'none',borderRadius:8,color:B,fontSize:12,fontWeight:700,cursor:'pointer'}}>📜 Histórico</button>
+        <button onClick={function(){abrirEditar(p);}} style={{padding:'8px 12px',background:'#F1F5F9',border:'none',borderRadius:8,color:'#1E293B',fontSize:12,fontWeight:700,cursor:'pointer'}}>✏️ Editar</button>
+        <button onClick={function(){excluir(p);}} style={{padding:'8px 12px',background:'#FEE2E2',border:'none',borderRadius:8,color:'#B91C1C',fontSize:12,fontWeight:700,cursor:'pointer'}}>🗑️ Excluir</button>
+      </div>
+    </div>);
+  }
+
+  var listaFiltrada=PJ_TIPOS_KEYS.indexOf(sub)>=0?filtrarPorCategoria(sub,subStatus):[];
+  var histRetiradas=showHist?retiradasJud.filter(function(r){return r.pacienteId===showHist.id;}):[];
 
   return (<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
-    <div style={{fontSize:18,fontWeight:800,color:'#1E293B',marginBottom:4}}>⚖️ Pedidos Judiciais</div>
+    <div style={{fontSize:18,fontWeight:800,color:'#1E293B',marginBottom:4}}>⚖️ Pacientes Judiciais</div>
     <div style={{fontSize:13,color:'#64748B',marginBottom:16}}>Fornecimento obrigatório por decisão judicial — prioridade máxima.</div>
 
-    <div style={{display:'flex',gap:6,marginBottom:16,flexWrap:'wrap'}}>
-      {Object.keys(PJ_CATEGORIAS).map(function(c){return(
-        <button key={c} onClick={function(){setSub(c);}} style={{padding:'9px 12px',borderRadius:10,border:'1.5px solid '+(sub===c?B:'#E2E8F0'),background:sub===c?B:'#fff',color:sub===c?'#fff':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>{PJ_CATEGORIAS[c].icon} {PJ_CATEGORIAS[c].label}</button>
+    <div style={{display:'flex',gap:6,marginBottom:12,flexWrap:'wrap'}}>
+      {PJ_TIPOS_KEYS.map(function(c){var t=TIPOS[c];return(
+        <button key={c} onClick={function(){setSub(c);}} style={{padding:'9px 12px',borderRadius:10,border:'1.5px solid '+(sub===c?t.cor:'#E2E8F0'),background:sub===c?t.cor:'#fff',color:sub===c?'#fff':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>{t.icon} {t.label}</button>
       );})}
       <button onClick={function(){setSub('estoque');}} style={{padding:'9px 12px',borderRadius:10,border:'1.5px solid '+(sub==='estoque'?B:'#E2E8F0'),background:sub==='estoque'?B:'#fff',color:sub==='estoque'?'#fff':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>📦 Estoque Judicial</button>
       <button onClick={function(){setSub('saidas');}} style={{padding:'9px 12px',borderRadius:10,border:'1.5px solid '+(sub==='saidas'?B:'#E2E8F0'),background:sub==='saidas'?B:'#fff',color:sub==='saidas'?'#fff':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>📤 Saídas</button>
     </div>
 
-    {PJ_CATEGORIAS[sub]&&(<div>
-      <button onClick={abrirNovo} className="bp" style={{marginBottom:12}}>+ Novo pedido judicial</button>
-      <input value={busca} onChange={function(e){setBusca(e.target.value);}} className="inp" placeholder="🔍 Buscar paciente pelo nome..." style={{marginBottom:12}}/>
-      {listaFiltrada.length===0&&<div style={{textAlign:'center',padding:40,color:'#94A3B8'}}>Nenhum pedido em {PJ_CATEGORIAS[sub].label.toLowerCase()}.</div>}
-      {listaFiltrada.map(function(p){
-        var proxima=p.ultimaEntregaEm?pjProximaEntrega(p.ultimaEntregaEm):null;
-        var atrasado=p.status!=='atendido'&&proxima&&proxima<new Date();
-        var itensCat=(p.itens||[]).filter(function(it){return it.categoria===sub;});
-        return(<div key={p.id} style={{background:'#fff',border:'1.5px solid '+(atrasado?'#FCA5A5':'#E2E8F0'),borderRadius:14,padding:14,marginBottom:10,boxShadow:atrasado?'0 2px 10px rgba(220,38,38,.15)':'none'}}>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:6,gap:8}}>
-            <div>
-              <div style={{fontWeight:800,fontSize:14,color:'#1E293B'}}>{p.pacienteNome}</div>
-              <div style={{fontSize:12,color:'#64748B'}}>Processo nº {p.processoNumero}</div>
-              {p.responsavelNome&&<div style={{fontSize:11,color:'#94A3B8'}}>Retirado por: {p.responsavelNome}{p.parentesco?' ('+p.parentesco+')':''}</div>}
-            </div>
-            <span style={{fontSize:10,fontWeight:800,padding:'4px 9px',borderRadius:20,whiteSpace:'nowrap',background:atrasado?'#FEE2E2':p.status==='atendido'?'#DCFCE7':p.status==='em_andamento'?'#FEF3C7':'#F1F5F9',color:atrasado?'#B91C1C':p.status==='atendido'?'#16A34A':p.status==='em_andamento'?'#B45309':'#64748B'}}>
-              {atrasado?'⚠️ ATRASADO':p.status==='atendido'?'✅ Atendido':p.status==='em_andamento'?'⏳ Em andamento':'Pendente'}
-            </span>
-          </div>
-          {itensCat.map(function(it,i){return(
-            <div key={i} style={{fontSize:13,color:'#1E293B',marginBottom:2}}>{it.medicamentoNome} — {it.quantidadeMensal} un./mês <span style={{color:'#94A3B8',fontSize:11}}>(estoque: {stock[it.medicamentoId]||0})</span></div>
-          );})}
-          <div style={{fontSize:11,color:'#94A3B8',margin:'8px 0'}}>
-            Pedido em {p.dataPedido?new Date(p.dataPedido+'T00:00:00').toLocaleDateString('pt-BR'):'-'}
-            {p.ultimaEntregaEm?' • Última entrega: '+new Date(p.ultimaEntregaEm).toLocaleDateString('pt-BR'):''}
-            {proxima?' • Próxima entrega: '+proxima.toLocaleDateString('pt-BR'):''}
-          </div>
-          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-            {p.status!=='atendido'&&<button onClick={function(){atender(p);}} style={{padding:'8px 12px',background:'#16A34A',border:'none',borderRadius:8,color:'#fff',fontSize:12,fontWeight:700,cursor:'pointer'}}>✅ Dar saída / Atender</button>}
-            {p.status==='atendido'&&<button onClick={function(){reabrir(p);}} style={{padding:'8px 12px',background:'#F59E0B',border:'none',borderRadius:8,color:'#fff',fontSize:12,fontWeight:700,cursor:'pointer'}}>🔄 Reabrir (próximo mês)</button>}
-            <button onClick={function(){setHistPaciente(p.pacienteNome);}} style={{padding:'8px 12px',background:'#EFF6FF',border:'none',borderRadius:8,color:B,fontSize:12,fontWeight:700,cursor:'pointer'}}>📜 Histórico</button>
-            <button onClick={function(){abrirEditar(p);}} style={{padding:'8px 12px',background:'#F1F5F9',border:'none',borderRadius:8,color:'#1E293B',fontSize:12,fontWeight:700,cursor:'pointer'}}>✏️ Editar</button>
-            <button onClick={function(){excluir(p.id);}} style={{padding:'8px 12px',background:'#FEE2E2',border:'none',borderRadius:8,color:'#B91C1C',fontSize:12,fontWeight:700,cursor:'pointer'}}>🗑️ Excluir</button>
-          </div>
-        </div>);
-      })}
+    {PJ_TIPOS_KEYS.indexOf(sub)>=0&&(<div>
+      <div style={{display:'flex',gap:10,marginBottom:12,flexWrap:'wrap'}}>
+        <input value={busca} onChange={function(e){setBusca(e.target.value);}} className="inp" placeholder="🔍 Buscar paciente, responsável ou processo..." style={{marginBottom:0,flex:1,minWidth:200}}/>
+        <button onClick={abrirNovo} className="bp" style={{whiteSpace:'nowrap',padding:'0 16px',width:'auto'}}>+ Novo Paciente</button>
+      </div>
+      <div className="tab-sw" style={{marginBottom:12}}>
+        <button onClick={function(){setSubStatus('pendente');}} className={subStatus==='pendente'?'on':''}>⏳ Pendentes ({filtrarPorCategoria(sub,'pendente').length})</button>
+        <button onClick={function(){setSubStatus('separado');}} className={subStatus==='separado'?'on':''}>✅ Separados ({filtrarPorCategoria(sub,'separado').length})</button>
+      </div>
+      {listaFiltrada.length===0&&<div style={{textAlign:'center',padding:40,color:'#94A3B8'}}>Nenhum paciente {subStatus} em {TIPOS[sub].label.toLowerCase()}.</div>}
+      {listaFiltrada.map(renderCard)}
     </div>)}
 
     {sub==='estoque'&&(<div>
@@ -4677,13 +4743,14 @@ function TabPedidosJudiciais(props){
           <button key={n} onClick={function(){setHorizonte(n);}} style={{flex:1,padding:'10px',borderRadius:10,border:'1.5px solid '+(horizonte===n?B:'#E2E8F0'),background:horizonte===n?B:'#fff',color:horizonte===n?'#fff':'#64748B',fontWeight:700,fontSize:13,cursor:'pointer'}}>{n} {n===1?'mês':'meses'}</button>
         );})}
       </div>
-      {necessidadePorMed.length===0&&<div style={{textAlign:'center',padding:40,color:'#94A3B8'}}>Nenhum item com pedido judicial cadastrado ainda.</div>}
+      {necessidadePorMed.length===0&&<div style={{textAlign:'center',padding:40,color:'#94A3B8'}}>Nenhum item cadastrado ainda.</div>}
       {necessidadePorMed.map(function(m){
         var necessidade=m.mensal*horizonte;
-        var atual=stock[m.medicamentoId]||0;
+        var atual=stock[m.medId]||0;
         var faltam=Math.max(0,necessidade-atual);
-        return(<div key={m.medicamentoId} style={{background:'#fff',border:'1.5px solid #E2E8F0',borderRadius:14,padding:14,marginBottom:10}}>
-          <div style={{fontWeight:800,fontSize:14,color:'#1E293B',marginBottom:2}}>{PJ_CATEGORIAS[m.categoria]?PJ_CATEGORIAS[m.categoria].icon+' ':''}{m.medicamentoNome}</div>
+        var t=TIPOS[m.categoria]||TIPOS.medicamento;
+        return(<div key={m.medId} style={{background:'#fff',border:'1.5px solid #E2E8F0',borderRadius:14,padding:14,marginBottom:10}}>
+          <div style={{fontWeight:800,fontSize:14,color:'#1E293B',marginBottom:2}}>{t.icon} {m.medNome}</div>
           <div style={{fontSize:11,color:'#94A3B8',marginBottom:10}}>{m.pacientes} paciente(s) • {m.mensal} un./mês no total</div>
           <div style={{display:'flex',gap:16,flexWrap:'wrap'}}>
             <div><div style={{fontSize:10,color:'#94A3B8',fontWeight:700,textTransform:'uppercase'}}>Necessário ({horizonte}m)</div><div style={{fontSize:18,fontWeight:800,color:'#1E293B'}}>{necessidade}</div></div>
@@ -4695,66 +4762,135 @@ function TabPedidosJudiciais(props){
     </div>)}
 
     {sub==='saidas'&&(<div>
-      {saidasJudiciais.length===0&&<div style={{textAlign:'center',padding:40,color:'#94A3B8'}}>Nenhuma saída judicial registrada ainda.</div>}
-      {saidasJudiciais.map(function(e){return(
-        <div key={e.id} style={{background:'#fff',border:'1.5px solid #E2E8F0',borderRadius:12,padding:12,marginBottom:8}}>
-          <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>{e.medicamentoNome} — {e.quantidade} un.</div>
-          <div style={{fontSize:12,color:'#64748B'}}>Paciente: {e.pacienteNome||'-'}</div>
-          <div style={{fontSize:11,color:'#94A3B8'}}>{e.criadoEm?new Date(e.criadoEm).toLocaleString('pt-BR'):'-'}</div>
+      {retiradasJud.length===0&&<div style={{textAlign:'center',padding:40,color:'#94A3B8'}}>Nenhuma saída judicial registrada ainda.</div>}
+      {retiradasJud.map(function(r){return(
+        <div key={r.id} style={{background:'#fff',border:'1.5px solid #E2E8F0',borderRadius:12,padding:12,marginBottom:8}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
+            <div style={{fontWeight:800,fontSize:13,color:'#0C6B3E'}}>{r.pacienteNome}</div>
+            <div style={{fontSize:11,color:'#94A3B8'}}>{fD(r.data)}</div>
+          </div>
+          {(r.itens||[]).map(function(it,i){return(<div key={i} style={{fontSize:12,color:'#1E293B'}}>{(TIPOS[it.categoria]||TIPOS.medicamento).icon} {it.medNome}{it.trocado&&<span style={{color:'#7C3AED',fontSize:11}}> (trocado — prescrito: {it.medNomeOriginal})</span>}: {it.qtdEntregue}{!it.trocado&&it.qtdPrescrita?'/'+it.qtdPrescrita:''} un.</div>);})}
+          <div style={{fontSize:11,color:'#94A3B8',marginTop:4}}>Liberado por {r.liberadoPor}</div>
         </div>
       );})}
     </div>)}
 
-    {showForm&&<Modal onClose={function(){setShowForm(false);}} title={editId?'Editar pedido judicial':'Novo pedido judicial'} wide>
-      <Lbl c="Nº do processo"/><input value={form.processoNumero} onChange={function(e){setForm(Object.assign({},form,{processoNumero:e.target.value}));}} className="inp" placeholder="Ex: 0001234-56.2026.8.17.0000" autoFocus/>
-      <Lbl c="Nome do paciente"/><input value={form.pacienteNome} onChange={function(e){setForm(Object.assign({},form,{pacienteNome:e.target.value}));}} className="inp" placeholder="Nome completo"/>
-      <Lbl c="Nome do responsável pela retirada (se não for o próprio paciente)"/><input value={form.responsavelNome} onChange={function(e){setForm(Object.assign({},form,{responsavelNome:e.target.value}));}} className="inp" placeholder="Opcional"/>
-      {form.responsavelNome.trim()&&(<div><Lbl c="Parentesco"/><select value={form.parentesco} onChange={function(e){setForm(Object.assign({},form,{parentesco:e.target.value}));}} className="inp"><option value="">Selecione...</option>{PJ_PARENTESCOS.map(function(pt){return <option key={pt} value={pt}>{pt}</option>;})}</select></div>)}
-      <Lbl c="Data do pedido"/><input type="date" value={form.dataPedido} onChange={function(e){setForm(Object.assign({},form,{dataPedido:e.target.value}));}} className="inp"/>
-      <Lbl c="Status"/>
-      <select value={form.status} onChange={function(e){setForm(Object.assign({},form,{status:e.target.value}));}} className="inp" style={{marginBottom:16}}>
-        <option value="pendente">Pendente</option>
-        <option value="em_andamento">Em andamento</option>
-        <option value="atendido">Atendido</option>
-      </select>
+    {showForm&&<Modal onClose={function(){setShowForm(false);resetForm();}} title={editId?'✏️ Editar Paciente':'➕ Novo Paciente Judicial'} wide>
+      <Lbl c="Nº do processo *"/><input value={form.processoNumero} onChange={function(e){setForm(Object.assign({},form,{processoNumero:e.target.value}));}} className="inp" placeholder="Ex: 0001234-56.2026.8.17.0000" autoFocus/>
+      <Lbl c="Nome do paciente *"/><input value={form.nome} onChange={function(e){setForm(Object.assign({},form,{nome:e.target.value}));}} className="inp" placeholder="Nome completo"/>
+      <Lbl c="Nome do responsável pela retirada (se não for o próprio paciente)"/><input value={form.responsavel} onChange={function(e){setForm(Object.assign({},form,{responsavel:e.target.value}));}} className="inp" placeholder="Opcional"/>
+      {form.responsavel.trim()&&(<div><Lbl c="Parentesco"/><select value={form.parentesco} onChange={function(e){setForm(Object.assign({},form,{parentesco:e.target.value}));}} className="inp"><option value="">Selecione...</option>{PJ_PARENTESCOS.map(function(pt){return <option key={pt} value={pt}>{pt}</option>;})}</select></div>)}
+      <Lbl c="Disponível para retirada em"/>
+      <input type="date" value={form.dataDisponivel} onChange={function(e){setForm(Object.assign({},form,{dataDisponivel:e.target.value}));}} className="inp"/>
+      <div style={{fontSize:11,color:'#94A3B8',marginTop:-10,marginBottom:14}}>Usado só antes da primeira retirada — depois disso o histórico aparece aqui (igual Leites).</div>
 
       <div style={{background:'#F8FAFC',border:'1.5px solid #E2E8F0',borderRadius:12,padding:12,marginBottom:16}}>
-        <Lbl c="Itens do pedido (medicamentos, fórmulas, fraldas)"/>
-        {form.itens.map(function(it,i){return(
-          <div key={i} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 0',borderBottom:'1px solid #E2E8F0'}}>
-            <span style={{flex:1,fontSize:13}}>{PJ_CATEGORIAS[it.categoria].icon} {it.medicamentoNome} — {it.quantidadeMensal}/mês</span>
-            <button onClick={function(){removerItem(i);}} style={{background:'#FEE2E2',border:'none',borderRadius:6,width:26,height:26,color:'#B91C1C',cursor:'pointer'}}>×</button>
-          </div>
-        );})}
-        <div style={{display:'flex',gap:6,marginTop:10,flexWrap:'wrap'}}>
-          <select value={itemCat} onChange={function(e){setItemCat(e.target.value);}} className="inp" style={{marginBottom:0,width:120}}>
-            {Object.keys(PJ_CATEGORIAS).map(function(c){return <option key={c} value={c}>{PJ_CATEGORIAS[c].icon} {PJ_CATEGORIAS[c].label}</option>;})}
-          </select>
-          <select value={itemMed} onChange={function(e){setItemMed(e.target.value);}} className="inp" style={{marginBottom:0,flex:1,minWidth:140}}>
-            <option value="">Medicamento/item...</option>
-            {medications.slice().sort(function(a,b){return a.nome.localeCompare(b.nome);}).map(function(m){return <option key={m.id} value={m.id}>{m.nome}</option>;})}
-          </select>
-          <input value={itemQtd} onChange={function(e){setItemQtd(e.target.value.replace(/[^0-9]/g,''));}} className="inp" placeholder="Qtd/mês" style={{marginBottom:0,width:90}}/>
-          <button onClick={adicionarItem} style={{padding:'0 14px',background:B,border:'none',borderRadius:10,color:'#fff',fontWeight:700,cursor:'pointer'}}>+ Add</button>
+        <Lbl c="Itens do paciente (medicamentos, fórmulas, fraldas...)"/>
+        {form.itens.length>0&&<div style={{marginBottom:10}}>
+          {form.itens.map(function(it,i){var t=TIPOS[it.categoria]||TIPOS.medicamento;return(
+            <div key={i} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 0',borderBottom:'1px solid #E2E8F0'}}>
+              <span style={{flex:1,fontSize:13}}>{t.icon} {it.medNome} — {it.qtd}/mês</span>
+              <button onClick={function(){removerItemForm(i);}} style={{background:'#FEE2E2',border:'none',borderRadius:6,width:26,height:26,color:'#B91C1C',cursor:'pointer'}}>×</button>
+            </div>
+          );})}
+        </div>}
+        <div style={{display:'flex',gap:6,marginBottom:8,flexWrap:'wrap'}}>
+          {PJ_TIPOS_KEYS.map(function(c){var t=TIPOS[c];var sel2=fItemCat===c;return(<button key={c} onClick={function(){setFItemCat(c);setFItemBusca('');setFItemSel(null);}} style={{padding:'6px 10px',borderRadius:20,border:'1.5px solid '+(sel2?t.cor:'#E2E8F0'),background:sel2?t.cor:'#fff',color:sel2?'#fff':'#64748B',fontWeight:sel2?700:500,fontSize:11,cursor:'pointer'}}>{t.icon} {t.label}</button>);})}
         </div>
-        {itemMed&&<div style={{fontSize:11,color:'#94A3B8',marginTop:6}}>Estoque atual: {stock[itemMed]||0}</div>}
+        {fItemSel?
+          <div style={{display:'flex',alignItems:'center',gap:8,background:'#EFF6FF',border:'1.5px solid #BFDBFE',borderRadius:10,padding:'9px 12px',marginBottom:8}}>
+            <span style={{flex:1,fontWeight:700,fontSize:13,color:B}}>{fItemSel.nome}</span>
+            <button onClick={function(){setFItemSel(null);setFItemBusca('');}} style={{background:'#fff',border:'1px solid #BFDBFE',borderRadius:8,padding:'4px 10px',fontSize:11,color:B,cursor:'pointer',fontWeight:600}}>Trocar</button>
+          </div>
+          :<div style={{position:'relative',marginBottom:8}}>
+            <input value={fItemBusca} onChange={function(e){setFItemBusca(e.target.value);}} placeholder={'Buscar em '+TIPOS[fItemCat].label+'...'} className="inp" style={{marginBottom:0}}/>
+            {sugestoesForm.length>0&&<div style={{position:'absolute',top:'100%',left:0,right:0,background:'#fff',border:'1.5px solid #E2E8F0',borderRadius:10,marginTop:4,zIndex:20,maxHeight:200,overflowY:'auto',boxShadow:'0 8px 24px rgba(0,0,0,.12)'}}>
+              {sugestoesForm.map(function(x){return<button key={x.m.id} onClick={function(){setFItemSel(x.m);}} style={{width:'100%',textAlign:'left',padding:'10px 12px',border:'none',borderBottom:'1px solid #F1F5F9',background:'#fff',cursor:'pointer',fontSize:13,color:'#1E293B'}}>{x.m.nome}</button>;})}
+            </div>}
+            {fItemBusca.trim()&&sugestoesForm.length===0&&<div style={{fontSize:11,color:'#94A3B8',marginTop:4}}>Nenhum item de {TIPOS[fItemCat].label.toLowerCase()} encontrado.</div>}
+          </div>}
+        <div style={{display:'flex',gap:6}}>
+          <input value={fItemQtd} onChange={function(e){setFItemQtd(e.target.value.replace(/[^0-9]/g,''));}} className="inp" style={{marginBottom:0,width:100}} placeholder="Qtd/mês" inputMode="numeric"/>
+          <button onClick={adicionarItemForm} style={{flex:1,padding:'0 14px',background:B,border:'none',borderRadius:10,color:'#fff',fontWeight:700,cursor:'pointer'}}>+ Adicionar</button>
+        </div>
       </div>
 
-      <button onClick={salvar} disabled={saving} className="bp" style={{opacity:saving?0.7:1}}>{saving?'Salvando...':'Salvar pedido'}</button>
+      <Lbl c="Observações"/>
+      <textarea value={form.observacao} onChange={function(e){setForm(Object.assign({},form,{observacao:e.target.value}));}} className="inp" rows="2" placeholder="Opcional" style={{marginBottom:16}}/>
+
+      <button onClick={salvar} disabled={saving} className="bp" style={{opacity:saving?0.7:1}}>{saving?'Salvando...':editId?'Salvar Alterações':'Cadastrar Paciente'}</button>
     </Modal>}
 
-    {histPaciente&&<Modal onClose={function(){setHistPaciente(null);}} title={'Histórico — '+histPaciente}>
-      {historicoPaciente.length===0&&<div style={{textAlign:'center',padding:20,color:'#94A3B8'}}>Nenhuma entrega registrada ainda.</div>}
-      {historicoPaciente.map(function(e){return(
-        <div key={e.id} style={{borderBottom:'1px solid #F1F5F9',padding:'8px 0'}}>
-          <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>{e.medicamentoNome} — {e.quantidade} un.</div>
-          <div style={{fontSize:11,color:'#94A3B8'}}>{e.criadoEm?new Date(e.criadoEm).toLocaleString('pt-BR'):'-'}</div>
+    {showBaixa&&<Modal onClose={function(){if(!bSaving)setShowBaixa(null);}} title={'♻️ Dar Saída — '+showBaixa.nome} wide>
+      {showBaixa.responsavel&&<div style={{fontSize:12,color:'#64748B',marginBottom:10}}>Responsável: {showBaixa.responsavel}</div>}
+      {showBaixa.observacao&&<div style={{fontSize:12,color:'#B45309',marginBottom:14,background:'#FFFBEB',border:'1px solid #FCD34D',borderRadius:8,padding:'8px 12px'}}>📝 {showBaixa.observacao}</div>}
+      <div style={{fontSize:11,color:'#94A3B8',marginBottom:10}}>Todos os itens deste paciente, de qualquer categoria, pra registrar numa entrega só.</div>
+      {bItens.map(function(it,i){
+        var t=TIPOS[it.categoria]||TIPOS.medicamento;
+        var disp=stock[it.medId]||0;
+        var medsTroca=medications;
+        var sugTroca=bTrocaBusca.trim()?_fuzzyMeds(bTrocaBusca,medsTroca,8):[];
+        return(<div key={i} style={{background:it.trocado?'#F5F3FF':'#F0FDF4',border:'1px solid '+(it.trocado?'#DDD6FE':'#86EFAC'),borderRadius:10,padding:'10px 12px',marginBottom:8}}>
+          <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+            <div style={{flex:1,minWidth:140}}>
+              <div style={{fontWeight:700,fontSize:13,color:it.trocado?'#7C3AED':'#0C6B3E'}}>{t.icon} {it.medNome}{it.trocado&&<span style={{fontSize:11,marginLeft:6}}>(trocado)</span>}</div>
+              <div style={{fontSize:11,color:'#64748B'}}>{it.trocado?'Prescrito: '+it.medNomeOriginal:'Prescrito: '+it.qtdPrescrita+' un./mês'} · Estoque: {disp}</div>
+            </div>
+            <div style={{display:'flex',gap:6,alignItems:'center'}}>
+              <span style={{fontSize:11,color:'#64748B'}}>Entregue:</span>
+              <input value={it.qtdEntregue} onChange={function(e){updQtdBaixa(i,e.target.value.replace(/[^0-9]/g,''));}} className="inp" style={{marginBottom:0,fontSize:16,fontWeight:800,textAlign:'center',color:'#0C6B3E',width:80}} inputMode="numeric"/>
+              <button onClick={function(){removerItemBaixa(i);}} title="Não entregar este item" style={{background:'#FEE2E2',border:'none',borderRadius:8,width:34,height:34,cursor:'pointer',fontSize:13}}>🗑</button>
+            </div>
+          </div>
+          <div style={{marginTop:8,display:'flex',gap:8,flexWrap:'wrap'}}>
+            {!it.trocado?
+              <button onClick={function(){abrirTrocaBaixa(i);}} style={{background:'#EDE9FE',border:'none',borderRadius:8,padding:'6px 12px',fontSize:11,fontWeight:700,color:'#7C3AED',cursor:'pointer'}}>🔁 Trocar item (faltou o prescrito)</button>
+              :<button onClick={function(){desfazerTrocaBaixa(i);}} style={{background:'#F1F5F9',border:'none',borderRadius:8,padding:'6px 12px',fontSize:11,fontWeight:700,color:'#64748B',cursor:'pointer'}}>↩️ Desfazer troca</button>}
+          </div>
+          {bTrocaIdx===i&&<div style={{position:'relative',marginTop:8}}>
+            <input value={bTrocaBusca} onChange={function(e){setBTrocaBusca(e.target.value);}} placeholder="Buscar item pra trocar no lugar deste..." className="inp" style={{marginBottom:0,fontSize:13}} autoFocus/>
+            {sugTroca.length>0&&<div style={{border:'1.5px solid #E2E8F0',borderRadius:10,marginTop:4,maxHeight:160,overflowY:'auto',background:'#fff',boxShadow:'0 8px 24px rgba(0,0,0,.12)'}}>
+              {sugTroca.map(function(x){return<button key={x.m.id} onClick={function(){confirmarTrocaBaixa(i,x.m);}} style={{width:'100%',textAlign:'left',padding:'9px 12px',border:'none',borderBottom:'1px solid #F1F5F9',background:'#fff',cursor:'pointer',fontSize:13,color:'#1E293B'}}>{x.m.nome} <span style={{color:'#94A3B8',fontSize:11}}>(estoque: {stock[x.m.id]||0})</span></button>;})}
+            </div>}
+          </div>}
+        </div>);
+      })}
+      {bItens.length===0&&<div style={{textAlign:'center',padding:20,color:'#94A3B8',fontSize:13}}>Nenhum item nesta entrega.</div>}
+      <div style={{margin:'14px 0'}}>
+        <Lbl c="Data da retirada"/>
+        <input type="date" value={bData} onChange={function(e){setBData(e.target.value);}} className="inp"/>
+      </div>
+      <div style={{fontSize:11,color:'#64748B',marginBottom:10,background:'#F8FAFC',padding:'8px 12px',borderRadius:8}}>
+        ℹ️ Liberado por: <strong>{user.name||user.email}</strong>. As saídas serão registradas no estoque e o paciente voltará para "Pendente".
+      </div>
+      {bSaving&&<div style={{textAlign:'center',color:'#0C6B3E',fontWeight:600,marginBottom:8}}>⏳ Registrando...</div>}
+      <div style={{display:'flex',gap:8}}>
+        <button onClick={function(){if(!bSaving)setShowBaixa(null);}} className="bs" style={{flex:1,padding:'12px 0'}} disabled={bSaving}>Cancelar</button>
+        <button onClick={confirmarBaixa} disabled={bSaving} style={{flex:2,padding:'12px 0',background:'#0C6B3E',color:'#fff',border:'none',borderRadius:12,fontWeight:700,fontSize:14,cursor:'pointer',opacity:bSaving?0.6:1}}>♻️ Confirmar Saída</button>
+      </div>
+    </Modal>}
+
+    {showHist&&<Modal onClose={function(){setShowHist(null);}} title={'📜 Histórico — '+showHist.nome}>
+      {histRetiradas.length===0?
+        <div style={{textAlign:'center',padding:'40px 0',color:'#94A3B8'}}>
+          <div style={{fontSize:36,marginBottom:6}}>📭</div>
+          <div style={{fontSize:13}}>Nenhuma retirada registrada ainda.</div>
+          <div style={{fontSize:12,marginTop:8}}>Disponível para retirada em: {fD(showHist.dataDisponivel)}</div>
         </div>
-      );})}
+        :histRetiradas.map(function(r){return(<div key={r.id} style={{background:'#F8FAFC',borderRadius:12,padding:12,marginBottom:8,border:'1px solid #E2E8F0'}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+            <div style={{fontWeight:800,fontSize:13,color:'#0C6B3E'}}>📅 {fD(r.data)}</div>
+            <div style={{fontSize:11,color:'#64748B'}}>por {r.liberadoPor}</div>
+          </div>
+          {(r.itens||[]).map(function(it,i){var t=TIPOS[it.categoria]||TIPOS.medicamento;return(
+            <div key={i} style={{fontSize:12,color:'#1E293B'}}>{t.icon} <strong>{it.medNome}</strong>{it.trocado&&<span style={{color:'#7C3AED',fontSize:11,marginLeft:6}}>(trocado — prescrito: {it.medNomeOriginal})</span>}: {it.qtdEntregue}{!it.trocado&&it.qtdPrescrita?'/'+it.qtdPrescrita:''} un.{!it.trocado&&it.qtdPrescrita&&it.qtdEntregue<it.qtdPrescrita&&<span style={{color:'#B45309'}}> ⚠️ parcial</span>}</div>
+          );})}
+        </div>);})
+      }
+      <button onClick={function(){setShowHist(null);}} className="bs" style={{width:'100%',padding:'12px 0',marginTop:8}}>Fechar</button>
     </Modal>}
   </div>);
 }
-
 function TabAntibiotico({user,medications,stock,allUsers}){
   var sl=React.useState,ef=React.useEffect,B='#1351B4';
   var _tr=sl([]);var tratamentos=_tr[0];var setTratamentos=_tr[1];
