@@ -4545,17 +4545,21 @@ function TabPedidosJudiciais(props){
   var _saving=useState(false);var saving=_saving[0],setSaving=_saving[1];
   var _bSaving=useState(false);var bSaving=_bSaving[0],setBSaving=_bSaving[1];
   // form (cadastro/edição)
-  var formInicial={processoNumero:'',nome:'',responsavel:'',parentesco:'',dataDisponivel:todayStr(),itens:[],observacao:''};
+  var formInicial={processoNumero:'',nome:'',responsavel:'',responsavelCpf:'',parentesco:'',dataDisponivel:todayStr(),itens:[],observacao:''};
   var _form=useState(formInicial);var form=_form[0],setForm=_form[1];
   var _fItemCat=useState('medicamento');var fItemCat=_fItemCat[0],setFItemCat=_fItemCat[1];
   var _fItemBusca=useState('');var fItemBusca=_fItemBusca[0],setFItemBusca=_fItemBusca[1];
   var _fItemSel=useState(null);var fItemSel=_fItemSel[0],setFItemSel=_fItemSel[1];
   var _fItemQtd=useState('');var fItemQtd=_fItemQtd[0],setFItemQtd=_fItemQtd[1];
-  // baixa (dar saída)
+  // baixa (dar saída) — nome/CPF de quem retirou de fato, pré-preenchido do cadastro mas editável
+  // (pode ser outra pessoa indo buscar naquele mês) — pedido da usuária (06/10/2026) pra gerar o
+  // comprovante de entrega assinado, servindo de proteção jurídica.
   var _bItens=useState([]);var bItens=_bItens[0],setBItens=_bItens[1];
   var _bData=useState(todayStr());var bData=_bData[0],setBData=_bData[1];
   var _bTrocaIdx=useState(null);var bTrocaIdx=_bTrocaIdx[0],setBTrocaIdx=_bTrocaIdx[1]; // idx da linha com busca de troca aberta
   var _bTrocaBusca=useState('');var bTrocaBusca=_bTrocaBusca[0],setBTrocaBusca=_bTrocaBusca[1];
+  var _bRespNome=useState('');var bRespNome=_bRespNome[0],setBRespNome=_bRespNome[1];
+  var _bRespCpf=useState('');var bRespCpf=_bRespCpf[0],setBRespCpf=_bRespCpf[1];
 
   useEffect(function(){
     var u1=db.collection('pacientes_judiciais').where('tenant_id','==',tenantDe(user)).onSnapshot(function(s){
@@ -4574,7 +4578,7 @@ function TabPedidosJudiciais(props){
   function resetForm(){setForm(formInicial);setFItemCat('medicamento');setFItemBusca('');setFItemSel(null);setFItemQtd('');setEditId(null);}
   function abrirNovo(){resetForm();setShowForm(true);}
   function abrirEditar(p){
-    setForm({processoNumero:p.processoNumero||'',nome:p.nome||'',responsavel:p.responsavel||'',parentesco:p.parentesco||'',dataDisponivel:p.dataDisponivel||todayStr(),itens:(p.itens||[]).slice(),observacao:p.observacao||''});
+    setForm({processoNumero:p.processoNumero||'',nome:p.nome||'',responsavel:p.responsavel||'',responsavelCpf:p.responsavelCpf?mascaraCPF(p.responsavelCpf):'',parentesco:p.parentesco||'',dataDisponivel:p.dataDisponivel||todayStr(),itens:(p.itens||[]).slice(),observacao:p.observacao||''});
     setFItemCat('medicamento');setFItemBusca('');setFItemSel(null);setFItemQtd('');
     setEditId(p.id);setShowForm(true);
   }
@@ -4596,8 +4600,10 @@ function TabPedidosJudiciais(props){
   function salvar(){
     if(!form.processoNumero.trim()||!form.nome.trim()){alert2('Preencha o nº do processo e o nome do paciente.');return;}
     if(form.itens.length===0){alert2('Adicione pelo menos um item (medicamento, fórmula, fralda...).');return;}
+    var cpfDigitosForm=String(form.responsavelCpf||'').replace(/\D/g,'');
+    if(cpfDigitosForm&&!validaCPF(cpfDigitosForm)){alert2('O CPF do responsável não é válido (dígito verificador não confere). Corrija ou apague o campo.');return;}
     setSaving(true);
-    var dados={processoNumero:form.processoNumero.trim(),nome:form.nome.trim(),responsavel:form.responsavel.trim(),parentesco:form.parentesco,dataDisponivel:form.dataDisponivel,itens:form.itens,observacao:form.observacao.trim(),tenant_id:tenantDe(user),atualizadoEm:new Date().toISOString(),atualizadoPor:user.name||user.email};
+    var dados={processoNumero:form.processoNumero.trim(),nome:form.nome.trim(),responsavel:form.responsavel.trim(),responsavelCpf:cpfDigitosForm,parentesco:form.parentesco,dataDisponivel:form.dataDisponivel,itens:form.itens,observacao:form.observacao.trim(),tenant_id:tenantDe(user),atualizadoEm:new Date().toISOString(),atualizadoPor:user.name||user.email};
     var p2;
     if(editId){p2=db.collection('pacientes_judiciais').doc(editId).update(dados);}
     else{dados.status='pendente';dados.criadoEm=new Date().toISOString();dados.criadoPor=user.name||user.email;p2=db.collection('pacientes_judiciais').add(dados);}
@@ -4619,6 +4625,7 @@ function TabPedidosJudiciais(props){
     setShowBaixa(p);
     setBItens((p.itens||[]).map(function(it){return{medId:it.medId,medNome:it.medNome,medIdOriginal:it.medId,medNomeOriginal:it.medNome,categoria:it.categoria,qtdPrescrita:it.qtd,qtdEntregue:String(it.qtd||''),trocado:false};}));
     setBData(todayStr());setBTrocaIdx(null);setBTrocaBusca('');
+    setBRespNome(p.responsavel||p.nome||'');setBRespCpf(p.responsavelCpf?mascaraCPF(p.responsavelCpf):'');
   }
   function updQtdBaixa(i,v){setBItens(function(arr){var n=arr.slice();n[i]=Object.assign({},n[i],{qtdEntregue:v});return n;});}
   function abrirTrocaBaixa(i){setBTrocaIdx(i);setBTrocaBusca('');}
@@ -4635,6 +4642,9 @@ function TabPedidosJudiciais(props){
     if(!showBaixa)return;
     var entregas=bItens.filter(function(it){return it.medId&&(parseInt(it.qtdEntregue)||0)>0;});
     if(entregas.length===0){alert2('Informe ao menos um item com quantidade entregue (maior que zero).');return;}
+    if(!bRespNome.trim()){alert2('Informe o nome de quem está retirando — vai no comprovante de entrega.');return;}
+    var respCpfDigitos=String(bRespCpf||'').replace(/\D/g,'');
+    if(respCpfDigitos&&!validaCPF(respCpfDigitos)){alert2('O CPF de quem está retirando não é válido (dígito verificador não confere). Corrija ou apague o campo.');return;}
     var bloqueios=[];
     entregas.forEach(function(it){
       var disp=stock[it.medId]||0;var qtd=parseInt(it.qtdEntregue)||0;
@@ -4644,28 +4654,80 @@ function TabPedidosJudiciais(props){
     if(bloqueios.length>0){alert2('Estoque insuficiente:\n'+bloqueios.join('\n')+'\n\nAjuste as quantidades para no máximo o disponível.');return;}
     setBSaving(true);
     var tenantId=tenantDe(user);
+    var pacienteBaixa=showBaixa;
     var medIds=[];entregas.forEach(function(it){if(medIds.indexOf(it.medId)<0)medIds.push(it.medId);});
     Promise.all(medIds.map(function(id){return _loteFEFOAsync(id,tenantId).then(function(r){return{id:id,fefo:r};});})).then(function(resultados){
       var fefoPorMed={};resultados.forEach(function(r){fefoPorMed[r.id]=r.fefo;});
       var retObj={
-        pacienteId:showBaixa.id,pacienteNome:showBaixa.nome,processoNumero:showBaixa.processoNumero||'',
-        responsavelPaciente:showBaixa.responsavel||'',
+        pacienteId:pacienteBaixa.id,pacienteNome:pacienteBaixa.nome,processoNumero:pacienteBaixa.processoNumero||'',
+        responsavelPaciente:pacienteBaixa.responsavel||'',
+        responsavelRetirada:bRespNome.trim(),responsavelRetiradaCpf:respCpfDigitos,
         itens:entregas.map(function(it){return{medId:it.medId,medNome:it.medNome,categoria:it.categoria,qtdPrescrita:it.trocado?0:(parseInt(it.qtdPrescrita)||0),qtdEntregue:parseInt(it.qtdEntregue)||0,trocado:!!it.trocado,medIdOriginal:it.medIdOriginal,medNomeOriginal:it.medNomeOriginal};}),
         data:bData,liberadoPor:user.name||user.email,liberadoPorUid:user.uid,criadoEm:new Date().toISOString(),tenant_id:tenantId
       };
       return db.collection('retiradas_judiciais').add(retObj).then(function(){
-        var obsBase='Pedido judicial nº '+(showBaixa.processoNumero||'')+' — paciente: '+showBaixa.nome;
+        var obsBase='Pedido judicial nº '+(pacienteBaixa.processoNumero||'')+' — paciente: '+pacienteBaixa.nome;
         return Promise.all(entregas.map(function(it){
           var fefo=fefoPorMed[it.medId];
           var extra=it.trocado?' — trocado por '+it.medNome+' (prescrito: '+it.medNomeOriginal+')':' ('+it.qtdEntregue+'/'+it.qtdPrescrita+')';
-          return onSave({tipo:'saida',medicamentoId:it.medId,medicamentoNome:it.medNome,quantidade:parseInt(it.qtdEntregue)||0,lote:fefo?fefo.lote:'',validade:fefo?fefo.validade:'',observacao:obsBase+extra,pedidoJudicialId:showBaixa.id,pacienteNome:showBaixa.nome});
+          return onSave({tipo:'saida',medicamentoId:it.medId,medicamentoNome:it.medNome,quantidade:parseInt(it.qtdEntregue)||0,lote:fefo?fefo.lote:'',validade:fefo?fefo.validade:'',observacao:obsBase+extra,pedidoJudicialId:pacienteBaixa.id,pacienteNome:pacienteBaixa.nome});
         }));
-      });
-    }).then(function(){
-      return db.collection('pacientes_judiciais').doc(showBaixa.id).update({status:'pendente',ultimaRetirada:bData,atualizadoEm:new Date().toISOString(),atualizadoPor:user.name||user.email});
-    }).then(function(){
-      setBSaving(false);setShowBaixa(null);alert2('Saída registrada! Paciente voltou para "Pendente".');
+      }).then(function(){return retObj;});
+    }).then(function(retObj){
+      return db.collection('pacientes_judiciais').doc(pacienteBaixa.id).update({status:'pendente',ultimaRetirada:bData,atualizadoEm:new Date().toISOString(),atualizadoPor:user.name||user.email}).then(function(){return retObj;});
+    }).then(function(retObj){
+      setBSaving(false);setShowBaixa(null);
+      imprimirComprovanteJudicial(retObj,pacienteBaixa);
+      alert2('Saída registrada! Paciente voltou para "Pendente". Comprovante enviado pra impressão.');
     }).catch(function(e){setBSaving(false);alert2('Erro: '+(e&&e.message?e.message:'verifique a conexão'));});
+  }
+
+  // ===== Comprovante de entrega (impressão) — pedido da usuária (06/10/2026): documento assinável
+  // pelo responsável que retirou, pra servir de proteção jurídica. Mesmo padrão visual/mecanismo de
+  // impressão (_imprimirDoc, iframe oculto) já usado nas Ordens de Fornecimento de Itaquitinga.
+  function imprimirComprovanteJudicial(retirada,paciente){
+    var css='<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;font-size:12px;color:#111}'+
+      '.pagina{padding:26px 30px}'+
+      '.cab{text-align:center;margin-bottom:14px}.cab img{height:64px;margin-bottom:4px}'+
+      '.cab .l1{font-family:Georgia,"Times New Roman",serif;font-weight:700;font-size:15px;color:#15803D}'+
+      '.cab .l2{font-family:Georgia,"Times New Roman",serif;font-size:13px;color:#111}'+
+      '.titulo{text-align:center;font-weight:700;font-size:13px;margin:14px 0;text-transform:uppercase}'+
+      '.dados{margin-bottom:14px;font-size:12px;line-height:1.8}.dados b{font-weight:700}'+
+      'table{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:16px}'+
+      'th{border:1px solid #333;background:#fff;padding:6px 5px;font-weight:700;text-align:center}'+
+      'td{border:1px solid #333;padding:6px 5px;text-align:center;vertical-align:middle}'+
+      'td.desc{text-align:left}'+
+      '.declaracao{font-size:11.5px;line-height:1.7;text-align:justify;margin-bottom:30px}'+
+      '.assin{margin-top:46px;text-align:center;display:inline-block;width:48%}'+
+      '.assin .linha{border-top:1px solid #000;padding-top:4px;font-size:11px;margin:0 10px}'+
+      '.linhas-assin{display:flex;justify-content:space-between;margin-top:20px}'+
+      '@media print{.pagina{padding:14px 18px}}</style>';
+    var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Comprovante de Entrega — Judicial</title>'+css+'</head><body><div class="pagina">';
+    var logoUrl=location.origin+'/assets/itaquitinga-bandeira.png';
+    html+='<div class="cab"><img src="'+logoUrl+'"/><div class="l1">Prefeitura Municipal de Itaquitinga</div><div class="l2">Secretaria Municipal de Saúde</div><div class="l2">Coordenação de Assistência Farmacêutica</div></div>';
+    html+='<div class="titulo">Comprovante de Entrega — Fornecimento por Decisão Judicial</div>';
+    var fDataRet=(function(){try{return new Date(retirada.data+'T00:00:00').toLocaleDateString('pt-BR');}catch(e){return retirada.data;}})();
+    html+='<div class="dados"><b>Processo judicial nº:</b> '+_escHtml(retirada.processoNumero||'—')+'<br>'+
+      '<b>Paciente:</b> '+_escHtml(retirada.pacienteNome||'')+'<br>'+
+      '<b>Data da entrega:</b> '+_escHtml(fDataRet)+'</div>';
+    html+='<table><thead><tr><th>Categoria</th><th>Item</th><th style="width:90px">Prescrito</th><th style="width:90px">Entregue</th><th>Observação</th></tr></thead><tbody>';
+    (retirada.itens||[]).forEach(function(it){
+      var t=TIPOS[it.categoria]||TIPOS.medicamento;
+      var obs=it.trocado?'Trocado — prescrito: '+_escHtml(it.medNomeOriginal||''):(it.qtdPrescrita&&it.qtdEntregue<it.qtdPrescrita?'Entrega parcial':'');
+      html+='<tr><td>'+_escHtml(t.label)+'</td><td class="desc">'+_escHtml(it.medNome)+'</td><td>'+(it.trocado?'—':it.qtdPrescrita)+'</td><td>'+it.qtdEntregue+'</td><td class="desc">'+obs+'</td></tr>';
+    });
+    html+='</tbody></table>';
+    var cpfFmt=retirada.responsavelRetiradaCpf?mascaraCPF(retirada.responsavelRetiradaCpf):'não informado';
+    html+='<div class="declaracao">Declaro, para os devidos fins, ter recebido nesta data os itens relacionados acima, '+
+      'destinados ao(à) paciente <b>'+_escHtml(retirada.pacienteNome||'')+'</b>, em cumprimento à decisão judicial referente ao '+
+      'processo nº <b>'+_escHtml(retirada.processoNumero||'—')+'</b>, nas quantidades e condições descritas, '+
+      'nada mais tendo a reclamar quanto ao fornecimento ora atestado.</div>';
+    html+='<div class="linhas-assin">'+
+      '<div class="assin"><div class="linha">'+_escHtml(retirada.responsavelRetirada||'')+'<br>CPF: '+_escHtml(cpfFmt)+'<br>Responsável pela retirada</div></div>'+
+      '<div class="assin"><div class="linha">'+_escHtml(retirada.liberadoPor||'')+'<br>Liberado por</div></div>'+
+      '</div>';
+    html+='</div></body></html>';
+    if(!_imprimirDoc(html)){alert2('Não foi possível abrir a impressão do comprovante. Tente de novo pelo histórico.');}
   }
 
   // ===== Listagem / filtros =====
@@ -4795,7 +4857,11 @@ function TabPedidosJudiciais(props){
       <Lbl c="Nº do processo *"/><input value={form.processoNumero} onChange={function(e){setForm(Object.assign({},form,{processoNumero:e.target.value}));}} className="inp" placeholder="Ex: 0001234-56.2026.8.17.0000" autoFocus/>
       <Lbl c="Nome do paciente *"/><input value={form.nome} onChange={function(e){setForm(Object.assign({},form,{nome:e.target.value}));}} className="inp" placeholder="Nome completo"/>
       <Lbl c="Nome do responsável pela retirada (se não for o próprio paciente)"/><input value={form.responsavel} onChange={function(e){setForm(Object.assign({},form,{responsavel:e.target.value}));}} className="inp" placeholder="Opcional"/>
-      {form.responsavel.trim()&&(<div><Lbl c="Parentesco"/><select value={form.parentesco} onChange={function(e){setForm(Object.assign({},form,{parentesco:e.target.value}));}} className="inp"><option value="">Selecione...</option>{PJ_PARENTESCOS.map(function(pt){return <option key={pt} value={pt}>{pt}</option>;})}</select></div>)}
+      {form.responsavel.trim()&&(<div>
+        <Lbl c="Parentesco"/><select value={form.parentesco} onChange={function(e){setForm(Object.assign({},form,{parentesco:e.target.value}));}} className="inp"><option value="">Selecione...</option>{PJ_PARENTESCOS.map(function(pt){return <option key={pt} value={pt}>{pt}</option>;})}</select>
+        <Lbl c="CPF do responsável"/><input value={form.responsavelCpf} onChange={function(e){setForm(Object.assign({},form,{responsavelCpf:mascaraCPF(e.target.value)}));}} className="inp" placeholder="000.000.000-00" inputMode="numeric"/>
+        <div style={{fontSize:11,color:'#94A3B8',marginTop:-10,marginBottom:14}}>Usado pra pré-preencher o comprovante de entrega na hora de dar saída — pode confirmar ou trocar lá se for outra pessoa retirando.</div>
+      </div>)}
       <Lbl c="Disponível para retirada em"/>
       <input type="date" value={form.dataDisponivel} onChange={function(e){setForm(Object.assign({},form,{dataDisponivel:e.target.value}));}} className="inp"/>
       <div style={{fontSize:11,color:'#94A3B8',marginTop:-10,marginBottom:14}}>Usado só antes da primeira retirada — depois disso o histórico aparece aqui (igual Leites).</div>
@@ -4876,8 +4942,13 @@ function TabPedidosJudiciais(props){
         <Lbl c="Data da retirada"/>
         <input type="date" value={bData} onChange={function(e){setBData(e.target.value);}} className="inp"/>
       </div>
+      <div style={{background:'#FFFBEB',border:'1.5px solid #FCD34D',borderRadius:12,padding:12,marginBottom:14}}>
+        <div style={{fontWeight:700,fontSize:12,color:'#92400E',marginBottom:8}}>🖊️ Quem está retirando agora (vai no comprovante pra assinar)</div>
+        <Lbl c="Nome *"/><input value={bRespNome} onChange={function(e){setBRespNome(e.target.value);}} className="inp" placeholder="Nome de quem está retirando"/>
+        <Lbl c="CPF"/><input value={bRespCpf} onChange={function(e){setBRespCpf(mascaraCPF(e.target.value));}} className="inp" placeholder="000.000.000-00" inputMode="numeric" style={{marginBottom:0}}/>
+      </div>
       <div style={{fontSize:11,color:'#64748B',marginBottom:10,background:'#F8FAFC',padding:'8px 12px',borderRadius:8}}>
-        ℹ️ Liberado por: <strong>{user.name||user.email}</strong>. As saídas serão registradas no estoque e o paciente voltará para "Pendente".
+        ℹ️ Liberado por: <strong>{user.name||user.email}</strong>. As saídas serão registradas no estoque, o paciente voltará para "Pendente" e o comprovante de entrega vai direto pra impressão.
       </div>
       {bSaving&&<div style={{textAlign:'center',color:'#0C6B3E',fontWeight:600,marginBottom:8}}>⏳ Registrando...</div>}
       <div style={{display:'flex',gap:8}}>
@@ -4901,6 +4972,8 @@ function TabPedidosJudiciais(props){
           {(r.itens||[]).map(function(it,i){var t=TIPOS[it.categoria]||TIPOS.medicamento;return(
             <div key={i} style={{fontSize:12,color:'#1E293B'}}>{t.icon} <strong>{it.medNome}</strong>{it.trocado&&<span style={{color:'#7C3AED',fontSize:11,marginLeft:6}}>(trocado — prescrito: {it.medNomeOriginal})</span>}: {it.qtdEntregue}{!it.trocado&&it.qtdPrescrita?'/'+it.qtdPrescrita:''} un.{!it.trocado&&it.qtdPrescrita&&it.qtdEntregue<it.qtdPrescrita&&<span style={{color:'#B45309'}}> ⚠️ parcial</span>}</div>
           );})}
+          {r.responsavelRetirada&&<div style={{fontSize:11,color:'#64748B',marginTop:6}}>Retirado por: {r.responsavelRetirada}{r.responsavelRetiradaCpf?' · CPF: '+mascaraCPF(r.responsavelRetiradaCpf):''}</div>}
+          <button onClick={function(){imprimirComprovanteJudicial(r,showHist);}} style={{marginTop:8,padding:'6px 12px',background:'#EFF6FF',border:'none',borderRadius:8,color:B,fontSize:11,fontWeight:700,cursor:'pointer'}}>🖨️ Reimprimir comprovante</button>
         </div>);})
       }
       <button onClick={function(){setShowHist(null);}} className="bs" style={{width:'100%',padding:'12px 0',marginTop:8}}>Fechar</button>
