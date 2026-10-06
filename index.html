@@ -286,7 +286,7 @@ var useState=React.useState,useEffect=React.useEffect,useRef=React.useRef,useMem
 var B='#1351B4',CFG_KEY='mt_firebase_cfg_permanent',db=null,auth=null,skipAuthCheck=false;
 var ROLES={gestor:'Gestor',farmaceutico:'Farmacêutico',auxiliar:'Auxiliar',tecnico:'Técnico',diarista:'Diarista'};
 var ROLE_ICON={gestor:'🏥',farmaceutico:'⚗️',tecnico:'🔧',auxiliar:'💊',diarista:'📋'};
-var PERMS={gestor:['saida','entrada','estoque','relatorio','gestao','perfil','editar','historico','log'],farmaceutico:['saida','entrada','estoque','perfil','historico'],auxiliar:['saida','entrada','estoque','perfil','historico'],tecnico:['saida','entrada','estoque','relatorio','gestao','perfil','editar','historico','log'],diarista:['saida','entrada','estoque','perfil','historico']};
+var PERMS={gestor:['saida','estoque','relatorio','gestao','perfil','editar','historico','log'],farmaceutico:['saida','estoque','perfil','historico'],auxiliar:['saida','estoque','perfil','historico'],tecnico:['saida','estoque','relatorio','gestao','perfil','editar','historico','log'],diarista:['saida','estoque','perfil','historico']};
 var PALETTE=['#1351B4','#0C7B4A','#D32F2F','#7B1FA2','#E65100','#00838F','#558B2F','#AD1457','#1565C0','#2E7D32','#6A1B9A','#0277BD'];
 var TIPOS={medicamento:{label:'Farm. Básica',icon:'💊',cor:'#1351B4'},controlado:{label:'Controlado',icon:'🔵',cor:'#DC2626'},injetavel:{label:'Injetável',icon:'💉',cor:'#7C3AED'},leite:{label:'Leite',icon:'🍼',cor:'#D97706'},penso:{label:'Penso/Material',icon:'🩹',cor:'#0891B2'}};
 function can(role,a){return (PERMS[role]||[]).indexOf(a)>=0;}
@@ -1929,80 +1929,6 @@ return(
   <button data-tour="saida-demo-controlado" aria-hidden="true" tabIndex={-1} onClick={abrirDemoControlado} style={{position:'fixed',width:1,height:1,opacity:0,pointerEvents:'none',overflow:'hidden'}}/>
   {showControlado&&controladoData&&<ModalSaidaControlada data={controladoData} user={user} onConfirm={demoControlado?demoConfirmControlado:confirmarSaidaControlada} onClose={function(){setShowControlado(false);setControladoData(null);setDemoControlado(false);}}/>}
 </div>);}
-
-function TabEntrada(props){var user=props.user;var medications=props.medications;var entries=props.entries||[];var onSave=props.onSave;var isGuest=props.isGuest||false;var canMove=props.canMove!==false;var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};var alert2=props.alert2||function(m){window.alert(m);};var _search=useState('');var search=_search[0];var setSearch=_search[1];var _sel=useState(null);var sel=_sel[0];var setSel=_sel[1];var _newNome=useState('');var newNome=_newNome[0];var setNewNome=_newNome[1];var _newEan=useState('');var newEan=_newEan[0];var setNewEan=_newEan[1];var _creating=useState(false);var creating=_creating[0];var setCreating=_creating[1];var _showList=useState(false);var showList=_showList[0];var setShowList=_showList[1];var _qty=useState('');var qty=_qty[0];var setQty=_qty[1];var _lote=useState('');var lote=_lote[0];var setLote=_lote[1];var _val=useState('');var val=_val[0];var setVal=_val[1];var _obs=useState('');var obs=_obs[0];var setObs=_obs[1];var _err=useState('');var err=_err[0];var setErr=_err[1];var _ok=useState('');var ok=_ok[0];var setOk=_ok[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];var _filtEntrada=useState('todos');var filtEntrada=_filtEntrada[0];var setFiltEntrada=_filtEntrada[1];
-var medList=medications;if(filtEntrada&&filtEntrada!=='todos')medList=medList.filter(function(m){return ((m.categoria||'medicamento').toLowerCase().trim())===filtEntrada.toLowerCase().trim();});if(search.trim()){var s=search.toLowerCase();medList=medList.filter(function(m){return m.nome.toLowerCase().indexOf(s)>=0||(m.ean&&m.ean.indexOf(s)>=0);});}
-function selectMed(m){setSel(m);setSearch(m.nome);setShowList(false);setCreating(false);}
-function create(){if(!newNome.trim()){setErr('Nome obrigatorio.');return;}setSaving(true);db.collection('medicamentos').add({nome:newNome.trim(),ean:newEan.trim(),minEstoque:0,criadoEm:new Date().toISOString(),tenant_id:tenantDe(user)}).then(function(r){selectMed({id:r.id,nome:newNome.trim(),ean:newEan.trim()});setCreating(false);setErr('');setSaving(false);}).catch(function(e){setErr(e.message);setSaving(false);});}
-function save(){if(!sel){setErr('Selecione um medicamento.');return;}var q=parseInt(qty);if(!q||q<=0){setErr('Informe a quantidade.');return;}setSaving(true);setErr('');var data={medicamentoId:sel.id,medicamentoNome:sel.nome,ean:sel.ean||'',tipo:'entrada',quantidade:q,lote:lote.trim(),validade:val.trim(),observacao:obs.trim()};var saveFn=(!canMove&&isGuest&&props.onSolicitar)?props.onSolicitar:onSave;saveFn(data).then(function(){playSound('success');setOk((!canMove&&isGuest)?'Solicitação enviada!':'Entrada de '+q+'x '+sel.nome+' registrada!');setSel(null);setSearch('');setQty('');setLote('');setVal('');setObs('');setTimeout(function(){setOk('');},4000);setSaving(false);}).catch(function(e){setErr('Erro: '+(e.message||''));setSaving(false);});}
-return(
-<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
-    <div>
-      <div className="card" style={{marginBottom:14}}>
-        <div className="ch"><div className="ch-title"><div style={{width:3,height:16,background:'#0C6B3E',borderRadius:2}}/><span>Registrar Entrada</span></div></div>
-        <div style={{padding:'16px'}}>
-          <Lbl c="Filtrar por tipo"/>
-          <div style={{display:'flex',gap:6,marginBottom:14,flexWrap:'wrap'}}>
-            {[{k:'todos',label:'Todos',icon:'',cor:'#64748B'}].concat(Object.keys(TIPOS).map(function(k){var t=TIPOS[k];return {k:k,label:t.label,icon:t.icon,cor:t.cor};})).map(function(t){var sel2=filtEntrada===t.k;return(<button key={t.k} onClick={function(){setFiltEntrada(t.k);}} style={{padding:'7px 12px',borderRadius:20,border:'1.5px solid '+(sel2?t.cor:'#E2E8F0'),background:sel2?t.cor:'#fff',color:sel2?'#fff':'#64748B',cursor:'pointer',fontWeight:sel2?700:500,fontSize:12,transition:'all .15s'}}>{t.icon} {t.label}</button>);}  )}
-          </div>
-          <Lbl c="Selecionar medicamento"/>
-          <div style={{position:'relative'}}>
-            <input value={search} onChange={function(e){setSearch(e.target.value);setShowList(true);}} onFocus={function(){setShowList(true);}} placeholder="Digite para filtrar..." className="inp" style={{marginBottom:6}}/>
-            {showList&&(
-              <div style={{border:'1.5px solid '+B,borderRadius:12,overflow:'hidden',maxHeight:260,overflowY:'auto',marginBottom:8,background:'#fff',boxShadow:'0 8px 24px rgba(0,0,0,.1)'}}>
-                {medList.length===0?(
-                  <div style={{padding:'12px 16px'}}>
-                    <div style={{fontSize:13,color:'#64748B',marginBottom:8}}>Não encontrado.</div>
-                    <div onClick={function(){setNewNome(search);setCreating(true);setShowList(false);}} style={{fontSize:13,fontWeight:600,color:'#0C6B3E',background:'#DCFCE7',padding:'10px',borderRadius:8,cursor:'pointer'}}>+ Cadastrar novo: "{search}"</div>
-                  </div>
-                ):(
-                  <div>
-                    <div style={{padding:'8px 14px',fontSize:10,color:'#94A3B8',background:'#F8FAFC',borderBottom:'1px solid #E2E8F0',fontWeight:700,textTransform:'uppercase',letterSpacing:'.04em'}}>{medList.length} medicamento(s)</div>
-                    {medList.map(function(m){return <div key={m.id} onClick={function(){selectMed(m);}} style={{padding:'12px 16px',borderBottom:'1px solid #F8FAFC',cursor:'pointer',fontWeight:600,color:'#1E293B',fontSize:14,transition:'background .1s'}} onMouseEnter={function(e){e.currentTarget.style.background='#EFF6FF';}} onMouseLeave={function(e){e.currentTarget.style.background='';}}>{m.nome}</div>;}  )}
-                    <div onClick={function(){setNewNome(search);setCreating(true);setShowList(false);}} style={{padding:'12px 16px',fontSize:13,fontWeight:600,color:'#0C6B3E',background:'#F0FDF4',cursor:'pointer',borderTop:'1px solid #DCFCE7'}}>+ Cadastrar novo medicamento</div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-          {!showList&&!sel&&!creating&&medications.length>0&&(<button onClick={function(){setShowList(true);setSearch('');}} style={{width:'100%',padding:'12px',background:'#EFF6FF',border:'1.5px dashed '+B,borderRadius:10,color:B,fontWeight:600,cursor:'pointer',fontSize:13}}>Ver todos os {medList.length} medicamentos</button>)}
-          {creating&&(
-            <div style={{background:'#F0FDF4',border:'1.5px solid #86EFAC',borderRadius:12,padding:'16px',marginTop:8}}>
-              <div style={{fontSize:14,fontWeight:700,color:'#0C6B3E',marginBottom:12}}>Novo medicamento</div>
-              <Lbl c="Nome"/><input value={newNome} onChange={function(e){setNewNome(e.target.value);}} placeholder="Ex: Clonazepam 2mg" className="inp" autoFocus/>
-              <Lbl c="EAN (opcional)"/><input value={newEan} onChange={function(e){setNewEan(e.target.value.replace(/[^0-9]/g,''));}} className="inp" placeholder="Deixe em branco se não souber"/>
-              <div style={{display:'flex',gap:8}}><button onClick={function(){setCreating(false);}} className="bs" style={{flex:1}}>Cancelar</button><button onClick={create} disabled={saving} className="bg" style={{flex:2,opacity:saving?0.7:1}}>{saving?'Salvando...':'Cadastrar e usar'}</button></div>
-            </div>
-          )}
-          {sel&&!creating&&(
-            <div style={{background:'#F0FDF4',border:'1.5px solid #86EFAC',borderRadius:12,padding:'12px 16px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-              <div><div style={{fontWeight:700,color:'#0C6B3E',fontSize:15}}>{sel.nome}</div><div style={{fontSize:11,color:'#64748B',marginTop:2}}>Medicamento selecionado</div></div>
-              <button onClick={function(){setSel(null);setSearch('');setShowList(false);}} style={{background:'#fff',border:'1px solid #E2E8F0',borderRadius:8,width:30,height:30,cursor:'pointer',color:'#64748B',fontSize:16}}>×</button>
-            </div>
-          )}
-        </div>
-      </div>
-      <div className="card">
-        <div style={{padding:'16px'}}>
-          <Lbl c="Quantidade"/>
-          <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:10}}>
-            {[1,5,10,20,30,50,100].map(function(n){return <button key={n} onClick={function(){setQty(String(n));}} className={'qb'+(qty===String(n)?' on':'')}>{n}</button>;})}
-          </div>
-          <input value={qty} onChange={function(e){setQty(e.target.value.replace(/[^0-9]/g,''));}} placeholder="Ou outra quantidade..." className="inp" style={{fontSize:22,fontWeight:800,textAlign:'center',color:'#0C6B3E'}}/>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-            <div><Lbl c="Lote"/><input value={lote} onChange={function(e){setLote(e.target.value);}} placeholder="Ex: ABC1234" className="inp"/></div>
-            <div><Lbl c="Validade"/><input value={val} onChange={function(e){setVal(e.target.value);}} placeholder="MM/AAAA" className="inp"/></div>
-          </div>
-          <Lbl c="Observação (opcional)"/>
-          <textarea value={obs} onChange={function(e){setObs(e.target.value);}} rows={2} className="inp" style={{resize:'vertical',lineHeight:1.6}}/>
-          {err&&<div className="er">{err}</div>}
-          {ok&&<div className="ok">{ok}</div>}
-          {isGuest&&!canMove&&<div className="wn">Modo convidado — sera enviado para aprovação.</div>}
-          <button onClick={save} disabled={saving} className="bg" style={{opacity:saving?0.5:1}}>{isGuest&&!canMove?'Solicitar Entrada':'Registrar Entrada'}</button>
-        </div>
-      </div>
-    </div>
-  </div>);}
 
 function HistModal(props){
   var med=props.med;var entries=props.entries;var onClose=props.onClose;var user=props.user;var stock=props.stock||{};
@@ -9737,6 +9663,13 @@ function TabRecebimento(props){
   function blankItem(){_recSeq++;return{key:'it'+_recSeq,medId:'',medNome:'',busca:'',qtd:'',lote:'',validade:'',obs:''};}
   var _data=useState(todayStr());var data=_data[0];var setData=_data[1];
   var _forn=useState('');var fornecedor=_forn[0];var setFornecedor=_forn[1];
+  // Modo "Nota Fiscal" (pedido da usuária, 06/10/2026): quando ela já tem a nota em mãos no momento do
+  // recebimento (tudo bateu certinho), Nº da nota e Valor total viram obrigatórios e o recebimento já
+  // entra CONCILIADO — não fica pendente aguardando a conciliação de Importar Notas. Também gera o
+  // registro da nota fiscal (notas_fiscais) na mesma hora, pros relatórios/histórico que leem de lá.
+  var _modoRec=useState('simples');var modoRec=_modoRec[0];var setModoRec=_modoRec[1];// 'simples' | 'nota'
+  var _nfNumero=useState('');var nfNumero=_nfNumero[0];var setNfNumero=_nfNumero[1];
+  var _nfValorTotal=useState('');var nfValorTotal=_nfValorTotal[0];var setNfValorTotal=_nfValorTotal[1];
   var _resp=useState(user.name||'');var responsavel=_resp[0];var setResponsavel=_resp[1];
   var _itens=useState([blankItem()]);var itens=_itens[0];var setItens=_itens[1];
   var _foco=useState(null);var focoItem=_foco[0];var setFocoItem=_foco[1];// item com dropdown de busca aberto
@@ -9811,12 +9744,19 @@ function TabRecebimento(props){
   function pedirConfirmacaoFinalizar(){
     var validos=itens.filter(function(it){return it.medId&&(parseInt(it.qtd)||0)>0;});
     if(validos.length===0){alert('Adicione ao menos um medicamento com quantidade.');return;}
+    if(modoRec==='nota'){
+      if(!nfNumero.trim()){alert('Modo Nota Fiscal: informe o número da nota.');return;}
+      if(!parseFloat(String(nfValorTotal).replace(',','.'))){alert('Modo Nota Fiscal: informe o valor total da nota.');return;}
+    }
     setConfirmFin(true);
   }
 
   async function finalizar(){
     var validos=itens.filter(function(it){return it.medId&&(parseInt(it.qtd)||0)>0;});
     if(validos.length===0){alert('Adicione ao menos um medicamento com quantidade.');return;}
+    if(modoRec==='nota'&&(!nfNumero.trim()||!parseFloat(String(nfValorTotal).replace(',','.')))){
+      alert('Modo Nota Fiscal: número da nota e valor total são obrigatórios.');return;
+    }
     setSaving(true);
     console.group('%c📦 finalizar() Recebimento','background:#1351B4;color:#fff;padding:3px 8px;border-radius:4px;font-weight:bold');
     console.log('Fornecedor:',fornecedor.trim(),'| Itens:',validos.length,'| Data:',data);
@@ -9858,18 +9798,30 @@ function TabRecebimento(props){
         itensComEntry.push({medicamentoId:it.medId,medicamentoNome:it.medNome,quantidade:qtdNum,lote:loteTrim,validade:valNorm,observacao:(it.obs||'').trim(),entryId:entryRef.id});
         if(loteTrim&&valNorm)lotesParaAtualizar.push({medId:it.medId,lote:loteTrim,validade:valNorm});
       }
+      var ehNota=modoRec==='nota';
+      // Modo Nota Fiscal: a usuária já confirmou que tudo que chegou bate com a nota em mãos — então o
+      // recebimento nasce CONCILIADO (não fica pendente aguardando a conciliação de Importar Notas), e o
+      // registro da nota fiscal em si (notas_fiscais) já nasce junto, também conciliado — pra existir no
+      // histórico sem precisar de nenhum passo de conferência depois.
+      var itensRec=ehNota?itensComEntry.map(function(it){return Object.assign({},it,{conciliado:true,resultadoMatching:'conciliado'});}):itensComEntry;
+      var recObj={data:data,fornecedor:fornecedor.trim(),responsavel:(responsavel||user.name||'').trim(),responsavelId:user.uid||'',status:ehNota?'conciliado':'pendente',statusLabel:ehNota?'Conciliado':'Pendente de Conciliação Fiscal',totalItens:validos.length,itens:itensRec,criadoEm:now,criadoPor:user.name||'',criadoPorId:user.uid||'',tenant_id:tenantDe(user)};
+      if(ehNota){recObj.nfNumero=nfNumero.trim();recObj.valorTotal=parseFloat(String(nfValorTotal).replace(',','.'))||0;}
       // Doc do recebimento JÁ COM os entryIds preenchidos (não precisa de update depois).
-      batch.set(recRef,{data:data,fornecedor:fornecedor.trim(),responsavel:(responsavel||user.name||'').trim(),responsavelId:user.uid||'',status:'pendente',statusLabel:'Pendente de Conciliação Fiscal',totalItens:validos.length,itens:itensComEntry,criadoEm:now,criadoPor:user.name||'',criadoPorId:user.uid||'',tenant_id:tenantDe(user)});
-      console.log('Committing batch: '+validos.length+' entries + 1 recebimento (updates de cadastro ficam FORA do batch)...');
+      batch.set(recRef,recObj);
+      if(ehNota){
+        var itensNota=validos.map(function(it){return{descricao:it.medNome,qtd:parseInt(it.qtd)||0,unidade:'',cean:'',vUnit:0,lote:(it.lote||'').trim(),validade:_normValidade((it.validade||'').trim()),medId:it.medId,medNome:it.medNome,status:'conciliado'};});
+        batch.set(db.collection('notas_fiscais').doc(),{nfNumero:nfNumero.trim(),fornecedor:fornecedor.trim(),dataEmissao:data,valorTotal:parseFloat(String(nfValorTotal).replace(',','.'))||0,itens:itensNota,nomeArquivo:'(via Recebimento — Nota Fiscal)',status:'processada',origemRecebimento:true,recebimentoId:recId,criadoEm:now,criadoPor:user.name||'',criadoPorId:user.uid||'',tenant_id:tenantDe(user)});
+      }
+      console.log('Committing batch: '+validos.length+' entries + 1 recebimento'+(ehNota?' + 1 nota fiscal':'')+' (updates de cadastro ficam FORA do batch)...');
       await batch.commit();
       console.log('%c✅ Batch commitado com SUCESSO — estoque atualizado. Recebimento: '+recId,'color:#0C6B3E;font-weight:bold');
       // Best-effort (fora do batch): atualiza loteAtual/validadeAtual do cadastro (LIFO). Se falhar (med
       // deletado etc.), NÃO afeta o estoque — a entry já foi criada. Cada update é isolado com .catch.
       lotesParaAtualizar.forEach(function(x){db.collection('medicamentos').doc(x.medId).update({loteAtual:x.lote,validadeAtual:x.validade}).catch(function(err){console.warn('loteAtual não atualizado p/',x.medId,'(cosmético, estoque OK):',err&&err.message);});});
       console.groupEnd();
-      logAcao('recebimento_criado','Recebimento '+recId+' — forn: '+fornecedor.trim()+' — '+validos.length+' item(ns) — resp: '+(responsavel||user.name||''),null,'pendente');
-      setFornecedor('');setResponsavel(user.name||'');setData(todayStr());setItens([blankItem()]);setFocoItem(null);
-      setOk('✅ Recebimento finalizado — estoque atualizado e disponível para dispensação.');
+      logAcao('recebimento_criado','Recebimento '+recId+' — forn: '+fornecedor.trim()+' — '+validos.length+' item(ns) — resp: '+(responsavel||user.name||'')+(ehNota?' — NF '+nfNumero.trim():''),null,ehNota?'conciliado':'pendente');
+      setFornecedor('');setResponsavel(user.name||'');setData(todayStr());setItens([blankItem()]);setFocoItem(null);setModoRec('simples');setNfNumero('');setNfValorTotal('');
+      setOk(ehNota?'✅ Recebimento finalizado — estoque atualizado e já conciliado com a nota fiscal.':'✅ Recebimento finalizado — estoque atualizado e disponível para dispensação.');
       setTimeout(function(){setOk('');},4500);
     }catch(e){
       console.error('%c❌ Batch FALHOU — nada foi escrito','color:#DC2626;font-weight:bold',e);
@@ -10051,10 +10003,19 @@ function TabRecebimento(props){
       {/* FORMULÁRIO */}
       <div data-tour="receb-form" style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9',marginBottom:16}}>
         <div style={{fontWeight:800,fontSize:15,color:'#1E293B',marginBottom:12}}>Novo recebimento</div>
+        <div style={{display:'flex',gap:8,marginBottom:14}}>
+          <button type="button" onClick={function(){setModoRec('simples');}} style={{flex:1,padding:'11px',borderRadius:10,border:'1.5px solid '+(modoRec==='simples'?B:'#E2E8F0'),background:modoRec==='simples'?'#EFF6FF':'#fff',color:modoRec==='simples'?B:'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>📦 Recebimento simples</button>
+          <button type="button" onClick={function(){setModoRec('nota');}} style={{flex:1,padding:'11px',borderRadius:10,border:'1.5px solid '+(modoRec==='nota'?'#0C6B3E':'#E2E8F0'),background:modoRec==='nota'?'#F0FDF4':'#fff',color:modoRec==='nota'?'#0C6B3E':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>📄 Já tenho a Nota Fiscal</button>
+        </div>
+        {modoRec==='nota'&&<div style={{background:'#F0FDF4',border:'1px solid #86EFAC',borderRadius:10,padding:'10px 12px',marginBottom:12,fontSize:11,color:'#0C6B3E'}}>Tudo que chegou bate com a nota — esse recebimento já entra conciliado, sem precisar passar por Importar Notas depois.</div>}
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:12}}>
           <div><label style={lbl}>📅 Data do recebimento</label><input type="date" value={data} max={todayStr()} onChange={function(e){setData(e.target.value);}} style={inp}/></div>
           <div><label style={lbl}>Fornecedor (opcional)</label><input value={fornecedor} onChange={function(e){setFornecedor(e.target.value);}} placeholder="Nome do fornecedor" style={inp}/></div>
         </div>
+        {modoRec==='nota'&&<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:12}}>
+          <div><label style={lbl}>Nº da nota *</label><input value={nfNumero} onChange={function(e){setNfNumero(e.target.value);}} placeholder="Ex: 12345" style={Object.assign({},inp,{borderColor:!nfNumero.trim()?'#FCA5A5':'#E2E8F0'})}/></div>
+          <div><label style={lbl}>Valor total *</label><input value={nfValorTotal} onChange={function(e){setNfValorTotal(e.target.value.replace(/[^0-9.,]/g,''));}} placeholder="Ex: 1250,00" style={Object.assign({},inp,{borderColor:!parseFloat(String(nfValorTotal).replace(',','.'))?'#FCA5A5':'#E2E8F0'})}/></div>
+        </div>}
         <div style={{marginBottom:14}}><label style={lbl}>Responsável pelo recebimento</label><input value={responsavel} onChange={function(e){setResponsavel(e.target.value);}} placeholder="Quem recebeu" style={inp}/></div>
 
         <div style={{fontWeight:700,fontSize:13,color:'#334155',marginBottom:8}}>Medicamentos recebidos</div>
@@ -10771,7 +10732,7 @@ var badge=pending+alertCount+solicitCount;
 // Vicência" no texto). Vicência, e os outros papéis em Itaquitinga (que nunca tiveram acesso a
 // Pedidos Judiciais — só aparecia no menu lateral, restrito a gestor/técnico), continuam vendo ATB
 // nesse slot exatamente como antes.
-var navPrincipal=[{id:'dashboard',icon:'🏠',label:'Início'},{id:'saida',icon:'💊',label:'Saída'},{id:'entrada',icon:'📥',label:'Entrada'},
+var navPrincipal=[{id:'dashboard',icon:'🏠',label:'Início'},{id:'saida',icon:'💊',label:'Saída'},{id:'recebimento',icon:'🚚',label:'Recebimento'},
   (tenantDe(user)==='itaquitinga-pe'&&isManagerRole?{id:'pedidosjudiciais',icon:'⚖️',label:'Judicial'}:{id:'antibiotico',icon:'🧬',label:'ATB'})];
 return(
 <div style={{minHeight:'100vh',background:'#EEF2F7',position:'relative',overflow:'hidden'}}>
@@ -10843,7 +10804,6 @@ return(
         {tab==='visaogeral'&&isManagerRole&&<TabVisaoGeral entries={entries} medications={meds} stock={stock} user={user}/>}
         {tab==='comparapedido'&&isManagerRole&&tenantDe(user)!=='itaquitinga-pe'&&<ErrBoundary><TabComparacaoPedido/></ErrBoundary>}
         {tab==='saida'&&<TabSaida user={user} medications={meds} stock={stock} entries={entries} onSave={addEntryStable} onSolicitar={addSolicitacaoStable} latest={latest} isGuest={isGuest} canMove={canMove} confirm2={confirm2} alert2={alert2}/>}
-        {tab==='entrada'&&<TabEntrada user={user} medications={meds} entries={entries} onSave={addEntry} onSolicitar={addSolicitacao} isGuest={isGuest} canMove={canMove} confirm2={confirm2} alert2={alert2}/>}
         {tab==='estoque'&&<TabEstoque user={user} medications={meds} entries={entries} stock={stock} estoqueBruto={estoqueBruto} onSave={addEntryStable} confirm2={confirm2} alert2={alert2}/>}
         {tab==='conferencia'&&<ErrBoundary><TabConferencia user={user} medications={meds} entries={entries} stock={stock} estoqueBruto={estoqueBruto}/></ErrBoundary>}
         {tab==='relatorio'&&<TabRelatorio entries={entries} medications={meds} db={db} user={user}/>}
