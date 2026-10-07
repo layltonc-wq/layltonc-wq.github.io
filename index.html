@@ -1962,17 +1962,19 @@ function HistModal(props){
   var lotes=Object.keys(loteMap).map(function(k){var l=loteMap[k];var qty=Math.max(0,l.entrada-l.saida);var hoje=new Date();var dias=null;var dv=_dataValidade(l.validade);if(dv)dias=Math.ceil((dv-hoje)/86400000);return Object.assign({},l,{qty:qty,dias:dias});}).filter(function(l){return l.qty>0;}).sort(function(a,b){return a.dias!==null&&b.dias!==null?a.dias-b.dias:0;});
   // Saldo autoritativo = o MESMO número da lista principal (calcStock). Nunca é alterado aqui.
   var saldoReal=(stock&&stock[med.id]!=null)?stock[med.id]:(calcStock(entries)[med.id]||0);
-  // Soma dos lotes com saldo positivo (os baldes "confiáveis").
-  var somaLotes=lotes.reduce(function(s,l){return s+(l.qty||0);},0);
-  // "Sem lote" vira o RESÍDUO que fecha a conta com o saldo real (Opção A resiliente):
-  // saídas órfãs / super-dispensadas / lotes trocados caem aqui em vez de sumir ou travar em zero.
-  // Garantia: somaLotes + qtdSemLote === saldoReal para QUALQUER dado.
-  var qtdSemLote=saldoReal-somaLotes;
-  // Quando qtdSemLote fica negativo (saídas antigas sem lote vinculado, acumuladas ao longo do
-  // tempo — não tem a ver com o lançamento de hoje), o "pool sem lote" deixa de ser confiável.
-  // Em vez de travar a usuária com um aviso de divergência, deixa atribuir lote normalmente,
-  // com teto no saldo total (nunca deixa reclassificar mais do que existe de verdade).
-  var maxAtribuir=qtdSemLote>0?qtdSemLote:saldoReal;
+  // "Sem lote" = soma DIRETA dos lançamentos sem lote vinculado (entrada - saída), não um resíduo
+  // calculado contra o saldo total. Pedido da usuária (07/10/2026): depois de um balanço de
+  // estoque, ela queria ver exatamente a quantidade que ela lançou — não um número inflado ou
+  // reduzido por saídas antigas de OUTROS lotes (inclusive saídas com código de lote órfão, que
+  // não corresponde a nenhuma entrada, e por isso não abatem nada aqui nem em nenhum lote real).
+  var semLoteEntradas=0,semLoteSaidas=0;
+  entries.filter(function(e){return e.medicamentoId===med.id&&!e.lote;}).forEach(function(e){
+    if(e.tipo==='entrada')semLoteEntradas+=(e.quantidade||0);
+    else if(e.tipo==='saida')semLoteSaidas+=(e.quantidade||0);
+  });
+  var qtdSemLote=Math.max(0,semLoteEntradas-semLoteSaidas);
+  // Nunca deixa reclassificar mais do que existe de verdade no saldo total.
+  var maxAtribuir=Math.min(qtdSemLote,saldoReal);
 
   function atribuirLote(){
     if(!atribLote.trim()||!atribVal.trim()||!atribQty)return;
