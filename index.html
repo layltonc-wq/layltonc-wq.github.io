@@ -2591,16 +2591,60 @@ relEntries.forEach(function(e){
   if(e.tipo==='entrada')relMap[k].qtdE+=(e.quantidade||0);
   else if(e.tipo==='saida')relMap[k].qtdS+=(e.quantidade||0);
 });
-var relLista=Object.keys(relMap).map(function(k){return relMap[k];}).sort(function(a,b){return a.nome.localeCompare(b.nome);});
+var relLista=Object.keys(relMap).map(function(k){return relMap[k];})
+  .filter(function(it){return it.qtdE>0||it.qtdS>0;}) // tira o que não teve nenhuma movimentação (zerado)
+  .sort(function(a,b){return a.nome.localeCompare(b.nome);});
 var relTotE=0,relTotS=0;relLista.forEach(function(it){relTotE+=it.qtdE;relTotS+=it.qtdS;});
 var relDesde=null;relEntries.forEach(function(e){var dt=(e.criadoEm||'').slice(0,10);if(!relDesde||dt<relDesde)relDesde=dt;});
 function exportRelXL(){
   var rows=[['Medicamento','Categoria','Entradas','Saídas']];
-  relLista.forEach(function(it){rows.push([it.nome,(TIPOS[it.cat]?TIPOS[it.cat].label:it.cat),it.qtdE,it.qtdS]);});
+  relLista.forEach(function(it){rows.push([it.nome,(TIPOS[it.cat]?TIPOS[it.cat].label:it.cat),it.qtdE||'',it.qtdS||'']);});
   rows.push(['TOTAL','',relTotE,relTotS]);
   var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'Relatorio');
   var nomeArq=relPeriodo==='mensal'?'relatorio_mensal_'+relMes:'relatorio_geral_desde_'+(relDesde||'inicio');
   XLSX.writeFile(wb,nomeArq+'.xlsx');
+}
+var MESES_PT=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+function tituloPeriodoRel(){
+  if(relPeriodo==='mensal'){var p=relMes.split('-');return MESES_PT[parseInt(p[1],10)-1]+' de '+p[0];}
+  return relDesde?('desde '+fDPlain(relDesde)+' até '+fDPlain(relDT)):'sem movimentações';
+}
+function imprimirResumoRelatorio(){
+  var css='<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;font-size:12px;color:#111}'+
+    '.pagina{padding:26px 30px}'+
+    '.cab{text-align:center;margin-bottom:14px}.cab img{height:64px;margin-bottom:4px}'+
+    '.cab .l1{font-family:Georgia,"Times New Roman",serif;font-weight:700;font-size:15px;color:#1351B4}'+
+    '.cab .l2{font-family:Georgia,"Times New Roman",serif;font-size:12px;color:#111}'+
+    '.titulo{text-align:center;font-weight:700;font-size:13px;margin:14px 0;text-transform:uppercase}'+
+    '.dados{margin-bottom:16px;font-size:12px;line-height:1.8;text-align:center}.dados b{font-weight:700}'+
+    '.resumo{display:flex;justify-content:center;gap:28px;margin-bottom:18px}'+
+    '.resumo .n{font-size:22px;font-weight:800;color:#1351B4;text-align:center}'+
+    '.resumo .l{font-size:10px;color:#475569;text-align:center;text-transform:uppercase;letter-spacing:.3px}'+
+    'table{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:6px}'+
+    'th{border:1px solid #333;background:#F1F5F9;padding:6px 5px;font-weight:700;text-align:left}'+
+    'td{border:1px solid #333;padding:6px 5px;vertical-align:top}'+
+    'td.num{text-align:right;white-space:nowrap}td.desc{text-align:left}'+
+    'tfoot td{font-weight:700;background:#F8FAFC}'+
+    '.rodape{margin-top:26px;font-size:9.5px;color:#64748B;text-align:center;line-height:1.6}'+
+    '@media print{.pagina{padding:14px 18px}}</style>';
+  var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Relatório de Movimentação — Vicência</title>'+css+'</head><body><div class="pagina">';
+  html+='<div class="cab"><img src="'+VIC_LOGO_B64+'"/><div class="l1">Fundo Municipal de Saúde de Vicência</div><div class="l2">Secretaria de Saúde e Departamento de Compras — CAF-Unidade Hospitalar</div></div>';
+  html+='<div class="titulo">Relatório de Movimentação de Medicamentos e Materiais</div>';
+  html+='<div class="dados"><b>Período: '+_escHtml(tituloPeriodoRel())+'</b><br>Gerado em '+_escHtml(new Date().toLocaleString('pt-BR'))+'</div>';
+  html+='<div class="resumo">'+
+    '<div><div class="n">+'+relTotE+'</div><div class="l">Entradas</div></div>'+
+    '<div><div class="n">−'+relTotS+'</div><div class="l">Saídas</div></div>'+
+    '<div><div class="n">'+relLista.length+'</div><div class="l">Medicamentos/materiais</div></div>'+
+    '</div>';
+  html+='<table><thead><tr><th>Medicamento</th><th style="width:110px">Categoria</th><th style="width:80px">Entradas</th><th style="width:80px">Saídas</th></tr></thead><tbody>';
+  relLista.forEach(function(it){
+    var t=TIPOS[it.cat]||TIPOS.medicamento;
+    html+='<tr><td class="desc">'+_escHtml(it.nome)+'</td><td class="desc">'+_escHtml(t.label)+'</td><td class="num">'+(it.qtdE||'—')+'</td><td class="num">'+(it.qtdS||'—')+'</td></tr>';
+  });
+  html+='</tbody><tfoot><tr><td colspan="2">TOTAL</td><td class="num">'+relTotE+'</td><td class="num">'+relTotS+'</td></tr></tfoot></table>';
+  html+='<div class="rodape">Fundo Municipal de Saúde de Vicência - CNPJ: 10.566.414/0001-36<br>Rua José Candido de Oliveira, 79 - Centro - Vicência - PE; CEP: 558580-000<br>Relatório gerado automaticamente pelo FarmaControl</div>';
+  html+='</div></body></html>';
+  if(!_imprimirDoc(html)){window.alert('Não foi possível abrir a impressão do relatório.');}
 }
 return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
 <div className="tab-sw">{[['mov','Movimentações'],['resumo','🗓️ Resumo'],['dia','Saídas do Dia'],['div','⚠️ Divergências'],['resp','Por Responsável'],['rank','Ranking']].map(function(t){return <button key={t[0]} onClick={function(){setSub(t[0]);}} className={sub===t[0]?'on':''}>{t[1]}</button>;})}</div>
@@ -2645,7 +2689,10 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
       </table>
     </div>
   }
-  <button onClick={exportRelXL} disabled={relLista.length===0} className="bp" style={{opacity:relLista.length===0?0.5:1}}>📥 Baixar Excel</button>
+  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+    <button onClick={exportRelXL} disabled={relLista.length===0} className="bp" style={{opacity:relLista.length===0?0.5:1}}>📥 Excel</button>
+    <button onClick={imprimirResumoRelatorio} disabled={relLista.length===0} style={{padding:'12px 16px',background:relLista.length===0?'#94A3B8':'#DC2626',border:'none',borderRadius:10,color:'#fff',fontWeight:700,fontSize:14,cursor:relLista.length===0?'default':'pointer'}}>🖨️ Baixar PDF</button>
+  </div>
 </div>}
 {sub==='dia'&&<div style={{paddingBottom:8}}>
   <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:10,flexWrap:'wrap'}}>
