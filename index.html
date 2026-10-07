@@ -1957,7 +1957,7 @@ function HistModal(props){
   var hist=entries.filter(function(e){return e.medicamentoId===med.id;}).sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});
   var totE=0,totS=0;hist.forEach(function(e){if(e.tipo==='entrada')totE+=(e.quantidade||0);if(e.tipo==='saida')totS+=(e.quantidade||0);});
   var loteMap={};
-  entries.filter(function(e){return e.medicamentoId===med.id&&e.tipo==='entrada'&&e.lote;}).forEach(function(e){var lk=e.lote;if(!loteMap[lk])loteMap[lk]={lote:e.lote,validade:e.validade||'',entrada:0,saida:0};loteMap[lk].entrada+=(e.quantidade||0);});
+  entries.filter(function(e){return e.medicamentoId===med.id&&e.tipo==='entrada'&&e.lote;}).forEach(function(e){var lk=e.lote;if(!loteMap[lk])loteMap[lk]={lote:e.lote,validade:e.validade||'',entrada:0,saida:0,maisRecente:''};loteMap[lk].entrada+=(e.quantidade||0);if((e.criadoEm||'')>loteMap[lk].maisRecente)loteMap[lk].maisRecente=e.criadoEm||'';});
   entries.filter(function(e){return e.medicamentoId===med.id&&e.tipo==='saida'&&e.lote;}).forEach(function(e){var lk=e.lote;if(loteMap[lk])loteMap[lk].saida+=(e.quantidade||0);});
   var lotesRaw=Object.keys(loteMap).map(function(k){var l=loteMap[k];var qty=Math.max(0,l.entrada-l.saida);var hoje=new Date();var dias=null;var dv=_dataValidade(l.validade);if(dv)dias=Math.ceil((dv-hoje)/86400000);return Object.assign({},l,{qty:qty,dias:dias});}).filter(function(l){return l.qty>0;}).sort(function(a,b){return a.dias!==null&&b.dias!==null?a.dias-b.dias:0;});
   // Saldo autoritativo = o MESMO número da lista principal (calcStock). Nunca é alterado aqui.
@@ -1973,15 +1973,18 @@ function HistModal(props){
   // Um balanço (recontagem) substitui lote antigo — pedido explícito da usuária (07/10/2026).
   // Quando os lotes rastreados + "sem lote" juntos passariam do saldo real (lote antigo com dado
   // que não reflete mais o estoque físico de verdade), os lotes cedem espaço primeiro — começando
-  // pelos de validade mais distante (lotesRaw já vem ordenado por validade, mais próxima primeiro).
-  // "Sem lote" nunca é reduzido: continua mostrando exatamente o que foi lançado.
+  // pelo MAIS ANTIGO (data do lançamento mais recente daquele lote, não a validade — um lote recém
+  // criado, por exemplo via "Atribuir lote" num balanço de hoje, tem que manter o valor cheio; é o
+  // lote mais velho/parado que cede). A ORDEM DE EXIBIÇÃO continua por validade (lotesRaw), só a
+  // PRIORIDADE DE ORÇAMENTO usa recência. "Sem lote" nunca é reduzido.
   var orcamentoLotes=Math.max(0,saldoReal-qtdSemLote);
-  var lotes=[];
-  lotesRaw.forEach(function(l){
+  var qtyAlocada={};
+  lotesRaw.slice().sort(function(a,b){return (b.maisRecente||'').localeCompare(a.maisRecente||'');}).forEach(function(l){
     var qty=Math.min(l.qty,orcamentoLotes);
     orcamentoLotes-=qty;
-    if(qty>0)lotes.push(Object.assign({},l,{qty:qty}));
+    qtyAlocada[l.lote]=qty;
   });
+  var lotes=lotesRaw.map(function(l){return Object.assign({},l,{qty:qtyAlocada[l.lote]||0});}).filter(function(l){return l.qty>0;});
   // Nunca deixa reclassificar mais do que existe de verdade no saldo total.
   var maxAtribuir=Math.min(qtdSemLote,saldoReal);
 
