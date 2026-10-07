@@ -2255,6 +2255,60 @@ var venc30=[],venc60=[],venc90=[],vencidos=[];medList.forEach(function(m){
 var faltas=medList.filter(function(m){return m.minEstoque>0&&m.est<=m.minEstoque;});var zerados=medList.filter(function(m){return m.minEstoque>0&&m.est<=0;});var baixos=medList.filter(function(m){return m.minEstoque>0&&m.est>0&&m.est<=m.minEstoque;});var totalAlertas=vencidos.length+venc30.length+venc60.length+venc90.filter(function(m){return !m.semLote;}).length+faltas.length;
 function exportXL(){var rows=[['Tipo','Medicamento','EAN','Estoque','Lote','Validade','Minimo']];medList.forEach(function(m){var t=TIPOS[m.cat]||TIPOS.medicamento;rows.push([t.label,m.nome,m.ean||'',m.est,m.info.lote||'',m.info.validade||'',m.minEstoque||0]);});var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'Estoque');XLSX.writeFile(wb,'estoque_'+todayStr()+'.xlsx');}
 function exportAlertasXL(){var rows=[['Tipo','Medicamento','Estoque','Min','Validade','Lote','Dias']];vencidos.forEach(function(m){rows.push(['VENCIDO',m.nome,m.est,'',m.validade,m.lote,m.dias]);});venc30.forEach(function(m){rows.push(['Vence 30d',m.nome,m.est,'',m.validade,m.lote,m.dias]);});zerados.forEach(function(m){rows.push(['Zerado',m.nome,m.est,m.minEstoque,'','',0]);});baixos.forEach(function(m){rows.push(['Baixo',m.nome,m.est,m.minEstoque,'','',0]);});var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'Alertas');XLSX.writeFile(wb,'alertas_'+todayStr()+'.xlsx');}
+  // ===== PDF do estoque (pedido da usuária, 07/10/2026) — mesmo padrão visual dos outros
+  // relatórios impressos (brasão embutido, sem depender de rede). Usa a lista JÁ FILTRADA na tela
+  // (categoria + busca), igual o Excel. Cabeçalho muda por tenant (Vicência/Itaquitinga).
+  function imprimirEstoquePDF(){
+    var ten=tenantDe(user);
+    var isItaq=ten==='itaquitinga-pe';
+    var logo=isItaq?PJ_LOGO_B64:VIC_LOGO_B64;
+    var orgL1=isItaq?'Prefeitura Municipal de Itaquitinga':'Fundo Municipal de Saúde de Vicência';
+    var orgL2=isItaq?'Secretaria Municipal de Saúde — Coordenação de Assistência Farmacêutica':'Secretaria de Saúde e Departamento de Compras — CAF-Unidade Hospitalar';
+    var rodapeOrg=isItaq?'Secretaria Municipal de Saúde de Itaquitinga - PE':'Fundo Municipal de Saúde de Vicência - CNPJ: 10.566.414/0001-36<br>Rua José Candido de Oliveira, 79 - Centro - Vicência - PE; CEP: 558580-000';
+    var totalUnidades=medList.reduce(function(s,m){return s+(m.est||0);},0);
+    var qtdBaixos=medList.filter(function(m){return m.minEstoque>0&&m.est>0&&m.est<=m.minEstoque;}).length;
+    var qtdZerados=medList.filter(function(m){return m.est<=0;}).length;
+    var filtroTxt=(filtCat&&filtCat!=='todos'?(TIPOS[filtCat]?TIPOS[filtCat].label:filtCat):'Todas as categorias')+(search.trim()?' · Busca: "'+search.trim()+'"':'');
+    var css='<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;font-size:12px;color:#111}'+
+      '.pagina{padding:26px 30px}'+
+      '.cab{text-align:center;margin-bottom:14px}.cab img{height:64px;margin-bottom:4px}'+
+      '.cab .l1{font-family:Georgia,"Times New Roman",serif;font-weight:700;font-size:15px;color:#1351B4}'+
+      '.cab .l2{font-family:Georgia,"Times New Roman",serif;font-size:12px;color:#111}'+
+      '.titulo{text-align:center;font-weight:700;font-size:13px;margin:14px 0;text-transform:uppercase}'+
+      '.dados{margin-bottom:16px;font-size:12px;line-height:1.8;text-align:center}.dados b{font-weight:700}'+
+      '.resumo{display:flex;justify-content:center;gap:28px;margin-bottom:18px}'+
+      '.resumo .n{font-size:22px;font-weight:800;color:#1351B4;text-align:center}'+
+      '.resumo .l{font-size:10px;color:#475569;text-align:center;text-transform:uppercase;letter-spacing:.3px}'+
+      'table{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:6px}'+
+      'th{border:1px solid #333;background:#F1F5F9;padding:6px 5px;font-weight:700;text-align:left}'+
+      'td{border:1px solid #333;padding:6px 5px;vertical-align:top}'+
+      'td.num{text-align:right;white-space:nowrap}td.desc{text-align:left}'+
+      'tfoot td{font-weight:700;background:#F8FAFC}'+
+      '.rodape{margin-top:26px;font-size:9.5px;color:#64748B;text-align:center;line-height:1.6}'+
+      '@media print{.pagina{padding:14px 18px}}</style>';
+    var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Relatório de Estoque</title>'+css+'</head><body><div class="pagina">';
+    html+='<div class="cab"><img src="'+logo+'"/><div class="l1">'+_escHtml(orgL1)+'</div><div class="l2">'+_escHtml(orgL2)+'</div></div>';
+    html+='<div class="titulo">Relatório de Estoque Atual</div>';
+    html+='<div class="dados"><b>'+_escHtml(filtroTxt)+'</b><br>Gerado em '+_escHtml(new Date().toLocaleString('pt-BR'))+'</div>';
+    html+='<div class="resumo">'+
+      '<div><div class="n">'+medList.length+'</div><div class="l">Itens</div></div>'+
+      '<div><div class="n">'+totalUnidades+'</div><div class="l">Unidades em estoque</div></div>'+
+      '<div><div class="n" style="color:#B45309">'+qtdBaixos+'</div><div class="l">Estoque baixo</div></div>'+
+      '<div><div class="n" style="color:#DC2626">'+qtdZerados+'</div><div class="l">Zerados</div></div>'+
+      '</div>';
+    html+='<table><thead><tr><th>Medicamento</th><th style="width:110px">Categoria</th><th style="width:70px">Estoque</th><th style="width:80px">Status</th></tr></thead><tbody>';
+    medList.forEach(function(m){
+      var t=TIPOS[m.cat]||TIPOS.medicamento;
+      var zero=m.est<=0;var low=!zero&&m.minEstoque>0&&m.est<=m.minEstoque;
+      var statusTxt=zero?'Zerado':low?'Baixo':'OK';
+      var statusCor=zero?'#DC2626':low?'#B45309':'#16A34A';
+      html+='<tr><td class="desc">'+_escHtml(m.nome)+'</td><td class="desc">'+_escHtml(t.label)+'</td><td class="num">'+m.est+'</td><td class="num" style="color:'+statusCor+';font-weight:700">'+statusTxt+'</td></tr>';
+    });
+    html+='</tbody><tfoot><tr><td colspan="2">TOTAL</td><td class="num">'+totalUnidades+'</td><td></td></tr></tfoot></table>';
+    html+='<div class="rodape">'+rodapeOrg+'<br>Relatório gerado automaticamente pelo FarmaControl</div>';
+    html+='</div></body></html>';
+    if(!_imprimirDoc(html)){alert2('Não foi possível abrir a impressão do estoque.');}
+  }
 function saveNew(){if(!newNome.trim())return;setSaving(true);db.collection('medicamentos').add({nome:newNome.trim(),ean:newEan.trim(),minEstoque:parseInt(newMin)||0,categoria:newTipo,criadoEm:new Date().toISOString(),tenant_id:tenantDe(user)}).then(function(){setShowAdd(false);setNewNome('');setNewEan('');setNewMin('');setNewTipo('medicamento');setSaving(false);});}
   // Exclui um lançamento de descarte por engano/duplicado (ex.: tentativas repetidas de "resolver" um
   // alerta de vencimento que não sumia por causa de um bug). Some do histórico e do cálculo de estoque
@@ -2380,7 +2434,7 @@ function darBaixaVencido(){
   </Modal>;})()}
 <div className="tab-sw">{subTabs.map(function(t){return <button key={t.id} onClick={function(){setSub(t.id);}} className={sub===t.id?'on':''}>{t.label}</button>;})}</div>
 {sub==='estoque'&&(<div><div style={{display:'flex',gap:10,marginBottom:10,flexWrap:'wrap'}}><input value={search} onChange={function(e){setSearch(e.target.value);}} placeholder="Buscar medicamento..." className="inp" style={{marginBottom:0,flex:1}}/>{can(user.role,'editar')&&<button onClick={function(){setShowAdd(true);}} className="bp" style={{whiteSpace:'nowrap',padding:'0 18px',width:'auto'}}>+ Novo</button>}{can(user.role,'editar')&&<button onClick={function(){document.getElementById('importXlsInput').click();}} style={{whiteSpace:'nowrap',padding:'0 14px',background:'#7C3AED',border:'none',borderRadius:10,color:'#fff',fontSize:13,fontWeight:600,cursor:'pointer',boxShadow:'0 2px 8px rgba(124,58,237,.3)'}}>Importar Excel</button>}<input id="importXlsInput" type="file" accept=".xlsx,.xls" style={{display:'none'}} onChange={function(e){handleImportXls(e.target.files[0]);e.target.value='';  }}/></div>
-<div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:14,alignItems:'center'}}><button onClick={function(){setFiltCat('todos');}} className={'pill'+(filtCat==='todos'?' on':'')}>Todos</button>{Object.keys(TIPOS).map(function(k){var t=TIPOS[k];return <button key={k} onClick={function(){setFiltCat(k);}} className={'pill'+(filtCat===k?' on':'')} style={filtCat===k?{background:t.cor,borderColor:t.cor,color:'#fff'}:{}}>{t.icon} {t.label}</button>;}  )}<button onClick={exportXL} style={{marginLeft:'auto',padding:'6px 12px',borderRadius:20,fontSize:11,fontWeight:600,cursor:'pointer',border:'1.5px solid #0C6B3E',background:'#F0FDF4',color:'#0C6B3E'}}>Excel</button></div>
+<div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:14,alignItems:'center'}}><button onClick={function(){setFiltCat('todos');}} className={'pill'+(filtCat==='todos'?' on':'')}>Todos</button>{Object.keys(TIPOS).map(function(k){var t=TIPOS[k];return <button key={k} onClick={function(){setFiltCat(k);}} className={'pill'+(filtCat===k?' on':'')} style={filtCat===k?{background:t.cor,borderColor:t.cor,color:'#fff'}:{}}>{t.icon} {t.label}</button>;}  )}<button onClick={imprimirEstoquePDF} style={{marginLeft:'auto',padding:'6px 12px',borderRadius:20,fontSize:11,fontWeight:600,cursor:'pointer',border:'1.5px solid #B91C1C',background:'#FEF2F2',color:'#B91C1C'}}>🖨️ PDF</button><button onClick={exportXL} style={{padding:'6px 12px',borderRadius:20,fontSize:11,fontWeight:600,cursor:'pointer',border:'1.5px solid #0C6B3E',background:'#F0FDF4',color:'#0C6B3E'}}>Excel</button></div>
 {importing&&<div className="inf" style={{marginBottom:10}}>⏳ {importStatus}</div>}
 {!importing&&importStatus&&<div className="ok" style={{marginBottom:10}}>{importStatus}</div>}
 <div className="card"><div className="ch"><div className="ch-title"><div className="ch-accent"/><span>Estoque Atual</span></div><span style={{fontSize:12,color:'#94A3B8',fontWeight:500}}>{medList.length} produto(s)</span></div>
