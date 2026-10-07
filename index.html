@@ -1968,11 +1968,16 @@ function HistModal(props){
   // saídas órfãs / super-dispensadas / lotes trocados caem aqui em vez de sumir ou travar em zero.
   // Garantia: somaLotes + qtdSemLote === saldoReal para QUALQUER dado.
   var qtdSemLote=saldoReal-somaLotes;
+  // Quando qtdSemLote fica negativo (saídas antigas sem lote vinculado, acumuladas ao longo do
+  // tempo — não tem a ver com o lançamento de hoje), o "pool sem lote" deixa de ser confiável.
+  // Em vez de travar a usuária com um aviso de divergência, deixa atribuir lote normalmente,
+  // com teto no saldo total (nunca deixa reclassificar mais do que existe de verdade).
+  var maxAtribuir=qtdSemLote>0?qtdSemLote:saldoReal;
 
   function atribuirLote(){
     if(!atribLote.trim()||!atribVal.trim()||!atribQty)return;
     var qty=parseInt(atribQty);if(!qty||qty<=0)return;
-    if(qty>qtdSemLote){alert('Quantidade maior que o disponível sem lote!');return;}
+    if(qty>maxAtribuir){alert('Quantidade maior que o disponível sem lote!');return;}
     // Cria entrada com lote/validade + saida sem lote (saldo zero, reclassifica)
     var now=new Date().toISOString();
     Promise.all([
@@ -2029,18 +2034,18 @@ function HistModal(props){
     </div>
 
     {aba==='lotes'&&<div>
-      {qtdSemLote>0&&<div style={{background:'#F8FAFC',borderRadius:12,padding:'12px 14px',marginBottom:8,border:'1.5px dashed #CBD5E1'}}>
+      {maxAtribuir>0&&<div style={{background:'#F8FAFC',borderRadius:12,padding:'12px 14px',marginBottom:8,border:'1.5px dashed #CBD5E1'}}>
         {showAtribuir
           ?<div>
             <div style={{fontWeight:700,fontSize:13,color:'#1E293B',marginBottom:10}}>🏷️ Atribuir lote a unidades sem lote</div>
-            <div style={{fontSize:12,color:'#64748B',marginBottom:8}}>Disponível sem lote: <strong>{qtdSemLote} un.</strong></div>
+            <div style={{fontSize:12,color:'#64748B',marginBottom:8}}>Disponível sem lote: <strong>{maxAtribuir} un.</strong></div>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
               <div><div style={{fontSize:10,color:'#64748B',fontWeight:600,marginBottom:2}}>LOTE *</div><input value={atribLote} onChange={function(e){setAtribLote(e.target.value);}} placeholder="Ex: ABC123" style={{width:'100%',padding:'8px',borderRadius:7,border:'1.5px solid #1351B4',fontSize:13,boxSizing:'border-box'}}/></div>
               <div><div style={{fontSize:10,color:'#64748B',fontWeight:600,marginBottom:2}}>VALIDADE *</div><input value={atribVal} onChange={function(e){setAtribVal(e.target.value);}} placeholder="MM/AAAA" style={{width:'100%',padding:'8px',borderRadius:7,border:'1.5px solid #1351B4',fontSize:13,boxSizing:'border-box'}}/></div>
             </div>
             <div style={{marginBottom:8}}>
-              <div style={{fontSize:10,color:'#64748B',fontWeight:600,marginBottom:2}}>QUANTIDADE * (máx: {qtdSemLote})</div>
-              <input value={atribQty} onChange={function(e){var v=e.target.value.replace(/[^0-9]/g,'');if(parseInt(v)>qtdSemLote)v=String(qtdSemLote);setAtribQty(v);}} placeholder={'Ex: '+qtdSemLote} style={{width:'100%',padding:'8px',borderRadius:7,border:'1.5px solid #1351B4',fontSize:18,fontWeight:800,textAlign:'center',boxSizing:'border-box'}}/>
+              <div style={{fontSize:10,color:'#64748B',fontWeight:600,marginBottom:2}}>QUANTIDADE * (máx: {maxAtribuir})</div>
+              <input value={atribQty} onChange={function(e){var v=e.target.value.replace(/[^0-9]/g,'');if(parseInt(v)>maxAtribuir)v=String(maxAtribuir);setAtribQty(v);}} placeholder={'Ex: '+maxAtribuir} style={{width:'100%',padding:'8px',borderRadius:7,border:'1.5px solid #1351B4',fontSize:18,fontWeight:800,textAlign:'center',boxSizing:'border-box'}}/>
             </div>
             <div style={{display:'flex',gap:8}}>
               <button onClick={function(){setShowAtribuir(false);setAtribLote('');setAtribVal('');setAtribQty('');}} style={{flex:1,padding:'8px',background:'#F1F5F9',border:'none',borderRadius:8,fontWeight:600,fontSize:12,cursor:'pointer'}}>Cancelar</button>
@@ -2050,15 +2055,11 @@ function HistModal(props){
           :<div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
             <div>
               <div style={{fontWeight:700,fontSize:14,color:'#64748B'}}>Sem lote registrado</div>
-              <div style={{fontSize:12,color:'#94A3B8',marginTop:2}}>{qtdSemLote} un. sem lote/validade</div>
+              <div style={{fontSize:12,color:'#94A3B8',marginTop:2}}>{maxAtribuir} un. sem lote/validade</div>
             </div>
             <button onClick={function(){setShowAtribuir(true);}} style={{background:'#1351B4',border:'none',borderRadius:8,padding:'7px 12px',color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>🏷️ Atribuir lote</button>
           </div>
         }
-      </div>}
-      {qtdSemLote<0&&<div style={{background:'#FFFBEB',borderRadius:12,padding:'12px 14px',marginBottom:8,border:'1.5px solid #FCD34D'}}>
-        <div style={{fontWeight:700,fontSize:13,color:'#92400E',marginBottom:2}}>⚠️ Divergência de lote</div>
-        <div style={{fontSize:12,color:'#92400E'}}>{Math.abs(qtdSemLote)} un. de saída não correspondem a nenhum lote (lote órfão, código trocado ou super-dispensado). O saldo total ({saldoReal}) está correto — revise os lançamentos por lote.</div>
       </div>}
       {lotes.length===0&&qtdSemLote===0
         ?<div style={{textAlign:'center',padding:32,color:'#94A3B8'}}>Nenhum lote com estoque disponível</div>
