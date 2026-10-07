@@ -1959,20 +1959,29 @@ function HistModal(props){
   var loteMap={};
   entries.filter(function(e){return e.medicamentoId===med.id&&e.tipo==='entrada'&&e.lote;}).forEach(function(e){var lk=e.lote;if(!loteMap[lk])loteMap[lk]={lote:e.lote,validade:e.validade||'',entrada:0,saida:0};loteMap[lk].entrada+=(e.quantidade||0);});
   entries.filter(function(e){return e.medicamentoId===med.id&&e.tipo==='saida'&&e.lote;}).forEach(function(e){var lk=e.lote;if(loteMap[lk])loteMap[lk].saida+=(e.quantidade||0);});
-  var lotes=Object.keys(loteMap).map(function(k){var l=loteMap[k];var qty=Math.max(0,l.entrada-l.saida);var hoje=new Date();var dias=null;var dv=_dataValidade(l.validade);if(dv)dias=Math.ceil((dv-hoje)/86400000);return Object.assign({},l,{qty:qty,dias:dias});}).filter(function(l){return l.qty>0;}).sort(function(a,b){return a.dias!==null&&b.dias!==null?a.dias-b.dias:0;});
+  var lotesRaw=Object.keys(loteMap).map(function(k){var l=loteMap[k];var qty=Math.max(0,l.entrada-l.saida);var hoje=new Date();var dias=null;var dv=_dataValidade(l.validade);if(dv)dias=Math.ceil((dv-hoje)/86400000);return Object.assign({},l,{qty:qty,dias:dias});}).filter(function(l){return l.qty>0;}).sort(function(a,b){return a.dias!==null&&b.dias!==null?a.dias-b.dias:0;});
   // Saldo autoritativo = o MESMO número da lista principal (calcStock). Nunca é alterado aqui.
   var saldoReal=(stock&&stock[med.id]!=null)?stock[med.id]:(calcStock(entries)[med.id]||0);
-  // "Sem lote" = soma DIRETA dos lançamentos sem lote vinculado (entrada - saída), não um resíduo
-  // calculado contra o saldo total. Pedido da usuária (07/10/2026): depois de um balanço de
-  // estoque, ela queria ver exatamente a quantidade que ela lançou — não um número inflado ou
-  // reduzido por saídas antigas de OUTROS lotes (inclusive saídas com código de lote órfão, que
-  // não corresponde a nenhuma entrada, e por isso não abatem nada aqui nem em nenhum lote real).
+  // "Sem lote" = soma DIRETA dos lançamentos sem lote vinculado (entrada - saída) — sempre mostra
+  // exatamente a quantidade de um balanço/ajuste, nunca é reduzida.
   var semLoteEntradas=0,semLoteSaidas=0;
   entries.filter(function(e){return e.medicamentoId===med.id&&!e.lote;}).forEach(function(e){
     if(e.tipo==='entrada')semLoteEntradas+=(e.quantidade||0);
     else if(e.tipo==='saida')semLoteSaidas+=(e.quantidade||0);
   });
   var qtdSemLote=Math.max(0,semLoteEntradas-semLoteSaidas);
+  // Um balanço (recontagem) substitui lote antigo — pedido explícito da usuária (07/10/2026).
+  // Quando os lotes rastreados + "sem lote" juntos passariam do saldo real (lote antigo com dado
+  // que não reflete mais o estoque físico de verdade), os lotes cedem espaço primeiro — começando
+  // pelos de validade mais distante (lotesRaw já vem ordenado por validade, mais próxima primeiro).
+  // "Sem lote" nunca é reduzido: continua mostrando exatamente o que foi lançado.
+  var orcamentoLotes=Math.max(0,saldoReal-qtdSemLote);
+  var lotes=[];
+  lotesRaw.forEach(function(l){
+    var qty=Math.min(l.qty,orcamentoLotes);
+    orcamentoLotes-=qty;
+    if(qty>0)lotes.push(Object.assign({},l,{qty:qty}));
+  });
   // Nunca deixa reclassificar mais do que existe de verdade no saldo total.
   var maxAtribuir=Math.min(qtdSemLote,saldoReal);
 
