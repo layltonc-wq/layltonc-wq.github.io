@@ -1948,6 +1948,7 @@ function HistModal(props){
   var _atribLote=useState('');var atribLote=_atribLote[0];var setAtribLote=_atribLote[1];
   var _atribVal=useState('');var atribVal=_atribVal[0];var setAtribVal=_atribVal[1];
   var _atribQty=useState('');var atribQty=_atribQty[0];var setAtribQty=_atribQty[1];
+  var _atribSaving=useState(false);var atribSaving=_atribSaving[0];var setAtribSaving=_atribSaving[1];
   var _novoLote=useState('');var novoLote=_novoLote[0];var setNovoLote=_novoLote[1];
   var _novaVal=useState('');var novaVal=_novaVal[0];var setNovaVal=_novaVal[1];
   var _ajusteQty=useState('');var ajusteQty=_ajusteQty[0];var setAjusteQty=_ajusteQty[1];
@@ -1989,15 +1990,21 @@ function HistModal(props){
   var maxAtribuir=Math.min(qtdSemLote,saldoReal);
 
   function atribuirLote(){
+    if(atribSaving)return; // evita clique duplo criando dois pares entrada/saída pro mesmo lançamento
     if(!atribLote.trim()||!atribVal.trim()||!atribQty)return;
     var qty=parseInt(atribQty);if(!qty||qty<=0)return;
     if(qty>maxAtribuir){alert('Quantidade maior que o disponível sem lote!');return;}
+    setAtribSaving(true);
     // Cria entrada com lote/validade + saida sem lote (saldo zero, reclassifica)
     var now=new Date().toISOString();
+    var loteSalvo=atribLote.trim();
     Promise.all([
-      db.collection('entries').add({medicamentoId:med.id,medicamentoNome:med.nome,tipo:'entrada',quantidade:qty,lote:atribLote.trim(),validade:_normValidade(atribVal),autorNome:user.name,autorId:user.uid||'',observacao:'Atribuição de lote',criadoEm:now,tenant_id:tenantDe(user)}),
+      db.collection('entries').add({medicamentoId:med.id,medicamentoNome:med.nome,tipo:'entrada',quantidade:qty,lote:loteSalvo,validade:_normValidade(atribVal),autorNome:user.name,autorId:user.uid||'',observacao:'Atribuição de lote',criadoEm:now,tenant_id:tenantDe(user)}),
       db.collection('entries').add({medicamentoId:med.id,medicamentoNome:med.nome,tipo:'saida',quantidade:qty,lote:'',validade:'',autorNome:user.name,autorId:user.uid||'',observacao:'Atribuição de lote (reclassificação)',criadoEm:now,tenant_id:tenantDe(user)})
-    ]).then(function(){setShowAtribuir(false);setAtribLote('');setAtribVal('');setAtribQty('');}).catch(function(e){alert('Erro: '+e.message);});
+    ]).then(function(){
+      setAtribSaving(false);setShowAtribuir(false);setAtribLote('');setAtribVal('');setAtribQty('');
+      alert('✅ Lote atribuído: '+qty+' un. no lote '+loteSalvo+'. Se não aparecer na lista na hora, feche e abra esse medicamento de novo.');
+    }).catch(function(e){setAtribSaving(false);alert('Erro ao atribuir lote: '+(e&&e.message?e.message:e));});
   }
   function salvarEdicaoLote(){
     if(!editLote)return;
@@ -2066,8 +2073,8 @@ function HistModal(props){
               <input value={atribQty} onChange={function(e){var v=e.target.value.replace(/[^0-9]/g,'');if(parseInt(v)>maxAtribuir)v=String(maxAtribuir);setAtribQty(v);}} placeholder={'Ex: '+maxAtribuir} style={{width:'100%',padding:'8px',borderRadius:7,border:'1.5px solid #1351B4',fontSize:18,fontWeight:800,textAlign:'center',boxSizing:'border-box'}}/>
             </div>
             <div style={{display:'flex',gap:8}}>
-              <button onClick={function(){setShowAtribuir(false);setAtribLote('');setAtribVal('');setAtribQty('');}} style={{flex:1,padding:'8px',background:'#F1F5F9',border:'none',borderRadius:8,fontWeight:600,fontSize:12,cursor:'pointer'}}>Cancelar</button>
-              <button onClick={atribuirLote} disabled={!atribLote.trim()||!atribVal.trim()||!atribQty} style={{flex:2,padding:'8px',background:(!atribLote.trim()||!atribVal.trim()||!atribQty)?'#E2E8F0':'#1351B4',border:'none',borderRadius:8,color:(!atribLote.trim()||!atribVal.trim()||!atribQty)?'#94A3B8':'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>✅ Confirmar atribuição</button>
+              <button onClick={function(){setShowAtribuir(false);setAtribLote('');setAtribVal('');setAtribQty('');}} disabled={atribSaving} style={{flex:1,padding:'8px',background:'#F1F5F9',border:'none',borderRadius:8,fontWeight:600,fontSize:12,cursor:atribSaving?'default':'pointer',opacity:atribSaving?0.6:1}}>Cancelar</button>
+              <button onClick={atribuirLote} disabled={atribSaving||!atribLote.trim()||!atribVal.trim()||!atribQty} style={{flex:2,padding:'8px',background:(atribSaving||!atribLote.trim()||!atribVal.trim()||!atribQty)?'#E2E8F0':'#1351B4',border:'none',borderRadius:8,color:(atribSaving||!atribLote.trim()||!atribVal.trim()||!atribQty)?'#94A3B8':'#fff',fontWeight:700,fontSize:12,cursor:(atribSaving||!atribLote.trim()||!atribVal.trim()||!atribQty)?'default':'pointer'}}>{atribSaving?'⏳ Salvando...':'✅ Confirmar atribuição'}</button>
             </div>
           </div>
           :<div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
