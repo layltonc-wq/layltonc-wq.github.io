@@ -2057,6 +2057,10 @@ function HistModal(props){
               <div><div style={{fontSize:10,color:'#64748B',fontWeight:600,marginBottom:2}}>LOTE *</div><input value={atribLote} onChange={function(e){setAtribLote(e.target.value);}} placeholder="Ex: ABC123" style={{width:'100%',padding:'8px',borderRadius:7,border:'1.5px solid #1351B4',fontSize:13,boxSizing:'border-box'}}/></div>
               <div><div style={{fontSize:10,color:'#64748B',fontWeight:600,marginBottom:2}}>VALIDADE *</div><input value={atribVal} onChange={function(e){setAtribVal(e.target.value);}} placeholder="MM/AAAA" style={{width:'100%',padding:'8px',borderRadius:7,border:'1.5px solid #1351B4',fontSize:13,boxSizing:'border-box'}}/></div>
             </div>
+            {(function(){
+              var jaExiste=atribLote.trim()&&lotesRaw.find(function(l){return l.lote&&l.lote.trim().toLowerCase()===atribLote.trim().toLowerCase();});
+              return jaExiste&&<div style={{fontSize:11,color:'#B45309',background:'#FFFBEB',border:'1px solid #FCD34D',borderRadius:8,padding:'7px 10px',marginBottom:8,lineHeight:1.4}}>⚠️ Esse código de lote já existe com <strong>{jaExiste.qty} un.</strong> cadastradas — a quantidade que você colocar abaixo vai se somar a esse total, não substituir. Pra deixar separado, use um código diferente.</div>;
+            })()}
             <div style={{marginBottom:8}}>
               <div style={{fontSize:10,color:'#64748B',fontWeight:600,marginBottom:2}}>QUANTIDADE * (máx: {maxAtribuir})</div>
               <input value={atribQty} onChange={function(e){var v=e.target.value.replace(/[^0-9]/g,'');if(parseInt(v)>maxAtribuir)v=String(maxAtribuir);setAtribQty(v);}} placeholder={'Ex: '+maxAtribuir} style={{width:'100%',padding:'8px',borderRadius:7,border:'1.5px solid #1351B4',fontSize:18,fontWeight:800,textAlign:'center',boxSizing:'border-box'}}/>
