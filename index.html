@@ -406,6 +406,11 @@ function _bumpEntriesVersion(user){try{if(db&&tenantDe(user))db.collection('_met
 // próprio conteúdo, sem pop-up, sem travar o app; é removido depois. Fallback para window.open se
 // o iframe falhar. Retorna false se nada funcionou (para o chamador avisar o usuário).
 function _escHtml(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+// Formata número no padrão BR (ponto a cada 3 casas, vírgula decimal) — ex.: 249490.41 -> "249.490,41".
+function _fmtNumBR(v){var n=Number(v)||0;var neg=n<0;n=Math.abs(n);var p=n.toFixed(2).split('.');var intP=p[0].replace(/\B(?=(\d{3})+(?!\d))/g,'.');return(neg?'-':'')+intP+','+p[1];}
+function _fmtMoeda(v){return'R$ '+_fmtNumBR(v);}
+// Lê de volta um valor digitado no padrão BR (aceita com ou sem "R$"/pontos de milhar) -> Number.
+function _parseMoedaBR(s){if(s==null)return NaN;var str=String(s).trim();if(!str)return NaN;str=str.replace(/[^0-9,.\-]/g,'').replace(/\./g,'').replace(',','.');return parseFloat(str);}
 // Remove qualquer campo `undefined` (inclusive dentro de objetos/arrays aninhados) antes de escrever
 // no Firestore — o SDK lança uma exceção SÍNCRONA (não uma promise rejeitada) quando encontra
 // `undefined` em qualquer profundidade, o que escapava do try/catch/then de quem chamava e resultava
@@ -4370,7 +4375,7 @@ function TabNotas({user,medications}){
 
   function fD(d){if(!d)return'';var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}
   function fDxml(d){if(!d||d.length<8)return'';return d.substring(6,8)+'/'+d.substring(4,6)+'/'+d.substring(0,4);}
-  function fMoeda(v){return'R$ '+parseFloat(v||0).toFixed(2).replace('.',',');}
+  function fMoeda(v){return'R$ '+_fmtNumBR(parseFloat(v||0));}
 
   var totalConf=itemsEdit.filter(function(i){return i.incluir&&i.medId&&i.confirmado;}).length;
   var totalAguard=itemsEdit.filter(function(i){return i.incluir&&i.medId&&!i.confirmado;}).length;
@@ -6930,7 +6935,7 @@ function TabPrevisao(props){
     setEditCat(ata.categoria||'controlado');
     setEditNome(ata.nome||'');
     setEditCnpj(ata.cnpj||'');
-    setEditValorTotal(ata.valorTotal!=null?String(ata.valorTotal).replace('.',','):'');
+    setEditValorTotal(ata.valorTotal!=null?_fmtNumBR(ata.valorTotal):'');
     setEditProcesso(ata.processoLicitatorio||'');
     setEditPregao(ata.pregaoEletronico||'');
     setEditAtaSRP(ata.ataSRP||'');
@@ -7015,7 +7020,7 @@ function TabPrevisao(props){
       // Normaliza número/valor dos itens editados manualmente (os campos chegam como string do <input>).
       ataUpdate.itens=editItens.map(function(it){return Object.assign({},it,{
         qtdTeto:parseInt(it.qtdTeto)||0,
-        vUnit:parseFloat(String(it.vUnit).replace(',','.'))||0
+        vUnit:_parseMoedaBR(it.vUnit)||0
       });});
     }
     if(editCat&&editCat!==ata.categoria)ataUpdate.categoria=editCat;
@@ -7028,8 +7033,21 @@ function TabPrevisao(props){
     if((editProcesso||'').trim()!==(ata.processoLicitatorio||''))ataUpdate.processoLicitatorio=(editProcesso||'').trim();
     if((editPregao||'').trim()!==(ata.pregaoEletronico||''))ataUpdate.pregaoEletronico=(editPregao||'').trim();
     if((editAtaSRP||'').trim()!==(ata.ataSRP||''))ataUpdate.ataSRP=(editAtaSRP||'').trim();
-    var novoValorTotal=parseFloat(String(editValorTotal).replace(',','.'));
-    if(!isNaN(novoValorTotal)&&novoValorTotal!==(ata.valorTotal||0))ataUpdate.valorTotal=novoValorTotal;
+    var novoValorTotal=_parseMoedaBR(editValorTotal);
+    if(!isNaN(novoValorTotal)){
+      // "Valor total do contrato" é só um espelho — quem alimenta o saldo restante e o pedido é a
+      // soma dos itens (qtdTeto × vUnit). Se o valor digitado aqui não bate com essa soma, reajusta
+      // o preço unitário de cada item na mesma proporção, pra corrigir total/saldo/pedido JUNTOS —
+      // em vez de só guardar um número bonito que nunca refletia em nada (bug relatado 09/10/2026).
+      if(ataUpdate.itens&&ataUpdate.itens.length){
+        var somaAtual=ataUpdate.itens.reduce(function(a,it){return a+(it.vUnit*(it.qtdTeto||0));},0);
+        if(somaAtual>0&&Math.abs(novoValorTotal-somaAtual)>0.009){
+          var fator=novoValorTotal/somaAtual;
+          ataUpdate.itens=ataUpdate.itens.map(function(it){return Object.assign({},it,{vUnit:Math.round(it.vUnit*fator*10000)/10000});});
+        }
+      }
+      if(novoValorTotal!==(ata.valorTotal||0))ataUpdate.valorTotal=novoValorTotal;
+    }
     if(Object.keys(ataUpdate).length>0)ops.push(db.collection('atas').doc(ata.id).update(ataUpdate));
     adicionar.forEach(function(id){ops.push(db.collection('medicamentos').doc(id).update({ataId:ata.id}));});
     remover.forEach(function(id){ops.push(db.collection('medicamentos').doc(id).update({ataId:''}));});
@@ -7277,10 +7295,10 @@ function TabPrevisao(props){
           var lvU=Number(l.vUnit)||0,lvT=Number(l.vTotal)||0;
           html+='<tr><td>'+_escHtml(l.num||'')+'</td><td class="desc">'+_escHtml(l.desc)+'</td><td>'+_escHtml(l.item&&l.item.catmat||'')+'</td>'+
             '<td>'+l.qtd+'</td><td>'+_escHtml(l.unidade||'')+'</td>'+
-            '<td>R$ '+lvU.toFixed(2).replace('.',',')+'</td><td>R$ '+lvT.toFixed(2).replace('.',',')+'</td>'+
+            '<td>R$ '+_fmtNumBR(lvU)+'</td><td>R$ '+_fmtNumBR(lvT)+'</td>'+
             '<td>'+_escHtml(l.marca||'')+'</td></tr>';
         });
-        html+='</tbody><tfoot><tr class="total-row"><td colspan="6">TOTAL</td><td colspan="2">R$ '+totalVal.toFixed(2).replace('.',',')+'</td></tr></tfoot></table>';
+        html+='</tbody><tfoot><tr class="total-row"><td colspan="6">TOTAL</td><td colspan="2">R$ '+_fmtNumBR(totalVal)+'</td></tr></tfoot></table>';
         html+='<div class="dados"><b>DADOS PARA EMISSÃO DA NOTA FISCAL:</b><br>'+
           'FUNDO MUNICIPAL DE SAÚDE DE ITAQUITINGA<br>CNPJ/MF: 12.848.758/0001-63<br>'+
           '<b>DADOS PARA ENTREGA:</b><br>Entregar na Farmácia Municipal ao lado UNIDADE MISTA ADELINA AZEVEDO<br>'+
@@ -7354,8 +7372,8 @@ function TabPrevisao(props){
         '</td><td style="padding:6px 8px;border:1px solid #ddd">'+x.desc+
         '</td><td style="padding:6px 8px;border:1px solid #ddd;text-align:center">'+x.unidade+
         '</td><td style="padding:6px 8px;border:1px solid #ddd;text-align:center">'+qtd+
-        '</td><td style="padding:6px 8px;border:1px solid #ddd;text-align:right">'+(vU>0?'R$ '+vU.toFixed(2).replace('.',','):'—')+
-        '</td><td style="padding:6px 8px;border:1px solid #ddd;text-align:right">'+(vT>0?'R$ '+vT.toFixed(2).replace('.',','):'—')+
+        '</td><td style="padding:6px 8px;border:1px solid #ddd;text-align:right">'+(vU>0?'R$ '+_fmtNumBR(vU):'—')+
+        '</td><td style="padding:6px 8px;border:1px solid #ddd;text-align:right">'+(vT>0?'R$ '+_fmtNumBR(vT):'—')+
         (info.mostrarColunaMarca?'</td><td style="padding:6px 8px;border:1px solid #ddd">'+(x.marca||''):'')+
         '</td></tr>';
     }).join('');
@@ -7384,7 +7402,7 @@ function TabPrevisao(props){
       '<td colspan="3" style="padding:7px 8px;border:1px solid #ddd;text-align:right">TOTAL</td>'+
       '<td style="padding:7px 8px;border:1px solid #ddd;text-align:center">'+totalUn+'</td>'+
       '<td style="padding:7px 8px;border:1px solid #ddd"></td>'+
-      '<td style="padding:7px 8px;border:1px solid #ddd;text-align:right">R$ '+totalVal.toFixed(2).replace('.',',')+
+      '<td style="padding:7px 8px;border:1px solid #ddd;text-align:right">R$ '+_fmtNumBR(totalVal)+
       '</td>'+(info.mostrarColunaMarca?'<td style="padding:7px 8px;border:1px solid #ddd"></td>':'')+
       '</tr></tfoot></table></body></html>';
     if(!_imprimirDoc(html)){setMsg('e:Não foi possível abrir a impressão. Tente de novo.');return;}
@@ -7490,16 +7508,16 @@ function TabPrevisao(props){
         html+='<tr>';
         html+='<td class="num">'+it.qtd+' '+(it.unidade||'UN')+'</td>';
         html+='<td>'+it.desc+'</td>';
-        html+='<td class="vunit">'+(it.vUnit>0?'R$ '+it.vUnit.toFixed(2).replace('.',','):'—')+'</td>';
-        html+='<td class="vtotal">'+(it.vTotal>0?'R$ '+it.vTotal.toFixed(2).replace('.',','):'—')+'</td>';
+        html+='<td class="vunit">'+(it.vUnit>0?'R$ '+_fmtNumBR(it.vUnit):'—')+'</td>';
+        html+='<td class="vtotal">'+(it.vTotal>0?'R$ '+_fmtNumBR(it.vTotal):'—')+'</td>';
         if(info.mostrarColunaMarca)html+='<td class="marca">'+(it.marca||'—')+'</td>';
         html+='</tr>';
       });
       html+='</tbody></table>';
-      if(totalVal>0){html+='<table><tbody><tr class="total-row"><td colspan="'+colspanTotal+'">SUBTOTAL '+sec.titulo+'</td><td>R$ '+totalVal.toFixed(2).replace('.',',')+'</td>'+celExtraTotal+'</tr></tbody></table>';}
+      if(totalVal>0){html+='<table><tbody><tr class="total-row"><td colspan="'+colspanTotal+'">SUBTOTAL '+sec.titulo+'</td><td>R$ '+_fmtNumBR(totalVal)+'</td>'+celExtraTotal+'</tr></tbody></table>';}
     });
     // Total geral do pedido (soma de todas as seções)
-    if(grandTotalVal>0){html+='<table style="margin-top:10px"><tbody><tr class="total-row" style="background:'+info.cor+'"><td colspan="'+colspanTotal+'" style="color:#fff;text-align:right">TOTAL GERAL DO PEDIDO</td><td style="color:#fff">R$ '+grandTotalVal.toFixed(2).replace('.',',')+'</td>'+celExtraTotal+'</tr></tbody></table>';}
+    if(grandTotalVal>0){html+='<table style="margin-top:10px"><tbody><tr class="total-row" style="background:'+info.cor+'"><td colspan="'+colspanTotal+'" style="color:#fff;text-align:right">TOTAL GERAL DO PEDIDO</td><td style="color:#fff">R$ '+_fmtNumBR(grandTotalVal)+'</td>'+celExtraTotal+'</tr></tbody></table>';}
 
     // Rodapé
     html+='<div style="margin-top:20px;font-size:11px"><b>LOCAL DE ENTREGA:</b> CAF - UNIDADE HOSPITALAR</div>';
@@ -7675,7 +7693,7 @@ function TabPrevisao(props){
                     Saldo ATA: {saldoAta} {item.unidade||''}{excede?' ⚠️ excede saldo!':''}
                   </div>}
                   {item&&item.qtdTeto>0&&<div style={{fontSize:10,color:'#94A3B8',marginTop:2}}>
-                    Teto do contrato: {item.qtdTeto} {item.unidade||''}{item.vUnit>0?' · R$ '+(item.qtdTeto*item.vUnit).toFixed(2).replace('.',',')+' no total':''}
+                    Teto do contrato: {item.qtdTeto} {item.unidade||''}{item.vUnit>0?' · R$ '+_fmtNumBR((item.qtdTeto*item.vUnit))+' no total':''}
                   </div>}
                 </div>
                 <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:3}}>
@@ -7687,7 +7705,7 @@ function TabPrevisao(props){
                 <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:3}}>
                   <div style={{fontSize:10,color:'#94A3B8',fontWeight:600}}>V. UNIT.</div>
                   <input type="text" inputMode="decimal" value={precos[m.id]!==undefined?precos[m.id]:(item&&item.vUnit?String(item.vUnit).replace('.',','):'')} onChange={function(e){var v=e.target.value;setPrecos(function(pr){var n=Object.assign({},pr);n[m.id]=v;return n;});}} placeholder={item&&item.vUnit?'':'R$'} style={{width:72,padding:'8px 6px',border:'1.5px solid #CBD5E1',borderRadius:10,fontSize:13,fontWeight:700,textAlign:'center',color:'#1E293B',outline:'none',background:'#fff'}}/>
-                  <div style={{fontSize:9,color:'#94A3B8',whiteSpace:'nowrap'}}>tot: {(function(){var vt=val*valorUnit(m.id,item);return vt>0?'R$ '+vt.toFixed(2).replace('.',','):'—';})()}</div>
+                  <div style={{fontSize:9,color:'#94A3B8',whiteSpace:'nowrap'}}>tot: {(function(){var vt=val*valorUnit(m.id,item);return vt>0?'R$ '+_fmtNumBR(vt):'—';})()}</div>
                 </div>
               </div>);
             }
@@ -7986,7 +8004,8 @@ function TabPrevisao(props){
             </div>}
             {editAta===ata.id&&<div style={{marginBottom:10}}>
               <div style={{fontSize:11,fontWeight:600,color:'#64748B',marginBottom:4}}>Valor total do contrato (R$) — ajuste aqui se houver aditivo:</div>
-              <input type="text" inputMode="decimal" value={editValorTotal} onChange={function(e){setEditValorTotal(e.target.value);}} placeholder="Ex: 50000,00" className="inp" style={{marginBottom:0,maxWidth:200}}/>
+              <input type="text" inputMode="decimal" value={editValorTotal} onChange={function(e){setEditValorTotal(e.target.value);}} placeholder="Ex: 249.490,41" className="inp" style={{marginBottom:0,maxWidth:200}}/>
+              <div style={{fontSize:10.5,color:'#94A3B8',marginTop:4}}>Corrigindo aqui, o preço unitário dos itens desta ata é reajustado na mesma proporção — o saldo restante e os pedidos já saem certos.</div>
             </div>}
             {ata.cnpj&&editAta!==ata.id&&<div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6,fontSize:12}}>
               <span style={{color:'#64748B',fontWeight:600}}>CNPJ:</span>
@@ -7994,7 +8013,7 @@ function TabPrevisao(props){
             </div>}
             {ata.valorTotal!=null&&<div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6,fontSize:12}}>
               <span style={{color:'#64748B',fontWeight:600}}>Valor total do contrato:</span>
-              <strong style={{color:cor}}>R$ {Number(ata.valorTotal).toFixed(2).replace('.',',')}</strong>
+              <strong style={{color:cor}}>R$ {_fmtNumBR(Number(ata.valorTotal))}</strong>
             </div>}
             {/* O campo antigo "Limite da ata" (número digitado à mão) nunca alimentava nenhum cálculo —
                 era só guardado, sem efeito nenhum no app. O saldo real, que já é descontado sozinho a
@@ -8007,7 +8026,7 @@ function TabPrevisao(props){
               return(<div style={{marginBottom:10}}>
                 <div style={{display:'flex',alignItems:'center',gap:8,fontSize:12,flexWrap:'wrap'}}>
                   <span style={{color:'#64748B',fontWeight:600}}>Saldo restante da ata:</span>
-                  <strong style={{color:vRestante<0?'#DC2626':cor}}>R$ {vRestante.toFixed(2).replace('.',',')}</strong>
+                  <strong style={{color:vRestante<0?'#DC2626':cor}}>R$ {_fmtNumBR(vRestante)}</strong>
                   <span style={{fontSize:10,color:'#94A3B8'}}>(controle interno — não aparece no pedido impresso)</span>
                 </div>
                 {(function(){
@@ -8024,7 +8043,7 @@ function TabPrevisao(props){
                         return(<div key={registro.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,padding:'8px 0',borderTop:i>0?'1px solid #FEF3C7':'none',flexWrap:'wrap'}}>
                           <div style={{fontSize:11,color:'#78350F'}}>
                             <div style={{fontWeight:700}}>{fmtD(registro.em)} {fmtT(registro.em)}</div>
-                            <div style={{color:'#92400E'}}>{qtdTotal} unidade(s){vTotalReg>0?' · ≈ R$ '+vTotalReg.toFixed(2).replace('.',',')+' (preço atual)':''}</div>
+                            <div style={{color:'#92400E'}}>{qtdTotal} unidade(s){vTotalReg>0?' · ≈ R$ '+_fmtNumBR(vTotalReg)+' (preço atual)':''}</div>
                           </div>
                           <button onClick={function(){desfazerPedido(ata,registro);}} style={{background:'#FDE68A',border:'none',borderRadius:6,padding:'5px 10px',fontSize:11,color:'#78350F',fontWeight:700,cursor:'pointer',flexShrink:0}}>↩️ Desfazer</button>
                         </div>);
@@ -8078,7 +8097,7 @@ function TabPrevisao(props){
                   {pedidoAberto&&qtdAtaPedido>0&&infoTenant.autoDescontarAta&&<button onClick={function(e){e.stopPropagation();fecharPedidoAta(ata);}} style={{background:'#0C6B3E',border:'none',borderRadius:8,padding:'6px 10px',fontSize:11,color:'#fff',fontWeight:700,cursor:'pointer',flexShrink:0,whiteSpace:'nowrap'}}>🔒 Fechar</button>}
                   <span style={{fontSize:13,color:'#94A3B8',flexShrink:0}}>{pedidoAberto?'▲':'▼'}</span>
                 </div>
-                {!pedidoAberto&&qtdAtaPedido>0&&<div style={{fontSize:11,color:cor,fontWeight:700}}>{totalAtaPedido>0?'Total do pedido: R$ '+totalAtaPedido.toFixed(2).replace('.',','):qtdAtaPedido+' unidade(s) a pedir'}</div>}
+                {!pedidoAberto&&qtdAtaPedido>0&&<div style={{fontSize:11,color:cor,fontWeight:700}}>{totalAtaPedido>0?'Total do pedido: R$ '+_fmtNumBR(totalAtaPedido):qtdAtaPedido+' unidade(s) a pedir'}</div>}
                 {pedidoAberto&&<React.Fragment>
                 {filtrarItens&&<div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,flexWrap:'wrap',background:'#EFF6FF',border:'1px solid #BFDBFE',borderRadius:8,padding:'6px 10px',marginBottom:6}}>
                   <span style={{fontSize:11,color:'#1E40AF'}}>🔍 Mostrando {medsFiltrados.length+naoVincFiltrados.length} de {totalItensPedido} item(ns) que combinam com "{buscaGestAta}"</span>
@@ -8098,10 +8117,10 @@ function TabPrevisao(props){
                   var excedeTeto=saldoDisp!==null&&val>saldoDisp;
                   return(<div key={m.id} style={{padding:'8px 0',borderTop:'1px solid #EEF2F8'}}>
                     <div style={{fontSize:12,fontWeight:600,color:'#1E293B',wordBreak:'break-word',marginBottom:2}}>{m.nome}</div>
-                    {it&&it.qtdTeto>0&&<div style={{fontSize:10,color:'#64748B',marginBottom:2}}>Teto do contrato: {it.qtdTeto} {it.unidade||''}{it.vUnit>0?' · R$ '+(it.qtdTeto*it.vUnit).toFixed(2).replace('.',',')+' no total':''}</div>}
-                    {saldoDisp!==null&&<div style={{fontSize:11,fontWeight:700,marginBottom:4,color:excedeTeto?'#DC2626':'#0C6B3E'}}>Saldo disponível: {saldoDisp} {it.unidade||''}{it.vUnit>0?' (R$ '+(saldoDisp*it.vUnit).toFixed(2).replace('.',',')+')':''}{val>0?' · após este pedido: '+saldoApos+' '+(it.unidade||'')+(it.vUnit>0?' (R$ '+(saldoApos*it.vUnit).toFixed(2).replace('.',',')+')':''):''}{excedeTeto?' ⚠️ excede o saldo!':''}</div>}
+                    {it&&it.qtdTeto>0&&<div style={{fontSize:10,color:'#64748B',marginBottom:2}}>Teto do contrato: {it.qtdTeto} {it.unidade||''}{it.vUnit>0?' · R$ '+_fmtNumBR((it.qtdTeto*it.vUnit))+' no total':''}</div>}
+                    {saldoDisp!==null&&<div style={{fontSize:11,fontWeight:700,marginBottom:4,color:excedeTeto?'#DC2626':'#0C6B3E'}}>Saldo disponível: {saldoDisp} {it.unidade||''}{it.vUnit>0?' (R$ '+_fmtNumBR((saldoDisp*it.vUnit))+')':''}{val>0?' · após este pedido: '+saldoApos+' '+(it.unidade||'')+(it.vUnit>0?' (R$ '+_fmtNumBR((saldoApos*it.vUnit))+')':''):''}{excedeTeto?' ⚠️ excede o saldo!':''}</div>}
                     <div style={{display:'flex',alignItems:'center',gap:8}}>
-                      <div style={{fontSize:10,color:'#94A3B8',flex:1,minWidth:0}}>sugestão: {pAuto}{vt>0?' · total: R$ '+vt.toFixed(2).replace('.',','):''}</div>
+                      <div style={{fontSize:10,color:'#94A3B8',flex:1,minWidth:0}}>sugestão: {pAuto}{vt>0?' · total: R$ '+_fmtNumBR(vt):''}</div>
                       <div style={{display:'flex',flexDirection:'column',alignItems:'center',flexShrink:0}}>
                         <span style={{fontSize:9,color:'#94A3B8',fontWeight:600}}>PEDIR</span>
                         <input type="number" min="0" value={val} onChange={function(e){var v=e.target.value;setAjustes(function(pr){var n=Object.assign({},pr);n[m.id]=v;return n;});}} style={{width:64,padding:'6px 4px',border:'2px solid '+(edu?'#F59E0B':'#CBD5E1'),borderRadius:8,fontSize:14,fontWeight:800,textAlign:'center',outline:'none',background:edu?'#FFFBEB':'#fff'}}/>
@@ -8128,11 +8147,11 @@ function TabPrevisao(props){
                   var excedeTetoNV=valNum>saldoDispNV;
                   return(<div key={uKey} style={{padding:'8px 0',borderTop:'1px solid #EEF2F8'}}>
                     <div style={{fontSize:12,fontWeight:600,color:'#1E293B',wordBreak:'break-word',marginBottom:2}}>{it.descricao||'(sem descrição)'}</div>
-                    {it.qtdTeto>0&&<div style={{fontSize:10,color:'#64748B',marginBottom:4}}>Teto do contrato: {it.qtdTeto} {it.unidade||''}{it.vUnit>0?' · R$ '+(it.qtdTeto*it.vUnit).toFixed(2).replace('.',',')+' no total':''}</div>}
-                    {it.qtdTeto>0&&<div style={{fontSize:11,fontWeight:700,marginBottom:4,color:excedeTetoNV?'#DC2626':'#0C6B3E'}}>Saldo disponível: {saldoDispNV} {it.unidade||''}{it.vUnit>0?' (R$ '+(saldoDispNV*it.vUnit).toFixed(2).replace('.',',')+')':''}{valNum>0?' · após este pedido: '+saldoAposNV+' '+(it.unidade||'')+(it.vUnit>0?' (R$ '+(saldoAposNV*it.vUnit).toFixed(2).replace('.',',')+')':''):''}{excedeTetoNV?' ⚠️ excede o saldo!':''}</div>}
+                    {it.qtdTeto>0&&<div style={{fontSize:10,color:'#64748B',marginBottom:4}}>Teto do contrato: {it.qtdTeto} {it.unidade||''}{it.vUnit>0?' · R$ '+_fmtNumBR((it.qtdTeto*it.vUnit))+' no total':''}</div>}
+                    {it.qtdTeto>0&&<div style={{fontSize:11,fontWeight:700,marginBottom:4,color:excedeTetoNV?'#DC2626':'#0C6B3E'}}>Saldo disponível: {saldoDispNV} {it.unidade||''}{it.vUnit>0?' (R$ '+_fmtNumBR((saldoDispNV*it.vUnit))+')':''}{valNum>0?' · após este pedido: '+saldoAposNV+' '+(it.unidade||'')+(it.vUnit>0?' (R$ '+_fmtNumBR((saldoAposNV*it.vUnit))+')':''):''}{excedeTetoNV?' ⚠️ excede o saldo!':''}</div>}
                     <div style={{marginBottom:6}}><span style={{display:'inline-block',fontSize:9,fontWeight:800,color:'#B45309',background:'#FEF3C7',border:'1px solid #FCD34D',borderRadius:6,padding:'1px 6px'}}>⚠️ NÃO VINCULADO</span></div>
                     <div style={{display:'flex',alignItems:'center',gap:8}}>
-                      <div style={{fontSize:10,color:'#94A3B8',flex:1,minWidth:0}}>{vtNV>0?'total deste pedido: R$ '+vtNV.toFixed(2).replace('.',','):''}</div>
+                      <div style={{fontSize:10,color:'#94A3B8',flex:1,minWidth:0}}>{vtNV>0?'total deste pedido: R$ '+_fmtNumBR(vtNV):''}</div>
                       <div style={{display:'flex',flexDirection:'column',alignItems:'center',flexShrink:0}}>
                         <span style={{fontSize:9,color:'#94A3B8',fontWeight:600}}>PEDIR</span>
                         <input type="number" min="0" value={val} onChange={function(e){var v=e.target.value;setAjustes(function(pr){var n=Object.assign({},pr);n[uKey]=v;return n;});}} placeholder="0" style={{width:64,padding:'6px 4px',border:'2px solid '+(edu?'#F59E0B':'#CBD5E1'),borderRadius:8,fontSize:14,fontWeight:800,textAlign:'center',outline:'none',background:edu?'#FFFBEB':'#fff'}}/>
@@ -8146,7 +8165,7 @@ function TabPrevisao(props){
                   </div>);
                 })}
                 {qtdAtaPedido>0&&<div style={{marginTop:8,paddingTop:8,borderTop:'1px solid #E2E8F0',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,flexWrap:'wrap'}}>
-                  <span style={{fontSize:12,fontWeight:800,color:cor}}>{totalAtaPedido>0?'Total do pedido: R$ '+totalAtaPedido.toFixed(2).replace('.',','):qtdAtaPedido+' unidade(s) a pedir'}</span>
+                  <span style={{fontSize:12,fontWeight:800,color:cor}}>{totalAtaPedido>0?'Total do pedido: R$ '+_fmtNumBR(totalAtaPedido):qtdAtaPedido+' unidade(s) a pedir'}</span>
                   {infoTenant.autoDescontarAta&&<button onClick={function(){fecharPedidoAta(ata);}} style={{background:'#0C6B3E',border:'none',borderRadius:8,padding:'6px 12px',fontSize:11,color:'#fff',fontWeight:700,cursor:'pointer'}}>🔒 Fechar Pedido</button>}
                 </div>}
                 </React.Fragment>}
