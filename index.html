@@ -411,6 +411,10 @@ function _fmtNumBR(v){var n=Number(v)||0;var neg=n<0;n=Math.abs(n);var p=n.toFix
 function _fmtMoeda(v){return'R$ '+_fmtNumBR(v);}
 // Lê de volta um valor digitado no padrão BR (aceita com ou sem "R$"/pontos de milhar) -> Number.
 function _parseMoedaBR(s){if(s==null)return NaN;var str=String(s).trim();if(!str)return NaN;str=str.replace(/[^0-9,.\-]/g,'').replace(/\./g,'').replace(',','.');return parseFloat(str);}
+// Pra campos que guardam ora um número puro (ex.: vUnit de item nunca editado nesta sessão, onde
+// "." já É o separador decimal normal do JS), ora uma string digitada no padrão BR (com vírgula) —
+// só trata "." como separador de milhar quando há vírgula na string, senão lê o número cru.
+function _parseValorInput(v){if(typeof v==='number')return v;var s=String(v==null?'':v).trim();if(!s)return NaN;if(s.indexOf(',')>=0)s=s.replace(/\./g,'').replace(',','.');return parseFloat(s);}
 // Remove qualquer campo `undefined` (inclusive dentro de objetos/arrays aninhados) antes de escrever
 // no Firestore — o SDK lança uma exceção SÍNCRONA (não uma promise rejeitada) quando encontra
 // `undefined` em qualquer profundidade, o que escapava do try/catch/then de quem chamava e resultava
@@ -6303,6 +6307,7 @@ function TabPrevisao(props){
   var _editNome=useState('');var editNome=_editNome[0];var setEditNome=_editNome[1];// rascunho: nome da ata (editável — útil quando duas atas de empresas diferentes têm o mesmo nome)
   var _editCnpj=useState('');var editCnpj=_editCnpj[0];var setEditCnpj=_editCnpj[1];// rascunho: CNPJ da empresa/fornecedor desta ata
   var _editValorTotal=useState('');var editValorTotal=_editValorTotal[0];var setEditValorTotal=_editValorTotal[1];// rascunho: valor total do contrato (sobe com aditivo)
+  var _editSaldoRestante=useState('');var editSaldoRestante=_editSaldoRestante[0];var setEditSaldoRestante=_editSaldoRestante[1];// rascunho: ajuste manual do saldo restante (opcional — vazio = mantém automático)
   // Rascunhos só usados em Itaquitinga (Ordens de Fornecimento — ver gerarOrdensFornecimento):
   // identificação do processo/pregão/ata-SRP desta ata, pra imprimir no cabeçalho da ordem oficial.
   var _editProcesso=useState('');var editProcesso=_editProcesso[0];var setEditProcesso=_editProcesso[1];
@@ -6936,13 +6941,14 @@ function TabPrevisao(props){
     setEditNome(ata.nome||'');
     setEditCnpj(ata.cnpj||'');
     setEditValorTotal(ata.valorTotal!=null?_fmtNumBR(ata.valorTotal):'');
+    setEditSaldoRestante(''); // vazio = mantém o saldo calculado automaticamente dos itens
     setEditProcesso(ata.processoLicitatorio||'');
     setEditPregao(ata.pregaoEletronico||'');
     setEditAtaSRP(ata.ataSRP||'');
     setEditBusca('');
   }
   // Fecha o editor DESCARTANDO o rascunho (não grava nada).
-  function fecharEditAta(){setEditAta(null);setEditDraft(null);setEditItens(null);setEditCat('');setEditNome('');setEditCnpj('');setEditValorTotal('');setEditProcesso('');setEditPregao('');setEditAtaSRP('');setEditBusca('');}
+  function fecharEditAta(){setEditAta(null);setEditDraft(null);setEditItens(null);setEditCat('');setEditNome('');setEditCnpj('');setEditValorTotal('');setEditSaldoRestante('');setEditProcesso('');setEditPregao('');setEditAtaSRP('');setEditBusca('');}
   // Adiciona um item NOVO em branco ao rascunho de itens da ata (rascunho local, só grava ao Salvar).
   function adicionarItemEditDraft(){
     setEditItens(function(prev){
@@ -7020,7 +7026,7 @@ function TabPrevisao(props){
       // Normaliza número/valor dos itens editados manualmente (os campos chegam como string do <input>).
       ataUpdate.itens=editItens.map(function(it){return Object.assign({},it,{
         qtdTeto:parseInt(it.qtdTeto)||0,
-        vUnit:_parseMoedaBR(it.vUnit)||0
+        vUnit:_parseValorInput(it.vUnit)||0
       });});
     }
     if(editCat&&editCat!==ata.categoria)ataUpdate.categoria=editCat;
@@ -7047,6 +7053,18 @@ function TabPrevisao(props){
         }
       }
       if(novoValorTotal!==(ata.valorTotal||0))ataUpdate.valorTotal=novoValorTotal;
+    }
+    // Saldo restante é sempre (soma dos itens) - (já pedido) + um ajuste manual opcional — pra quando a
+    // própria farmácia sabe que o saldo real é outro (ex.: consumo de antes do app) e esse cálculo
+    // automático não bate. Campo vazio = mantém 100% automático, sem gravar ajuste nenhum.
+    if(editSaldoRestante&&editSaldoRestante.trim()){
+      var novoSaldoDigitado=_parseMoedaBR(editSaldoRestante);
+      if(!isNaN(novoSaldoDigitado)){
+        var itensFinais=ataUpdate.itens||ata.itens||[];
+        var vTotFinal=itensFinais.reduce(function(a,it){return a+((it.vUnit||0)*(it.qtdTeto||0));},0);
+        var vGastoFinal=itensFinais.reduce(function(a,it){return a+((it.vUnit||0)*(it.pedidoAcumulado||0));},0);
+        ataUpdate.ajusteSaldo=novoSaldoDigitado-(vTotFinal-vGastoFinal);
+      }
     }
     if(Object.keys(ataUpdate).length>0)ops.push(db.collection('atas').doc(ata.id).update(ataUpdate));
     adicionar.forEach(function(id){ops.push(db.collection('medicamentos').doc(id).update({ataId:ata.id}));});
@@ -8006,6 +8024,9 @@ function TabPrevisao(props){
               <div style={{fontSize:11,fontWeight:600,color:'#64748B',marginBottom:4}}>Valor total do contrato (R$) — ajuste aqui se houver aditivo:</div>
               <input type="text" inputMode="decimal" value={editValorTotal} onChange={function(e){setEditValorTotal(e.target.value);}} placeholder="Ex: 249.490,41" className="inp" style={{marginBottom:0,maxWidth:200}}/>
               <div style={{fontSize:10.5,color:'#94A3B8',marginTop:4}}>Corrigindo aqui, o preço unitário dos itens desta ata é reajustado na mesma proporção — o saldo restante e os pedidos já saem certos.</div>
+              <div style={{fontSize:11,fontWeight:600,color:'#64748B',marginTop:12,marginBottom:4}}>Saldo restante da ata (R$) — só se o calculado automaticamente não bater com o real:</div>
+              <input type="text" inputMode="decimal" value={editSaldoRestante} onChange={function(e){setEditSaldoRestante(e.target.value);}} placeholder={'Deixe em branco p/ manter automático (atual: '+(function(){var itsPrev=editItens||ata.itens||[];var vT=itsPrev.reduce(function(a,it){return a+((_parseValorInput(it.vUnit)||0)*(parseInt(it.qtdTeto)||0));},0);var vG=itsPrev.reduce(function(a,it){return a+((_parseValorInput(it.vUnit)||0)*(it.pedidoAcumulado||0));},0);return _fmtNumBR(vT-vG+(ata.ajusteSaldo||0));})()+')'} className="inp" style={{marginBottom:0,maxWidth:260}}/>
+              <div style={{fontSize:10.5,color:'#94A3B8',marginTop:4}}>Digite o saldo real que a ata tem hoje — o app guarda a diferença como um ajuste manual, sem mexer nos itens.</div>
             </div>}
             {ata.cnpj&&editAta!==ata.id&&<div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6,fontSize:12}}>
               <span style={{color:'#64748B',fontWeight:600}}>CNPJ:</span>
@@ -8017,12 +8038,13 @@ function TabPrevisao(props){
             </div>}
             {/* O campo antigo "Limite da ata" (número digitado à mão) nunca alimentava nenhum cálculo —
                 era só guardado, sem efeito nenhum no app. O saldo real, que já é descontado sozinho a
-                cada pedido gerado, vem da soma dos itens do contrato (qtdTeto - pedidoAcumulado). Isso
-                é só controle interno da farmácia — não aparece no pedido impresso. */}
+                cada pedido gerado, vem da soma dos itens do contrato (qtdTeto - pedidoAcumulado), mais
+                o ajuste manual opcional (ata.ajusteSaldo) pra quando esse cálculo não bate com o saldo
+                real conhecido pela farmácia. É só controle interno — não aparece no pedido impresso. */}
             {ata.itens&&ata.itens.length>0&&(function(){
               var vTot=ata.itens.reduce(function(a,it){return a+(it.vUnit*(it.qtdTeto||0));},0);
               var vGasto=ata.itens.reduce(function(a,it){return a+(it.vUnit*(it.pedidoAcumulado||0));},0);
-              var vRestante=vTot-vGasto;
+              var vRestante=vTot-vGasto+(ata.ajusteSaldo||0);
               return(<div style={{marginBottom:10}}>
                 <div style={{display:'flex',alignItems:'center',gap:8,fontSize:12,flexWrap:'wrap'}}>
                   <span style={{color:'#64748B',fontWeight:600}}>Saldo restante da ata:</span>
@@ -8255,11 +8277,12 @@ function TabPrevisao(props){
             {ataDetalhe===ata.id&&ata.itens&&ata.itens.length>0&&(function(){
               var vTot=ata.itens.reduce(function(a,it){return a+(it.vUnit*(it.qtdTeto||0));},0);
               var vGasto=ata.itens.reduce(function(a,it){return a+(it.vUnit*(it.pedidoAcumulado||0));},0);
+              var vSaldo=vTot-vGasto+(ata.ajusteSaldo||0);
               return(<div style={{marginTop:12,borderTop:'1px solid #E2E8F0',paddingTop:12}}>
                 <div style={{background:'#F8FAFC',borderRadius:10,padding:'10px 14px',marginBottom:12,display:'flex',gap:20,flexWrap:'wrap',fontSize:12}}>
-                  <div><span style={{color:'#64748B'}}>Valor total ata: </span><strong>R$ {vTot.toFixed(2)}</strong></div>
-                  <div><span style={{color:'#64748B'}}>Já pedido: </span><strong style={{color:vGasto>vTot?'#DC2626':'#0C6B3E'}}>R$ {vGasto.toFixed(2)}</strong></div>
-                  <div><span style={{color:'#64748B'}}>Saldo R$: </span><strong style={{color:(vTot-vGasto)<0?'#DC2626':'#1351B4'}}>R$ {(vTot-vGasto).toFixed(2)}</strong></div>
+                  <div><span style={{color:'#64748B'}}>Valor total ata: </span><strong>R$ {_fmtNumBR(vTot)}</strong></div>
+                  <div><span style={{color:'#64748B'}}>Já pedido: </span><strong style={{color:vGasto>vTot?'#DC2626':'#0C6B3E'}}>R$ {_fmtNumBR(vGasto)}</strong></div>
+                  <div><span style={{color:'#64748B'}}>Saldo R$: </span><strong style={{color:vSaldo<0?'#DC2626':'#1351B4'}}>R$ {_fmtNumBR(vSaldo)}</strong></div>
                 </div>
                 {ata.itens.map(function(it,idxIt){
                   var saldo=(it.qtdTeto||0)-(it.pedidoAcumulado||0);
