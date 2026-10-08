@@ -6724,7 +6724,12 @@ function TabPrevisao(props){
               if(desc.toLowerCase().indexOf('total')>=0&&qtd===''&&cs.length<4)return;
             } else return;
 
-            var qN=parseInt((qtd||'').replace(/[^0-9]/g,''))||0;
+            // A quantidade vem do Word sempre como "250,00" (com ",00" de centavos, mesmo sendo um
+            // número inteiro de unidades) — tirar TODOS os caracteres não-dígitos (regex antiga) juntava
+            // essas duas casas decimais na parte inteira e multiplicava a quantidade por ~100 (bug
+            // relatado 08/10/2026, ata FENIX: "250,00" virava 25000; "10.000,00" virava 1.000.000).
+            // _parseValorInput entende vírgula como decimal e ponto como separador de milhar, igual o vUnit.
+            var qN=Math.round(_parseValorInput(qtd))||0;
             if(!desc||qN===0)return;
             var vUN=parseFloat((vU||'').replace(/[^0-9,]/g,'').replace(',','.'))||0;
             itens.push({num:n,descricao:desc,marca:marca,qtdTeto:qN,unidade:unid,vUnit:vUN,pedidoAcumulado:0,medicamentoId:''});
@@ -6818,7 +6823,9 @@ function TabPrevisao(props){
             var row=rows[r];
             var desc=String(row[colMap.desc]==null?'':row[colMap.desc]).trim();
             if(!desc)continue; // pula a linha "TOTAL" (descrição vazia) e linhas em branco
-            var qtd=parseInt(String(colMap.qtd!==undefined?row[colMap.qtd]:'').replace(/[^0-9]/g,''))||0;
+            // Mesmo bug do import de .docx: quantidade "250,00" vinda como texto não pode ter a vírgula
+            // removida junto com o ponto de milhar, senão vira 25000.
+            var qtd=Math.round(_parseValorInput(colMap.qtd!==undefined?row[colMap.qtd]:0))||0;
             if(qtd<=0)continue;
             var vU=parseFloat(String(colMap.vUnit!==undefined?row[colMap.vUnit]:'').replace(',','.'))||0;
             var unid=colMap.unid!==undefined?String(row[colMap.unid]==null?'':row[colMap.unid]).trim():'';
