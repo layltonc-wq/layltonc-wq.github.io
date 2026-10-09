@@ -6270,6 +6270,7 @@ function TabPrevisao(props){
   var _filtCatLote=useState('todos');var filtCatLote=_filtCatLote[0];var setFiltCatLote=_filtCatLote[1];
   var _ajBusca=useState('');var ajBusca=_ajBusca[0];var setAjBusca=_ajBusca[1];
   var _soUrg=useState(false);var soUrg=_soUrg[0];var setSoUrg=_soUrg[1];// filtro: mostrar só itens com risco de ruptura
+  var _tendMed=useState(null);var tendMed=_tendMed[0];var setTendMed=_tendMed[1];// medicamento com o detalhe de tendência de consumo aberto
   var _numPedido=useState('');var numPedido=_numPedido[0];var setNumPedido=_numPedido[1];
   var _empresa=useState('');var empresa=_empresa[0];var setEmpresa=_empresa[1];
   var _cnpjEmpresa=useState('');var cnpjEmpresa=_cnpjEmpresa[0];var setCnpjEmpresa=_cnpjEmpresa[1];
@@ -6382,6 +6383,28 @@ function TabPrevisao(props){
     var pg=medId?(consumoIndex.idx[medId]?consumoIndex.idx[medId].primeira:null):consumoIndex.primeiraGlobal;
     if(!pg)return 0;
     return Math.max(1,Math.round((Date.now()-new Date(pg+'T12:00:00').getTime())/(1000*60*60*24)));
+  }
+
+  // Série diária de saídas reais dos últimos `dias` dias (p/ o detalhe de tendência) — só calculada
+  // sob demanda, ao abrir o modal de um medicamento (não entra no useMemo pesado de todos os itens).
+  // Preenche os dias sem movimento com 0, pra virar um gráfico de barras contínuo (não só os dias com saída).
+  function serieDiariaConsumo(medId,dias){
+    var porDia={};
+    (entries||[]).forEach(function(e){
+      if(e.tipo!=='saida'||e.medicamentoId!==medId)return;
+      if(_ehSaidaNaoReal(e))return;
+      var ds=e.date||(e.criadoEm||'').slice(0,10);
+      if(!ds)return;
+      porDia[ds]=(porDia[ds]||0)+(Number(e.quantidade)||0);
+    });
+    var hoje=new Date();hoje.setHours(12,0,0,0);
+    var serie=[];
+    for(var i=dias-1;i>=0;i--){
+      var d=new Date(hoje);d.setDate(d.getDate()-i);
+      var ds=d.toISOString().slice(0,10);
+      serie.push({data:ds,qtd:porDia[ds]||0});
+    }
+    return serie;
   }
 
   // Núcleo do cálculo de previsão (puro). Lê os agregados já indexados — mesma lógica/números de antes.
@@ -7711,7 +7734,7 @@ function TabPrevisao(props){
                   {alerta&&<div style={{display:'inline-block',fontSize:11,fontWeight:800,color:critico?'#B91C1C':'#92400E',background:critico?'#FEE2E2':'#FEF3C7',borderRadius:6,padding:'2px 8px',marginBottom:3}}>⚠️ Acaba em {dAcaba} dia{dAcaba===1?'':'s'}</div>}
                   <div style={{fontSize:11,color:'#94A3B8'}}>
                     Estoque: {stock[m.id]||0} · Mín: {m.minEstoque||0} · Estimado: {m.consumoEstimado||0}/mês{p.consumoRealMes>0?' · Real: '+p.consumoRealMes+'/mês':''}
-                    {' · '}<span style={{color:cor2,fontWeight:600}}>{metodoLbl[p.metodo]||p.metodo}</span>
+                    {' · '}<button onClick={function(){setTendMed(m);}} style={{color:cor2,fontWeight:600,background:'none',border:'none',padding:0,font:'inherit',cursor:'pointer',textDecoration:'underline',textDecorationStyle:'dotted'}} title="Ver tendência de consumo">{metodoLbl[p.metodo]||p.metodo}</button>
                   </div>
                   {p.detalhe&&<div style={{fontSize:10,color:'#B0B8C4',marginTop:2}}>{p.detalhe}</div>}
                   {saldoAta!==null&&<div style={{fontSize:11,marginTop:2,fontWeight:600,color:excede?'#DC2626':'#0C6B3E'}}>
@@ -8454,6 +8477,52 @@ function TabPrevisao(props){
           </div>
         </div>
       </div>}
+
+      {/* Detalhe de tendência de consumo — aberto ao clicar no método (📈 tendência / 📉 média / etc.)
+          de um medicamento. Mostra o histórico diário real dos últimos 30 dias (barras) e a previsão
+          de quando o estoque acaba, em data de calendário em vez de só "X dias" (pedido da usuária). */}
+      {tendMed&&(function(){
+        var m=tendMed;
+        var p=calcularPrevisao(m);
+        var serie=serieDiariaConsumo(m.id,30);
+        var maxQ=Math.max(1,serie.reduce(function(mx,d){return Math.max(mx,d.qtd);},0));
+        var totalPeriodo=serie.reduce(function(s,d){return s+d.qtd;},0);
+        var mediaDiaria=totalPeriodo/serie.length;
+        var dAcaba=p.diasParaAcabar;
+        var dataAcaba=dAcaba!=null?(function(){var d=new Date();d.setDate(d.getDate()+dAcaba);return d.toLocaleDateString('pt-BR');})():null;
+        var tendCor=/alta/.test(p.detalhe||'')?'#DC2626':/queda/.test(p.detalhe||'')?'#0C6B3E':'#64748B';
+        return(<Modal onClose={function(){setTendMed(null);}} title={'📈 Tendência de consumo — '+m.nome}>
+          <div style={{display:'flex',gap:16,marginBottom:16,flexWrap:'wrap'}}>
+            <div style={{flex:1,minWidth:110}}>
+              <div style={{fontSize:22,fontWeight:800,color:'#1E293B'}}>{totalPeriodo}</div>
+              <div style={{fontSize:11,color:'#94A3B8'}}>unidades saíram nos últimos 30 dias</div>
+            </div>
+            <div style={{flex:1,minWidth:110}}>
+              <div style={{fontSize:22,fontWeight:800,color:'#1E293B'}}>{mediaDiaria.toFixed(1)}</div>
+              <div style={{fontSize:11,color:'#94A3B8'}}>média de unidades por dia</div>
+            </div>
+            <div style={{flex:1,minWidth:110}}>
+              <div style={{fontSize:22,fontWeight:800,color:dAcaba!=null&&dAcaba<15?'#DC2626':dAcaba!=null&&dAcaba<=30?'#D97706':'#0C6B3E'}}>{dAcaba!=null?dAcaba+'d':'—'}</div>
+              <div style={{fontSize:11,color:'#94A3B8'}}>{dataAcaba?'acaba por volta de '+dataAcaba:'sem saída real suficiente p/ prever'}</div>
+            </div>
+          </div>
+          <div style={{fontSize:11,fontWeight:700,color:'#64748B',marginBottom:6,textTransform:'uppercase',letterSpacing:'.04em'}}>Saídas por dia (últimos 30 dias)</div>
+          <div style={{display:'flex',alignItems:'flex-end',gap:2,height:90,marginBottom:4,background:'#F8FAFC',borderRadius:10,padding:'8px 6px'}}>
+            {serie.map(function(d,i){
+              var h=Math.round((d.qtd/maxQ)*70);
+              return <div key={d.data} title={d.data.split('-').reverse().join('/')+': '+d.qtd+' un.'} style={{flex:1,minWidth:2,height:Math.max(2,h),background:d.qtd>0?'#1351B4':'#E2E8F0',borderRadius:2}}/>;
+            })}
+          </div>
+          <div style={{display:'flex',justifyContent:'space-between',fontSize:10,color:'#94A3B8',marginBottom:16}}>
+            <span>{serie[0]&&serie[0].data.split('-').reverse().slice(0,2).join('/')}</span>
+            <span>hoje</span>
+          </div>
+          <div style={{background:tendCor+'14',border:'1.5px solid '+tendCor+'40',borderRadius:10,padding:'10px 12px',fontSize:12.5,color:'#1E293B'}}>
+            {p.detalhe||'Sem detalhe de cálculo disponível para este medicamento.'}
+          </div>
+          <div style={{fontSize:10,color:'#94A3B8',marginTop:10}}>Considera só dispensação real — balanços, descartes e ajustes de conferência não entram nesta conta.</div>
+        </Modal>);
+      })()}
     </div>
   );
 }
