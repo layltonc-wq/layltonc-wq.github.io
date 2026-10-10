@@ -229,7 +229,7 @@ select.inp{cursor:pointer}
    ===================================================================== */
 .theme-itaq{
   --itq-ink:#101B33;--itq-text:#3C4A66;--itq-soft:#5B6B8C;--itq-faint:#94A3B8;
-  --itq-bg:#F3F6FC;--itq-line:#E3E9F6;--itq-tint:#EBF2FD;--itq-tint-line:#CFE0FA;
+  --itq-bg:#DCE6F5;--itq-line:#E3E9F6;--itq-tint:#EBF2FD;--itq-tint-line:#CFE0FA;
   --itq-radius:16px;--itq-shadow:0 1px 2px rgba(15,23,42,.04),0 12px 28px -18px rgba(16,42,90,.22);
   background:var(--itq-bg)!important;color:var(--itq-text)!important;
   font-family:'IBM Plex Sans','Segoe UI',system-ui,sans-serif!important;
@@ -294,9 +294,12 @@ select.inp{cursor:pointer}
   }
   body.theme-itaq{padding-bottom:0;padding-left:76px}
   .theme-itaq .menu-drawer{left:76px!important}
+  /* O fundo escurecido por trás do menu não pode cobrir a barra lateral — senão ela "some"
+     (vira uma coluna em branco/escurecida) enquanto o menu está aberto. */
+  .theme-itaq .itaq-backdrop{left:76px!important}
 }
 .itaq-sidebar-logo{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,var(--blue-900),var(--blue-700));display:flex;align-items:center;justify-content:center;color:#fff;margin-bottom:22px;flex-shrink:0}
-.itaq-sidebar-nav{display:flex;flex-direction:column;gap:6px;flex:1}
+.itaq-sidebar-nav{display:flex;flex-direction:column;gap:6px;flex:1;width:100%;align-items:center}
 .itaq-sidebar-btn{display:flex;flex-direction:column;align-items:center;gap:4px;width:60px;padding:9px 2px;border:none;background:transparent;border-radius:12px;cursor:pointer;color:var(--gray-400);transition:background .15s,color .15s}
 .itaq-sidebar-btn span{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.02em;text-align:center;line-height:1.15}
 .itaq-sidebar-btn:hover{background:var(--gray-50);color:var(--gray-600)}
@@ -829,13 +832,16 @@ function Icon(props){
   var cm={width:s,height:s,viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:sw,strokeLinecap:'round',strokeLinejoin:'round'};
   var P={
     home:<path d="M4 11.5 12 4l8 7.5M6 10v9h4.5v-5h3v5H18v-9"/>,
-    pill:<g><rect x="4.3" y="10" width="15.4" height="7" rx="3.5" transform="rotate(-35 12 13.5)"/><line x1="10" y1="9.2" x2="14" y2="17.8" transform="rotate(-35 12 13.5)"/></g>,
+    pill:<g><rect x="4.5" y="9.5" width="15" height="7" rx="3.5" transform="rotate(-45 12 13)"/><line x1="12" y1="9" x2="12" y2="17" transform="rotate(-45 12 13)"/></g>,
     inbox:<g><path d="M3.5 12h4.2l1.6 2.6h5.4l1.6-2.6h4.2"/><path d="M4.3 12 5.6 5.8A1 1 0 0 1 6.6 5h10.8a1 1 0 0 1 1 .8L19.7 12"/><path d="M4.3 12v6a1 1 0 0 0 1 1h13.4a1 1 0 0 0 1-1v-6"/></g>,
     hourglass:<path d="M6.5 3h11M6.5 21h11M7.5 3c0 5.5 9 5.5 9 0M7.5 21c0-5.5 9-5.5 9 0"/>,
     trendDown:<g><polyline points="4 7 10 13 14 10 20 17"/><polyline points="14 17 20 17 20 11"/></g>,
     trendUp:<g><polyline points="4 17 10 11 14 14 20 7"/><polyline points="14 7 20 7 20 13"/></g>,
     truck:<g><rect x="2.3" y="7.5" width="11" height="8.5"/><path d="M13.3 10.3h4l3 3.2v2.5h-7z"/><circle cx="7" cy="18" r="1.6"/><circle cx="17.3" cy="18" r="1.6"/></g>,
-    scale:<g><path d="M12 3v3M12 19v2M8 21h8"/><path d="M6 6h12M3.5 6 2 11a2.6 2.6 0 0 0 5.2 0zM22 11l-1.5-5h-3l-1.5 5a2.6 2.6 0 0 0 5.2 0z"/></g>,
+    scale:<g><line x1="12" y1="4" x2="12" y2="19"/><line x1="7" y1="19" x2="17" y2="19"/><line x1="5" y1="6.5" x2="19" y2="6.5"/><path d="M5 6.5 2.3 11.8a2.4 2.4 0 0 0 4.7 0z"/><path d="M19 6.5l-2.7 5.3a2.4 2.4 0 0 0 4.7 0z"/></g>,
+    check:<polyline points="4.5 12.5 9.5 17.5 19.5 6.5"/>,
+    x:<g><line x1="5.5" y1="5.5" x2="18.5" y2="18.5"/><line x1="18.5" y1="5.5" x2="5.5" y2="18.5"/></g>,
+    arrowRight:<g><line x1="4" y1="12" x2="18.5" y2="12"/><polyline points="13 6.5 18.5 12 13 17.5"/></g>,
     dna:<g><path d="M6 3c0 6 12 6 12 12M18 21c0-6-12-6-12-12"/><line x1="8" y1="6.5" x2="12.5" y2="6.5"/><line x1="11.5" y1="12" x2="16" y2="12"/><line x1="8" y1="17.5" x2="12.5" y2="17.5"/></g>,
     menu:<g><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></g>,
     search:<g><circle cx="10.8" cy="10.8" r="6.3"/><line x1="19.5" y1="19.5" x2="15.4" y2="15.4"/></g>,
@@ -978,12 +984,13 @@ function ShiftCard(props){
     db.collection('plantoes').doc(plantaoDocId(user,shiftId)).update({equipe:novaEquipe}).catch(function(e){alert('Erro: '+e.message);});
   }
 
+  var temaItaq=tenantDe(user)==='itaquitinga-pe';
   if(!plantao){
     // Farmacêutico só abre dentro do horário de plantão; gestor/técnico podem abrir a qualquer hora
     // (eles já operam sem precisar de plantão, mas também podem formalizar/abrir um se quiserem).
     if(!user||!(user.role==='farmaceutico'||user.role==='gestor'||user.role==='tecnico'))return null;
     if(user.role==='farmaceutico'&&!isShiftTime())return null;
-    return(<div style={{background:'#EFF6FF',border:'1.5px dashed #BFDBFE',borderRadius:16,padding:'16px 18px',marginBottom:14,textAlign:'center'}}>
+    return(<div className={temaItaq?'shift-empty':''} style={temaItaq?{marginBottom:14,padding:'16px 18px',textAlign:'center'}:{background:'#EFF6FF',border:'1.5px dashed #BFDBFE',borderRadius:16,padding:'16px 18px',marginBottom:14,textAlign:'center'}}>
       <div style={{fontSize:13,color:'#64748B',marginBottom:10}}>Nenhum plantão ativo hoje</div>
       <button onClick={onIniciar} style={{background:B,border:'none',borderRadius:10,padding:'10px 24px',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer'}}>Abrir Plantão</button>
     </div>);
@@ -1003,48 +1010,55 @@ function ShiftCard(props){
   return true;
 });
 
-  return(<div className="shift-card">
+  var ov1=temaItaq?'rgba(19,81,180,.08)':'rgba(255,255,255,.12)';
+  var ov2=temaItaq?'rgba(19,81,180,.05)':'rgba(255,255,255,.1)';
+  var ovLine=temaItaq?'1px solid rgba(19,81,180,.14)':'1px solid rgba(255,255,255,.15)';
+  var txtMain=temaItaq?'#1E293B':'#fff';
+  var txtSoft=temaItaq?'#64748B':'rgba(255,255,255,.65)';
+  var cardStyle=temaItaq?{background:'#fff',border:'1.5px solid var(--itq-line,#E3E9F6)',borderRadius:16,padding:'16px 18px',marginBottom:14,color:txtMain,boxShadow:'0 1px 2px rgba(15,23,42,.04),0 12px 28px -18px rgba(16,42,90,.22)'}:undefined;
+  return(<div className="shift-card" style={cardStyle}>
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
-      <div style={{fontWeight:700,fontSize:13,display:'flex',alignItems:'center',gap:6}}>
+      <div style={{fontWeight:700,fontSize:13,display:'flex',alignItems:'center',gap:6,color:txtMain}}>
         <div style={{width:8,height:8,borderRadius:'50%',background:'#4ADE80',boxShadow:'0 0 0 3px rgba(74,222,128,.3)'}}/>
         Plantão em andamento
       </div>
       <div style={{display:'flex',alignItems:'center',gap:6}}>
-        <div style={{fontSize:11,opacity:0.65}}>por {plantao.iniciadoPorNome}</div>
-        {isManager&&<button onClick={function(){setShowGestao(!showGestao);}} style={{background:'rgba(255,255,255,.2)',border:'1px solid rgba(255,255,255,.3)',borderRadius:8,padding:'4px 10px',color:'#fff',fontSize:11,fontWeight:700,cursor:'pointer'}}>⚙️ Equipe</button>}
+        <div style={{fontSize:11,color:txtSoft}}>por {plantao.iniciadoPorNome}</div>
+        {isManager&&<button onClick={function(){setShowGestao(!showGestao);}} style={{background:ov1,border:ovLine,borderRadius:8,padding:'4px 10px',color:txtMain,fontSize:11,fontWeight:700,cursor:'pointer',display:'flex',alignItems:'center',gap:4}}>{temaItaq?<Icon name="gear" size={12}/>:'⚙️'} Equipe</button>}
       </div>
     </div>
 
     {/* Equipe atual */}
     <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:10}}>
       {equipe.map(function(m,i){
+        var stIcon=m.status==='confirmado'?'check':m.status==='negou'?'x':m.status==='saiu'?'arrowRight':null;
         var st=m.status==='confirmado'?'✓':m.status==='negou'?'✗':m.status==='saiu'?'→':'…';
-        var stColor=m.status==='confirmado'?'rgba(74,222,128,.9)':m.status==='negou'?'rgba(248,113,113,.9)':'rgba(255,255,255,.5)';
-        return(<div key={i} style={{display:'flex',alignItems:'center',gap:5,background:'rgba(255,255,255,.12)',borderRadius:20,padding:'4px 10px',border:'1px solid rgba(255,255,255,.15)'}}>
-          <div className="av" style={{width:16,height:16,background:m.color||'rgba(255,255,255,.3)',fontSize:8}}>{m.nome?m.nome.charAt(0):''}</div>
-          <span style={{fontSize:11}}>{m.nome?m.nome.split(' ')[0]:''}</span>
-          <span style={{fontSize:10,color:stColor,fontWeight:700}}>{st}</span>
-          {isManager&&m.id!==user.uid&&<button onClick={function(){if(!confirm('Remover '+m.nome+' do plantão?'))return;removerMembro(m.id);}} style={{background:'none',border:'none',color:'rgba(255,100,100,.8)',cursor:'pointer',fontSize:12,padding:'0 2px',lineHeight:1}} title="Remover">×</button>}
+        var stColor=m.status==='confirmado'?(temaItaq?'#059669':'rgba(74,222,128,.9)'):m.status==='negou'?(temaItaq?'#DC2626':'rgba(248,113,113,.9)'):(temaItaq?'#94A3B8':'rgba(255,255,255,.5)');
+        return(<div key={i} style={{display:'flex',alignItems:'center',gap:5,background:ov1,borderRadius:20,padding:'4px 10px',border:ovLine}}>
+          <div className="av" style={{width:16,height:16,background:m.color||(temaItaq?'#94A3B8':'rgba(255,255,255,.3)'),fontSize:8}}>{m.nome?m.nome.charAt(0):''}</div>
+          <span style={{fontSize:11,color:txtMain}}>{m.nome?m.nome.split(' ')[0]:''}</span>
+          <span style={{color:stColor,fontWeight:700,display:'flex',alignItems:'center'}}>{temaItaq&&stIcon?<Icon name={stIcon} size={11} strokeWidth={2.5}/>:<span style={{fontSize:10}}>{st}</span>}</span>
+          {isManager&&m.id!==user.uid&&<button onClick={function(){if(!confirm('Remover '+m.nome+' do plantão?'))return;removerMembro(m.id);}} style={{background:'none',border:'none',color:temaItaq?'#DC2626':'rgba(255,100,100,.8)',cursor:'pointer',fontSize:12,padding:'0 2px',lineHeight:1}} title="Remover">×</button>}
         </div>);
       })}
     </div>
 
     {/* Painel de gestão de equipe para gestor/técnico */}
-    {isManager&&showGestao&&<div style={{background:'rgba(255,255,255,.1)',borderRadius:10,padding:'10px 12px',marginBottom:8,border:'1px solid rgba(255,255,255,.2)'}}>
-      <div style={{fontSize:12,fontWeight:700,color:'#fff',marginBottom:8}}>⚙️ Gerenciar Equipe</div>
-      {disponiveis.length===0&&<div style={{fontSize:11,color:'rgba(255,255,255,.6)'}}>Todos os funcionários já estão na equipe</div>}
+    {isManager&&showGestao&&<div style={{background:ov2,borderRadius:10,padding:'10px 12px',marginBottom:8,border:ovLine}}>
+      <div style={{fontSize:12,fontWeight:700,color:txtMain,marginBottom:8,display:'flex',alignItems:'center',gap:5}}>{temaItaq?<Icon name="gear" size={13}/>:'⚙️'} Gerenciar Equipe</div>
+      {disponiveis.length===0&&<div style={{fontSize:11,color:txtSoft}}>Todos os funcionários já estão na equipe</div>}
       {disponiveis.map(function(u){
-        return(<div key={u.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'6px 0',borderBottom:'1px solid rgba(255,255,255,.1)'}}>
-          <span style={{fontSize:12,color:'#fff'}}>{u.name||u.nome||u.email} <span style={{fontSize:10,opacity:0.6}}>({u.role})</span></span>
-          <button onClick={function(){adicionarMembro(u);}} style={{background:'rgba(74,222,128,.3)',border:'1px solid rgba(74,222,128,.5)',borderRadius:6,padding:'4px 10px',color:'#fff',fontSize:11,fontWeight:700,cursor:'pointer'}}>+ Adicionar</button>
+        return(<div key={u.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'6px 0',borderBottom:temaItaq?'1px solid rgba(19,81,180,.08)':'1px solid rgba(255,255,255,.1)'}}>
+          <span style={{fontSize:12,color:txtMain}}>{u.name||u.nome||u.email} <span style={{fontSize:10,color:txtSoft}}>({u.role})</span></span>
+          <button onClick={function(){adicionarMembro(u);}} style={{background:temaItaq?'#DCFCE7':'rgba(74,222,128,.3)',border:temaItaq?'1px solid #86EFAC':'1px solid rgba(74,222,128,.5)',borderRadius:6,padding:'4px 10px',color:temaItaq?'#0C6B3E':'#fff',fontSize:11,fontWeight:700,cursor:'pointer'}}>+ Adicionar</button>
         </div>);
       })}
     </div>}
 
-    {isGuest&&<div style={{fontSize:11,background:'rgba(255,255,255,.1)',borderRadius:8,padding:'5px 10px',marginBottom:8,color:'rgba(255,255,255,.8)',border:'1px solid rgba(255,255,255,.15)'}}>Você está no modo convidado</div>}
-    {canSolicitar&&<button onClick={onSolicitar} style={{width:'100%',background:'rgba(255,255,255,.15)',border:'1px solid rgba(255,255,255,.3)',borderRadius:10,padding:'9px',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer',marginBottom:6}}>Solicitar entrada no plantão</button>}
-    {canSair&&<button onClick={onSair} style={{width:'100%',background:'rgba(255,255,255,.08)',border:'1px solid rgba(255,255,255,.2)',borderRadius:10,padding:'8px',color:'rgba(255,255,255,.8)',fontSize:12,fontWeight:600,cursor:'pointer',marginBottom:6}}>Sair do plantão</button>}
-    {canEncerrar&&<button onClick={onEncerrar} style={{width:'100%',background:'rgba(220,38,38,.7)',border:'1px solid rgba(255,255,255,.2)',borderRadius:10,padding:'9px',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer'}}>Encerrar Plantão</button>}
+    {isGuest&&<div style={{fontSize:11,background:ov2,borderRadius:8,padding:'5px 10px',marginBottom:8,color:txtSoft,border:ovLine}}>Você está no modo convidado</div>}
+    {canSolicitar&&<button onClick={onSolicitar} style={{width:'100%',background:temaItaq?B:'rgba(255,255,255,.15)',border:temaItaq?'none':'1px solid rgba(255,255,255,.3)',borderRadius:10,padding:'9px',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer',marginBottom:6}}>Solicitar entrada no plantão</button>}
+    {canSair&&<button onClick={onSair} style={{width:'100%',background:ov1,border:ovLine,borderRadius:10,padding:'8px',color:txtSoft,fontSize:12,fontWeight:600,cursor:'pointer',marginBottom:6}}>Sair do plantão</button>}
+    {canEncerrar&&<button onClick={onEncerrar} style={{width:'100%',background:temaItaq?'#DC2626':'rgba(220,38,38,.7)',border:temaItaq?'none':'1px solid rgba(255,255,255,.2)',borderRadius:10,padding:'9px',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer'}}>Encerrar Plantão</button>}
   </div>);
 }
 
@@ -1058,11 +1072,12 @@ function del(id){db.collection('avisos').doc(id).delete();}
 var today=todayStr();var te=entries.filter(function(e){return (e.criadoEm||'').startsWith(today)&&!_ehSaidaNaoReal(e);});var ts=0;te.forEach(function(e){if(e.tipo==='saida')ts+=(e.quantidade||0);});var tin=0;te.forEach(function(e){if(e.tipo==='entrada')tin+=(e.quantidade||0);});var low=medications.filter(function(m){return m.minEstoque&&(stock[m.id]||0)<=m.minEstoque&&(stock[m.id]||0)>0;});
 var vencendoIds={};computeVencimentos(medications,entries,stock).venc30.forEach(function(v){vencendoIds[v.id]=true;});var vencendo=Object.keys(vencendoIds).length;
 var week=[];for(var wi=0;wi<7;wi++){var wd=new Date();wd.setDate(wd.getDate()-(6-wi));var wk=fmtISO(wd);var wv=0;entries.forEach(function(e){if(e.tipo==='saida'&&!_ehSaidaNaoReal(e)&&(e.criadoEm||'').startsWith(wk))wv+=(e.quantidade||0);});week.push({l:wd.toLocaleDateString('pt-BR',{weekday:'short'}).slice(0,3),v:wv});}
+var temaItaq=tenantDe(user)==='itaquitinga-pe';
 var stats=[
-  {icon:'💊',label:'Saídas hoje',val:ts,sub:te.filter(function(e){return e.tipo==='saida';}).length+' registros',color:'#DC2626',bg:'#FEE2E2'},
-  {icon:'📥',label:'Entradas hoje',val:tin,sub:te.filter(function(e){return e.tipo==='entrada';}).length+' registros',color:'#0C6B3E',bg:'#DCFCE7'},
-  {icon:'⏳',label:'Vencimento',val:vencendo,sub:'produtos',color:vencendo>0?'#DC2626':'#0C6B3E',bg:vencendo>0?'#FEE2E2':'#DCFCE7'},
-  {icon:'📉',label:'Estoque baixo',val:low.length,sub:'produtos',color:low.length>0?'#B45309':'#0C6B3E',bg:low.length>0?'#FEF3C7':'#DCFCE7'},
+  {icon:'💊',iconName:'pill',label:'Saídas hoje',val:ts,sub:te.filter(function(e){return e.tipo==='saida';}).length+' registros',color:'#DC2626',bg:'#FEE2E2'},
+  {icon:'📥',iconName:'inbox',label:'Entradas hoje',val:tin,sub:te.filter(function(e){return e.tipo==='entrada';}).length+' registros',color:'#0C6B3E',bg:'#DCFCE7'},
+  {icon:'⏳',iconName:'hourglass',label:'Vencimento',val:vencendo,sub:'produtos',color:vencendo>0?'#DC2626':'#0C6B3E',bg:vencendo>0?'#FEE2E2':'#DCFCE7'},
+  {icon:'📉',iconName:'trendDown',label:'Estoque baixo',val:low.length,sub:'produtos',color:low.length>0?'#B45309':'#0C6B3E',bg:low.length>0?'#FEF3C7':'#DCFCE7'},
 ];
 return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
   <ShiftCard plantao={plantao} isGuest={isGuest} user={user} onEncerrar={onEncerrar} shiftId={shiftId} onIniciar={onIniciar} onSolicitarEntrada={onSolicitarEntrada} onSair={onSair} db={db}/>
@@ -1070,7 +1085,7 @@ return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
   <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:10,marginBottom:14}}>
     {stats.map(function(s){return(
       <div key={s.label} className="stat-card" style={{color:s.color}}>
-        <div className="stat-icon" style={{background:s.bg}}>{s.icon}</div>
+        <div className="stat-icon" style={{background:s.bg}}>{temaItaq?<Icon name={s.iconName} size={18}/>:s.icon}</div>
         <div className="stat-val">{s.val}</div>
         <div className="stat-label">{s.label}</div>
         <div className="stat-sub">{s.sub}</div>
@@ -1891,6 +1906,7 @@ var _showControlado=useState(false);var showControlado=_showControlado[0];var se
 var _controladoData=useState(null);var controladoData=_controladoData[0];var setControladoData=_controladoData[1];
 var _demoControlado=useState(false);var demoControlado=_demoControlado[0];var setDemoControlado=_demoControlado[1];
 var inStock=medications.filter(function(m){return (stock[m.id]||0)>0;});var filtered=[];if(search.trim()){var s=search.toLowerCase();filtered=inStock.filter(function(m){return m.nome.toLowerCase().indexOf(s)>=0;}).slice(0,8);}var cur=sel?(stock[sel.id]||0):0;
+var temaItaq=tenantDe(user)==='itaquitinga-pe';
 function adicionarCarrinho(){
     if(!sel){setErr('Selecione um medicamento.');return;}
     if(_ehMedControlado(sel.nome)){setErr('🔒 '+sel.nome+' é controlado (Morfina/Tramal) — retire individualmente em "Registrar Saída", não pelo carrinho.');return;}
@@ -1978,7 +1994,7 @@ var last10=entries.filter(function(e){return e.tipo==='saida'&&!_ehSaidaNaoReal(
 return(
 <div style={{maxWidth:600,margin:'0 auto',padding:'16px 14px'}}>
   <div className="card" style={{marginBottom:14}}>
-    <div className="ch"><div className="ch-title"><div style={{width:3,height:16,background:'#DC2626',borderRadius:2,flexShrink:0}}/><span>Registrar Saída</span></div></div>
+    <div className="ch"><div className="ch-title"><div style={{width:3,height:16,background:temaItaq?'var(--blue-700)':'#DC2626',borderRadius:2,flexShrink:0}}/><span>Registrar Saída</span></div></div>
     <div style={{padding:'16px',position:'relative'}}>
       <Lbl c="Medicamento"/>
       <div style={{position:'relative'}}>
@@ -2076,10 +2092,10 @@ return(
   </div>
   {last10.length>0&&(
     <div className="card">
-      <div className="ch"><div className="ch-title"><div style={{width:3,height:16,background:'#DC2626',borderRadius:2}}/><span>Últimas saidas</span></div></div>
+      <div className="ch"><div className="ch-title"><div style={{width:3,height:16,background:temaItaq?'var(--blue-700)':'#DC2626',borderRadius:2}}/><span>Últimas saidas</span></div></div>
       {last10.map(function(e,i){return(
         <div key={e.id} style={{padding:'12px 16px',borderBottom:i<last10.length-1?'1px solid #F8FAFC':'none',display:'flex',gap:10,alignItems:'center'}}>
-          <div style={{width:36,height:36,borderRadius:10,background:'#FEE2E2',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0}}>💊</div>
+          <div className={temaItaq?'row-icon':''} style={temaItaq?{}:{width:36,height:36,borderRadius:10,background:'#FEE2E2',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0}}>{temaItaq?<Icon name="pill" size={16}/>:'💊'}</div>
           <div style={{flex:1}}><div style={{fontWeight:600,fontSize:13,color:'#1E293B'}}>{e.medicamentoNome}</div><div style={{fontSize:11,color:'#94A3B8',marginTop:2}}>{fmtD(e.criadoEm)} · {e.autorNome}</div></div>
           <div style={{fontWeight:800,fontSize:16,color:'#DC2626'}}>−{e.quantidade}</div>
         </div>
@@ -11765,7 +11781,7 @@ return(
           <span>{t.label}</span>
         </button>
       );})}
-      <button className="itaq-sidebar-btn" onClick={function(){setMenuAberto(!menuAberto);}}>
+      <button className="itaq-sidebar-btn" onClick={function(){setMenuAberto(!menuAberto);}} style={{marginTop:'auto'}}>
         <Icon name="menu" size={19}/>
         <span>Menu</span>
       </button>
@@ -11774,7 +11790,7 @@ return(
   <nav className="bnav">
     {(user.role==='gestor'||user.role==='tecnico')
       ?<div style={{width:'100%'}}>
-        {menuAberto&&<div onClick={function(){setMenuAberto(false);}} style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.6)',zIndex:149,backdropFilter:'blur(6px)'}}/>}
+        {menuAberto&&<div className={temaItaq?'itaq-backdrop':''} onClick={function(){setMenuAberto(false);}} style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.6)',zIndex:149,backdropFilter:'blur(6px)'}}/>}
         <div data-tour="menu-panel" className={temaItaq?'menu-drawer':''} style={{position:'fixed',top:0,[temaItaq?'left':'right']:0,bottom:0,width:280,background:'#fff',zIndex:150,transform:menuAberto?'translateX(0)':(temaItaq?'translateX(calc(-100% - 100px))':'translateX(110%)'),transition:'transform .3s cubic-bezier(.4,0,.2,1)',boxShadow:menuAberto?(temaItaq?'8px 0 40px rgba(16,42,90,.18)':'-8px 0 40px rgba(0,0,0,0.2)'):'none',display:'flex',flexDirection:'column',willChange:'transform'}}>
           <div style={{background:'linear-gradient(135deg,#0D1B4B,#1351B4)',padding:'52px 20px 20px',flexShrink:0}}>
             <div style={{display:'flex',alignItems:'center',gap:12}}>
@@ -11834,7 +11850,7 @@ return(
         </div>
       </div>
       :<div style={{width:'100%'}}>
-        {menuAberto&&<div onClick={function(){setMenuAberto(false);}} style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.5)',zIndex:149,backdropFilter:'blur(4px)'}}/>}
+        {menuAberto&&<div className={temaItaq?'itaq-backdrop':''} onClick={function(){setMenuAberto(false);}} style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.5)',zIndex:149,backdropFilter:'blur(4px)'}}/>}
         <div data-tour="menu-panel" className={temaItaq?'menu-drawer':''} style={{position:'fixed',top:0,[temaItaq?'left':'right']:0,bottom:0,width:260,background:'#fff',zIndex:150,transform:menuAberto?'translateX(0)':(temaItaq?'translateX(calc(-100% - 100px))':'translateX(110%)'),transition:'transform .3s cubic-bezier(.4,0,.2,1)',boxShadow:menuAberto?(temaItaq?'8px 0 40px rgba(16,42,90,.18)':'-8px 0 40px rgba(0,0,0,0.15)'):'none',display:'flex',flexDirection:'column'}}>
           <div style={{background:'linear-gradient(135deg,#0D1B4B,#1351B4)',padding:'52px 20px 20px',flexShrink:0}}>
             <div style={{fontWeight:800,fontSize:15,color:'#fff'}}>{user.name}</div>
