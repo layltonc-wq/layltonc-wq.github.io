@@ -234,6 +234,7 @@ select.inp{cursor:pointer}
   background:var(--itq-bg)!important;color:var(--itq-text)!important;
   font-family:'IBM Plex Sans','Segoe UI',system-ui,sans-serif!important;
 }
+.theme-itaq .fc-mark{font-family:'IBM Plex Sans','Segoe UI',system-ui,sans-serif!important;font-weight:800!important;letter-spacing:-.02em!important}
 .theme-itaq .text-strong{color:var(--itq-ink)!important}
 .theme-itaq .text-soft{color:var(--itq-soft)!important}
 .theme-itaq .text-faint{color:var(--itq-faint)!important}
@@ -2066,16 +2067,16 @@ return(
       {ok&&<div className="ok">{ok}</div>}
       {isGuest&&!canMove&&<div className="wn">Modo convidado — sera enviado para aprovação.</div>}
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginTop:4}}>
-        <button onClick={save} disabled={saving} className="br" style={{opacity:saving?0.5:1,margin:0}}>{isGuest&&!canMove?'Solicitar':'Registrar Saída'}</button>
-        <button onClick={adicionarCarrinho} disabled={saving} style={{padding:'14px',background:'#F59E0B',border:'none',borderRadius:12,color:'#fff',fontWeight:800,fontSize:14,cursor:'pointer',opacity:saving?0.5:1}}>+ Carrinho 🛒</button>
+        <button onClick={save} disabled={saving} className={temaItaq?'bp':'br'} style={{opacity:saving?0.5:1,margin:0}}>{isGuest&&!canMove?'Solicitar':'Registrar Saída'}</button>
+        <button onClick={adicionarCarrinho} disabled={saving} style={temaItaq?{padding:'14px',background:'var(--itq-tint)',border:'1.5px solid var(--blue-700)',borderRadius:12,color:'var(--blue-700)',fontWeight:800,fontSize:14,cursor:'pointer',opacity:saving?0.5:1}:{padding:'14px',background:'#F59E0B',border:'none',borderRadius:12,color:'#fff',fontWeight:800,fontSize:14,cursor:'pointer',opacity:saving?0.5:1}}>+ Carrinho{temaItaq?'':' 🛒'}</button>
       </div>
-      {carrinho.length>0&&<div style={{marginTop:12,background:'#FFFBEB',border:'2px solid #F59E0B',borderRadius:12,padding:14}}>
+      {carrinho.length>0&&<div style={temaItaq?{marginTop:12,background:'var(--itq-tint)',border:'1.5px solid var(--itq-tint-line)',borderRadius:12,padding:14}:{marginTop:12,background:'#FFFBEB',border:'2px solid #F59E0B',borderRadius:12,padding:14}}>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
-          <div style={{fontWeight:800,fontSize:14,color:'#92400E'}}>🛒 Carrinho ({carrinho.length} item{carrinho.length>1?'s':''})</div>
-          <button onClick={function(){setShowCarrinho(!showCarrinho);}} style={{background:'none',border:'none',color:'#92400E',cursor:'pointer',fontSize:12,fontWeight:700}}>{showCarrinho?'Fechar':'Ver itens'}</button>
+          <div style={{fontWeight:800,fontSize:14,color:temaItaq?'var(--blue-700)':'#92400E'}}>{temaItaq?'':'🛒 '}Carrinho ({carrinho.length} item{carrinho.length>1?'s':''})</div>
+          <button onClick={function(){setShowCarrinho(!showCarrinho);}} style={{background:'none',border:'none',color:temaItaq?'var(--blue-700)':'#92400E',cursor:'pointer',fontSize:12,fontWeight:700}}>{showCarrinho?'Fechar':'Ver itens'}</button>
         </div>
         {showCarrinho&&carrinho.map(function(item,i){return(
-          <div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',background:'#fff',borderRadius:8,padding:'8px 12px',marginBottom:6,border:'1px solid #FCD34D'}}>
+          <div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',background:'#fff',borderRadius:8,padding:'8px 12px',marginBottom:6,border:temaItaq?'1px solid var(--itq-tint-line)':'1px solid #FCD34D'}}>
             <div>
               <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>{item.medNome}</div>
               <div style={{fontSize:11,color:'#64748B'}}>{item.qty} un.{item.lote?' · Lote: '+item.lote:''}</div>
@@ -2084,7 +2085,7 @@ return(
           </div>
         );})}
         {saving
-          ?<div style={{textAlign:'center',color:'#92400E',fontWeight:700,padding:8}}>Registrando...</div>
+          ?<div style={{textAlign:'center',color:temaItaq?'var(--blue-700)':'#92400E',fontWeight:700,padding:8}}>Registrando...</div>
           :<button onClick={confirmarCarrinho} style={{width:'100%',padding:'13px',background:'#059669',border:'none',borderRadius:10,color:'#fff',fontWeight:800,fontSize:15,cursor:'pointer',marginTop:4}}>✅ Confirmar saida de tudo ({carrinho.length})</button>
         }
       </div>}
@@ -4903,11 +4904,14 @@ function TabNotas({user,medications}){
 // (medicamento ou controlado) — só o agrupamento visual das abas do Judicial é que junta as duas,
 // pra ainda dar pra filtrar/relatar só os controlados depois se precisar.
 var PJ_PARENTESCOS=['Mãe','Pai','Irmão(ã)','Avô(ó)','Tio(a)','Cônjuge','Procurador(a)','Outro'];
+// Ícones e cor únicos (azul do padrão) — TabPedidosJudiciais só é usado em Itaquitinga, então
+// não precisa de gate .theme-itaq: as cores diferentes por categoria (roxo/ciano/âmbar de TIPOS)
+// destoavam do resto do app; aqui fica tudo no mesmo azul, como as outras abas.
 var PJ_ABAS=[
-  {key:'medicamento',label:'Medicamentos',icon:'💊',cor:'#1351B4',cats:['medicamento','controlado']},
-  {key:'injetavel',label:TIPOS.injetavel.label,icon:TIPOS.injetavel.icon,cor:TIPOS.injetavel.cor,cats:['injetavel']},
-  {key:'leite',label:TIPOS.leite.label,icon:TIPOS.leite.icon,cor:TIPOS.leite.cor,cats:['leite']},
-  {key:'penso',label:TIPOS.penso.label,icon:TIPOS.penso.icon,cor:TIPOS.penso.cor,cats:['penso']}
+  {key:'medicamento',label:'Medicamentos',icon:'pill',cor:B,cats:['medicamento','controlado']},
+  {key:'injetavel',label:TIPOS.injetavel.label,icon:'droplet',cor:B,cats:['injetavel']},
+  {key:'leite',label:TIPOS.leite.label,icon:'package',cor:B,cats:['leite']},
+  {key:'penso',label:TIPOS.penso.label,icon:'clipboard',cor:B,cats:['penso']}
 ];
 // Logo embutido como data URI (06/10/2026): o comprovante judicial imprime logo depois de salvar
 // no Firestore, e o iframe de impressao (_imprimirDoc) as vezes disparava o print() antes da imagem
@@ -5206,25 +5210,25 @@ function TabPedidosJudiciais(props){
   var histRetiradas=showHist?retiradasJud.filter(function(r){return r.pacienteId===showHist.id;}):[];
 
   return (<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
-    <div style={{fontSize:18,fontWeight:800,color:'#1E293B',marginBottom:4}}>⚖️ Pacientes Judiciais</div>
+    <div style={{fontSize:18,fontWeight:800,color:'#1E293B',marginBottom:4,display:'flex',alignItems:'center',gap:8}}><Icon name="scale" size={20}/> Pacientes Judiciais</div>
     <div style={{fontSize:13,color:'#64748B',marginBottom:16}}>Fornecimento obrigatório por decisão judicial — prioridade máxima.</div>
 
     <div style={{display:'flex',gap:6,marginBottom:12,flexWrap:'wrap'}}>
       {PJ_ABAS.map(function(t){var c=t.key;return(
-        <button key={c} onClick={function(){setSub(c);}} style={{padding:'9px 12px',borderRadius:10,border:'1.5px solid '+(sub===c?t.cor:'#E2E8F0'),background:sub===c?t.cor:'#fff',color:sub===c?'#fff':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>{t.icon} {t.label}</button>
+        <button key={c} onClick={function(){setSub(c);}} style={{padding:'9px 12px',borderRadius:10,border:'1.5px solid '+(sub===c?t.cor:'#E2E8F0'),background:sub===c?t.cor:'#fff',color:sub===c?'#fff':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:6}}><Icon name={t.icon} size={14}/> {t.label}</button>
       );})}
-      <button onClick={function(){setSub('estoque');}} style={{padding:'9px 12px',borderRadius:10,border:'1.5px solid '+(sub==='estoque'?B:'#E2E8F0'),background:sub==='estoque'?B:'#fff',color:sub==='estoque'?'#fff':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>📦 Estoque Judicial</button>
-      <button onClick={function(){setSub('saidas');}} style={{padding:'9px 12px',borderRadius:10,border:'1.5px solid '+(sub==='saidas'?B:'#E2E8F0'),background:sub==='saidas'?B:'#fff',color:sub==='saidas'?'#fff':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>📤 Saídas</button>
+      <button onClick={function(){setSub('estoque');}} style={{padding:'9px 12px',borderRadius:10,border:'1.5px solid '+(sub==='estoque'?B:'#E2E8F0'),background:sub==='estoque'?B:'#fff',color:sub==='estoque'?'#fff':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:6}}><Icon name="package" size={14}/> Estoque Judicial</button>
+      <button onClick={function(){setSub('saidas');}} style={{padding:'9px 12px',borderRadius:10,border:'1.5px solid '+(sub==='saidas'?B:'#E2E8F0'),background:sub==='saidas'?B:'#fff',color:sub==='saidas'?'#fff':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:6}}><Icon name="trendDown" size={14}/> Saídas</button>
     </div>
 
     {PJ_ABAS.some(function(a){return a.key===sub;})&&(<div>
       <div style={{display:'flex',gap:10,marginBottom:12,flexWrap:'wrap'}}>
-        <input value={busca} onChange={function(e){setBusca(e.target.value);}} className="inp" placeholder="🔍 Buscar paciente, responsável ou processo..." style={{marginBottom:0,flex:1,minWidth:200}}/>
+        <input value={busca} onChange={function(e){setBusca(e.target.value);}} className="inp" placeholder="Buscar paciente, responsável ou processo..." style={{marginBottom:0,flex:1,minWidth:200}}/>
         <button onClick={abrirNovo} className="bp" style={{whiteSpace:'nowrap',padding:'0 16px',width:'auto'}}>+ Novo Paciente</button>
       </div>
       <div className="tab-sw" style={{marginBottom:12}}>
-        <button onClick={function(){setSubStatus('pendente');}} className={subStatus==='pendente'?'on':''}>⏳ Pendentes ({filtrarPorCategoria(sub,'pendente').length})</button>
-        <button onClick={function(){setSubStatus('separado');}} className={subStatus==='separado'?'on':''}>✅ Separados ({filtrarPorCategoria(sub,'separado').length})</button>
+        <button onClick={function(){setSubStatus('pendente');}} className={subStatus==='pendente'?'on':''}><Icon name="hourglass" size={13}/> Pendentes ({filtrarPorCategoria(sub,'pendente').length})</button>
+        <button onClick={function(){setSubStatus('separado');}} className={subStatus==='separado'?'on':''}><Icon name="check" size={13}/> Separados ({filtrarPorCategoria(sub,'separado').length})</button>
       </div>
       {listaFiltrada.length===0&&<div style={{textAlign:'center',padding:40,color:'#94A3B8'}}>Nenhum paciente {subStatus} em {(PJ_ABAS.filter(function(a){return a.key===sub;})[0]||PJ_ABAS[0]).label.toLowerCase()}.</div>}
       {listaFiltrada.map(renderCard)}
@@ -11691,25 +11695,25 @@ return(
       O alerta continua disponível sob demanda em Estoque → Vencimentos. */}
 
   {/* NAVBAR */}
-  <div style={{background:'linear-gradient(135deg,#0A2D6E 0%,#1351B4 100%)',padding:'0 16px',display:'flex',alignItems:'center',justifyContent:'space-between',position:'sticky',top:0,zIndex:10,boxShadow:'0 2px 20px rgba(10,45,110,.35)',height:56}}>
+  <div style={temaItaq?{background:'#fff',borderBottom:'1px solid var(--itq-line,#E3E9F6)',padding:'0 16px',display:'flex',alignItems:'center',justifyContent:'space-between',position:'sticky',top:0,zIndex:10,boxShadow:'0 1px 2px rgba(15,23,42,.04)',height:56}:{background:'linear-gradient(135deg,#0A2D6E 0%,#1351B4 100%)',padding:'0 16px',display:'flex',alignItems:'center',justifyContent:'space-between',position:'sticky',top:0,zIndex:10,boxShadow:'0 2px 20px rgba(10,45,110,.35)',height:56}}>
     <div style={{display:'flex',alignItems:'center',gap:10}}>
-      <div style={{width:34,height:34,borderRadius:10,background:'rgba(255,255,255,0.18)',border:'1.5px solid rgba(255,255,255,0.3)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-          <span style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:15,fontWeight:900,color:'#fff',letterSpacing:'-1px'}}>FC</span>
+      <div style={{width:34,height:34,borderRadius:10,background:temaItaq?'linear-gradient(135deg,var(--blue-900),var(--blue-700))':'rgba(255,255,255,0.18)',border:temaItaq?'none':'1.5px solid rgba(255,255,255,0.3)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+          <span className="fc-mark" style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:15,fontWeight:900,color:'#fff',letterSpacing:'-1px'}}>FC</span>
         </div>
-      <div><div style={{fontWeight:800,fontSize:15,color:'#fff',letterSpacing:'-.01em'}}>FarmaControl</div><div style={{fontSize:9,color:'rgba(255,255,255,.5)',letterSpacing:'.02em'}}>{new Date().toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'short'}).toUpperCase()}</div></div>
+      <div><div style={{fontWeight:800,fontSize:15,color:temaItaq?'var(--itq-ink)':'#fff',letterSpacing:'-.01em'}}>FarmaControl</div><div style={{fontSize:9,color:temaItaq?'var(--itq-faint)':'rgba(255,255,255,.5)',letterSpacing:'.02em'}}>{new Date().toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'short'}).toUpperCase()}</div></div>
     </div>
     <div style={{display:'flex',alignItems:'center',gap:8}}>
-      {lowCount>0&&<div style={{background:'rgba(245,158,11,.2)',border:'1px solid rgba(245,158,11,.4)',borderRadius:20,padding:'3px 9px',fontSize:10,color:'#FCD34D',fontWeight:700}}>⚠ {lowCount}</div>}
-      <button onClick={function(){setBusca(true);}} style={{background:'rgba(255,255,255,.12)',border:'1px solid rgba(255,255,255,.18)',borderRadius:9,width:34,height:34,cursor:'pointer',fontSize:15,color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',transition:'background .15s'}} title="Buscar">{temaItaq?<Icon name="search" size={16}/>:'🔍'}</button>
-      <div onClick={function(){setTab('perfil');}} style={{display:'flex',alignItems:'center',gap:8,background:'rgba(255,255,255,.12)',border:'1px solid rgba(255,255,255,.18)',borderRadius:12,padding:'5px 10px',cursor:'pointer',transition:'background .15s'}}>
+      {lowCount>0&&<div style={{background:temaItaq?'#FEF3C7':'rgba(245,158,11,.2)',border:temaItaq?'1px solid #FCD34D':'1px solid rgba(245,158,11,.4)',borderRadius:20,padding:'3px 9px',fontSize:10,color:temaItaq?'#92400E':'#FCD34D',fontWeight:700}}>⚠ {lowCount}</div>}
+      <button onClick={function(){setBusca(true);}} style={{background:temaItaq?'var(--itq-tint)':'rgba(255,255,255,.12)',border:temaItaq?'1px solid var(--itq-tint-line)':'1px solid rgba(255,255,255,.18)',borderRadius:9,width:34,height:34,cursor:'pointer',fontSize:15,color:temaItaq?'var(--blue-700)':'#fff',display:'flex',alignItems:'center',justifyContent:'center',transition:'background .15s'}} title="Buscar">{temaItaq?<Icon name="search" size={16}/>:'🔍'}</button>
+      <div onClick={function(){setTab('perfil');}} style={{display:'flex',alignItems:'center',gap:8,background:temaItaq?'var(--itq-tint)':'rgba(255,255,255,.12)',border:temaItaq?'1px solid var(--itq-tint-line)':'1px solid rgba(255,255,255,.18)',borderRadius:12,padding:'5px 10px',cursor:'pointer',transition:'background .15s'}}>
         {(convites.length>0||(user.role==='gestor'&&lowStock.filter(function(m){return (stock[m.id]||0)<=m.estoqueMin;}).length>0))&&<div style={{position:'relative',marginRight:4}}>
-          <div style={{fontSize:20,cursor:'pointer',display:'flex'}} onClick={function(){setTab('dashboard');}}>{temaItaq?<Icon name="bell" size={18}/>:'🔔'}</div>
+          <div style={{fontSize:20,cursor:'pointer',display:'flex',color:temaItaq?'var(--blue-700)':undefined}} onClick={function(){setTab('dashboard');}}>{temaItaq?<Icon name="bell" size={18}/>:'🔔'}</div>
           <span style={{position:'absolute',top:-4,right:-4,background:'#DC2626',color:'#fff',borderRadius:99,width:14,height:14,fontSize:8,fontWeight:800,display:'flex',alignItems:'center',justifyContent:'center'}}>
             {convites.length+(user.role==='gestor'?lowStock.filter(function(m){return (stock[m.id]||0)<=m.estoqueMin;}).length:0)}
           </span>
         </div>}
-        {user.photoURL?<img src={user.photoURL} style={{width:26,height:26,borderRadius:'50%',objectFit:'cover',border:'1.5px solid rgba(255,255,255,.5)',flexShrink:0}}/>:<div className="av" style={{width:26,height:26,background:user.color||'rgba(255,255,255,.25)',fontSize:11,fontWeight:700}}>{user.name?user.name.charAt(0):'?'}</div>}
-        <div><div style={{fontSize:12,fontWeight:700,color:'#fff',lineHeight:1.2}}>{(user.name||'').split(' ')[0]}</div><div style={{fontSize:9,color:'rgba(255,255,255,.5)',lineHeight:1.2}}>{isGuest?'Convidado':(ROLES[user.role]||user.role)}</div></div>
+        {user.photoURL?<img src={user.photoURL} style={{width:26,height:26,borderRadius:'50%',objectFit:'cover',border:temaItaq?'1.5px solid var(--itq-line)':'1.5px solid rgba(255,255,255,.5)',flexShrink:0}}/>:<div className="av" style={{width:26,height:26,background:user.color||(temaItaq?'var(--blue-700)':'rgba(255,255,255,.25)'),fontSize:11,fontWeight:700}}>{user.name?user.name.charAt(0):'?'}</div>}
+        <div><div style={{fontSize:12,fontWeight:700,color:temaItaq?'var(--itq-ink)':'#fff',lineHeight:1.2}}>{(user.name||'').split(' ')[0]}</div><div style={{fontSize:9,color:temaItaq?'var(--itq-faint)':'rgba(255,255,255,.5)',lineHeight:1.2}}>{isGuest?'Convidado':(ROLES[user.role]||user.role)}</div></div>
       </div>
     </div>
   </div>
@@ -11728,7 +11732,7 @@ return(
     {loading?(
       <div style={{minHeight:'60vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:40}}>
         <div style={{width:64,height:64,borderRadius:16,background:'linear-gradient(135deg,#0D1B4B,#1351B4)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,color:'#fff',fontWeight:900,marginBottom:16,boxShadow:'0 8px 24px rgba(19,81,180,.3)'}}>
-          <span style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:28,fontWeight:900,color:'#fff',letterSpacing:'-1.5px'}}>FC</span>
+          <span className="fc-mark" style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:28,fontWeight:900,color:'#fff',letterSpacing:'-1.5px'}}>FC</span>
         </div>
         <div style={{fontWeight:800,fontSize:18,color:'#0A2D6E',marginBottom:6}}>FarmaControl</div>
         <div style={{fontSize:13,color:'#94A3B8'}}>Carregando dados...</div>
@@ -11773,7 +11777,7 @@ return(
   </div>}
 
   <nav className="itaq-sidebar">
-    <div className="itaq-sidebar-logo"><span style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:15,fontWeight:900,letterSpacing:'-1px'}}>FC</span></div>
+    <div className="itaq-sidebar-logo"><span className="fc-mark" style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:15,fontWeight:900,letterSpacing:'-1px'}}>FC</span></div>
     <div className="itaq-sidebar-nav">
       {navPrincipal.map(function(t){return(
         <button key={t.id} className={'itaq-sidebar-btn'+(tab===t.id?' on':'')} onClick={function(){setTab(t.id);setMenuAberto(false);}}>
@@ -11795,7 +11799,7 @@ return(
           <div style={{background:'linear-gradient(135deg,#0D1B4B,#1351B4)',padding:'52px 20px 20px',flexShrink:0}}>
             <div style={{display:'flex',alignItems:'center',gap:12}}>
               <div style={{width:42,height:42,borderRadius:12,background:'rgba(255,255,255,0.15)',border:'1.5px solid rgba(255,255,255,0.25)',display:'flex',alignItems:'center',justifyContent:'center'}}>
-                <span style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:17,fontWeight:900,color:'#fff',letterSpacing:'-1px'}}>FC</span>
+                <span className="fc-mark" style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:17,fontWeight:900,color:'#fff',letterSpacing:'-1px'}}>FC</span>
               </div>
               <div>
                 <div style={{fontWeight:800,fontSize:15,color:'#fff',letterSpacing:'-.01em'}}>FarmaControl</div>
