@@ -205,6 +205,19 @@ select.inp{cursor:pointer}
 .shift-empty{background:#EFF6FF;border:1.5px dashed #BFDBFE}
 .shift-empty-txt{color:var(--gray-500)}
 
+/* ── MENU DRAWER (painel "Menu completo") ── */
+.menu-drawer{background:var(--white)}
+.menu-drawer-head{background:linear-gradient(135deg,#0D1B4B,#1351B4)}
+.menu-drawer-item{width:100%;display:flex;align-items:center;gap:14px;padding:13px 20px;border:none;background:transparent;cursor:pointer;position:relative;border-left:3px solid transparent;transition:background .15s;text-align:left}
+.menu-drawer-item:hover{background:var(--gray-50)}
+.menu-drawer-item.on{background:var(--blue-50);border-left-color:var(--blue-700)}
+.menu-drawer-ic{font-size:20px;width:26px;text-align:center;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;color:var(--gray-600)}
+.menu-drawer-item.on .menu-drawer-ic{color:var(--blue-700)}
+.menu-drawer-lbl{font-size:14px;font-weight:500;color:var(--gray-800);flex:1}
+.menu-drawer-item.on .menu-drawer-lbl{font-weight:700;color:var(--blue-700)}
+.menu-drawer-badge{background:var(--red-600);color:#fff;border-radius:99px;min-width:18px;height:18px;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 5px}
+.menu-drawer-footer{border-top:1px solid var(--gray-100)}
+
 /* ── BAR CHART (barras de saídas por dia) ── */
 .bar-fill{background:var(--blue-200)}
 .bar-fill-on{background:var(--blue-700)}
@@ -226,7 +239,7 @@ select.inp{cursor:pointer}
   --itq-accent-dim:#405D7A;--itq-green:#58956E;--itq-green-lt:#82DBA3;--itq-red:#E8828A;
   --itq-text:#F3F6FC;--itq-text-dim:#93A1C2;--itq-border:rgba(255,255,255,.08);
   background:var(--itq-bg)!important;font-family:'Plus Jakarta Sans','Segoe UI',system-ui,sans-serif!important}
-.theme-itaq body,.theme-itaq{color:var(--itq-text)}
+.theme-itaq{color:var(--itq-text)}
 .theme-itaq .stat-card{background:linear-gradient(155deg,var(--itq-card-a) 0%,var(--itq-card-b) 100%)!important;border:1px solid var(--itq-border)!important;border-radius:22px!important;box-shadow:0 10px 30px -14px rgba(0,0,0,.6)!important}
 .theme-itaq .stat-card::before{display:none}
 .theme-itaq .stat-icon{background:rgba(255,255,255,.1)!important;border-radius:12px!important}
@@ -249,6 +262,16 @@ select.inp{cursor:pointer}
 .theme-itaq .pill.on{background:var(--itq-accent)!important;border-color:var(--itq-accent)!important;color:#0A0F17!important}
 .theme-itaq .shift-empty{background:rgba(129,189,250,.08)!important;border-color:rgba(129,189,250,.3)!important}
 .theme-itaq .shift-empty-txt{color:var(--itq-text-dim)!important}
+.theme-itaq .shift-card{background:linear-gradient(135deg,#2E4868 0%,#16202C 100%)!important;border:1px solid rgba(129,189,250,.25)!important;box-shadow:0 10px 30px -14px rgba(0,0,0,.6)!important}
+.theme-itaq .menu-drawer{background:linear-gradient(165deg,var(--itq-card-a) 0%,var(--itq-card-b) 100%)!important;border-left:1px solid var(--itq-border)!important;border-right:1px solid var(--itq-border)!important}
+.theme-itaq .menu-drawer-head{background:linear-gradient(135deg,var(--itq-card-b) 0%,#0A0F17 100%)!important;border-bottom:1px solid var(--itq-border)!important}
+.theme-itaq .menu-drawer-item:hover{background:rgba(255,255,255,.05)!important}
+.theme-itaq .menu-drawer-item.on{background:rgba(129,189,250,.12)!important;border-left-color:var(--itq-accent)!important}
+.theme-itaq .menu-drawer-ic{color:var(--itq-text-dim)!important}
+.theme-itaq .menu-drawer-item.on .menu-drawer-ic{color:var(--itq-accent)!important}
+.theme-itaq .menu-drawer-lbl{color:var(--itq-text)!important}
+.theme-itaq .menu-drawer-item.on .menu-drawer-lbl{color:var(--itq-accent)!important}
+.theme-itaq .menu-drawer-footer{border-top-color:var(--itq-border)!important}
 .theme-itaq .bar-fill{background:var(--itq-accent-dim)!important}
 .theme-itaq .bar-fill-on{background:var(--itq-accent)!important}
 .theme-itaq .bar-lbl{color:var(--itq-text-dim)!important}
@@ -262,7 +285,7 @@ select.inp{cursor:pointer}
   /* .bnav continua existindo (o painel do Menu completo é fixed e mora dentro dela — display:none
      aqui apagaria o painel junto), só fica com altura zero e invisível; .bnav-row (os 4 ícones +
      botão Menu redondo) some, porque a sidebar já cobre a mesma navegação. */
-  .theme-itaq .bnav{height:0!important;min-height:0!important;padding:0!important;border:none!important;box-shadow:none!important;background:transparent!important;overflow:visible!important}
+  .theme-itaq .bnav{height:0!important;min-height:0!important;padding:0!important;border:none!important;box-shadow:none!important;background:transparent!important;overflow:visible!important;z-index:200!important}
   .theme-itaq .bnav-row{display:none!important}
   .theme-itaq .itaq-sidebar{
     display:flex;flex-direction:column;align-items:center;gap:4px;
@@ -270,7 +293,11 @@ select.inp{cursor:pointer}
     background:linear-gradient(185deg,var(--itq-card-a) 0%,var(--itq-card-b) 100%);
     border-right:1px solid var(--itq-border);padding:16px 0 20px;
   }
-  .theme-itaq body{padding-bottom:0;padding-left:76px}
+  body.theme-itaq{padding-bottom:0;padding-left:76px}
+  /* O painel do Menu completo abre encostado depois da barra lateral (não por cima dela) — e
+     !important aqui vence o left:0 inline porque regra de stylesheet com !important sempre
+     sobrepõe style inline sem !important. */
+  .theme-itaq .menu-drawer{left:76px!important}
 }
 .itaq-sidebar-logo{width:38px;height:38px;border-radius:11px;background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;color:#fff;margin-bottom:22px;flex-shrink:0}
 .itaq-sidebar-nav{display:flex;flex-direction:column;gap:6px;flex:1}
@@ -807,6 +834,14 @@ function Icon(props){
     camera:<g><path d="M4 8h3.2l1.7-2h6.2l1.7 2H20v11H4z"/><circle cx="12" cy="13.3" r="3.4"/></g>,
     gear:<g><circle cx="12" cy="12" r="2.8"/><path d="M19.4 12.9v-1.8l-2.1-.5a5.9 5.9 0 0 0-.7-1.7l1.1-1.9-1.3-1.3-1.9 1.1a5.9 5.9 0 0 0-1.7-.7L12.3 4.6h-1.8l-.5 2.1a5.9 5.9 0 0 0-1.7.7L6.4 6.3 5.1 7.6l1.1 1.9a5.9 5.9 0 0 0-.7 1.7l-2.1.5v1.8l2.1.5c.15.6.4 1.18.7 1.7l-1.1 1.9 1.3 1.3 1.9-1.1c.52.3 1.1.55 1.7.7l.5 2.1h1.8l.5-2.1c.6-.15 1.18-.4 1.7-.7l1.9 1.1 1.3-1.3-1.1-1.9c.3-.52.55-1.1.7-1.7z"/></g>,
     chevronRight:<polyline points="9 6 15 12 9 18"/>,
+    package:<g><path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5z"/><path d="M3 7.5 12 12l9-4.5M12 12v9"/></g>,
+    lock:<g><rect x="5" y="10.5" width="14" height="9" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></g>,
+    clipboard:<g><rect x="5.5" y="4.5" width="13" height="16" rx="2"/><rect x="9" y="3" width="6" height="3" rx="1"/><line x1="8.5" y1="11" x2="15.5" y2="11"/><line x1="8.5" y1="14.5" x2="15.5" y2="14.5"/></g>,
+    droplet:<path d="M12 3c3 4 6 7.5 6 11a6 6 0 0 1-12 0c0-3.5 3-7 6-11z"/>,
+    barChart:<g><line x1="5" y1="20" x2="5" y2="12"/><line x1="12" y1="20" x2="12" y2="6"/><line x1="19" y1="20" x2="19" y2="15"/></g>,
+    users:<g><circle cx="9" cy="8" r="3"/><path d="M3.5 20c0-3.5 2.5-6 5.5-6s5.5 2.5 5.5 6"/><circle cx="17" cy="9" r="2.3"/><path d="M15.2 13.2c2.2.3 3.8 2.3 3.8 5.3"/></g>,
+    folder:<path d="M3.5 6.5a1 1 0 0 1 1-1H10l2 2.2h7.5a1 1 0 0 1 1 1V18a1 1 0 0 1-1 1H4.5a1 1 0 0 1-1-1z"/>,
+    trendUp:<g><polyline points="4 17 10 11 14 14 20 7"/><polyline points="14 7 20 7 20 13"/></g>,
     logout:<g><path d="M9 4H6a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h3"/><polyline points="14 16 19 11 14 6"/><line x1="19" y1="11" x2="8.5" y2="11"/></g>,
   };
   return <svg {...cm}>{P[n]||null}</svg>;
@@ -9452,7 +9487,11 @@ function TourEngine(props){
 
   // Executa cliques reais nos elementos de navegação (que já têm data-tour) para preparar a tela do passo
   function tourClicar(sel){var el=null;try{el=document.querySelector(sel);}catch(e){el=null;}if(el&&el.click)el.click();}
-  function menuPanelAberto(){var p=document.querySelector('[data-tour="menu-panel"]');if(!p||!p.getBoundingClientRect)return false;var r=p.getBoundingClientRect();return r.left<window.innerWidth-20;}
+  // O painel agora pode abrir pela esquerda (tema Itaquitinga) ou pela direita (padrão) — checar só
+  // "r.left<innerWidth" não bastava mais (um painel fechado pela esquerda também tem left negativo,
+  // que também é < innerWidth, dando falso positivo). Fechado dos dois lados o painel fica FORA da
+  // tela (left negativo além do -20 de folga, ou left além do innerWidth); aberto, sempre dentro.
+  function menuPanelAberto(){var p=document.querySelector('[data-tour="menu-panel"]');if(!p||!p.getBoundingClientRect)return false;var r=p.getBoundingClientRect();return r.left>-20&&r.left<window.innerWidth;}
   function executarAcao(acao){
     var lista=Array.isArray(acao)?acao:[acao];
     lista.forEach(function(a){
@@ -11609,6 +11648,25 @@ var navPrincipal=[{id:'dashboard',icon:'🏠',label:'Início'},{id:'saida',icon:
 // Tema visual em teste — só pra Itaquitinga, que ainda não está totalmente ativo (pedido da
 // usuária 10/10/2026). Se aprovado, removemos essa condição pra valer pros dois municípios.
 var temaItaq=tenantDe(user)==='itaquitinga-pe';
+// Ícone de linha por aba do menu completo (drawer) — usado só quando temaItaq, senão mantém o emoji
+// de sempre. Centralizado aqui pra não duplicar o mapeamento nos dois blocos de menu (gestor/outros).
+function menuIconName(id){
+  var m={visaogeral:'trendUp',comparapedido:'search',estoque:'package',recebimento:'truck',
+    pacientes:'lock',conferencia:'clipboard',leites:'droplet',relatorio:'barChart',gestao:'users',
+    log:'lock',histnotas:'folder',previsao:'clipboard',histcontas:'clipboard',admin:'gear'};
+  return m[id]||'package';
+}
+// Um item do drawer do menu completo — reaproveitado pelos dois blocos (gestor/outros cargos) pra
+// não duplicar a lógica de tema (classe + ícone) duas vezes. O visual/cor em si vem todo do CSS
+// (.menu-drawer-item / .theme-itaq .menu-drawer-item), não mais de style inline por item.
+function DrawerItem(props){
+  var t=props.t;var active=props.active;
+  return(<button data-tour={'nav-'+t.id} onClick={props.onClick} className={'menu-drawer-item'+(active?' on':'')}>
+    <span className="menu-drawer-ic">{temaItaq?<Icon name={menuIconName(t.id)} size={18}/>:t.icon}</span>
+    <span className="menu-drawer-lbl">{t.label}</span>
+    {t.badge>0&&<span className="menu-drawer-badge">{t.badge}</span>}
+  </button>);
+}
 return(
 <div style={{minHeight:'100vh',background:temaItaq?undefined:'#EEF2F7',position:'relative',overflow:'hidden'}}>
   {/* MARCA D'ÁGUA BACKGROUND */}
@@ -11716,8 +11774,8 @@ return(
     {(user.role==='gestor'||user.role==='tecnico')
       ?<div style={{width:'100%'}}>
         {menuAberto&&<div onClick={function(){setMenuAberto(false);}} style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.6)',zIndex:149,backdropFilter:'blur(6px)'}}/>}
-        <div data-tour="menu-panel" style={{position:'fixed',top:0,right:0,bottom:0,width:280,background:'#fff',zIndex:150,transform:menuAberto?'translateX(0)':'translateX(110%)',transition:'transform .3s cubic-bezier(.4,0,.2,1)',boxShadow:menuAberto?'-8px 0 40px rgba(0,0,0,0.2)':'none',display:'flex',flexDirection:'column',willChange:'transform'}}>
-          <div style={{background:'linear-gradient(135deg,#0D1B4B,#1351B4)',padding:'52px 20px 20px',flexShrink:0}}>
+        <div data-tour="menu-panel" className="menu-drawer" style={{position:'fixed',top:0,[temaItaq?'left':'right']:0,bottom:0,width:280,zIndex:150,transform:menuAberto?'translateX(0)':(temaItaq?'translateX(calc(-100% - 100px))':'translateX(110%)'),transition:'transform .3s cubic-bezier(.4,0,.2,1)',boxShadow:menuAberto?(temaItaq?'8px 0 40px rgba(0,0,0,0.5)':'-8px 0 40px rgba(0,0,0,0.2)'):'none',display:'flex',flexDirection:'column',willChange:'transform'}}>
+          <div className="menu-drawer-head" style={{padding:'52px 20px 20px',flexShrink:0}}>
             <div style={{display:'flex',alignItems:'center',gap:12}}>
               <div style={{width:42,height:42,borderRadius:12,background:'rgba(255,255,255,0.15)',border:'1.5px solid rgba(255,255,255,0.25)',display:'flex',alignItems:'center',justifyContent:'center'}}>
                 <span style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:17,fontWeight:900,color:'#fff',letterSpacing:'-1px'}}>FC</span>
@@ -11745,17 +11803,13 @@ return(
               {id:'histcontas',icon:'📋',label:'Hist. de Contas',show:can(user.role,'log')},
               {id:'admin',icon:'🔧',label:'Painel Admin',show:user.role==='tecnico'},
             ].filter(function(t){return t.show;}).map(function(t){return(
-              <button key={t.id} data-tour={'nav-'+t.id} onClick={function(){setTab(t.id);setMenuAberto(false);}} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'13px 20px',border:'none',background:tab===t.id?'#EFF6FF':'transparent',cursor:'pointer',position:'relative',borderLeft:tab===t.id?'3px solid #1351B4':'3px solid transparent',transition:'background .15s'}}>
-                <span style={{fontSize:20,width:26,textAlign:'center'}}>{t.icon}</span>
-                <span style={{fontSize:14,fontWeight:tab===t.id?700:500,color:tab===t.id?'#1351B4':'#1E293B',flex:1,textAlign:'left'}}>{t.label}</span>
-                {t.badge>0&&<span style={{background:'#DC2626',color:'#fff',borderRadius:99,minWidth:18,height:18,fontSize:10,fontWeight:800,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 5px'}}>{t.badge}</span>}
-              </button>
+              <DrawerItem key={t.id} t={t} active={tab===t.id} onClick={function(){setTab(t.id);setMenuAberto(false);}}/>
             );})}
           </div>
-          <div style={{borderTop:'1px solid #F1F5F9',padding:'8px 0'}}>
-            <button onClick={function(){setTab('perfil');setMenuAberto(false);}} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'13px 20px',border:'none',background:tab==='perfil'?'#EFF6FF':'transparent',cursor:'pointer',borderLeft:tab==='perfil'?'3px solid #1351B4':'3px solid transparent'}}>
-              {user.photoURL?<img src={user.photoURL} style={{width:26,height:26,borderRadius:'50%',objectFit:'cover',border:'2px solid #E2E8F0'}}/>:<div style={{width:26,height:26,borderRadius:'50%',background:user.color||'#1351B4',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:700,color:'#fff'}}>{user.name?user.name.charAt(0):'?'}</div>}
-              <span style={{fontSize:14,fontWeight:tab==='perfil'?700:500,color:tab==='perfil'?'#1351B4':'#1E293B',flex:1,textAlign:'left'}}>Meu Perfil</span>
+          <div className="menu-drawer-footer" style={{padding:'8px 0'}}>
+            <button onClick={function(){setTab('perfil');setMenuAberto(false);}} className={'menu-drawer-item'+(tab==='perfil'?' on':'')}>
+              {user.photoURL?<img src={user.photoURL} style={{width:26,height:26,borderRadius:'50%',objectFit:'cover',border:'2px solid #E2E8F0'}}/>:<div style={{width:26,height:26,borderRadius:'50%',background:user.color||'#1351B4',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:700,color:'#fff',flexShrink:0}}>{user.name?user.name.charAt(0):'?'}</div>}
+              <span className="menu-drawer-lbl">Meu Perfil</span>
             </button>
           </div>
         </div>
@@ -11776,23 +11830,20 @@ return(
       </div>
       :<div style={{width:'100%'}}>
         {menuAberto&&<div onClick={function(){setMenuAberto(false);}} style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.5)',zIndex:149,backdropFilter:'blur(4px)'}}/>}
-        <div data-tour="menu-panel" style={{position:'fixed',top:0,right:0,bottom:0,width:260,background:'#fff',zIndex:150,transform:menuAberto?'translateX(0)':'translateX(110%)',transition:'transform .3s cubic-bezier(.4,0,.2,1)',boxShadow:menuAberto?'-8px 0 40px rgba(0,0,0,0.15)':'none',display:'flex',flexDirection:'column'}}>
-          <div style={{background:'linear-gradient(135deg,#0D1B4B,#1351B4)',padding:'52px 20px 20px',flexShrink:0}}>
+        <div data-tour="menu-panel" className="menu-drawer" style={{position:'fixed',top:0,[temaItaq?'left':'right']:0,bottom:0,width:260,zIndex:150,transform:menuAberto?'translateX(0)':(temaItaq?'translateX(calc(-100% - 100px))':'translateX(110%)'),transition:'transform .3s cubic-bezier(.4,0,.2,1)',boxShadow:menuAberto?(temaItaq?'8px 0 40px rgba(0,0,0,0.5)':'-8px 0 40px rgba(0,0,0,0.15)'):'none',display:'flex',flexDirection:'column'}}>
+          <div className="menu-drawer-head" style={{padding:'52px 20px 20px',flexShrink:0}}>
             <div style={{fontWeight:800,fontSize:15,color:'#fff'}}>{user.name}</div>
             <div style={{fontSize:11,color:'rgba(255,255,255,0.5)',marginTop:2}}>{ROLES[user.role]||user.role}</div>
           </div>
           <div style={{flex:1,overflowY:'auto',padding:'8px 0'}}>
             {[{id:'estoque',icon:'📦',label:'Estoque'},{id:'recebimento',icon:'🚚',label:'Recebimento'},{id:'pacientes',icon:'🔒',label:'Pacientes (Controlados)'},{id:'conferencia',icon:'🧾',label:'Conferência'},{id:'leites',icon:'🍼',label:'Leites'},{id:'relatorio',icon:'📊',label:'Relatório'}].filter(function(t){return t.id!=='pacientes'||tenantDe(user)!=='itaquitinga-pe';}).map(function(t){return(
-              <button key={t.id} data-tour={'nav-'+t.id} onClick={function(){setTab(t.id);setMenuAberto(false);}} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'13px 20px',border:'none',background:tab===t.id?'#EFF6FF':'transparent',cursor:'pointer',borderLeft:tab===t.id?'3px solid #1351B4':'3px solid transparent'}}>
-                <span style={{fontSize:20}}>{t.icon}</span>
-                <span style={{fontSize:14,fontWeight:tab===t.id?700:500,color:tab===t.id?'#1351B4':'#1E293B'}}>{t.label}</span>
-              </button>
+              <DrawerItem key={t.id} t={t} active={tab===t.id} onClick={function(){setTab(t.id);setMenuAberto(false);}}/>
             );})}
           </div>
-          <div style={{borderTop:'1px solid #F1F5F9',padding:'8px 0'}}>
-            <button onClick={function(){setTab('perfil');setMenuAberto(false);}} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'13px 20px',border:'none',background:tab==='perfil'?'#EFF6FF':'transparent',cursor:'pointer',borderLeft:tab==='perfil'?'3px solid #1351B4':'3px solid transparent'}}>
-              <span style={{fontSize:20}}>👤</span>
-              <span style={{fontSize:14,fontWeight:500,color:'#1E293B'}}>Meu Perfil</span>
+          <div className="menu-drawer-footer" style={{padding:'8px 0'}}>
+            <button onClick={function(){setTab('perfil');setMenuAberto(false);}} className={'menu-drawer-item'+(tab==='perfil'?' on':'')}>
+              <span className="menu-drawer-ic">{temaItaq?<Icon name="users" size={18}/>:'👤'}</span>
+              <span className="menu-drawer-lbl">Meu Perfil</span>
             </button>
           </div>
         </div>
