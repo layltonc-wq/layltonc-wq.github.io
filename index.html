@@ -400,9 +400,19 @@ var useState=React.useState,useEffect=React.useEffect,useRef=React.useRef,useMem
 var B='#1351B4',CFG_KEY='mt_firebase_cfg_permanent',db=null,auth=null,skipAuthCheck=false;
 var ROLES={gestor:'Gestor',farmaceutico:'Farmacêutico',auxiliar:'Auxiliar',tecnico:'Técnico',diarista:'Diarista'};
 var ROLE_ICON={gestor:'🏥',farmaceutico:'⚗️',tecnico:'🔧',auxiliar:'💊',diarista:'📋'};
+// Em Itaquitinga some o emoji do cargo (sem ícone de linha equivalente pra cada um ainda) em vez
+// de deixar um emoji solto — mantém texto limpo; Vicência continua com o emoji normalmente.
+function _roleIcon(role){return document.body.classList.contains('theme-itaq')?'':ROLE_ICON[role];}
 var PERMS={gestor:['saida','estoque','relatorio','gestao','perfil','editar','historico','log'],farmaceutico:['saida','estoque','perfil','historico'],auxiliar:['saida','estoque','perfil','historico'],tecnico:['saida','estoque','relatorio','gestao','perfil','editar','historico','log'],diarista:['saida','estoque','perfil','historico']};
 var PALETTE=['#1351B4','#0C7B4A','#D32F2F','#7B1FA2','#E65100','#00838F','#558B2F','#AD1457','#1565C0','#2E7D32','#6A1B9A','#0277BD'];
 var TIPOS={medicamento:{label:'Farm. Básica',icon:'💊',cor:'#1351B4'},controlado:{label:'Controlado',icon:'🔵',cor:'#DC2626'},injetavel:{label:'Injetável',icon:'💉',cor:'#7C3AED'},leite:{label:'Leite',icon:'🍼',cor:'#D97706'},penso:{label:'Penso/Material',icon:'🩹',cor:'#0891B2'}};
+// Nome do ícone de linha (Icon) equivalente a cada emoji de TIPOS — usado só quando temaItaq,
+// pra manter emoji em Vicência e ícone consistente em Itaquitinga (vistoria geral, 10/2026).
+var TIPOS_ICON={medicamento:'pill',controlado:'lock',injetavel:'droplet',leite:'package',penso:'clipboard'};
+// Remove um emoji solto do início de um rótulo tipo "💊 Básica" -> "Básica" — usado só em Itaquitinga,
+// pra rótulos curtos de filtro que hoje têm o emoji preso no texto (não dá pra trocar por Icon sem
+// reescrever o array todo).
+function _semEmoji(s){if(!document.body.classList.contains('theme-itaq'))return s;var m=String(s).match(/^[\u{1F000}-\u{1FFFF}\u{2190}-\u{2BFF}\u{2600}-\u{27BF}️]+\s*/u);return m?String(s).slice(m[0].length):s;}
 function can(role,a){return (PERMS[role]||[]).indexOf(a)>=0;}
 // ===== Multi-tenant =====
 function tenantDe(user){return (user&&user.tenant_id)||null;}
@@ -938,7 +948,7 @@ var _showCarrinho=useState(false);var showCarrinho=_showCarrinho[0];var setShowC
   }
   return prev.concat([{id:u.id,nome:u.name,cargo:u.role,color:u.color}]);
 });}function startShift(){setSaving(true);var today=todayStr();var leader={id:user.uid,nome:user.name,cargo:user.role,color:user.color,status:'confirmado'};var members=team.map(function(m){return {id:m.id,nome:m.nome||m.name,cargo:m.cargo||m.role,color:m.color,status:'confirmado'};});var equipe=[leader].concat(members);db.collection('plantoes').doc(plantaoDocId(user,today)).set({iniciadoPor:user.uid,iniciadoPorNome:user.name,inicio:new Date().toISOString(),equipe:equipe,ativo:true,data:today,tenant_id:tenantDe(user)}).then(function(){return Promise.resolve();}).then(function(){onDone({plantao:{equipe:equipe,iniciadoPor:user.uid,iniciadoPorNome:user.name,inicio:new Date().toISOString(),ativo:true},isGuest:false,shiftId:today});setSaving(false);}).catch(function(e){alert('Erro: '+e.message);setSaving(false);});}
-return(<div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'linear-gradient(160deg,#0A2D6E,#1351B4)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:500,padding:16,overflowY:'auto'}}><div style={{background:'#fff',borderRadius:24,padding:'28px 22px',maxWidth:440,width:'100%',maxHeight:'90vh',overflowY:'auto',boxShadow:'0 24px 64px rgba(0,0,0,.25)'}}><div style={{textAlign:'center',marginBottom:20}}><div style={{fontSize:18,fontWeight:800,color:B,marginBottom:4}}>Abrir Plantão</div><div style={{fontSize:12,color:'#64748B'}}>Selecione sua equipe para hoje</div></div>{eligible.length>0&&(<div style={{display:'flex',flexDirection:'column',gap:8,marginBottom:16}}>{eligible.map(function(u){var sel=team.some(function(t){return t.id===u.id;});return(<div key={u.id} onClick={function(){toggle(u);}} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 14px',borderRadius:12,border:'1.5px solid '+(sel?B:'#E2E8F0'),background:sel?'#EFF6FF':'#fff',cursor:'pointer',transition:'all .15s'}}><UserAvatar user={u} size={40}/><div style={{flex:1}}><div style={{fontWeight:600,fontSize:14,color:sel?B:'#1E293B'}}>{u.name}</div><div style={{fontSize:12,color:'#64748B'}}>{ROLE_ICON[u.role]} {ROLES[u.role]||u.role}</div></div>{sel&&<div style={{width:22,height:22,borderRadius:'50%',background:B,display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:12,fontWeight:700}}>✓</div>}</div>);})}</div>)}<button onClick={startShift} disabled={saving} className="bp" style={{marginBottom:10,opacity:saving?0.7:1}}>{saving?'Abrindo...':'Abrir Plantão'}</button><button onClick={function(){onDone({plantao:null,isGuest:true,shiftId:null});}} className="bs">Entrar como Convidado</button></div></div>);}
+return(<div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'linear-gradient(160deg,#0A2D6E,#1351B4)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:500,padding:16,overflowY:'auto'}}><div style={{background:'#fff',borderRadius:24,padding:'28px 22px',maxWidth:440,width:'100%',maxHeight:'90vh',overflowY:'auto',boxShadow:'0 24px 64px rgba(0,0,0,.25)'}}><div style={{textAlign:'center',marginBottom:20}}><div style={{fontSize:18,fontWeight:800,color:B,marginBottom:4}}>Abrir Plantão</div><div style={{fontSize:12,color:'#64748B'}}>Selecione sua equipe para hoje</div></div>{eligible.length>0&&(<div style={{display:'flex',flexDirection:'column',gap:8,marginBottom:16}}>{eligible.map(function(u){var sel=team.some(function(t){return t.id===u.id;});return(<div key={u.id} onClick={function(){toggle(u);}} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 14px',borderRadius:12,border:'1.5px solid '+(sel?B:'#E2E8F0'),background:sel?'#EFF6FF':'#fff',cursor:'pointer',transition:'all .15s'}}><UserAvatar user={u} size={40}/><div style={{flex:1}}><div style={{fontWeight:600,fontSize:14,color:sel?B:'#1E293B'}}>{u.name}</div><div style={{fontSize:12,color:'#64748B'}}>{_roleIcon(u.role)} {ROLES[u.role]||u.role}</div></div>{sel&&<div style={{width:22,height:22,borderRadius:'50%',background:B,display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:12,fontWeight:700}}>✓</div>}</div>);})}</div>)}<button onClick={startShift} disabled={saving} className="bp" style={{marginBottom:10,opacity:saving?0.7:1}}>{saving?'Abrindo...':'Abrir Plantão'}</button><button onClick={function(){onDone({plantao:null,isGuest:true,shiftId:null});}} className="bs">Entrar como Convidado</button></div></div>);}
 
 function InviteScreen(props){return(<div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(15,23,42,.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:500,padding:16,backdropFilter:'blur(4px)'}}><div style={{background:'#fff',borderRadius:24,padding:'32px 24px',maxWidth:380,width:'100%',textAlign:'center',boxShadow:'0 24px 64px rgba(0,0,0,.25)'}}><div style={{width:56,height:56,borderRadius:16,background:'#EFF6FF',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px',fontSize:24}}>🏥</div><div style={{fontSize:18,fontWeight:800,color:B,marginBottom:8}}>Convite de Plantão</div><div style={{fontSize:14,color:'#64748B',marginBottom:24,lineHeight:1.7}}><strong style={{color:B}}>{props.invite.deNome}</strong><br/>te adicionou ao plantao de hoje.</div><div style={{display:'flex',gap:10}}><button onClick={function(){props.onDeny(props.invite);}} className="bs" style={{flex:1}}>Recusar</button><button onClick={function(){props.onConfirm(props.invite);}} className="bg" style={{flex:2}}>Aceitar Plantão</button></div></div></div>);}
 
@@ -1155,11 +1165,12 @@ var saidasHoje=useMemo(function(){var hoje=todayStr();var porCat={};var totalGer
 
 var rankFunc=useMemo(function(){var d30=new Date();d30.setDate(d30.getDate()-30);var map={};entries.forEach(function(e){if(e.origemConferencia||e.isAjuste)return;if(_ehSaidaNaoReal(e))return;var dt=new Date(e.criadoEm||0);if(dt<d30)return;var nome=e.autorNome||'Desconhecido';if(!map[nome])map[nome]={nome:nome,total:0};map[nome].total+=(e.quantidade||0);});var arr=[];for(var k in map)arr.push(map[k]);arr.sort(function(a,b){return b.total-a.total;});return arr;},[entries]);
 
+var temaItaq=tenantDe(user)==='itaquitinga-pe';
 var kpi=[
-  {icon:'💊',label:'Medicamentos',val:totalMeds,sub:'cadastrados',color:'#1351B4',bg:'#DBEAFE'},
-  {icon:'📦',label:'Estoque Total',val:totalUnits,sub:'unidades',color:'#0C6B3E',bg:'#DCFCE7'},
-  {icon:'🔔',label:'Alertas Ativos',val:alertCount,sub:'vencimento + baixo',color:alertCount>0?'#DC2626':'#0C6B3E',bg:alertCount>0?'#FEE2E2':'#DCFCE7'},
-  {icon:'☠️',label:'Vencidos',val:medsVencidos,sub:'lotes vencidos',color:medsVencidos>0?'#DC2626':'#0C6B3E',bg:medsVencidos>0?'#FEE2E2':'#DCFCE7'},
+  {icon:'💊',iconName:'pill',label:'Medicamentos',val:totalMeds,sub:'cadastrados',color:'#1351B4',bg:'#DBEAFE'},
+  {icon:'📦',iconName:'package',label:'Estoque Total',val:totalUnits,sub:'unidades',color:'#0C6B3E',bg:'#DCFCE7'},
+  {icon:'🔔',iconName:'bell',label:'Alertas Ativos',val:alertCount,sub:'vencimento + baixo',color:alertCount>0?'#DC2626':'#0C6B3E',bg:alertCount>0?'#FEE2E2':'#DCFCE7'},
+  {icon:'☠️',iconName:'x',label:'Vencidos',val:medsVencidos,sub:'lotes vencidos',color:medsVencidos>0?'#DC2626':'#0C6B3E',bg:medsVencidos>0?'#FEE2E2':'#DCFCE7'},
 ];
 
 var donutTotal=0;catData.forEach(function(c){donutTotal+=c.val;});
@@ -1177,7 +1188,7 @@ return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
   <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:10,marginBottom:16}}>
     {kpi.map(function(s){return(
       <div key={s.label} className="stat-card" style={{color:s.color}}>
-        <div className="stat-icon" style={{background:s.bg}}>{s.icon}</div>
+        <div className="stat-icon" style={{background:s.bg}}>{temaItaq?<Icon name={s.iconName} size={18}/>:s.icon}</div>
         <div className="stat-val">{s.val}</div>
         <div className="stat-label">{s.label}</div>
         <div className="stat-sub">{s.sub}</div>
@@ -1200,7 +1211,7 @@ return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
               {catData.map(function(c){return(
                 <div key={c.key} style={{display:'flex',alignItems:'center',gap:6,fontSize:10,color:'#475569',marginBottom:3}}>
                   <div style={{width:8,height:8,borderRadius:2,background:c.cor,flexShrink:0}}/>
-                  <span style={{flex:1,textAlign:'left'}}>{c.icon} {c.label}</span>
+                  <span style={{flex:1,textAlign:'left',display:'flex',alignItems:'center',gap:4}}>{temaItaq?<Icon name={TIPOS_ICON[c.key]||'pill'} size={11}/>:c.icon} {c.label}</span>
                   <span style={{fontWeight:700}}>{c.val}</span>
                 </div>
               );})}
@@ -1242,7 +1253,7 @@ return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
           {saidasHoje.cats.map(function(c){var pct=saidasHoje.total>0?Math.round((c.val/saidasHoje.total)*100):0;return(
             <div key={c.key} style={{background:'#F8FAFC',borderRadius:10,padding:'10px 12px',border:'1px solid #E2E8F0'}}>
               <div style={{display:'flex',alignItems:'center',gap:5,marginBottom:6}}>
-                <span style={{fontSize:14}}>{c.icon}</span>
+                <span style={{fontSize:14,display:'flex',color:temaItaq?c.cor:undefined}}>{temaItaq?<Icon name={TIPOS_ICON[c.key]||'pill'} size={13}/>:c.icon}</span>
                 <span style={{fontSize:11,fontWeight:700,color:c.cor}}>{c.label}</span>
               </div>
               <div style={{fontSize:18,fontWeight:900,color:'#1E293B'}}>{c.val}</div>
@@ -2499,7 +2510,10 @@ function salvarAjuste(){if(!ajusteMed)return;var nq=parseInt(ajusteQty);if(isNaN
   var brutoAtual=estoqueBruto[ajusteMed.id];var atual=loteSel?loteSel.qty:(brutoAtual!=null?brutoAtual:(stock[ajusteMed.id]||0));var diff=nq-atual;if(diff===0){setAjusteId(null);setAjusteMed(null);setAjusteQty('');setAjusteMotivo('');setLoteSel(null);return;}setSaving(true);db.collection('entries').add({medicamentoId:ajusteMed.id,medicamentoNome:ajusteMed.nome,ean:ajusteMed.ean||'',tipo:diff>0?'entrada':'saida',quantidade:Math.abs(diff),lote:loteSel?loteSel.lote:'',validade:loteSel?loteSel.validade:'',observacao:'Balanço: '+ajusteMotivo.trim()+' (era '+atual+', passou a '+nq+')',criadoEm:new Date().toISOString(),date:todayStr(),autorId:user.uid,autorNome:user.name,autorCargo:user.role,autorColor:user.color||B,isAjuste:true,tenant_id:tenantDe(user)}).then(function(){setAjusteId(null);setAjusteMed(null);setAjusteQty('');setAjusteMotivo('');setLoteSel(null);setSaving(false);}).catch(function(e){alert(e.message);setSaving(false);});}
 function handleImportXls(file){if(!file)return;setImporting(true);setImportStatus('Lendo arquivo...');var reader=new FileReader();reader.onload=function(ev){try{var data=new Uint8Array(ev.target.result);var wb=XLSX.read(data,{type:'array'});var catMap={'CONTROLADOS':'controlado','CONTROLADO':'controlado','FARMACIA BASICA':'medicamento','FARMACIA':'medicamento','LEITES':'leite','LEITE':'leite','INJETAVEIS':'injetavel','INJETAVEL':'injetavel','PENSOS':'penso','MATERIAIS':'penso'};var batch=[];for(var si=0;si<wb.SheetNames.length;si++){var sn=wb.SheetNames[si];if(sn.toUpperCase().indexOf('INSTRUC')>=0)continue;var ws2=wb.Sheets[sn];var rows=XLSX.utils.sheet_to_json(ws2,{defval:''});if(!rows||rows.length===0)continue;var su=sn.toUpperCase().trim();var sc='medicamento';for(var key in catMap){if(su.indexOf(key)>=0){sc=catMap[key];break;}}for(var i=0;i<rows.length;i++){var row=rows[i];var nome=row['Nome']||row['NOME']||row['nome']||'';if(!nome||!nome.trim())continue;var cat=row['Categoria']||row['CATEGORIA']||sc;var est2=parseInt(row['Estoque Inicial']||row['estoque']||0)||0;var min2=parseInt(row['Estoque Minimo']||row['minimo']||0)||0;var ean=(row['EAN (opcional)']||row['EAN']||'')+'';var val2=(row['Validade (MM/AAAA)']||row['Validade']||'')+'';var cl=cat.toLowerCase().trim();if(cl.indexOf('injet')>=0)cl='injetavel';else if(cl.indexOf('penso')>=0||cl.indexOf('material')>=0)cl='penso';else if(cl.indexOf('control')>=0)cl='controlado';else if(cl.indexOf('leite')>=0)cl='leite';else cl='medicamento';batch.push({nome:nome.trim(),categoria:cl,minEstoque:min2,ean:ean,validade:_normValidade(val2),estoque:est2,criadoEm:new Date().toISOString()});}}if(batch.length===0){setImportStatus('Nenhum item encontrado.');setImporting(false);return;}setImportStatus('Importando '+batch.length+' itens...');var idx=0,done=0;function next2(){if(idx>=batch.length){setImportStatus('Registrando estoques...');var ei=0;function ne(){if(ei>=batch.length){setImportStatus('Concluido! '+done+' itens!');setImporting(false);return;}var item=batch[ei++];if(item.estoque>0){db.collection('medicamentos').where('tenant_id','==',tenantDe(user)).where('nome','==',item.nome).limit(1).get().then(function(s){if(!s.empty){db.collection('entries').add({medicamentoId:s.docs[0].id,medicamentoNome:item.nome,ean:item.ean||'',tipo:'entrada',quantidade:item.estoque,lote:'',validade:item.validade||'',observacao:'Estoque inicial',criadoEm:new Date().toISOString(),date:todayStr(),autorId:user.uid,autorNome:user.name,autorCargo:user.role,autorColor:user.color||B,tenant_id:tenantDe(user)}).then(ne).catch(ne);}else ne();}).catch(ne);}else ne();}ne();return;}var item=batch[idx++];db.collection('medicamentos').add({nome:item.nome,categoria:item.categoria,minEstoque:item.minEstoque,ean:item.ean,criadoEm:item.criadoEm,tenant_id:tenantDe(user)}).then(function(){done++;next2();}).catch(function(){done++;next2();});}next2();}catch(ex){setImportStatus('Erro: '+ex.message);setImporting(false);}};reader.readAsArrayBuffer(file);}
 var _cutDesc=(function(){var d=new Date();d.setDate(d.getDate()-30);return d.toISOString().slice(0,10);})();var descartes30=(entries||[]).filter(function(e){return e.tipo==='saida'&&e.descarte&&(e.date||'')>=_cutDesc;});var subTabs=[{id:'estoque',label:'Estoque'},{id:'faltas',label:'Faltas'+(faltas.length>0?' ('+faltas.length+')':'')},{id:'vencimento',label:'Vencimentos'+(totalAlertas>0?' ('+totalAlertas+')':'')},{id:'descartes',label:'🗑️ Descartes'+(descartes30.length>0?' ('+descartes30.length+')':'')}];
-var TipoBtn=function(props){var t=TIPOS[props.k];var sel=props.sel===props.k;return <button onClick={function(){props.onClick(props.k);}} style={{padding:'7px 12px',borderRadius:20,border:'1.5px solid '+(sel?t.cor:'#E2E8F0'),background:sel?t.cor:'#fff',color:sel?'#fff':'#64748B',cursor:'pointer',fontWeight:sel?700:500,fontSize:12,transition:'all .15s'}}>{t.icon} {t.label}</button>;};
+// Usado em várias abas (Estoque, Conferência, Leites...) pra selecionar o tipo/categoria do
+// medicamento. Checa a classe do body (em vez de receber uma prop) porque é chamado em muitos
+// lugares diferentes e nem todos têm `user` à mão — mais simples tematizar aqui uma vez só.
+var TipoBtn=function(props){var t=TIPOS[props.k];var sel=props.sel===props.k;var temaItaq=document.body.classList.contains('theme-itaq');var cor=temaItaq?B:t.cor;return <button onClick={function(){props.onClick(props.k);}} style={{padding:'7px 12px',borderRadius:20,border:'1.5px solid '+(sel?cor:(temaItaq?'var(--itq-line,#E3E9F6)':'#E2E8F0')),background:sel?cor:'#fff',color:sel?'#fff':(temaItaq?'var(--itq-soft)':'#64748B'),cursor:'pointer',fontWeight:sel?700:500,fontSize:12,transition:'all .15s',display:'inline-flex',alignItems:'center',gap:5}}>{temaItaq?<Icon name={TIPOS_ICON[props.k]||'pill'} size={12}/>:t.icon} {t.label}</button>;};
 function darBaixaVencido(){
     if(!showBaixa)return;
     if(descarteMed&&descarteMed.lotes&&descarteMed.lotes.length>1&&!descarteLoteSel){alert2('Selecione qual lote está sendo descartado.');return;}
@@ -2602,7 +2616,7 @@ function darBaixaVencido(){
   </Modal>;})()}
 <div className="tab-sw">{subTabs.map(function(t){return <button key={t.id} onClick={function(){setSub(t.id);}} className={sub===t.id?'on':''}>{t.label}</button>;})}</div>
 {sub==='estoque'&&(<div><div style={{display:'flex',gap:10,marginBottom:10,flexWrap:'wrap'}}><input value={search} onChange={function(e){setSearch(e.target.value);}} placeholder="Buscar medicamento..." className="inp" style={{marginBottom:0,flex:1}}/>{can(user.role,'editar')&&<button onClick={function(){setShowAdd(true);}} className="bp" style={{whiteSpace:'nowrap',padding:'0 18px',width:'auto'}}>+ Novo</button>}{can(user.role,'editar')&&<button onClick={function(){document.getElementById('importXlsInput').click();}} style={{whiteSpace:'nowrap',padding:'0 14px',background:'#7C3AED',border:'none',borderRadius:10,color:'#fff',fontSize:13,fontWeight:600,cursor:'pointer',boxShadow:'0 2px 8px rgba(124,58,237,.3)'}}>Importar Excel</button>}<input id="importXlsInput" type="file" accept=".xlsx,.xls" style={{display:'none'}} onChange={function(e){handleImportXls(e.target.files[0]);e.target.value='';  }}/></div>
-<div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:14,alignItems:'center'}}><button onClick={function(){setFiltCat('todos');}} className={'pill'+(filtCat==='todos'?' on':'')}>Todos</button>{Object.keys(TIPOS).map(function(k){var t=TIPOS[k];return <button key={k} onClick={function(){setFiltCat(k);}} className={'pill'+(filtCat===k?' on':'')} style={filtCat===k?{background:t.cor,borderColor:t.cor,color:'#fff'}:{}}>{t.icon} {t.label}</button>;}  )}<button onClick={imprimirEstoquePDF} style={{marginLeft:'auto',padding:'6px 12px',borderRadius:20,fontSize:11,fontWeight:600,cursor:'pointer',border:'1.5px solid #B91C1C',background:'#FEF2F2',color:'#B91C1C'}}>🖨️ PDF</button><button onClick={exportXL} style={{padding:'6px 12px',borderRadius:20,fontSize:11,fontWeight:600,cursor:'pointer',border:'1.5px solid #0C6B3E',background:'#F0FDF4',color:'#0C6B3E'}}>Excel</button></div>
+<div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:14,alignItems:'center'}}><button onClick={function(){setFiltCat('todos');}} className={'pill'+(filtCat==='todos'?' on':'')}>Todos</button>{Object.keys(TIPOS).map(function(k){var t=TIPOS[k];var temaItaq=document.body.classList.contains('theme-itaq');var cor=temaItaq?B:t.cor;return <button key={k} onClick={function(){setFiltCat(k);}} className={'pill'+(filtCat===k?' on':'')} style={filtCat===k?{background:cor,borderColor:cor,color:'#fff'}:{}}>{temaItaq?<Icon name={TIPOS_ICON[k]||'pill'} size={12}/>:t.icon} {t.label}</button>;}  )}<button onClick={imprimirEstoquePDF} style={{marginLeft:'auto',padding:'6px 12px',borderRadius:20,fontSize:11,fontWeight:600,cursor:'pointer',border:'1.5px solid #B91C1C',background:'#FEF2F2',color:'#B91C1C'}}>🖨️ PDF</button><button onClick={exportXL} style={{padding:'6px 12px',borderRadius:20,fontSize:11,fontWeight:600,cursor:'pointer',border:'1.5px solid #0C6B3E',background:'#F0FDF4',color:'#0C6B3E'}}>Excel</button></div>
 {importing&&<div className="inf" style={{marginBottom:10}}>⏳ {importStatus}</div>}
 {!importing&&importStatus&&<div className="ok" style={{marginBottom:10}}>{importStatus}</div>}
 <div className="card"><div className="ch"><div className="ch-title"><div className="ch-accent"/><span>Estoque Atual</span></div><span style={{fontSize:12,color:'#94A3B8',fontWeight:500}}>{medList.length} produto(s)</span></div>
@@ -2895,7 +2909,7 @@ function imprimirResumoRelatorio(){
   if(!_imprimirDoc(html)){window.alert('Não foi possível abrir a impressão do relatório.');}
 }
 return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
-<div className="tab-sw">{[['mov','Movimentações'],['resumo','🗓️ Resumo'],['dia','Saídas do Dia'],['div','⚠️ Divergências'],['resp','Por Responsável'],['rank','Ranking']].map(function(t){return <button key={t[0]} onClick={function(){setSub(t[0]);}} className={sub===t[0]?'on':''}>{t[1]}</button>;})}</div>
+<div className="tab-sw">{[['mov','Movimentações'],['resumo','🗓️ Resumo'],['dia','Saídas do Dia'],['div','⚠️ Divergências'],['resp','Por Responsável'],['rank','Ranking']].map(function(t){return <button key={t[0]} onClick={function(){setSub(t[0]);}} className={sub===t[0]?'on':''}>{_semEmoji(t[1])}</button>;})}</div>
 {sub==='resumo'&&<div>
   <div className="card" style={{marginBottom:12,padding:14}}>
     <div style={{display:'flex',gap:8,marginBottom:relPeriodo==='mensal'?10:0}}>
@@ -2955,7 +2969,7 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
   <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:12}}>
     <button onClick={function(){setDiaCats([]);}} style={{padding:'5px 10px',borderRadius:20,border:'1.5px solid '+(diaCats.length===0?'#1351B4':'#E2E8F0'),background:diaCats.length===0?'#EFF6FF':'#fff',fontSize:11,fontWeight:diaCats.length===0?700:500,color:diaCats.length===0?'#1351B4':'#64748B',cursor:'pointer'}}>Todos</button>
     {[['medicamento','💊 Farm. Básica'],['controlado','🔒 Controlado'],['injetavel','💉 Injetável'],['leite','🍼 Leite'],['penso','🩹 Penso/Material']].map(function(c){var sel=diaCats.indexOf(c[0])>=0;return(
-      <button key={c[0]} onClick={function(){setDiaCats(sel?diaCats.filter(function(x){return x!==c[0];}):diaCats.concat([c[0]]));}} style={{padding:'5px 10px',borderRadius:20,border:'1.5px solid '+(sel?'#1351B4':'#E2E8F0'),background:sel?'#EFF6FF':'#fff',fontSize:11,fontWeight:sel?700:500,color:sel?'#1351B4':'#64748B',cursor:'pointer'}}>{c[1]}</button>
+      <button key={c[0]} onClick={function(){setDiaCats(sel?diaCats.filter(function(x){return x!==c[0];}):diaCats.concat([c[0]]));}} style={{padding:'5px 10px',borderRadius:20,border:'1.5px solid '+(sel?'#1351B4':'#E2E8F0'),background:sel?'#EFF6FF':'#fff',fontSize:11,fontWeight:sel?700:500,color:sel?'#1351B4':'#64748B',cursor:'pointer'}}>{_semEmoji(c[1])}</button>
     );})}
   </div>
   {(function(){
@@ -3055,10 +3069,10 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
       {porResp.map(function(r){return <option key={r.nome} value={r.nome}>{r.nome}</option>;})}
     </select>
     <div style={{marginTop:10,borderTop:'1px solid #F1F5F9',paddingTop:10}}>
-      <div style={{fontSize:12,fontWeight:700,color:'#1E293B',marginBottom:6}}>🔍 Filtrar por medicamento(s)</div>
+      <div style={{fontSize:12,fontWeight:700,color:'#1E293B',marginBottom:6}}>{_semEmoji('🔍 Filtrar por medicamento(s)')}</div>
       <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:6}}>
         {[['todos','Todas'],['medicamento','💊 Básica'],['controlado','🔵 Controlado'],['injetavel','💉 Injetável'],['leite','🍼 Leite'],['penso','🩹 Penso']].map(function(c){return(
-          <button key={c[0]} onClick={function(){setFiltBuscaCat(c[0]);}} style={{padding:'5px 10px',borderRadius:20,border:'1.5px solid '+(filtBuscaCat===c[0]?'#1351B4':'#E2E8F0'),background:filtBuscaCat===c[0]?'#EFF6FF':'#fff',fontSize:11,fontWeight:filtBuscaCat===c[0]?700:500,color:filtBuscaCat===c[0]?'#1351B4':'#64748B',cursor:'pointer'}}>{c[1]}</button>
+          <button key={c[0]} onClick={function(){setFiltBuscaCat(c[0]);}} style={{padding:'5px 10px',borderRadius:20,border:'1.5px solid '+(filtBuscaCat===c[0]?'#1351B4':'#E2E8F0'),background:filtBuscaCat===c[0]?'#EFF6FF':'#fff',fontSize:11,fontWeight:filtBuscaCat===c[0]?700:500,color:filtBuscaCat===c[0]?'#1351B4':'#64748B',cursor:'pointer'}}>{_semEmoji(c[1])}</button>
         );})}
       </div>
       <input value={filtBusca} onChange={function(e){setFiltBusca(e.target.value);}} placeholder="Digite o nome do medicamento..." className="inp" style={{margin:0}}/>
@@ -3184,7 +3198,7 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
       <div style={{fontSize:12,fontWeight:700,color:'#1E293B',marginBottom:6}}>📂 Categoria</div>
       <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
         {[['todos','Todas'],['medicamento','💊 Básica'],['controlado','🔵 Controlado'],['injetavel','💉 Injetável'],['leite','🍼 Leite'],['penso','🩹 Penso']].map(function(c){return(
-          <button key={c[0]} onClick={function(){setRankCat(c[0]);}} style={{padding:'6px 12px',borderRadius:20,border:'1.5px solid '+(rankCat===c[0]?'#1351B4':'#E2E8F0'),background:rankCat===c[0]?'#EFF6FF':'#fff',fontSize:11,fontWeight:rankCat===c[0]?700:500,color:rankCat===c[0]?'#1351B4':'#64748B',cursor:'pointer'}}>{c[1]}</button>
+          <button key={c[0]} onClick={function(){setRankCat(c[0]);}} style={{padding:'6px 12px',borderRadius:20,border:'1.5px solid '+(rankCat===c[0]?'#1351B4':'#E2E8F0'),background:rankCat===c[0]?'#EFF6FF':'#fff',fontSize:11,fontWeight:rankCat===c[0]?700:500,color:rankCat===c[0]?'#1351B4':'#64748B',cursor:'pointer'}}>{_semEmoji(c[1])}</button>
         );})}
       </div>
     </div>
@@ -3387,9 +3401,9 @@ function rejectSolicit(id){db.collection('solicitacoes').doc(id).update({status:
 var tabs=[['pending','Pendentes ('+pending.length+')'],['team','Equipe'],['solicit','Solicit.'+(solicitList.length>0?' ('+solicitList.length+')':'')],['alerts','Alertas'+(unread>0?' ('+unread+')':'')],['tutoriais','📚 Tutoriais'],['inativo','Inativos'],['reset','Reset']];
 var totalUsuarios=approved.length;
 return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
-<div className="tab-sw" style={{flexWrap:'wrap'}}>{tabs.map(function(t){return <button key={t[0]} onClick={function(){setSub(t[0]);}} className={sub===t[0]?'on':''}>{t[1]}</button>;})}</div>
-{sub==='pending'&&(pending.length===0?<div className="card" style={{padding:48,textAlign:'center',color:'#94A3B8'}}>Nenhuma conta pendente de aprovação.</div>:(<div style={{display:'flex',flexDirection:'column',gap:10}}>{pending.map(function(u){return(<div key={u.id} className="card" style={{padding:'16px',border:'1.5px solid #FCD34D'}}><div style={{display:'flex',alignItems:'center',gap:12,marginBottom:14}}><UserAvatar user={u} size={46}/><div style={{flex:1}}><div style={{fontWeight:700,fontSize:15,color:'#1E293B'}}>{u.name}</div><div style={{fontSize:12,color:'#64748B',marginTop:2}}>{ROLE_ICON[u.role]} {ROLES[u.role]||u.role} · {u.email}</div>{u.role==='farmaceutico'&&u.crf&&<div style={{fontSize:12,color:'#64748B'}}>CRF: {u.crf}</div>}</div></div><div style={{display:'flex',gap:10}}><button onClick={function(){approve(u.id);}} className="bg" style={{flex:1}}>Aprovar</button><button onClick={function(){reject(u.id);}} className="br" style={{flex:1}}>Recusar</button></div></div>);})}</div>))}
-{sub==='team'&&(<div style={{display:'flex',flexDirection:'column',gap:10}}>{approved.map(function(u){return(<div key={u.id} className="card" style={{padding:'14px 16px',display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}><UserAvatar user={u} size={42}/><div style={{flex:1}}><div style={{fontWeight:700,color:u.color||B,fontSize:14}}>{u.name}</div><div style={{fontSize:12,color:'#64748B',marginTop:2}}>{ROLE_ICON[u.role]} {ROLES[u.role]}{u.role==='farmaceutico'&&u.crf?' · CRF: '+u.crf:''}</div></div>{u.id!==currentUser.uid?(<div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}><select value={u.role} onChange={function(e){changeRole(u.id,e.target.value);}} className="inp" style={{width:'auto',marginBottom:0,fontSize:12,padding:'6px 10px'}}>{Object.keys(ROLES).map(function(k){return <option key={k} value={k}>{ROLES[k]}</option>;})}</select>{currentUser.role==='tecnico'&&<button onClick={function(){deactivate(u.id,u.name);}} style={{background:'#FEE2E2',border:'1px solid #FCA5A5',borderRadius:8,padding:'6px 12px',color:'#B91C1C',cursor:'pointer',fontSize:11,fontWeight:600,whiteSpace:'nowrap'}}>Desativar</button>}</div>):<span className="badge badge-blue">{ROLES[u.role]} (voce)</span>}</div>);})}</div>)}
+<div className="tab-sw" style={{flexWrap:'wrap'}}>{tabs.map(function(t){return <button key={t[0]} onClick={function(){setSub(t[0]);}} className={sub===t[0]?'on':''}>{_semEmoji(t[1])}</button>;})}</div>
+{sub==='pending'&&(pending.length===0?<div className="card" style={{padding:48,textAlign:'center',color:'#94A3B8'}}>Nenhuma conta pendente de aprovação.</div>:(<div style={{display:'flex',flexDirection:'column',gap:10}}>{pending.map(function(u){return(<div key={u.id} className="card" style={{padding:'16px',border:'1.5px solid #FCD34D'}}><div style={{display:'flex',alignItems:'center',gap:12,marginBottom:14}}><UserAvatar user={u} size={46}/><div style={{flex:1}}><div style={{fontWeight:700,fontSize:15,color:'#1E293B'}}>{u.name}</div><div style={{fontSize:12,color:'#64748B',marginTop:2}}>{_roleIcon(u.role)} {ROLES[u.role]||u.role} · {u.email}</div>{u.role==='farmaceutico'&&u.crf&&<div style={{fontSize:12,color:'#64748B'}}>CRF: {u.crf}</div>}</div></div><div style={{display:'flex',gap:10}}><button onClick={function(){approve(u.id);}} className="bg" style={{flex:1}}>Aprovar</button><button onClick={function(){reject(u.id);}} className="br" style={{flex:1}}>Recusar</button></div></div>);})}</div>))}
+{sub==='team'&&(<div style={{display:'flex',flexDirection:'column',gap:10}}>{approved.map(function(u){return(<div key={u.id} className="card" style={{padding:'14px 16px',display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}><UserAvatar user={u} size={42}/><div style={{flex:1}}><div style={{fontWeight:700,color:u.color||B,fontSize:14}}>{u.name}</div><div style={{fontSize:12,color:'#64748B',marginTop:2}}>{_roleIcon(u.role)} {ROLES[u.role]}{u.role==='farmaceutico'&&u.crf?' · CRF: '+u.crf:''}</div></div>{u.id!==currentUser.uid?(<div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}><select value={u.role} onChange={function(e){changeRole(u.id,e.target.value);}} className="inp" style={{width:'auto',marginBottom:0,fontSize:12,padding:'6px 10px'}}>{Object.keys(ROLES).map(function(k){return <option key={k} value={k}>{ROLES[k]}</option>;})}</select>{currentUser.role==='tecnico'&&<button onClick={function(){deactivate(u.id,u.name);}} style={{background:'#FEE2E2',border:'1px solid #FCA5A5',borderRadius:8,padding:'6px 12px',color:'#B91C1C',cursor:'pointer',fontSize:11,fontWeight:600,whiteSpace:'nowrap'}}>Desativar</button>}</div>):<span className="badge badge-blue">{ROLES[u.role]} (voce)</span>}</div>);})}</div>)}
 {sub==='solicit'&&(solicitList.length===0?<div className="card" style={{padding:40,textAlign:'center',color:'#94A3B8'}}>Nenhuma solicitação pendente.</div>:(<div style={{display:'flex',flexDirection:'column',gap:10}}>{solicitList.map(function(s){return(<div key={s.id} className="card" style={{padding:'14px 16px',border:'1.5px solid #BFDBFE'}}><div style={{display:'flex',justifyContent:'space-between',marginBottom:10,alignItems:'center'}}><div style={{display:'flex',alignItems:'center',gap:8}}><div className="av" style={{width:34,height:34,background:s.solicitanteColor||B,fontSize:13}}>{s.solicitanteNome?s.solicitanteNome.charAt(0):'?'}</div><div><div style={{fontWeight:600,fontSize:13,color:B}}>{s.solicitanteNome}</div><div style={{fontSize:11,color:'#64748B'}}>{ROLES[s.solicitanteCargo]||s.solicitanteCargo} · {fmtT(s.criadoEm)}</div></div></div><span className={s.tipo==='saida'?'tag-s':'tag-e'}>{s.tipo}</span></div><div style={{fontWeight:700,color:'#1E293B',fontSize:14,marginBottom:4}}>{s.medicamentoNome}</div><div style={{fontSize:13,color:'#64748B',marginBottom:s.observação?8:14}}>Qtd: <strong>{s.quantidade}</strong></div>{s.observação&&<div style={{fontSize:12,color:'#64748B',fontStyle:'italic',marginBottom:14,background:'#F8FAFC',padding:'8px 12px',borderRadius:8}}>"{s.observação}"</div>}<div style={{display:'flex',gap:8}}><button onClick={function(){rejectSolicit(s.id);}} className="br" style={{flex:1}}>Recusar</button><button onClick={function(){approveSolicit(s);}} className="bg" style={{flex:2}}>Aprovar</button></div></div>);})}</div>))}
 {sub==='alerts'&&(alertas.length===0?<div className="card" style={{padding:40,textAlign:'center',color:'#94A3B8'}}>Nenhum alerta registrado.</div>:(<div style={{display:'flex',flexDirection:'column',gap:10}}>{alertas.map(function(a){return(<div key={a.id} className="card" style={{padding:'14px 16px',opacity:a.lido?0.5:1}}><div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}><span className="badge badge-amber">Saida excessiva</span><span style={{fontSize:11,color:'#94A3B8'}}>{fmtD(a.criadoEm)}</span></div><div style={{fontWeight:600,color:'#1E293B',marginBottom:4,fontSize:14}}>{a.medicamentoNome}</div><div style={{fontSize:12,color:'#64748B',marginBottom:a.lido?0:12}}>Por: {a.autorNome} · {a.quantidade} un.</div>{!a.lido&&<button onClick={function(){db.collection('alertas').doc(a.id).update({lido:true});}} className="bs" style={{width:'auto',padding:'6px 16px',fontSize:12}}>Marcar como lido</button>}</div>);})}</div>))}
 {sub==='tutoriais'&&(<div style={{display:'flex',flexDirection:'column',gap:12}}>
@@ -3507,7 +3521,7 @@ function TabAdmin({user,entries,medications,db}){
       {ok&&<div style={{background:'#DCFCE7',color:'#065F46',padding:'10px 14px',borderRadius:10,marginBottom:12,fontWeight:700,fontSize:13}}>{ok}</div>}
       <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:14}}>
         {subItems.map(function(s){return(
-          <button key={s[0]} onClick={function(){setSub(s[0]);setBusca('');}} style={{padding:'8px 14px',borderRadius:10,border:'none',background:sub===s[0]?'#1351B4':'#F1F5F9',color:sub===s[0]?'#fff':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>{s[1]}</button>
+          <button key={s[0]} onClick={function(){setSub(s[0]);setBusca('');}} style={{padding:'8px 14px',borderRadius:10,border:'none',background:sub===s[0]?'#1351B4':'#F1F5F9',color:sub===s[0]?'#fff':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>{_semEmoji(s[1])}</button>
         );})}
       </div>
       <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="Buscar..." style={{width:'100%',padding:'10px 14px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:13,marginBottom:12,boxSizing:'border-box'}}/>
@@ -4177,7 +4191,7 @@ return(
       <div style={{fontSize:22,fontWeight:800,letterSpacing:'-.02em',marginBottom:10}}>{user.name}</div>
       <div style={{display:'flex',justifyContent:'center',flexWrap:'wrap',gap:6,marginBottom:6}}>
         <div style={{display:'inline-flex',alignItems:'center',gap:6,background:'rgba(255,255,255,.15)',borderRadius:20,padding:'5px 14px',fontSize:13,fontWeight:600,border:'1px solid rgba(255,255,255,.2)'}}>
-          {ROLE_ICON[user.role]} {ROLES[user.role]||user.role}
+          {_roleIcon(user.role)} {ROLES[user.role]||user.role}
         </div>
         {user.role==='farmaceutico'&&crf&&<div style={{display:'inline-flex',alignItems:'center',gap:4,background:'rgba(255,255,255,.12)',borderRadius:20,padding:'5px 12px',fontSize:12,fontWeight:600,border:'1px solid rgba(255,255,255,.18)'}}>CRF {crf}</div>}
       </div>
@@ -6275,7 +6289,7 @@ function TabHistoricoNotas(props){
   }
   return(
     <div style={{maxWidth:700,margin:'0 auto',padding:'16px 12px 90px'}}>
-      <div style={{fontWeight:800,fontSize:22,color:'#1E293B',marginBottom:4}}>🗂️ Histórico de Notas</div>
+      <div style={{fontWeight:800,fontSize:22,color:'#1E293B',marginBottom:4,display:'flex',alignItems:'center',gap:8}}>{document.body.classList.contains('theme-itaq')?<Icon name="folder" size={20}/>:'🗂️'} Histórico de Notas</div>
       <div style={{fontSize:13,color:'#64748B',marginBottom:14}}>Entradas agrupadas por nota fiscal</div>
 
       {notasConf.length>0&&<div style={{marginBottom:18,border:'1.5px solid #86EFAC',borderRadius:16,overflow:'hidden'}}>
@@ -6307,7 +6321,7 @@ function TabHistoricoNotas(props){
         </div>
       </div>}
 
-      <input value={search} onChange={function(e){setSearch(e.target.value);}} placeholder="🔍 Buscar NF, fornecedor ou medicamento..." className="inp" style={{marginBottom:14}}/>
+      <input value={search} onChange={function(e){setSearch(e.target.value);}} placeholder={_semEmoji('🔍 Buscar NF, fornecedor ou medicamento...')} className="inp" style={{marginBottom:14}}/>
       {msg==='ok'&&<div className="ok" style={{marginBottom:10}}>✅ Salvo com sucesso!</div>}
       {msg.indexOf('e:')===0&&<div className="er" style={{marginBottom:10}}>❌ {msg.slice(2)}</div>}
       {lista.length===0&&<div style={{textAlign:'center',padding:'48px 0',color:'#94A3B8'}}><div style={{fontSize:40,marginBottom:8}}>📋</div><div style={{fontWeight:600}}>{search?'Nenhuma nota encontrada':'Nenhuma entrada registrada'}</div></div>}
@@ -7777,9 +7791,9 @@ function TabPrevisao(props){
 
       {/* Sub-abas */}
       <div style={{display:'flex',gap:6,marginBottom:16}}>
-        <button onClick={function(){setSub('previsao');}} className={'pill'+(sub==='previsao'?' act':'')} style={sub==='previsao'?{background:'#1351B4',color:'#fff',borderColor:'#1351B4'}:{}}>📊 Previsão</button>
-        <button onClick={function(){setSub('atas');}} className={'pill'+(sub==='atas'?' act':'')} style={sub==='atas'?{background:'#1351B4',color:'#fff',borderColor:'#1351B4'}:{}}>🗂️ Gerenciar Atas</button>
-        <button onClick={function(){setSub('config');}} className={'pill'+(sub==='config'?' act':'')} style={sub==='config'?{background:'#1351B4',color:'#fff',borderColor:'#1351B4'}:{}}>⚙️ Mín. e Consumo</button>
+        <button onClick={function(){setSub('previsao');}} className={'pill'+(sub==='previsao'?' act':'')} style={sub==='previsao'?{background:'#1351B4',color:'#fff',borderColor:'#1351B4'}:{}}>{_semEmoji('📊 Previsão')}</button>
+        <button onClick={function(){setSub('atas');}} className={'pill'+(sub==='atas'?' act':'')} style={sub==='atas'?{background:'#1351B4',color:'#fff',borderColor:'#1351B4'}:{}}>{_semEmoji('🗂️ Gerenciar Atas')}</button>
+        <button onClick={function(){setSub('config');}} className={'pill'+(sub==='config'?' act':'')} style={sub==='config'?{background:'#1351B4',color:'#fff',borderColor:'#1351B4'}:{}}>{_semEmoji('⚙️ Mín. e Consumo')}</button>
       </div>
 
       {sub==='previsao'&&<div>
@@ -9401,7 +9415,7 @@ function TabConferencia(props){
         <div style={{marginBottom:10}}>
           <div style={{fontSize:11,fontWeight:700,color:'#475569',marginBottom:6}}>CATEGORIA *</div>
           <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
-            {Object.keys(TIPOS).map(function(k){var t=TIPOS[k];var sel=cadCat===k;return(<button key={k} onClick={function(){setCadCat(k);}} style={{padding:'7px 11px',borderRadius:20,border:'1.5px solid '+(sel?t.cor:'#E2E8F0'),background:sel?t.cor:'#fff',color:sel?'#fff':'#64748B',cursor:'pointer',fontWeight:sel?700:500,fontSize:12}}>{t.icon} {t.label}</button>);})}
+            {Object.keys(TIPOS).map(function(k){var t=TIPOS[k];var sel=cadCat===k;var temaItaq=document.body.classList.contains('theme-itaq');var cor=temaItaq?B:t.cor;return(<button key={k} onClick={function(){setCadCat(k);}} style={{padding:'7px 11px',borderRadius:20,border:'1.5px solid '+(sel?cor:'#E2E8F0'),background:sel?cor:'#fff',color:sel?'#fff':'#64748B',cursor:'pointer',fontWeight:sel?700:500,fontSize:12,display:'inline-flex',alignItems:'center',gap:5}}>{temaItaq?<Icon name={TIPOS_ICON[k]||'pill'} size={12}/>:t.icon} {t.label}</button>);})}
           </div>
         </div>
         <div style={{marginBottom:14}}>
@@ -10743,21 +10757,22 @@ function TabRecebimento(props){
     if(fStatus!=='todos'&&(r.status||'pendente')!==fStatus)return false;
     return true;
   });
-  var inp={width:'100%',padding:'11px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:14,boxSizing:'border-box'};
-  var lbl={fontSize:12,fontWeight:700,color:'#475569',display:'block',marginBottom:5};
+  var temaItaq=tenantDe(user)==='itaquitinga-pe';
+  var inp=temaItaq?{width:'100%',padding:'11px',borderRadius:12,border:'1.5px solid var(--itq-line,#E3E9F6)',fontSize:14,boxSizing:'border-box',color:'var(--itq-ink)',fontFamily:'inherit'}:{width:'100%',padding:'11px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:14,boxSizing:'border-box'};
+  var lbl=temaItaq?{fontSize:12,fontWeight:700,color:'var(--itq-soft)',display:'block',marginBottom:5}:{fontSize:12,fontWeight:700,color:'#475569',display:'block',marginBottom:5};
 
   return(
     <div style={{maxWidth:560,margin:'0 auto',padding:'16px 14px 40px'}}>
       <div style={{background:'linear-gradient(135deg,#0D1B4B,#1351B4)',padding:'20px 18px',borderRadius:18,marginBottom:16}}>
         <div style={{color:'rgba(255,255,255,.7)',fontSize:12,textTransform:'uppercase',letterSpacing:1}}>Entrada de mercadoria</div>
-        <div style={{color:'#fff',fontSize:20,fontWeight:800}}>📦 Recebimento</div>
+        <div style={{color:'#fff',fontSize:20,fontWeight:800,display:'flex',alignItems:'center',gap:8}}>{temaItaq?<Icon name="truck" size={20}/>:'📦'} Recebimento</div>
         <div style={{color:'rgba(255,255,255,.75)',fontSize:12,marginTop:4}}>Registre a mercadoria recebida — o estoque atualiza na hora e fica pendente de conciliação fiscal.</div>
       </div>
 
       {/* SUB-ABAS */}
       <div data-tour="receb-subabas" style={{display:'flex',gap:8,marginBottom:16,overflowX:'auto'}}>
         {[['fisico','📦 Recebimento'],['notas','📥 Importar Notas'],['divergencias','🚨 Divergências']].map(function(t){return(
-          <button key={t[0]} data-tour={'receb-sub-'+t[0]} onClick={function(){setAba(t[0]);}} style={{flexShrink:0,padding:'11px 14px',borderRadius:12,border:'none',background:aba===t[0]?B:'#F1F5F9',color:aba===t[0]?'#fff':'#64748B',fontWeight:700,fontSize:13,cursor:'pointer',whiteSpace:'nowrap'}}>{t[1]}</button>
+          <button key={t[0]} data-tour={'receb-sub-'+t[0]} onClick={function(){setAba(t[0]);}} style={{flexShrink:0,padding:'11px 14px',borderRadius:12,border:'none',background:aba===t[0]?B:'#F1F5F9',color:aba===t[0]?'#fff':'#64748B',fontWeight:700,fontSize:13,cursor:'pointer',whiteSpace:'nowrap'}}>{_semEmoji(t[1])}</button>
         );})}
       </div>
 
@@ -10825,8 +10840,8 @@ function TabRecebimento(props){
         <input value={nmNome} onChange={function(e){setNmNome(e.target.value);}} placeholder="Ex: Dipirona 500mg" className="inp" autoFocus/>
         <Lbl c="Categoria"/>
         <div style={{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap'}}>
-          {Object.keys(TIPOS).map(function(k){var t=TIPOS[k];var sel=nmTipo===k;return(
-            <button key={k} type="button" onClick={function(){setNmTipo(k);}} style={{padding:'7px 12px',borderRadius:20,border:'1.5px solid '+(sel?t.cor:'#E2E8F0'),background:sel?t.cor:'#fff',color:sel?'#fff':'#64748B',cursor:'pointer',fontWeight:sel?700:500,fontSize:12}}>{t.icon} {t.label}</button>
+          {Object.keys(TIPOS).map(function(k){var t=TIPOS[k];var sel=nmTipo===k;var temaItaq=document.body.classList.contains('theme-itaq');var cor=temaItaq?B:t.cor;return(
+            <button key={k} type="button" onClick={function(){setNmTipo(k);}} style={{padding:'7px 12px',borderRadius:20,border:'1.5px solid '+(sel?cor:'#E2E8F0'),background:sel?cor:'#fff',color:sel?'#fff':'#64748B',cursor:'pointer',fontWeight:sel?700:500,fontSize:12,display:'inline-flex',alignItems:'center',gap:5}}>{temaItaq?<Icon name={TIPOS_ICON[k]||'pill'} size={12}/>:t.icon} {t.label}</button>
           );})}
         </div>
         <Lbl c="EAN (opcional)"/>
@@ -11796,14 +11811,14 @@ return(
       ?<div style={{width:'100%'}}>
         {menuAberto&&<div className={temaItaq?'itaq-backdrop':''} onClick={function(){setMenuAberto(false);}} style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.6)',zIndex:149,backdropFilter:'blur(6px)'}}/>}
         <div data-tour="menu-panel" className={temaItaq?'menu-drawer':''} style={{position:'fixed',top:0,[temaItaq?'left':'right']:0,bottom:0,width:280,background:'#fff',zIndex:150,transform:menuAberto?'translateX(0)':(temaItaq?'translateX(calc(-100% - 100px))':'translateX(110%)'),transition:'transform .3s cubic-bezier(.4,0,.2,1)',boxShadow:menuAberto?(temaItaq?'8px 0 40px rgba(16,42,90,.18)':'-8px 0 40px rgba(0,0,0,0.2)'):'none',display:'flex',flexDirection:'column',willChange:'transform'}}>
-          <div style={{background:'linear-gradient(135deg,#0D1B4B,#1351B4)',padding:'52px 20px 20px',flexShrink:0}}>
+          <div style={temaItaq?{background:'#fff',borderBottom:'1px solid var(--itq-line,#E3E9F6)',padding:'52px 20px 20px',flexShrink:0}:{background:'linear-gradient(135deg,#0D1B4B,#1351B4)',padding:'52px 20px 20px',flexShrink:0}}>
             <div style={{display:'flex',alignItems:'center',gap:12}}>
-              <div style={{width:42,height:42,borderRadius:12,background:'rgba(255,255,255,0.15)',border:'1.5px solid rgba(255,255,255,0.25)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+              <div style={{width:42,height:42,borderRadius:12,background:temaItaq?'linear-gradient(135deg,var(--blue-900),var(--blue-700))':'rgba(255,255,255,0.15)',border:temaItaq?'none':'1.5px solid rgba(255,255,255,0.25)',display:'flex',alignItems:'center',justifyContent:'center'}}>
                 <span className="fc-mark" style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:17,fontWeight:900,color:'#fff',letterSpacing:'-1px'}}>FC</span>
               </div>
               <div>
-                <div style={{fontWeight:800,fontSize:15,color:'#fff',letterSpacing:'-.01em'}}>FarmaControl</div>
-                <div style={{fontSize:11,color:'rgba(255,255,255,0.5)',marginTop:1}}>{user.name}</div>
+                <div style={{fontWeight:800,fontSize:15,color:temaItaq?'var(--itq-ink)':'#fff',letterSpacing:'-.01em'}}>FarmaControl</div>
+                <div style={{fontSize:11,color:temaItaq?'var(--itq-faint)':'rgba(255,255,255,0.5)',marginTop:1}}>{user.name}</div>
               </div>
             </div>
           </div>
@@ -11856,9 +11871,9 @@ return(
       :<div style={{width:'100%'}}>
         {menuAberto&&<div className={temaItaq?'itaq-backdrop':''} onClick={function(){setMenuAberto(false);}} style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.5)',zIndex:149,backdropFilter:'blur(4px)'}}/>}
         <div data-tour="menu-panel" className={temaItaq?'menu-drawer':''} style={{position:'fixed',top:0,[temaItaq?'left':'right']:0,bottom:0,width:260,background:'#fff',zIndex:150,transform:menuAberto?'translateX(0)':(temaItaq?'translateX(calc(-100% - 100px))':'translateX(110%)'),transition:'transform .3s cubic-bezier(.4,0,.2,1)',boxShadow:menuAberto?(temaItaq?'8px 0 40px rgba(16,42,90,.18)':'-8px 0 40px rgba(0,0,0,0.15)'):'none',display:'flex',flexDirection:'column'}}>
-          <div style={{background:'linear-gradient(135deg,#0D1B4B,#1351B4)',padding:'52px 20px 20px',flexShrink:0}}>
-            <div style={{fontWeight:800,fontSize:15,color:'#fff'}}>{user.name}</div>
-            <div style={{fontSize:11,color:'rgba(255,255,255,0.5)',marginTop:2}}>{ROLES[user.role]||user.role}</div>
+          <div style={temaItaq?{background:'#fff',borderBottom:'1px solid var(--itq-line,#E3E9F6)',padding:'52px 20px 20px',flexShrink:0}:{background:'linear-gradient(135deg,#0D1B4B,#1351B4)',padding:'52px 20px 20px',flexShrink:0}}>
+            <div style={{fontWeight:800,fontSize:15,color:temaItaq?'var(--itq-ink)':'#fff'}}>{user.name}</div>
+            <div style={{fontSize:11,color:temaItaq?'var(--itq-faint)':'rgba(255,255,255,0.5)',marginTop:2}}>{ROLES[user.role]||user.role}</div>
           </div>
           <div style={{flex:1,overflowY:'auto',padding:'8px 0'}}>
             {[{id:'estoque',icon:'📦',label:'Estoque'},{id:'recebimento',icon:'🚚',label:'Recebimento'},{id:'pacientes',icon:'🔒',label:'Pacientes (Controlados)'},{id:'conferencia',icon:'🧾',label:'Conferência'},{id:'leites',icon:'🍼',label:'Leites'},{id:'relatorio',icon:'📊',label:'Relatório'}].filter(function(t){return t.id!=='pacientes'||tenantDe(user)!=='itaquitinga-pe';}).map(function(t){return(
