@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>FarmaControl</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%231351B4'/><text x='50%25' y='54%25' font-family='Georgia,serif' font-size='28' font-weight='900' fill='white' text-anchor='middle' dominant-baseline='middle' letter-spacing='-2'>FC</text></svg>"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
 <script>
 // ===== Auto-atualização: checa em segundo plano se existe uma versão mais nova no servidor e,
 // se existir, força um recarregamento de verdade (com um parâmetro novo na URL, que nunca bate
@@ -199,11 +202,57 @@ select.inp{cursor:pointer}
 
 /* ── SHIFT CARD ── */
 .shift-card{background:linear-gradient(135deg,var(--blue-900) 0%,var(--blue-800) 100%);border-radius:var(--r-xl);padding:16px 18px;margin-bottom:14px;color:#fff;box-shadow:var(--shadow-lg)}
+.shift-empty{background:#EFF6FF;border:1.5px dashed #BFDBFE}
+.shift-empty-txt{color:var(--gray-500)}
+
+/* ── BAR CHART (barras de saídas por dia) ── */
+.bar-fill{background:var(--blue-200)}
+.bar-fill-on{background:var(--blue-700)}
+.bar-lbl{color:var(--gray-400)}
+.bar-lbl-on{color:var(--blue-700)}
 
 /* ── SCROLL ── */
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--gray-300);border-radius:4px}
+
+/* ===== TEMA ITAQUITINGA (visual em teste, 10/2026) =====
+   Ativado só quando tenantDe(user)==='itaquitinga-pe' (classe .theme-itaq no wrapper raiz do App()).
+   Independente do toggle normal de "Modo escuro" (.dark) — é um visual próprio, baseado em
+   referência trazida pela usuária (dashboard financeiro: fundo azul-marinho quase preto, cards em
+   degradê arredondados, badges em pílula, números grandes). Usa !important pq a maior parte das
+   cores do app vem de style inline (que CSS normal não sobrescreve, mas !important sim). */
+.theme-itaq{--itq-bg:#0A0F17;--itq-card-a:#2B3A50;--itq-card-b:#18212E;--itq-accent:#81BDFA;
+  --itq-accent-dim:#405D7A;--itq-green:#58956E;--itq-green-lt:#82DBA3;--itq-red:#E8828A;
+  --itq-text:#F3F6FC;--itq-text-dim:#93A1C2;--itq-border:rgba(255,255,255,.08);
+  background:var(--itq-bg)!important;font-family:'Plus Jakarta Sans','Segoe UI',system-ui,sans-serif!important}
+.theme-itaq body,.theme-itaq{color:var(--itq-text)}
+.theme-itaq .stat-card{background:linear-gradient(155deg,var(--itq-card-a) 0%,var(--itq-card-b) 100%)!important;border:1px solid var(--itq-border)!important;border-radius:22px!important;box-shadow:0 10px 30px -14px rgba(0,0,0,.6)!important}
+.theme-itaq .stat-card::before{display:none}
+.theme-itaq .stat-icon{background:rgba(255,255,255,.1)!important;border-radius:12px!important}
+.theme-itaq .stat-val{color:var(--itq-text)!important;font-family:inherit}
+.theme-itaq .stat-label{color:var(--itq-text-dim)!important}
+.theme-itaq .stat-sub{display:inline-flex!important;align-items:center;gap:4px;margin-top:6px!important;padding:3px 9px;border-radius:20px;font-size:10px!important;font-weight:700;background:rgba(88,149,110,.22);color:var(--itq-green-lt)!important}
+.theme-itaq .card{background:linear-gradient(155deg,var(--itq-card-a) 0%,var(--itq-card-b) 100%)!important;border:1px solid var(--itq-border)!important;border-radius:22px!important;box-shadow:0 10px 30px -14px rgba(0,0,0,.6)!important}
+.theme-itaq .ch{background:transparent!important;border-bottom:1px solid var(--itq-border)!important}
+.theme-itaq .ch-title,.theme-itaq .ch-title span{color:var(--itq-text)!important}
+.theme-itaq .ch-accent{background:var(--itq-accent)!important}
+.theme-itaq .bnav{background:#0D1420!important;border-top:1px solid var(--itq-border)!important}
+.theme-itaq .nb:not(.on) .nl{color:var(--itq-text-dim)!important}
+.theme-itaq .nb.on .nl{color:var(--itq-accent)!important}
+.theme-itaq .nb.on::after{background:var(--itq-accent)!important}
+.theme-itaq .inp,.theme-itaq textarea{background:rgba(255,255,255,.05)!important;border-color:var(--itq-border)!important;color:var(--itq-text)!important}
+.theme-itaq .inp::placeholder,.theme-itaq textarea::placeholder{color:var(--itq-text-dim)!important}
+.theme-itaq .bp{background:var(--itq-accent)!important;color:#0A0F17!important;box-shadow:0 6px 18px -6px rgba(129,189,250,.5)!important}
+.theme-itaq .bs{background:rgba(255,255,255,.06)!important;border-color:var(--itq-border)!important;color:var(--itq-text)!important}
+.theme-itaq .pill{background:rgba(255,255,255,.05)!important;border-color:var(--itq-border)!important;color:var(--itq-text-dim)!important}
+.theme-itaq .pill.on{background:var(--itq-accent)!important;border-color:var(--itq-accent)!important;color:#0A0F17!important}
+.theme-itaq .shift-empty{background:rgba(129,189,250,.08)!important;border-color:rgba(129,189,250,.3)!important}
+.theme-itaq .shift-empty-txt{color:var(--itq-text-dim)!important}
+.theme-itaq .bar-fill{background:var(--itq-accent-dim)!important}
+.theme-itaq .bar-fill-on{background:var(--itq-accent)!important}
+.theme-itaq .bar-lbl{color:var(--itq-text-dim)!important}
+.theme-itaq .bar-lbl-on{color:var(--itq-accent)!important}
 </style>
 </head>
 <body>
@@ -841,9 +890,9 @@ function ShiftCard(props){
     // (eles já operam sem precisar de plantão, mas também podem formalizar/abrir um se quiserem).
     if(!user||!(user.role==='farmaceutico'||user.role==='gestor'||user.role==='tecnico'))return null;
     if(user.role==='farmaceutico'&&!isShiftTime())return null;
-    return(<div style={{background:'#EFF6FF',border:'1.5px dashed #BFDBFE',borderRadius:16,padding:'16px 18px',marginBottom:14,textAlign:'center'}}>
-      <div style={{fontSize:13,color:'#64748B',marginBottom:10}}>Nenhum plantão ativo hoje</div>
-      <button onClick={onIniciar} style={{background:B,border:'none',borderRadius:10,padding:'10px 24px',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer'}}>Abrir Plantão</button>
+    return(<div className="shift-empty" style={{borderRadius:16,padding:'16px 18px',marginBottom:14,textAlign:'center'}}>
+      <div className="shift-empty-txt" style={{fontSize:13,marginBottom:10}}>Nenhum plantão ativo hoje</div>
+      <button onClick={onIniciar} className="bp" style={{borderRadius:10,padding:'10px 24px',fontSize:13,width:'auto'}}>Abrir Plantão</button>
     </div>);
   }
 
@@ -906,7 +955,7 @@ function ShiftCard(props){
   </div>);
 }
 
-function BarChart(props){var data=props.data||[];var max=1;for(var i=0;i<data.length;i++){if(data[i].v>max)max=data[i].v;}return(<div style={{display:'flex',alignItems:'flex-end',gap:6,height:80,padding:'0 4px'}}>{data.map(function(d,i){var h=Math.round((d.v/max)*58);var isToday=i===data.length-1;return(<div key={i} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:3}}><div style={{fontSize:10,color:isToday?B:'#94A3B8',fontWeight:isToday?700:500}}>{d.v||''}</div><div style={{width:'100%',background:isToday?B:'#BFDBFE',borderRadius:'5px 5px 0 0',height:h+'px',minHeight:d.v?4:0,transition:'height .3s ease'}}/><div style={{fontSize:9,color:isToday?B:'#94A3B8',fontWeight:isToday?700:400}}>{d.l}</div></div>);})}</div>);}
+function BarChart(props){var data=props.data||[];var max=1;for(var i=0;i<data.length;i++){if(data[i].v>max)max=data[i].v;}return(<div style={{display:'flex',alignItems:'flex-end',gap:6,height:80,padding:'0 4px'}}>{data.map(function(d,i){var h=Math.round((d.v/max)*58);var isToday=i===data.length-1;return(<div key={i} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:3}}><div className={isToday?'bar-lbl-on':'bar-lbl'} style={{fontSize:10,fontWeight:isToday?700:500}}>{d.v||''}</div><div className={isToday?'bar-fill-on':'bar-fill'} style={{width:'100%',borderRadius:'5px 5px 0 0',height:h+'px',minHeight:d.v?4:0,transition:'height .3s ease'}}/><div className={isToday?'bar-lbl-on':'bar-lbl'} style={{fontSize:9,fontWeight:isToday?700:400}}>{d.l}</div></div>);})}</div>);}
 function TabDashboard(props){var entries=props.entries;var medications=props.medications;var stock=props.stock;var user=props.user;var plantao=props.plantao;var isGuest=props.isGuest;var onSolicitar=props.onSolicitar;var onEncerrar=props.onEncerrar;var onSair=props.onSair;var onSolicitarEntrada=props.onSolicitarEntrada;var shiftId=props.shiftId;var onIniciar=props.onIniciar;var _aviso=useState('');var aviso=_aviso[0];var setAviso=_aviso[1];var _avisos=useState([]);var avisos=_avisos[0];var setAvisos=_avisos[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];
 useEffect(function(){var u=db.collection('avisos').where('tenant_id','==',tenantDe(user)).limit(20).onSnapshot(function(s){var list=s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;});var agora=new Date().toISOString();list=list.filter(function(a){return !a.expiraEm||a.expiraEm>agora;});list.sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});setAvisos(list);});return u;},[]);
 var _fotoMural=useState('');var fotoMural=_fotoMural[0];var setFotoMural=_fotoMural[1];
@@ -11199,6 +11248,13 @@ useEffect(function(){var cfg=loadCfg();if(cfg&&initFB(cfg)){setReady(true);
     db.collection('users').doc(firebaseUser.uid).get().then(function(s){if(s.exists){var d=s.data();if(d.status==='inativo'||d.status==='rejected'||d.status==='pending'){auth.signOut();localStorage.removeItem('fc_user');setUser(null);return;}var u={uid:firebaseUser.uid,name:d.name,role:d.role,color:d.color,email:d.email,status:d.status,tenant_id:d.tenant_id||'',sessionTimeout:d.sessionTimeout||12,photoURL:d.photoURL||'',crf:d.crf||''};localStorage.setItem('fc_user',JSON.stringify(u));setUser(u);}}).catch(function(){var s2=localStorage.getItem('fc_user');if(s2){try{var su2=JSON.parse(s2);if(su2&&su2.tenant_id)setUser(su2);}catch(e){}}});
     });}});}},[] );
 useEffect(function(){function on(){setOnline(true);}function off(){setOnline(false);}window.addEventListener('online',on);window.addEventListener('offline',off);return function(){window.removeEventListener('online',on);window.removeEventListener('offline',off);};},[]);
+// Tema visual em teste pra Itaquitinga (ver comentário perto do fim do App()) — aplicado no <body>,
+// igual o toggle de modo escuro já faz, pra cobrir a página inteira (não só o wrapper interno).
+useEffect(function(){
+  var ativo=user&&tenantDe(user)==='itaquitinga-pe';
+  document.body.classList.toggle('theme-itaq',!!ativo);
+  return function(){document.body.classList.remove('theme-itaq');};
+},[user&&tenantDe(user)]);
 useEffect(function(){if(!user)return;var stored=localStorage.getItem('fc_last_act');if(stored)lastAct.current=parseInt(stored);var timeout=(user.sessionTimeout||12)*3600000;function reset(){lastAct.current=Date.now();localStorage.setItem('fc_last_act',String(Date.now()));}function check(){if(Date.now()-lastAct.current>timeout){localStorage.removeItem('fc_last_act');logout();}}document.addEventListener('touchstart',reset);document.addEventListener('click',reset);var t=setInterval(check,60000);return function(){document.removeEventListener('touchstart',reset);document.removeEventListener('click',reset);clearInterval(t);};},[user]);
 // Popup automático "MEDICAMENTOS VENCENDO!" REMOVIDO por pedido explícito da usuária (28/09/2026):
 // mesmo depois de 3 correções seguidas (reabrindo toda hora, não reconhecendo descarte já feito,
@@ -11499,16 +11555,19 @@ var badge=pending+alertCount+solicitCount;
 // nesse slot exatamente como antes.
 var navPrincipal=[{id:'dashboard',icon:'🏠',label:'Início'},{id:'saida',icon:'💊',label:'Saída'},{id:'recebimento',icon:'🚚',label:'Recebimento'},
   (tenantDe(user)==='itaquitinga-pe'&&isManagerRole?{id:'pedidosjudiciais',icon:'⚖️',label:'Judicial'}:{id:'antibiotico',icon:'🧬',label:'ATB'})];
+// Tema visual em teste — só pra Itaquitinga, que ainda não está totalmente ativo (pedido da
+// usuária 10/10/2026). Se aprovado, removemos essa condição pra valer pros dois municípios.
+var temaItaq=tenantDe(user)==='itaquitinga-pe';
 return(
-<div style={{minHeight:'100vh',background:'#EEF2F7',position:'relative',overflow:'hidden'}}>
+<div style={{minHeight:'100vh',background:temaItaq?undefined:'#EEF2F7',position:'relative',overflow:'hidden'}}>
   {/* MARCA D'ÁGUA BACKGROUND */}
   <div style={{position:'fixed',top:'50%',left:'50%',transform:'translate(-50%,-50%)',opacity:0.08,pointerEvents:'none',zIndex:0,width:400,height:400,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}}>
     <svg width="280" height="280" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="60" cy="60" r="56" fill="none" stroke="#1a1a1a" strokeWidth="1.5" opacity="0.8"/>
-      <circle cx="60" cy="60" r="42" fill="none" stroke="#1a1a1a" strokeWidth="1" opacity="0.5"/>
-      <text x="60" y="75" fontSize="56" fontWeight="300" letterSpacing="4" fill="#1a1a1a" textAnchor="middle" fontFamily="'Georgia', serif">FC</text>
+      <circle cx="60" cy="60" r="56" fill="none" stroke={temaItaq?'#fff':'#1a1a1a'} strokeWidth="1.5" opacity="0.8"/>
+      <circle cx="60" cy="60" r="42" fill="none" stroke={temaItaq?'#fff':'#1a1a1a'} strokeWidth="1" opacity="0.5"/>
+      <text x="60" y="75" fontSize="56" fontWeight="300" letterSpacing="4" fill={temaItaq?'#fff':'#1a1a1a'} textAnchor="middle" fontFamily="'Georgia', serif">FC</text>
     </svg>
-    <div style={{fontSize:12,letterSpacing:2,fontWeight:600,color:'#1a1a1a',marginTop:20,textAlign:'center',textTransform:'uppercase'}}>Controle Inteligente<br/>Farmácia Hospitalar</div>
+    <div style={{fontSize:12,letterSpacing:2,fontWeight:600,color:temaItaq?'#fff':'#1a1a1a',marginTop:20,textAlign:'center',textTransform:'uppercase'}}>Controle Inteligente<br/>Farmácia Hospitalar</div>
   </div>
   
   {/* CONTEÚDO PRINCIPAL */}
