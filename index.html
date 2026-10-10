@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>FarmaControl</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%231351B4'/><text x='50%25' y='54%25' font-family='Georgia,serif' font-size='28' font-weight='900' fill='white' text-anchor='middle' dominant-baseline='middle' letter-spacing='-2'>FC</text></svg>"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700;800&display=swap"/>
 <script>
 // ===== Auto-atualização: checa em segundo plano se existe uma versão mais nova no servidor e,
 // se existir, força um recarregamento de verdade (com um parâmetro novo na URL, que nunca bate
@@ -200,10 +203,117 @@ select.inp{cursor:pointer}
 /* ── SHIFT CARD ── */
 .shift-card{background:linear-gradient(135deg,var(--blue-900) 0%,var(--blue-800) 100%);border-radius:var(--r-xl);padding:16px 18px;margin-bottom:14px;color:#fff;box-shadow:var(--shadow-lg)}
 
+/* ── UTILITÁRIOS DE TEXTO/PAINEL (padroniza entre abas) ── */
+.text-strong{color:var(--gray-800)}
+.text-soft{color:var(--gray-500)}
+.text-faint{color:var(--gray-400)}
+.panel-soft{background:var(--blue-50);border:1.5px solid var(--blue-200);border-radius:12px}
+.row-item{display:flex;gap:10px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--gray-100)}
+.row-item:last-child{border-bottom:none}
+.row-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:var(--red-100);color:var(--red-700)}
+.cart-box{background:#FFFBEB;border:2px solid #F59E0B;border-radius:12px}
+.cart-item{background:#fff;border:1px solid #FCD34D;border-radius:8px}
+
 /* ── SCROLL ── */
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--gray-300);border-radius:4px}
+
+/* =====================================================================
+   IDENTIDADE VISUAL — ITAQUITINGA (v2, 10/2026)
+   Mantém a cor azul do gov.br (--blue-700 #1351B4) — pedido explícito da
+   usuária ("gosto das cores azul do padrão que está"). Não é um tema
+   escuro: é o MESMO azul, só com tipografia, espaçamento, cards, ícones
+   e navegação mais refinados e consistentes — ativado só quando
+   tenantDe(user)==='itaquitinga-pe' (classe .theme-itaq no <body>).
+   ===================================================================== */
+.theme-itaq{
+  --itq-ink:#101B33;--itq-text:#3C4A66;--itq-soft:#5B6B8C;--itq-faint:#94A3B8;
+  --itq-bg:#F3F6FC;--itq-line:#E3E9F6;--itq-tint:#EBF2FD;--itq-tint-line:#CFE0FA;
+  --itq-radius:16px;--itq-shadow:0 1px 2px rgba(15,23,42,.04),0 12px 28px -18px rgba(16,42,90,.22);
+  background:var(--itq-bg)!important;color:var(--itq-text)!important;
+  font-family:'IBM Plex Sans','Segoe UI',system-ui,sans-serif!important;
+}
+.theme-itaq .text-strong{color:var(--itq-ink)!important}
+.theme-itaq .text-soft{color:var(--itq-soft)!important}
+.theme-itaq .text-faint{color:var(--itq-faint)!important}
+
+/* Cards: um só raio, uma só sombra, em todo lugar */
+.theme-itaq .card,.theme-itaq .stat-card,.theme-itaq .menu-drawer,.theme-itaq .shift-empty{
+  background:#fff!important;border:1px solid var(--itq-line)!important;
+  border-radius:var(--itq-radius)!important;box-shadow:var(--itq-shadow)!important;
+}
+.theme-itaq .stat-card::before{display:none}
+.theme-itaq .stat-icon{background:var(--itq-tint)!important;color:var(--blue-700)!important;border-radius:12px!important}
+.theme-itaq .ch{background:#fff!important;border-bottom:1px solid var(--itq-line)!important;border-radius:var(--itq-radius) var(--itq-radius) 0 0!important}
+.theme-itaq .ch-title,.theme-itaq .ch-title span{color:var(--itq-ink)!important}
+
+/* Botões e controles — mesmo azul, bordas/raio consistentes */
+.theme-itaq .bp{border-radius:12px!important;box-shadow:0 8px 20px -8px rgba(19,81,180,.45)!important}
+.theme-itaq .bs{background:#fff!important;border-color:var(--itq-line)!important;color:var(--itq-text)!important;border-radius:12px!important}
+.theme-itaq .bg{border-radius:12px!important}
+.theme-itaq .br{border-radius:12px!important}
+.theme-itaq .inp,.theme-itaq textarea{border:1.5px solid var(--itq-line)!important;border-radius:12px!important;color:var(--itq-ink)!important}
+.theme-itaq .inp:focus{border-color:var(--blue-700)!important}
+.theme-itaq .pill{border-radius:10px!important;border-color:var(--itq-line)!important;color:var(--itq-soft)!important}
+.theme-itaq .pill.on{background:var(--blue-700)!important;border-color:var(--blue-700)!important;color:#fff!important}
+.theme-itaq .qb{border-radius:10px!important;border-color:var(--itq-line)!important;color:var(--itq-text)!important}
+.theme-itaq .qb.on{background:var(--blue-700)!important;border-color:var(--blue-700)!important;color:#fff!important}
+.theme-itaq .tab-sw{background:var(--itq-tint)!important;border-radius:12px!important}
+.theme-itaq .tab-sw button.on{background:#fff!important;color:var(--blue-700)!important;box-shadow:0 1px 4px rgba(15,23,42,.1)!important;border-radius:9px!important}
+.theme-itaq .tab-sw button:not(.on){color:var(--itq-soft)!important}
+.theme-itaq .sdrop{border-color:var(--blue-700)!important;border-radius:12px!important;box-shadow:0 16px 36px -12px rgba(16,42,90,.28)!important}
+.theme-itaq .sdi{border-bottom-color:var(--itq-line)!important}
+.theme-itaq .sdi:hover{background:var(--itq-tint)!important}
+.theme-itaq .panel-soft{background:var(--itq-tint)!important;border-color:var(--itq-tint-line)!important;border-radius:12px!important}
+.theme-itaq .row-item{border-bottom-color:var(--itq-line)!important}
+.theme-itaq .row-icon{background:var(--itq-tint)!important;color:var(--blue-700)!important}
+.theme-itaq .cart-box{border-radius:12px!important}
+.theme-itaq .cart-item{border-radius:10px!important}
+
+/* Navbar / menu-drawer já usam o degradê azul da marca — só refina cantos/sombra pra bater com o resto */
+.theme-itaq .menu-drawer-item{border-radius:0 12px 12px 0!important}
+.theme-itaq .menu-drawer-item.on{background:var(--itq-tint)!important}
+.theme-itaq .shift-empty{background:var(--itq-tint)!important;border:1.5px dashed var(--itq-tint-line)!important}
+
+/* ── BAR CHART / BARRA LATERAL / MENU DRAWER (estrutura, não cor) ── */
+.bar-fill{background:var(--blue-200)}
+.bar-fill-on{background:var(--blue-700)}
+.bar-lbl{color:var(--gray-400)}
+.bar-lbl-on{color:var(--blue-700)}
+
+.itaq-sidebar{display:none}
+@media (min-width:900px){
+  .theme-itaq .bnav{height:0!important;min-height:0!important;padding:0!important;border:none!important;box-shadow:none!important;background:transparent!important;overflow:visible!important;z-index:200!important}
+  .theme-itaq .bnav-row{display:none!important}
+  .theme-itaq .itaq-sidebar{
+    display:flex;flex-direction:column;align-items:center;gap:4px;
+    position:fixed;top:0;left:0;bottom:0;width:76px;z-index:60;
+    background:#fff;border-right:1px solid var(--itq-line,#E3E9F6);padding:16px 0 20px;
+    box-shadow:2px 0 16px -8px rgba(16,42,90,.12);
+  }
+  body.theme-itaq{padding-bottom:0;padding-left:76px}
+  .theme-itaq .menu-drawer{left:76px!important}
+}
+.itaq-sidebar-logo{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,var(--blue-900),var(--blue-700));display:flex;align-items:center;justify-content:center;color:#fff;margin-bottom:22px;flex-shrink:0}
+.itaq-sidebar-nav{display:flex;flex-direction:column;gap:6px;flex:1}
+.itaq-sidebar-btn{display:flex;flex-direction:column;align-items:center;gap:4px;width:60px;padding:9px 2px;border:none;background:transparent;border-radius:12px;cursor:pointer;color:var(--gray-400);transition:background .15s,color .15s}
+.itaq-sidebar-btn span{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.02em;text-align:center;line-height:1.15}
+.itaq-sidebar-btn:hover{background:var(--gray-50);color:var(--gray-600)}
+.itaq-sidebar-btn.on{background:var(--blue-50);color:var(--blue-700)}
+
+/* ── MENU DRAWER (painel "Menu completo") ── */
+.menu-drawer{background:var(--white)}
+.menu-drawer-head{background:linear-gradient(135deg,#0D1B4B,#1351B4)}
+.menu-drawer-item{width:100%;display:flex;align-items:center;gap:14px;padding:13px 20px;border:none;background:transparent;cursor:pointer;position:relative;border-left:3px solid transparent;transition:background .15s;text-align:left}
+.menu-drawer-item:hover{background:var(--gray-50)}
+.menu-drawer-item.on{background:var(--blue-50);border-left-color:var(--blue-700)}
+.menu-drawer-ic{font-size:20px;width:26px;text-align:center;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;color:var(--gray-600)}
+.menu-drawer-item.on .menu-drawer-ic{color:var(--blue-700)}
+.menu-drawer-lbl{font-size:14px;font-weight:500;color:var(--gray-800);flex:1}
+.menu-drawer-item.on .menu-drawer-lbl{font-weight:700;color:var(--blue-700)}
+.menu-drawer-badge{background:var(--red-600);color:#fff;border-radius:99px;min-width:18px;height:18px;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 5px}
+.menu-drawer-footer{border-top:1px solid var(--gray-100)}
 </style>
 </head>
 <body>
@@ -712,6 +822,38 @@ function _ehSaidaNaoReal(e){
 function playSound(type){try{var ctx=new (window.AudioContext||window.webkitAudioContext)();var o=ctx.createOscillator();var g=ctx.createGain();o.connect(g);g.connect(ctx.destination);if(type==='success'){o.frequency.setValueAtTime(523,ctx.currentTime);o.frequency.setValueAtTime(659,ctx.currentTime+0.1);g.gain.setValueAtTime(0.18,ctx.currentTime);g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.3);o.start(ctx.currentTime);o.stop(ctx.currentTime+0.3);}else{o.frequency.setValueAtTime(440,ctx.currentTime);g.gain.setValueAtTime(0.2,ctx.currentTime);g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.4);o.start(ctx.currentTime);o.stop(ctx.currentTime+0.4);}}catch(e){}}
 function compressPhoto(file,cb){var reader=new FileReader();reader.onload=function(ev){var img=new Image();img.onload=function(){var canvas=document.createElement('canvas');canvas.width=160;canvas.height=160;var ctx=canvas.getContext('2d');var size=Math.min(img.width,img.height);var sx=(img.width-size)/2;var sy=(img.height-size)/2;ctx.beginPath();ctx.arc(80,80,80,0,Math.PI*2);ctx.clip();ctx.drawImage(img,sx,sy,size,size,0,0,160,160);cb(canvas.toDataURL('image/jpeg',0.8));};img.src=ev.target.result;};reader.readAsDataURL(file);}
 function UserAvatar(p){var sz=p.size||28;var u=p.user;var st=p.style||{};if(u&&u.photoURL){return React.createElement('img',{src:u.photoURL,style:Object.assign({width:sz,height:sz,borderRadius:'50%',objectFit:'cover',flexShrink:0},st)});}return React.createElement('div',{className:'av',style:Object.assign({width:sz,height:sz,background:u&&u.color?u.color:B,fontSize:Math.round(sz*0.4),fontWeight:700},st)},u&&u.name?u.name.charAt(0):'?');}
+// Ícones em linha (SVG desenhado à mão, estilo "stroke" consistente) — substitui emoji nos pontos
+// mais visíveis (navegação, topo, cards), por pedido da usuária: identidade visual profissional.
+function Icon(props){
+  var n=props.name;var s=props.size||20;var sw=props.strokeWidth||1.8;
+  var cm={width:s,height:s,viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:sw,strokeLinecap:'round',strokeLinejoin:'round'};
+  var P={
+    home:<path d="M4 11.5 12 4l8 7.5M6 10v9h4.5v-5h3v5H18v-9"/>,
+    pill:<g><rect x="4.3" y="10" width="15.4" height="7" rx="3.5" transform="rotate(-35 12 13.5)"/><line x1="10" y1="9.2" x2="14" y2="17.8" transform="rotate(-35 12 13.5)"/></g>,
+    inbox:<g><path d="M3.5 12h4.2l1.6 2.6h5.4l1.6-2.6h4.2"/><path d="M4.3 12 5.6 5.8A1 1 0 0 1 6.6 5h10.8a1 1 0 0 1 1 .8L19.7 12"/><path d="M4.3 12v6a1 1 0 0 0 1 1h13.4a1 1 0 0 0 1-1v-6"/></g>,
+    hourglass:<path d="M6.5 3h11M6.5 21h11M7.5 3c0 5.5 9 5.5 9 0M7.5 21c0-5.5 9-5.5 9 0"/>,
+    trendDown:<g><polyline points="4 7 10 13 14 10 20 17"/><polyline points="14 17 20 17 20 11"/></g>,
+    trendUp:<g><polyline points="4 17 10 11 14 14 20 7"/><polyline points="14 7 20 7 20 13"/></g>,
+    truck:<g><rect x="2.3" y="7.5" width="11" height="8.5"/><path d="M13.3 10.3h4l3 3.2v2.5h-7z"/><circle cx="7" cy="18" r="1.6"/><circle cx="17.3" cy="18" r="1.6"/></g>,
+    scale:<g><path d="M12 3v3M12 19v2M8 21h8"/><path d="M6 6h12M3.5 6 2 11a2.6 2.6 0 0 0 5.2 0zM22 11l-1.5-5h-3l-1.5 5a2.6 2.6 0 0 0 5.2 0z"/></g>,
+    dna:<g><path d="M6 3c0 6 12 6 12 12M18 21c0-6-12-6-12-12"/><line x1="8" y1="6.5" x2="12.5" y2="6.5"/><line x1="11.5" y1="12" x2="16" y2="12"/><line x1="8" y1="17.5" x2="12.5" y2="17.5"/></g>,
+    menu:<g><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></g>,
+    search:<g><circle cx="10.8" cy="10.8" r="6.3"/><line x1="19.5" y1="19.5" x2="15.4" y2="15.4"/></g>,
+    bell:<path d="M12 3.2a4.8 4.8 0 0 0-4.8 4.8v3.2c0 1-.4 1.9-1.1 2.6L5 15h14l-1.1-1.2a3.7 3.7 0 0 1-1.1-2.6V8a4.8 4.8 0 0 0-4.8-4.8zM10.2 18.5a1.8 1.8 0 0 0 3.6 0"/>,
+    camera:<g><path d="M4 8h3.2l1.7-2h6.2l1.7 2H20v11H4z"/><circle cx="12" cy="13.3" r="3.4"/></g>,
+    gear:<g><circle cx="12" cy="12" r="2.8"/><path d="M19.4 12.9v-1.8l-2.1-.5a5.9 5.9 0 0 0-.7-1.7l1.1-1.9-1.3-1.3-1.9 1.1a5.9 5.9 0 0 0-1.7-.7L12.3 4.6h-1.8l-.5 2.1a5.9 5.9 0 0 0-1.7.7L6.4 6.3 5.1 7.6l1.1 1.9a5.9 5.9 0 0 0-.7 1.7l-2.1.5v1.8l2.1.5c.15.6.4 1.18.7 1.7l-1.1 1.9 1.3 1.3 1.9-1.1c.52.3 1.1.55 1.7.7l.5 2.1h1.8l.5-2.1c.6-.15 1.18-.4 1.7-.7l1.9 1.1 1.3-1.3-1.1-1.9c.3-.52.55-1.1.7-1.7z"/></g>,
+    chevronRight:<polyline points="9 6 15 12 9 18"/>,
+    logout:<g><path d="M9 4H6a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h3"/><polyline points="14 16 19 11 14 6"/><line x1="19" y1="11" x2="8.5" y2="11"/></g>,
+    package:<g><path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5z"/><path d="M3 7.5 12 12l9-4.5M12 12v9"/></g>,
+    lock:<g><rect x="5" y="10.5" width="14" height="9" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></g>,
+    clipboard:<g><rect x="5.5" y="4.5" width="13" height="16" rx="2"/><rect x="9" y="3" width="6" height="3" rx="1"/><line x1="8.5" y1="11" x2="15.5" y2="11"/><line x1="8.5" y1="14.5" x2="15.5" y2="14.5"/></g>,
+    droplet:<path d="M12 3c3 4 6 7.5 6 11a6 6 0 0 1-12 0c0-3.5 3-7 6-11z"/>,
+    barChart:<g><line x1="5" y1="20" x2="5" y2="12"/><line x1="12" y1="20" x2="12" y2="6"/><line x1="19" y1="20" x2="19" y2="15"/></g>,
+    users:<g><circle cx="9" cy="8" r="3"/><path d="M3.5 20c0-3.5 2.5-6 5.5-6s5.5 2.5 5.5 6"/><circle cx="17" cy="9" r="2.3"/><path d="M15.2 13.2c2.2.3 3.8 2.3 3.8 5.3"/></g>,
+    folder:<path d="M3.5 6.5a1 1 0 0 1 1-1H10l2 2.2h7.5a1 1 0 0 1 1 1V18a1 1 0 0 1-1 1H4.5a1 1 0 0 1-1-1z"/>,
+  };
+  return <svg {...cm}>{P[n]||null}</svg>;
+}
 function Lbl(props){return <div style={{fontSize:11,fontWeight:700,color:'#64748B',marginBottom:6,textTransform:'uppercase',letterSpacing:'.04em'}}>{props.c}</div>;}
 function Divider(){return <div style={{height:1,background:'#F1F5F9',margin:'16px 0'}}/>;}
 function SectionHeader(props){return(<div className="sec-header"><span className="sec-title">{props.c}</span><div className="sec-line"/></div>);}
@@ -9352,7 +9494,7 @@ function TourEngine(props){
 
   // Executa cliques reais nos elementos de navegação (que já têm data-tour) para preparar a tela do passo
   function tourClicar(sel){var el=null;try{el=document.querySelector(sel);}catch(e){el=null;}if(el&&el.click)el.click();}
-  function menuPanelAberto(){var p=document.querySelector('[data-tour="menu-panel"]');if(!p||!p.getBoundingClientRect)return false;var r=p.getBoundingClientRect();return r.left<window.innerWidth-20;}
+  function menuPanelAberto(){var p=document.querySelector('[data-tour="menu-panel"]');if(!p||!p.getBoundingClientRect)return false;var r=p.getBoundingClientRect();return r.left>-20&&r.left<window.innerWidth;}
   function executarAcao(acao){
     var lista=Array.isArray(acao)?acao:[acao];
     lista.forEach(function(a){
@@ -11199,6 +11341,8 @@ useEffect(function(){var cfg=loadCfg();if(cfg&&initFB(cfg)){setReady(true);
     db.collection('users').doc(firebaseUser.uid).get().then(function(s){if(s.exists){var d=s.data();if(d.status==='inativo'||d.status==='rejected'||d.status==='pending'){auth.signOut();localStorage.removeItem('fc_user');setUser(null);return;}var u={uid:firebaseUser.uid,name:d.name,role:d.role,color:d.color,email:d.email,status:d.status,tenant_id:d.tenant_id||'',sessionTimeout:d.sessionTimeout||12,photoURL:d.photoURL||'',crf:d.crf||''};localStorage.setItem('fc_user',JSON.stringify(u));setUser(u);}}).catch(function(){var s2=localStorage.getItem('fc_user');if(s2){try{var su2=JSON.parse(s2);if(su2&&su2.tenant_id)setUser(su2);}catch(e){}}});
     });}});}},[] );
 useEffect(function(){function on(){setOnline(true);}function off(){setOnline(false);}window.addEventListener('online',on);window.addEventListener('offline',off);return function(){window.removeEventListener('online',on);window.removeEventListener('offline',off);};},[]);
+// Identidade visual v2 (azul, não é tema escuro) ativada só para Itaquitinga — ver CSS .theme-itaq.
+useEffect(function(){var ativo=user&&tenantDe(user)==='itaquitinga-pe';document.body.classList.toggle('theme-itaq',!!ativo);},[user&&user.tenant_id]);
 useEffect(function(){if(!user)return;var stored=localStorage.getItem('fc_last_act');if(stored)lastAct.current=parseInt(stored);var timeout=(user.sessionTimeout||12)*3600000;function reset(){lastAct.current=Date.now();localStorage.setItem('fc_last_act',String(Date.now()));}function check(){if(Date.now()-lastAct.current>timeout){localStorage.removeItem('fc_last_act');logout();}}document.addEventListener('touchstart',reset);document.addEventListener('click',reset);var t=setInterval(check,60000);return function(){document.removeEventListener('touchstart',reset);document.removeEventListener('click',reset);clearInterval(t);};},[user]);
 // Popup automático "MEDICAMENTOS VENCENDO!" REMOVIDO por pedido explícito da usuária (28/09/2026):
 // mesmo depois de 3 correções seguidas (reabrindo toda hora, não reconhecendo descarte já feito,
@@ -11489,8 +11633,18 @@ if(!user)return <Auth onLogin={function(u){setUser(u);}}/>;
 if(showShift||showShiftModal)return <ShiftScreen user={user} allUsers={allUsers} onDone={handleShiftDone}/>;
 if(pendingInvite)return <InviteScreen invite={pendingInvite} onConfirm={handleConfirmInvite} onDeny={handleDenyInvite}/>;
 var isManagerRole=(user.role==='gestor'||user.role==='tecnico');
+var temaItaq=tenantDe(user)==='itaquitinga-pe';
 var canMove=isManagerRole||!isGuest;
 var badge=pending+alertCount+solicitCount;
+// Mapa emoji -> ícone de linha, só usado quando temaItaq (ver function Icon). Mantém os emojis
+// como estão para Vicência — pedido explícito da usuária de não alterar o visual lá.
+function menuIconName(id){
+  var m={dashboard:'home',saida:'pill',recebimento:'truck',antibiotico:'dna',pedidosjudiciais:'scale',
+    visaogeral:'trendUp',comparapedido:'search',estoque:'package',pacientes:'lock',conferencia:'clipboard',
+    leites:'droplet',relatorio:'barChart',gestao:'users',log:'lock',histnotas:'folder',previsao:'clipboard',
+    histcontas:'clipboard',admin:'gear',perfil:'users'};
+  return m[id]||'folder';
+}
 // Para gestor/técnico em Itaquitinga, o slot de maior destaque da navegação (sempre visível) troca
 // ATB por Pedidos Judiciais — é o que essa cidade usa no dia a dia (tratamento de antibiótico é um
 // fluxo específico do hospital de Vicência, inclusive com mensagens de WhatsApp com "Hospital de
@@ -11530,10 +11684,10 @@ return(
     </div>
     <div style={{display:'flex',alignItems:'center',gap:8}}>
       {lowCount>0&&<div style={{background:'rgba(245,158,11,.2)',border:'1px solid rgba(245,158,11,.4)',borderRadius:20,padding:'3px 9px',fontSize:10,color:'#FCD34D',fontWeight:700}}>⚠ {lowCount}</div>}
-      <button onClick={function(){setBusca(true);}} style={{background:'rgba(255,255,255,.12)',border:'1px solid rgba(255,255,255,.18)',borderRadius:9,width:34,height:34,cursor:'pointer',fontSize:15,color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',transition:'background .15s'}} title="Buscar">🔍</button>
+      <button onClick={function(){setBusca(true);}} style={{background:'rgba(255,255,255,.12)',border:'1px solid rgba(255,255,255,.18)',borderRadius:9,width:34,height:34,cursor:'pointer',fontSize:15,color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',transition:'background .15s'}} title="Buscar">{temaItaq?<Icon name="search" size={16}/>:'🔍'}</button>
       <div onClick={function(){setTab('perfil');}} style={{display:'flex',alignItems:'center',gap:8,background:'rgba(255,255,255,.12)',border:'1px solid rgba(255,255,255,.18)',borderRadius:12,padding:'5px 10px',cursor:'pointer',transition:'background .15s'}}>
         {(convites.length>0||(user.role==='gestor'&&lowStock.filter(function(m){return (stock[m.id]||0)<=m.estoqueMin;}).length>0))&&<div style={{position:'relative',marginRight:4}}>
-          <div style={{fontSize:20,cursor:'pointer'}} onClick={function(){setTab('dashboard');}}>🔔</div>
+          <div style={{fontSize:20,cursor:'pointer',display:'flex'}} onClick={function(){setTab('dashboard');}}>{temaItaq?<Icon name="bell" size={18}/>:'🔔'}</div>
           <span style={{position:'absolute',top:-4,right:-4,background:'#DC2626',color:'#fff',borderRadius:99,width:14,height:14,fontSize:8,fontWeight:800,display:'flex',alignItems:'center',justifyContent:'center'}}>
             {convites.length+(user.role==='gestor'?lowStock.filter(function(m){return (stock[m.id]||0)<=m.estoqueMin;}).length:0)}
           </span>
@@ -11602,11 +11756,26 @@ return(
     </div>
   </div>}
 
+  <nav className="itaq-sidebar">
+    <div className="itaq-sidebar-logo"><span style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:15,fontWeight:900,letterSpacing:'-1px'}}>FC</span></div>
+    <div className="itaq-sidebar-nav">
+      {navPrincipal.map(function(t){return(
+        <button key={t.id} className={'itaq-sidebar-btn'+(tab===t.id?' on':'')} onClick={function(){setTab(t.id);setMenuAberto(false);}}>
+          <Icon name={menuIconName(t.id)} size={19}/>
+          <span>{t.label}</span>
+        </button>
+      );})}
+      <button className="itaq-sidebar-btn" onClick={function(){setMenuAberto(!menuAberto);}}>
+        <Icon name="menu" size={19}/>
+        <span>Menu</span>
+      </button>
+    </div>
+  </nav>
   <nav className="bnav">
     {(user.role==='gestor'||user.role==='tecnico')
       ?<div style={{width:'100%'}}>
         {menuAberto&&<div onClick={function(){setMenuAberto(false);}} style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.6)',zIndex:149,backdropFilter:'blur(6px)'}}/>}
-        <div data-tour="menu-panel" style={{position:'fixed',top:0,right:0,bottom:0,width:280,background:'#fff',zIndex:150,transform:menuAberto?'translateX(0)':'translateX(110%)',transition:'transform .3s cubic-bezier(.4,0,.2,1)',boxShadow:menuAberto?'-8px 0 40px rgba(0,0,0,0.2)':'none',display:'flex',flexDirection:'column',willChange:'transform'}}>
+        <div data-tour="menu-panel" className={temaItaq?'menu-drawer':''} style={{position:'fixed',top:0,[temaItaq?'left':'right']:0,bottom:0,width:280,background:'#fff',zIndex:150,transform:menuAberto?'translateX(0)':(temaItaq?'translateX(calc(-100% - 100px))':'translateX(110%)'),transition:'transform .3s cubic-bezier(.4,0,.2,1)',boxShadow:menuAberto?(temaItaq?'8px 0 40px rgba(16,42,90,.18)':'-8px 0 40px rgba(0,0,0,0.2)'):'none',display:'flex',flexDirection:'column',willChange:'transform'}}>
           <div style={{background:'linear-gradient(135deg,#0D1B4B,#1351B4)',padding:'52px 20px 20px',flexShrink:0}}>
             <div style={{display:'flex',alignItems:'center',gap:12}}>
               <div style={{width:42,height:42,borderRadius:12,background:'rgba(255,255,255,0.15)',border:'1.5px solid rgba(255,255,255,0.25)',display:'flex',alignItems:'center',justifyContent:'center'}}>
@@ -11635,24 +11804,24 @@ return(
               {id:'histcontas',icon:'📋',label:'Hist. de Contas',show:can(user.role,'log')},
               {id:'admin',icon:'🔧',label:'Painel Admin',show:user.role==='tecnico'},
             ].filter(function(t){return t.show;}).map(function(t){return(
-              <button key={t.id} data-tour={'nav-'+t.id} onClick={function(){setTab(t.id);setMenuAberto(false);}} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'13px 20px',border:'none',background:tab===t.id?'#EFF6FF':'transparent',cursor:'pointer',position:'relative',borderLeft:tab===t.id?'3px solid #1351B4':'3px solid transparent',transition:'background .15s'}}>
-                <span style={{fontSize:20,width:26,textAlign:'center'}}>{t.icon}</span>
-                <span style={{fontSize:14,fontWeight:tab===t.id?700:500,color:tab===t.id?'#1351B4':'#1E293B',flex:1,textAlign:'left'}}>{t.label}</span>
-                {t.badge>0&&<span style={{background:'#DC2626',color:'#fff',borderRadius:99,minWidth:18,height:18,fontSize:10,fontWeight:800,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 5px'}}>{t.badge}</span>}
+              <button key={t.id} data-tour={'nav-'+t.id} className={temaItaq?'menu-drawer-item'+(tab===t.id?' on':''):''} onClick={function(){setTab(t.id);setMenuAberto(false);}} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'13px 20px',border:'none',background:temaItaq?undefined:(tab===t.id?'#EFF6FF':'transparent'),cursor:'pointer',position:'relative',borderLeft:temaItaq?undefined:(tab===t.id?'3px solid #1351B4':'3px solid transparent'),transition:'background .15s'}}>
+                <span className={temaItaq?'menu-drawer-ic':''} style={{fontSize:20,width:26,textAlign:'center'}}>{temaItaq?<Icon name={menuIconName(t.id)} size={18}/>:t.icon}</span>
+                <span className={temaItaq?'menu-drawer-lbl':''} style={{fontSize:14,fontWeight:tab===t.id?700:500,color:temaItaq?undefined:(tab===t.id?'#1351B4':'#1E293B'),flex:1,textAlign:'left'}}>{t.label}</span>
+                {t.badge>0&&<span className={temaItaq?'menu-drawer-badge':''} style={temaItaq?undefined:{background:'#DC2626',color:'#fff',borderRadius:99,minWidth:18,height:18,fontSize:10,fontWeight:800,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 5px'}}>{t.badge}</span>}
               </button>
             );})}
           </div>
-          <div style={{borderTop:'1px solid #F1F5F9',padding:'8px 0'}}>
-            <button onClick={function(){setTab('perfil');setMenuAberto(false);}} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'13px 20px',border:'none',background:tab==='perfil'?'#EFF6FF':'transparent',cursor:'pointer',borderLeft:tab==='perfil'?'3px solid #1351B4':'3px solid transparent'}}>
+          <div className={temaItaq?'menu-drawer-footer':''} style={{borderTop:'1px solid #F1F5F9',padding:'8px 0'}}>
+            <button className={temaItaq?'menu-drawer-item'+(tab==='perfil'?' on':''):''} onClick={function(){setTab('perfil');setMenuAberto(false);}} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'13px 20px',border:'none',background:temaItaq?undefined:(tab==='perfil'?'#EFF6FF':'transparent'),cursor:'pointer',borderLeft:temaItaq?undefined:(tab==='perfil'?'3px solid #1351B4':'3px solid transparent')}}>
               {user.photoURL?<img src={user.photoURL} style={{width:26,height:26,borderRadius:'50%',objectFit:'cover',border:'2px solid #E2E8F0'}}/>:<div style={{width:26,height:26,borderRadius:'50%',background:user.color||'#1351B4',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:700,color:'#fff'}}>{user.name?user.name.charAt(0):'?'}</div>}
-              <span style={{fontSize:14,fontWeight:tab==='perfil'?700:500,color:tab==='perfil'?'#1351B4':'#1E293B',flex:1,textAlign:'left'}}>Meu Perfil</span>
+              <span className={temaItaq?'menu-drawer-lbl':''} style={{fontSize:14,fontWeight:tab==='perfil'?700:500,color:temaItaq?undefined:(tab==='perfil'?'#1351B4':'#1E293B'),flex:1,textAlign:'left'}}>Meu Perfil</span>
             </button>
           </div>
         </div>
-        <div style={{display:'flex',justifyContent:'space-around',alignItems:'center',padding:'8px 8px 0'}}>
+        <div className="bnav-row" style={{display:'flex',justifyContent:'space-around',alignItems:'center',padding:'8px 8px 0'}}>
           {navPrincipal.map(function(t){return(
             <button key={t.id} data-tour={'nav-'+t.id} className={'nb'+(tab===t.id?' on':'')} onClick={function(){setTab(t.id);setMenuAberto(false);}}>
-              <span className="ni">{t.icon}</span>
+              <span className="ni">{temaItaq?<Icon name={menuIconName(t.id)} size={18}/>:t.icon}</span>
               <span className="nl">{t.label}</span>
             </button>
           );})}
@@ -11666,30 +11835,30 @@ return(
       </div>
       :<div style={{width:'100%'}}>
         {menuAberto&&<div onClick={function(){setMenuAberto(false);}} style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.5)',zIndex:149,backdropFilter:'blur(4px)'}}/>}
-        <div data-tour="menu-panel" style={{position:'fixed',top:0,right:0,bottom:0,width:260,background:'#fff',zIndex:150,transform:menuAberto?'translateX(0)':'translateX(110%)',transition:'transform .3s cubic-bezier(.4,0,.2,1)',boxShadow:menuAberto?'-8px 0 40px rgba(0,0,0,0.15)':'none',display:'flex',flexDirection:'column'}}>
+        <div data-tour="menu-panel" className={temaItaq?'menu-drawer':''} style={{position:'fixed',top:0,[temaItaq?'left':'right']:0,bottom:0,width:260,background:'#fff',zIndex:150,transform:menuAberto?'translateX(0)':(temaItaq?'translateX(calc(-100% - 100px))':'translateX(110%)'),transition:'transform .3s cubic-bezier(.4,0,.2,1)',boxShadow:menuAberto?(temaItaq?'8px 0 40px rgba(16,42,90,.18)':'-8px 0 40px rgba(0,0,0,0.15)'):'none',display:'flex',flexDirection:'column'}}>
           <div style={{background:'linear-gradient(135deg,#0D1B4B,#1351B4)',padding:'52px 20px 20px',flexShrink:0}}>
             <div style={{fontWeight:800,fontSize:15,color:'#fff'}}>{user.name}</div>
             <div style={{fontSize:11,color:'rgba(255,255,255,0.5)',marginTop:2}}>{ROLES[user.role]||user.role}</div>
           </div>
           <div style={{flex:1,overflowY:'auto',padding:'8px 0'}}>
             {[{id:'estoque',icon:'📦',label:'Estoque'},{id:'recebimento',icon:'🚚',label:'Recebimento'},{id:'pacientes',icon:'🔒',label:'Pacientes (Controlados)'},{id:'conferencia',icon:'🧾',label:'Conferência'},{id:'leites',icon:'🍼',label:'Leites'},{id:'relatorio',icon:'📊',label:'Relatório'}].filter(function(t){return t.id!=='pacientes'||tenantDe(user)!=='itaquitinga-pe';}).map(function(t){return(
-              <button key={t.id} data-tour={'nav-'+t.id} onClick={function(){setTab(t.id);setMenuAberto(false);}} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'13px 20px',border:'none',background:tab===t.id?'#EFF6FF':'transparent',cursor:'pointer',borderLeft:tab===t.id?'3px solid #1351B4':'3px solid transparent'}}>
-                <span style={{fontSize:20}}>{t.icon}</span>
-                <span style={{fontSize:14,fontWeight:tab===t.id?700:500,color:tab===t.id?'#1351B4':'#1E293B'}}>{t.label}</span>
+              <button key={t.id} data-tour={'nav-'+t.id} className={temaItaq?'menu-drawer-item'+(tab===t.id?' on':''):''} onClick={function(){setTab(t.id);setMenuAberto(false);}} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'13px 20px',border:'none',background:temaItaq?undefined:(tab===t.id?'#EFF6FF':'transparent'),cursor:'pointer',borderLeft:temaItaq?undefined:(tab===t.id?'3px solid #1351B4':'3px solid transparent')}}>
+                <span className={temaItaq?'menu-drawer-ic':''} style={{fontSize:20}}>{temaItaq?<Icon name={menuIconName(t.id)} size={18}/>:t.icon}</span>
+                <span className={temaItaq?'menu-drawer-lbl':''} style={{fontSize:14,fontWeight:tab===t.id?700:500,color:temaItaq?undefined:(tab===t.id?'#1351B4':'#1E293B')}}>{t.label}</span>
               </button>
             );})}
           </div>
-          <div style={{borderTop:'1px solid #F1F5F9',padding:'8px 0'}}>
-            <button onClick={function(){setTab('perfil');setMenuAberto(false);}} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'13px 20px',border:'none',background:tab==='perfil'?'#EFF6FF':'transparent',cursor:'pointer',borderLeft:tab==='perfil'?'3px solid #1351B4':'3px solid transparent'}}>
-              <span style={{fontSize:20}}>👤</span>
-              <span style={{fontSize:14,fontWeight:500,color:'#1E293B'}}>Meu Perfil</span>
+          <div className={temaItaq?'menu-drawer-footer':''} style={{borderTop:'1px solid #F1F5F9',padding:'8px 0'}}>
+            <button className={temaItaq?'menu-drawer-item'+(tab==='perfil'?' on':''):''} onClick={function(){setTab('perfil');setMenuAberto(false);}} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'13px 20px',border:'none',background:temaItaq?undefined:(tab==='perfil'?'#EFF6FF':'transparent'),cursor:'pointer',borderLeft:temaItaq?undefined:(tab==='perfil'?'3px solid #1351B4':'3px solid transparent')}}>
+              <span className={temaItaq?'menu-drawer-ic':''} style={{fontSize:20}}>{temaItaq?<Icon name="users" size={18}/>:'👤'}</span>
+              <span className={temaItaq?'menu-drawer-lbl':''} style={{fontSize:14,fontWeight:500,color:temaItaq?undefined:'#1E293B'}}>Meu Perfil</span>
             </button>
           </div>
         </div>
-        <div style={{display:'flex',justifyContent:'space-around',alignItems:'center',padding:'8px 8px 0'}}>
+        <div className="bnav-row" style={{display:'flex',justifyContent:'space-around',alignItems:'center',padding:'8px 8px 0'}}>
           {navPrincipal.map(function(t){return(
             <button key={t.id} data-tour={'nav-'+t.id} className={'nb'+(tab===t.id?' on':'')} onClick={function(){setTab(t.id);setMenuAberto(false);}}>
-              <span className="ni">{t.icon}</span>
+              <span className="ni">{temaItaq?<Icon name={menuIconName(t.id)} size={18}/>:t.icon}</span>
               <span className="nl">{t.label}</span>
             </button>
           );})}
