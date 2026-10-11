@@ -234,7 +234,11 @@ select.inp{cursor:pointer}
   background:var(--itq-bg)!important;color:var(--itq-text)!important;
   font-family:'IBM Plex Sans','Segoe UI',system-ui,sans-serif!important;
 }
-.theme-itaq .fc-mark{font-family:'IBM Plex Sans','Segoe UI',system-ui,sans-serif!important;font-weight:800!important;letter-spacing:-.02em!important}
+.theme-itaq .fc-mark{font-family:'IBM Plex Sans','Segoe UI',system-ui,sans-serif!important;font-weight:800!important;letter-spacing:-.03em!important;position:relative}
+/* Selo "FC" único e consistente em todo canto do app (navbar, sidebar, menu, tela de carregamento) —
+   pedido da usuária: o logo estava "fora do padrão" (formato/sombra diferentes em cada lugar). */
+.theme-itaq .fc-badge{border-radius:30%!important;box-shadow:0 3px 10px -2px rgba(13,27,75,.45),inset 0 1px 0 rgba(255,255,255,.18)!important;position:relative;overflow:hidden}
+.theme-itaq .fc-badge::after{content:'';position:absolute;top:0;left:0;right:0;height:45%;background:linear-gradient(rgba(255,255,255,.16),rgba(255,255,255,0));pointer-events:none}
 .theme-itaq .text-strong{color:var(--itq-ink)!important}
 .theme-itaq .text-soft{color:var(--itq-soft)!important}
 .theme-itaq .text-faint{color:var(--itq-faint)!important}
@@ -2624,13 +2628,43 @@ function darBaixaVencido(){
 {importing&&<div className="inf" style={{marginBottom:10}}>⏳ {importStatus}</div>}
 {!importing&&importStatus&&<div className="ok" style={{marginBottom:10}}>{importStatus}</div>}
 <div className="card"><div className="ch"><div className="ch-title"><div className="ch-accent"/><span>Estoque Atual</span></div><span style={{fontSize:12,color:'#94A3B8',fontWeight:500}}>{medList.length} produto(s)</span></div>
-{medList.length===0?<div style={{padding:48,textAlign:'center',color:'#94A3B8'}}>Nenhum medicamento cadastrado.</div>:(<div style={{overflowX:'auto'}}><table className="tbl"><thead><tr><th>Medicamento</th><th>Estoque</th><th>Status</th><th></th></tr></thead><tbody>
-{medList.map(function(m){var low=m.minEstoque>0&&m.est<=m.minEstoque;var zero=m.est<=0;var neg=m.negativo!=null;var tp=TIPOS[m.cat]||TIPOS.medicamento;var temaItaq=document.body.classList.contains('theme-itaq');return(<tr key={m.id}>
-<td><div style={{fontWeight:600,color:B,cursor:can(user.role,'historico')?'pointer':'default',marginBottom:4,fontSize:13}} onClick={function(){if(can(user.role,'historico'))setHist(m);}}>{m.nome}</div><span style={{fontSize:10,padding:'2px 8px',borderRadius:20,background:(temaItaq?B:tp.cor)+'18',color:temaItaq?B:tp.cor,fontWeight:700,border:'1px solid '+(temaItaq?B:tp.cor)+'40',display:'inline-flex',alignItems:'center',gap:4}}>{temaItaq?<Icon name={TIPOS_ICON[m.cat]||'pill'} size={10}/>:tp.icon} {tp.label}</span></td>
+{medList.length===0?<div style={{padding:48,textAlign:'center',color:'#94A3B8'}}>Nenhum medicamento cadastrado.</div>:(document.body.classList.contains('theme-itaq')?(
+<div>
+{medList.map(function(m){var low=m.minEstoque>0&&m.est<=m.minEstoque;var zero=m.est<=0;var neg=m.negativo!=null;var tp=TIPOS[m.cat]||TIPOS.medicamento;
+  var statusCor=zero?'#B91C1C':low?'#B45309':'#0C6B3E';
+  var acoes=[
+    can(user.role,'editar')&&{ic:'edit',cor:'#1351B4',bg:'#EFF6FF',title:'Editar',fn:function(){setEditId(m.id);setEditNome(m.nome);setEditMin(m.minEstoque||'');setEditTipo(m.cat||'medicamento');}},
+    can(user.role,'editar')&&{ic:'trash',cor:'#DC2626',bg:'#FEE2E2',title:'Excluir',fn:function(){delMed(m.id);}},
+    {ic:'scale',cor:'#B45309',bg:'#FEF3C7',title:'Balanço',fn:function(){setAjusteId(m.id);setAjusteMed(m);setAjusteQty(String(m.est));}},
+    {ic:'recycle',cor:'#DC2626',bg:'#FEE2E2',title:'Descarte por vencimento',fn:function(){setDescarteMed(m);setDescarteLoteSel(m.lotes&&m.lotes.length===1?m.lotes[0]:null);var loteInicial=m.lotes&&m.lotes.length===1?m.lotes[0]:null;setShowBaixa({id:m.id,medId:m.id,nome:m.nome,lote:loteInicial?loteInicial.lote:(m.info.lote||''),validade:loteInicial?loteInicial.validade:(m.info.validade||''),est:loteInicial?loteInicial.qty:m.est});setQtdBaixa('');}},
+    {ic:'calendar',cor:'#0C6B3E',bg:'#F0FDF4',title:'Lote/validade',fn:function(){var li=m.lotes&&m.lotes.length>0?m.lotes[0]:{entryId:'',lote:m.info.lote||'',validade:m.info.validade||''};setEditLote({entryId:li.entryId,medId:m.id,nome:m.nome});setEditLoteVal(li.lote||'');setEditLoteData(li.validade||'');}}
+  ].filter(Boolean);
+  return(<div key={m.id} style={{padding:'14px 16px',borderBottom:'1px solid var(--itq-line,#E3E9F6)'}}>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:10,marginBottom:8}}>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontWeight:700,color:'var(--itq-ink)',fontSize:14,cursor:can(user.role,'historico')?'pointer':'default'}} onClick={function(){if(can(user.role,'historico'))setHist(m);}}>{m.nome}</div>
+        <span style={{fontSize:10,padding:'2px 8px',borderRadius:20,background:'var(--itq-tint)',color:B,fontWeight:700,display:'inline-flex',alignItems:'center',gap:4,marginTop:5,whiteSpace:'nowrap'}}><Icon name={TIPOS_ICON[m.cat]||'pill'} size={10}/> {tp.label}</span>
+      </div>
+      <div style={{textAlign:'right',flexShrink:0}}>
+        <div style={{fontWeight:800,fontSize:20,color:'var(--itq-ink)',lineHeight:1}}>{m.est}</div>
+        <div style={{fontSize:10,color:'var(--itq-faint)',marginTop:2}}>un.</div>
+      </div>
+    </div>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+      {neg?<span className="badge badge-red" title={'Saídas registradas superam as entradas em '+Math.abs(m.negativo)+' un. — revise os lançamentos, não é falta de estoque comum.'}>Saldo negativo ({m.negativo})</span>:<span className={'badge '+(zero?'badge-red':low?'badge-amber':'badge-green')}>{zero?'Zerado':low?'Baixo':'OK'}</span>}
+      <div style={{display:'flex',gap:4}}>{acoes.map(function(a,i){return(
+        <button key={i} onClick={a.fn} title={a.title} style={{background:a.bg,border:'none',borderRadius:8,width:30,height:30,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:a.cor}}><Icon name={a.ic} size={14}/></button>
+      );})}</div>
+    </div>
+  </div>);})}
+</div>
+):(<div style={{overflowX:'auto'}}><table className="tbl"><thead><tr><th>Medicamento</th><th>Estoque</th><th>Status</th><th></th></tr></thead><tbody>
+{medList.map(function(m){var low=m.minEstoque>0&&m.est<=m.minEstoque;var zero=m.est<=0;var neg=m.negativo!=null;var tp=TIPOS[m.cat]||TIPOS.medicamento;return(<tr key={m.id}>
+<td><div style={{fontWeight:600,color:B,cursor:can(user.role,'historico')?'pointer':'default',marginBottom:4,fontSize:13}} onClick={function(){if(can(user.role,'historico'))setHist(m);}}>{m.nome}</div><span style={{fontSize:10,padding:'2px 8px',borderRadius:20,background:tp.cor+'18',color:tp.cor,fontWeight:700,border:'1px solid '+tp.cor+'40'}}>{tp.icon} {tp.label}</span></td>
 <td><span style={{fontWeight:900,fontSize:22,color:zero?'#B91C1C':low?'#B45309':'#0C6B3E'}}>{m.est}</span></td>
 <td>{neg?<span className="badge badge-red" title={'Saídas registradas superam as entradas em '+Math.abs(m.negativo)+' un. — revise os lançamentos, não é falta de estoque comum.'}>⚠️ Saldo negativo ({m.negativo})</span>:<span className={'badge '+(zero?'badge-red':low?'badge-amber':'badge-green')}>{zero?'Zerado':low?'Baixo':'OK'}</span>}</td>
-<td><div style={{display:'flex',gap:4}}>{can(user.role,'editar')&&<button onClick={function(){setEditId(m.id);setEditNome(m.nome);setEditMin(m.minEstoque||'');setEditTipo(m.cat||'medicamento');}} style={{background:'#EFF6FF',border:'none',borderRadius:8,width:32,height:32,cursor:'pointer',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center',color:'#1351B4'}}>{temaItaq?<Icon name="edit" size={15}/>:'✏️'}</button>}{can(user.role,'editar')&&<button onClick={function(){delMed(m.id);}} style={{background:'#FEE2E2',border:'none',borderRadius:8,width:32,height:32,cursor:'pointer',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center',color:'#DC2626'}}>{temaItaq?<Icon name="trash" size={15}/>:'🗑'}</button>}<button onClick={function(){setAjusteId(m.id);setAjusteMed(m);setAjusteQty(String(m.est));}} style={{background:'#FEF3C7',border:'none',borderRadius:8,width:32,height:32,cursor:'pointer',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center',color:'#B45309'}}>{temaItaq?<Icon name="scale" size={15}/>:'⚖️'}</button><button onClick={function(){setDescarteMed(m);setDescarteLoteSel(m.lotes&&m.lotes.length===1?m.lotes[0]:null);var loteInicial=m.lotes&&m.lotes.length===1?m.lotes[0]:null;setShowBaixa({id:m.id,medId:m.id,nome:m.nome,lote:loteInicial?loteInicial.lote:(m.info.lote||''),validade:loteInicial?loteInicial.validade:(m.info.validade||''),est:loteInicial?loteInicial.qty:m.est});setQtdBaixa('');}} title="Descarte por vencimento" style={{background:'#FEE2E2',border:'none',borderRadius:8,width:32,height:32,cursor:'pointer',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center',color:'#DC2626'}}>{temaItaq?<Icon name="recycle" size={15}/>:'♻️'}</button><button onClick={function(){var li=m.lotes&&m.lotes.length>0?m.lotes[0]:{entryId:'',lote:m.info.lote||'',validade:m.info.validade||''};setEditLote({entryId:li.entryId,medId:m.id,nome:m.nome});setEditLoteVal(li.lote||'');setEditLoteData(li.validade||'');}} style={{background:'#F0FDF4',border:'none',borderRadius:8,width:32,height:32,cursor:'pointer',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center',color:'#0C6B3E'}}>{temaItaq?<Icon name="calendar" size={15}/>:'📅'}</button></div></td>
-</tr>);})}</tbody></table></div>)}</div></div>)}
+<td><div style={{display:'flex',gap:4}}>{can(user.role,'editar')&&<button onClick={function(){setEditId(m.id);setEditNome(m.nome);setEditMin(m.minEstoque||'');setEditTipo(m.cat||'medicamento');}} style={{background:'#EFF6FF',border:'none',borderRadius:8,width:32,height:32,cursor:'pointer',fontSize:14}}>✏️</button>}{can(user.role,'editar')&&<button onClick={function(){delMed(m.id);}} style={{background:'#FEE2E2',border:'none',borderRadius:8,width:32,height:32,cursor:'pointer',fontSize:14}}>🗑</button>}<button onClick={function(){setAjusteId(m.id);setAjusteMed(m);setAjusteQty(String(m.est));}} style={{background:'#FEF3C7',border:'none',borderRadius:8,width:32,height:32,cursor:'pointer',fontSize:14}}>⚖️</button><button onClick={function(){setDescarteMed(m);setDescarteLoteSel(m.lotes&&m.lotes.length===1?m.lotes[0]:null);var loteInicial=m.lotes&&m.lotes.length===1?m.lotes[0]:null;setShowBaixa({id:m.id,medId:m.id,nome:m.nome,lote:loteInicial?loteInicial.lote:(m.info.lote||''),validade:loteInicial?loteInicial.validade:(m.info.validade||''),est:loteInicial?loteInicial.qty:m.est});setQtdBaixa('');}} title="Descarte por vencimento" style={{background:'#FEE2E2',border:'none',borderRadius:8,width:32,height:32,cursor:'pointer',fontSize:14}}>♻️</button><button onClick={function(){var li=m.lotes&&m.lotes.length>0?m.lotes[0]:{entryId:'',lote:m.info.lote||'',validade:m.info.validade||''};setEditLote({entryId:li.entryId,medId:m.id,nome:m.nome});setEditLoteVal(li.lote||'');setEditLoteData(li.validade||'');}} style={{background:'#F0FDF4',border:'none',borderRadius:8,width:32,height:32,cursor:'pointer',fontSize:14}}>📅</button></div></td>
+</tr>);})}</tbody></table></div>))}</div></div>)}
 {sub==='faltas'&&(<div><div style={{display:'flex',justifyContent:'flex-end',marginBottom:14}}><button onClick={exportAlertasXL} className="bg" style={{width:'auto',padding:'0 16px'}}>Excel Alertas</button></div>
 {faltas.length===0?<div className="card" style={{padding:48,textAlign:'center'}}><div style={{fontSize:40,marginBottom:12}}>✅</div><div style={{fontWeight:700,color:'#0C6B3E',fontSize:16}}>Nenhuma falta!</div></div>:(
 <div style={{display:'flex',flexDirection:'column',gap:10}}>
@@ -4169,9 +4203,11 @@ function TabLeites(props){
   </div>);
 }
 function TabPerfil(props){var user=props.user;var onUpdate=props.onUpdate;var onLogout=props.onLogout;var entries=props.entries;var medications=props.medications;var stock=props.stock;
+  var temaItaq=tenantDe(user)==='itaquitinga-pe';
   var _amb=useState((typeof window!=='undefined'&&window.__fcEnv)||'prod');var amb=_amb[0];var setAmb=_amb[1];
   var _showAmbSelector=useState(false);var showAmbSelector=_showAmbSelector[0];var setShowAmbSelector=_showAmbSelector[1];
-  var _darkMode=useState(localStorage.getItem('fc_theme')==='dark');var darkMode=_darkMode[0];var setDarkMode=_darkMode[1];var _showLogoutConfirm=useState(false);var showLogoutConfirm=_showLogoutConfirm[0];var setShowLogoutConfirm=_showLogoutConfirm[1];
+  var _darkModeInit=false;try{_darkModeInit=localStorage.getItem('fc_theme')==='dark';}catch(e){}
+  var _darkMode=useState(_darkModeInit);var darkMode=_darkMode[0];var setDarkMode=_darkMode[1];var _showLogoutConfirm=useState(false);var showLogoutConfirm=_showLogoutConfirm[0];var setShowLogoutConfirm=_showLogoutConfirm[1];
   function trocarAmbiente(novoAmb){localStorage.setItem('farmacontrol_env',novoAmb);setAmb(novoAmb);setShowAmbSelector(false);setTimeout(function(){window.location.reload();},500);}
   var _color=useState(user.color||PALETTE[0]);var color=_color[0];var setColor=_color[1];var _sessionH=useState(user.sessionTimeout||12);var sessionH=_sessionH[0];var setSessionH=_sessionH[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];var _ok=useState('');var ok=_ok[0];var setOk=_ok[1];var _photo=useState(user.photoURL||'');var photo=_photo[0];var setPhoto=_photo[1];var _crf=useState(user.crf||'');var crf=_crf[0];var setCrf=_crf[1];var _uploading=useState(false);var uploading=_uploading[0];var setUploading=_uploading[1];
 function handlePhotoChange(e){var file=e.target.files[0];if(!file)return;if(!file.type.startsWith('image/')){alert('Selecione uma imagem.');return;}if(file.size>8*1024*1024){alert('Max 8MB.');return;}setUploading(true);compressPhoto(file,function(b64){setPhoto(b64);setUploading(false);});}
@@ -4208,7 +4244,7 @@ return(
 
   <div className="card" style={{marginBottom:14,padding:'16px 18px'}}>
     <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:14}}>
-      <div style={{width:36,height:36,borderRadius:10,background:'linear-gradient(135deg,#1351B4,#1A6FD4)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>📊</div>
+      <div style={{width:36,height:36,borderRadius:10,background:'linear-gradient(135deg,#1351B4,#1A6FD4)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,color:'#fff'}}>{temaItaq?<Icon name="barChart" size={17}/>:'📊'}</div>
       <div style={{fontWeight:700,fontSize:15,color:'#1E293B'}}>Meu Desempenho</div>
     </div>
     {(function(){
@@ -4219,16 +4255,16 @@ return(
       var diasAtivo=Math.max(1,Math.ceil((new Date()-criadoEm)/86400000));
       var ultimoAcesso=(entries||[]).filter(function(e){return e.autorId===user.uid||e.autorNome===user.name;}).sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});
       return <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-        <div style={{background:'#EFF6FF',borderRadius:12,padding:'12px 14px'}}>
-          <div style={{fontSize:22,fontWeight:800,color:'#1351B4'}}>{minhasSaidas}</div>
+        <div style={{background:temaItaq?'var(--itq-tint)':'#EFF6FF',borderRadius:12,padding:'12px 14px'}}>
+          <div style={{fontSize:22,fontWeight:800,color:B}}>{minhasSaidas}</div>
           <div style={{fontSize:11,color:'#64748B',marginTop:2}}>Saídas registradas</div>
         </div>
-        <div style={{background:'#F0FDF4',borderRadius:12,padding:'12px 14px'}}>
-          <div style={{fontSize:22,fontWeight:800,color:'#059669'}}>{minhasEntradas}</div>
+        <div style={{background:temaItaq?'var(--itq-tint)':'#F0FDF4',borderRadius:12,padding:'12px 14px'}}>
+          <div style={{fontSize:22,fontWeight:800,color:temaItaq?B:'#059669'}}>{minhasEntradas}</div>
           <div style={{fontSize:11,color:'#64748B',marginTop:2}}>Entradas registradas</div>
         </div>
-        <div style={{background:'#FFFBEB',borderRadius:12,padding:'12px 14px'}}>
-          <div style={{fontSize:22,fontWeight:800,color:'#F59E0B'}}>{total}</div>
+        <div style={{background:temaItaq?'var(--itq-tint)':'#FFFBEB',borderRadius:12,padding:'12px 14px'}}>
+          <div style={{fontSize:22,fontWeight:800,color:temaItaq?B:'#F59E0B'}}>{total}</div>
           <div style={{fontSize:11,color:'#64748B',marginTop:2}}>Total de registros</div>
         </div>
         <div style={{background:'#F8FAFC',borderRadius:12,padding:'12px 14px'}}>
@@ -4266,7 +4302,7 @@ return(
     </div>
     <div className="card" style={{marginBottom:14,padding:'16px 18px'}}>
     <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:14}}>
-      <div style={{width:36,height:36,borderRadius:10,background:'linear-gradient(135deg,#059669,#047857)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>📋</div>
+      <div style={{width:36,height:36,borderRadius:10,background:temaItaq?'linear-gradient(135deg,var(--blue-900),var(--blue-700))':'linear-gradient(135deg,#059669,#047857)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,color:'#fff'}}>{temaItaq?<Icon name="clipboard" size={17}/>:'📋'}</div>
       <div style={{fontWeight:700,fontSize:15,color:'#1E293B'}}>Meus Últimos Registros</div>
     </div>
     {(function(){
@@ -4298,7 +4334,7 @@ return(
 
   <div className="card" style={{padding:'20px',marginBottom:14}}>
     <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}>
-      <div style={{width:40,height:40,borderRadius:12,background:'linear-gradient(135deg,#0C6B3E,#0891B2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20}}>💾</div>
+      <div style={{width:40,height:40,borderRadius:12,background:temaItaq?'linear-gradient(135deg,var(--blue-900),var(--blue-700))':'linear-gradient(135deg,#0C6B3E,#0891B2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,color:'#fff'}}>{temaItaq?<Icon name="package" size={18}/>:'💾'}</div>
       <div><div style={{fontWeight:700,color:'#1E293B',fontSize:15}}>Backup dos Dados</div><div style={{fontSize:12,color:'#94A3B8'}}>Excel com todas as movimentacoes e estoque</div></div>
     </div>
     <button onClick={exportBackup} className="bg">Baixar Excel completo</button>
@@ -4317,7 +4353,7 @@ return(
     </div>
   </div>}
   {(function(){var td=tenantDe(user)+'_'+todayStr();var flag=localStorage.getItem('fc_shift_enc_'+td)||localStorage.getItem('fc_shift_saiu_'+td);if(!flag)return null;return(<button onClick={function(){localStorage.removeItem('fc_shift_enc_'+td);localStorage.removeItem('fc_shift_saiu_'+td);window.location.reload();}} style={{width:'100%',padding:'12px',background:'#EFF6FF',border:'1.5px solid #BFDBFE',borderRadius:12,color:'#1351B4',fontWeight:700,fontSize:13,cursor:'pointer',marginBottom:10}}>🔓 Voltar ao Plantão de hoje</button>);})()}
-  <button onClick={function(){setShowLogoutConfirm(true);}} style={{width:'100%',padding:'14px',background:'#FEF2F2',border:'1.5px solid #FECACA',borderRadius:12,color:'#DC2626',fontWeight:700,fontSize:14,cursor:'pointer',marginBottom:12}}>👋 Sair da conta</button>
+  <button onClick={function(){setShowLogoutConfirm(true);}} style={{width:'100%',padding:'14px',background:'#FEF2F2',border:'1.5px solid #FECACA',borderRadius:12,color:'#DC2626',fontWeight:700,fontSize:14,cursor:'pointer',marginBottom:12}}>{_semEmoji('👋 Sair da conta')}</button>
   {(user.role==='gestor'||user.role==='tecnico')&&<div style={{textAlign:'center',fontSize:10,color:'#CBD5E1',marginBottom:12}}>Cache: {(typeof window!=='undefined'&&window.__fcPersist)||'verificando…'}</div>}
 </div>);}
 
@@ -6428,6 +6464,7 @@ function TabHistoricoNotas(props){
 
 function TabPrevisao(props){
   var user=props.user;var entries=props.entries;var medications=props.medications;var stock=props.stock;var db=props.db;
+  var temaItaq=tenantDe(user)==='itaquitinga-pe';
   var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};
   var isMan=user.role==='gestor'||user.role==='tecnico';
   var _atas=useState([]);var atas=_atas[0];var setAtas=_atas[1];
@@ -6504,7 +6541,7 @@ function TabPrevisao(props){
     return ataEd.itens.map(function(it){return {cands:_matchItemMeds(it.descricao||'',medications,6)};});
   },[editAta,medications,atas]);
 
-  var COR={medicamento:'#1351B4',controlado:'#DC2626',injetavel:'#7C3AED',leite:'#D97706',penso:'#0C6B3E'};
+  var COR=temaItaq?{medicamento:B,controlado:B,injetavel:B,leite:B,penso:B}:{medicamento:'#1351B4',controlado:'#DC2626',injetavel:'#7C3AED',leite:'#D97706',penso:'#0C6B3E'};
   var ICO={medicamento:'💊',controlado:'🔒',injetavel:'💉',leite:'🍼',penso:'🩹'};
   var LBL={medicamento:'Farm. Básica',controlado:'Controlado',injetavel:'Injetável',leite:'Leite',penso:'Penso/Material'};
   // As "Ordens de Fornecimento" oficiais de Itaquitinga (Hospital/Atenção Básica/Farmácia Básica,
@@ -7805,11 +7842,11 @@ function TabPrevisao(props){
         {(function(){
           var dias=diasHistorico();
           var fase=dias<25?1:(dias<55?2:3);
-          var fInfo={1:{txt:'Fase 1 — baseado no consumo estimado',cor:'#D97706',ico:'📊'},2:{txt:'Fase 2 — baseado no consumo médio real',cor:'#1351B4',ico:'📉'},3:{txt:'Fase 3 — baseado em tendência',cor:'#0C6B3E',ico:'📈'}};
+          var fInfo=temaItaq?{1:{txt:'Fase 1 — baseado no consumo estimado',cor:B,ico:'barChart'},2:{txt:'Fase 2 — baseado no consumo médio real',cor:B,ico:'trendDown'},3:{txt:'Fase 3 — baseado em tendência',cor:B,ico:'trendUp'}}:{1:{txt:'Fase 1 — baseado no consumo estimado',cor:'#D97706',ico:'📊'},2:{txt:'Fase 2 — baseado no consumo médio real',cor:'#1351B4',ico:'📉'},3:{txt:'Fase 3 — baseado em tendência',cor:'#0C6B3E',ico:'📈'}};
           var fi=fInfo[fase];
-          return(<div style={{background:fi.cor+'14',border:'1.5px solid '+fi.cor+'40',borderRadius:12,padding:'12px 14px',marginBottom:12}}>
+          return(<div style={{background:temaItaq?'var(--itq-tint)':fi.cor+'14',border:'1.5px solid '+(temaItaq?'var(--itq-tint-line)':fi.cor+'40'),borderRadius:12,padding:'12px 14px',marginBottom:12}}>
             <div style={{display:'flex',alignItems:'center',gap:10}}>
-              <span style={{fontSize:24}}>{fi.ico}</span>
+              <span style={{fontSize:24,display:'flex'}}>{temaItaq?<Icon name={fi.ico} size={22}/>:fi.ico}</span>
               <div>
                 <div style={{fontWeight:700,fontSize:13,color:fi.cor}}>{fi.txt}</div>
                 <div style={{fontSize:12,color:'#64748B'}}>{dias} dia(s) de histórico{fase<3?' · fica mais preciso com o tempo':''}</div>
@@ -7826,8 +7863,8 @@ function TabPrevisao(props){
             <option value={45}>45 dias</option>
             <option value={60}>60 dias</option>
           </select>
-          <input value={ajBusca||''} onChange={function(e){setAjBusca(e.target.value);}} placeholder="🔍 Buscar medicamento..." className="inp" style={{marginBottom:0,flex:1}}/>
-          <button onClick={function(){setSoUrg(!soUrg);}} style={{marginBottom:0,padding:'8px 14px',borderRadius:8,border:'1.5px solid '+(soUrg?'#DC2626':'#E2E8F0'),background:soUrg?'#DC2626':'#fff',color:soUrg?'#fff':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer',whiteSpace:'nowrap'}}>🚨 Só urgentes</button>
+          <input value={ajBusca||''} onChange={function(e){setAjBusca(e.target.value);}} placeholder={_semEmoji('🔍 Buscar medicamento...')} className="inp" style={{marginBottom:0,flex:1}}/>
+          <button onClick={function(){setSoUrg(!soUrg);}} style={{marginBottom:0,padding:'8px 14px',borderRadius:8,border:'1.5px solid '+(soUrg?'#DC2626':'#E2E8F0'),background:soUrg?'#DC2626':'#fff',color:soUrg?'#fff':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer',whiteSpace:'nowrap'}}>{_semEmoji('🚨 Só urgentes')}</button>
         </div>
         <div style={{fontSize:11,color:'#94A3B8',marginBottom:12,marginTop:-4}}>Itens ordenados por urgência (os que acabam antes aparecem primeiro).{soUrg?' Mostrando só ruptura em ≤30 dias.':''}</div>
 
@@ -7843,8 +7880,8 @@ function TabPrevisao(props){
             </div>
             <div><div style={{fontSize:11,color:'#64748B',marginBottom:3}}>Nome da Empresa</div><input value={empresa} onChange={function(e){setEmpresa(e.target.value);}} placeholder="Nome da empresa..." className="inp" style={{marginBottom:0,fontSize:13}}/></div>
           </>}
-          <div style={{display:'flex',gap:8,marginTop:10,flexWrap:'wrap'}}><button onClick={exportarExcel} className="bg" style={{flex:1}}>📥 Excel</button><button onClick={exportarPDF} className="bp" style={{flex:1,background:'#DC2626'}}>📄 PDF Pedido</button>{infoTenant.autoDescontarAta&&<button onClick={function(){fecharPedidoConsolidado();}} className="bp" style={{flex:1,background:'#0C6B3E'}}>🔒 Fechar Pedido</button>}</div>
-          {infoTenant.autoDescontarAta&&<div style={{fontSize:10,color:'#94A3B8',marginTop:6}}>Gerar o PDF só imprime — o saldo das ATAs só é descontado quando você clicar em "🔒 Fechar Pedido".</div>}
+          <div style={{display:'flex',gap:8,marginTop:10,flexWrap:'wrap'}}><button onClick={exportarExcel} className="bg" style={{flex:1}}>{_semEmoji('📥 Excel')}</button><button onClick={exportarPDF} className="bp" style={temaItaq?{flex:1}:{flex:1,background:'#DC2626'}}>{_semEmoji('📄 PDF Pedido')}</button>{infoTenant.autoDescontarAta&&<button onClick={function(){fecharPedidoConsolidado();}} className="bp" style={temaItaq?{flex:1}:{flex:1,background:'#0C6B3E'}}>{_semEmoji('🔒 Fechar Pedido')}</button>}</div>
+          {infoTenant.autoDescontarAta&&<div style={{fontSize:10,color:'#94A3B8',marginTop:6}}>Gerar o PDF só imprime — o saldo das ATAs só é descontado quando você clicar em "Fechar Pedido".</div>}
         </div>
 
         {/* Lista de medicamentos por categoria */}
@@ -7941,9 +7978,9 @@ function TabPrevisao(props){
             return(<div key={catKey} style={{marginBottom:10}}>
               {/* Pasta da Categoria */}
               <button onClick={function(){setPastasAbertas(function(p){var n=Object.assign({},p);n['prev_'+catKey]=!catAberta;return n;});}} style={{width:'100%',background:cor,border:'none',borderRadius:catAberta?'14px 14px 0 0':'14px',padding:'12px 16px',cursor:'pointer',display:'flex',alignItems:'center',gap:10,textAlign:'left'}}>
-                <span style={{fontSize:22}}>{ICO[catKey]||'💊'}</span>
+                <span style={{fontSize:22,display:'flex',color:'#fff'}}>{temaItaq?<Icon name={TIPOS_ICON[catKey]||'pill'} size={19}/>:(ICO[catKey]||'💊')}</span>
                 <div style={{flex:1}}>
-                  <div style={{fontWeight:800,fontSize:15,color:'#fff'}}>📁 {LBL[catKey]}</div>
+                  <div style={{fontWeight:800,fontSize:15,color:'#fff'}}>{temaItaq?'':'📁 '}{LBL[catKey]}</div>
                   <div style={{fontSize:12,color:'rgba(255,255,255,0.8)'}}>{medsCat.length} medicamento(s)</div>
                 </div>
                 <div style={{textAlign:'right',marginRight:6}}>
@@ -8001,7 +8038,7 @@ function TabPrevisao(props){
                 {semAta.length>0&&<div style={{marginBottom:8,borderRadius:12,overflow:'hidden',border:'1.5px solid #CBD5E1'}}>
                   <button onClick={function(){setPastasAbertas(function(p){var n=Object.assign({},p);n['prev_semata_'+catKey]=!pastasAbertas['prev_semata_'+catKey];return n;});}} style={{width:'100%',background:'#F1F5F9',border:'none',padding:'10px 14px',cursor:'pointer',display:'flex',alignItems:'center',gap:8,textAlign:'left'}}>
                     <div style={{flex:1}}>
-                      <div style={{fontWeight:700,fontSize:13,color:'#64748B'}}>📂 Sem ATA vinculada</div>
+                      <div style={{fontWeight:700,fontSize:13,color:'#64748B',display:'flex',alignItems:'center',gap:6}}>{temaItaq?<Icon name="folder" size={13}/>:'📂'} Sem ATA vinculada</div>
                       <div style={{fontSize:11,color:'#94A3B8'}}>{semAta.length} medicamento(s)</div>
                     </div>
                     <span style={{fontSize:14,color:'#94A3B8'}}>{pastasAbertas['prev_semata_'+catKey]?'▲':'▼'}</span>
@@ -8712,7 +8749,10 @@ function TabPrevisao(props){
 function confKey(medId,lote,val){return (medId+'--'+(lote||'SEM')+'--'+(val||'SEM')).replace(/[^A-Za-z0-9_-]/g,'_');}
 function TabConferencia(props){
   var user=props.user;var medications=props.medications||[];var entries=props.entries||[];var stock=props.stock||{};var estoqueBruto=props.estoqueBruto||{};
-  var CCOR={medicamento:'#1351B4',controlado:'#DC2626',injetavel:'#7C3AED',leite:'#D97706',penso:'#0891B2'};
+  var temaItaq=tenantDe(user)==='itaquitinga-pe';
+  // Em Itaquitinga todas as categorias usam o mesmo azul (pedido da usuária) — em Vicência cada
+  // categoria mantém sua cor própria (roxo/ciano/âmbar), sem alteração.
+  var CCOR=temaItaq?{medicamento:B,controlado:B,injetavel:B,leite:B,penso:B}:{medicamento:'#1351B4',controlado:'#DC2626',injetavel:'#7C3AED',leite:'#D97706',penso:'#0891B2'};
   var docRef=function(){return db.collection('conferencias').doc(plantaoDocId(user,todayStr()));};
   var _contagens=useState({});var contagens=_contagens[0];var setContagens=_contagens[1];
   var _contadoPor=useState({});var contadoPor=_contadoPor[0];var setContadoPor=_contadoPor[1];
@@ -9274,7 +9314,7 @@ function TabConferencia(props){
     </div>}
 
     {catAtiva&&<div style={{background:CCOR[catAtiva]+'12',border:'1.5px solid '+CCOR[catAtiva]+'40',borderRadius:12,padding:'10px 14px',marginBottom:12,display:'flex',alignItems:'center',gap:10}}>
-      <span style={{fontSize:20}}>{(TIPOS[catAtiva]||TIPOS.medicamento).icon}</span>
+      <span style={{fontSize:20,display:'flex',color:temaItaq?CCOR[catAtiva]:undefined}}>{temaItaq?<Icon name={TIPOS_ICON[catAtiva]||'pill'} size={18}/>:(TIPOS[catAtiva]||TIPOS.medicamento).icon}</span>
       <div style={{flex:1,minWidth:0}}>
         <div style={{fontSize:13,fontWeight:800,color:'#1E293B'}}>Conferindo: {(TIPOS[catAtiva]||TIPOS.medicamento).label}</div>
         {finalizadas[catAtiva]&&<div style={{fontSize:11,color:'#0C6B3E',fontWeight:600}}>✓ Já finalizada hoje{finalizadas[catAtiva].por?' por '+finalizadas[catAtiva].por:''} — recontar gera nova finalização.</div>}
@@ -9292,12 +9332,12 @@ function TabConferencia(props){
       <div style={{height:10,background:'#F1F5F9',borderRadius:99,overflow:'hidden'}}>
         <div style={{height:'100%',width:pct+'%',background:pct===100&&totalItens>0?'linear-gradient(90deg,#0C6B3E,#22C55E)':'linear-gradient(90deg,#1351B4,#3B82F6)',borderRadius:99,transition:'width .3s ease'}}/>
       </div>
-      <button data-tour="conf-finalizar" onClick={function(){setShowResumo(true);}} disabled={resumoCat.total===0} style={{marginTop:12,width:'100%',padding:'11px',background:resumoCat.total===0?'#E2E8F0':'#0C6B3E',border:'none',borderRadius:10,color:resumoCat.total===0?'#94A3B8':'#fff',fontWeight:700,fontSize:13,cursor:resumoCat.total===0?'default':'pointer'}}>✅ Finalizar categoria{resumoCat.divergiram>0?' — '+resumoCat.divergiram+' diverg.':''}</button>
+      <button data-tour="conf-finalizar" onClick={function(){setShowResumo(true);}} disabled={resumoCat.total===0} style={{marginTop:12,width:'100%',padding:'11px',background:resumoCat.total===0?'#E2E8F0':(temaItaq?B:'#0C6B3E'),border:'none',borderRadius:10,color:resumoCat.total===0?'#94A3B8':'#fff',fontWeight:700,fontSize:13,cursor:resumoCat.total===0?'default':'pointer'}}>{_semEmoji('✅ Finalizar categoria')}{resumoCat.divergiram>0?' — '+resumoCat.divergiram+' diverg.':''}</button>
     </div>
 
     <div style={{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap'}}>
-      <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="🔍 Buscar medicamento..." className="inp" style={{marginBottom:0,flex:1,minWidth:180}}/>
-      <button onClick={abrirCadastro} style={{whiteSpace:'nowrap',padding:'0 14px',background:'#0C6B3E',border:'none',borderRadius:10,color:'#fff',fontWeight:700,fontSize:13,cursor:'pointer'}}>+ Cadastrar medicamento</button>
+      <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder={_semEmoji('🔍 Buscar medicamento...')} className="inp" style={{marginBottom:0,flex:1,minWidth:180}}/>
+      <button onClick={abrirCadastro} className={temaItaq?'bs':''} style={temaItaq?{whiteSpace:'nowrap',padding:'0 14px',width:'auto'}:{whiteSpace:'nowrap',padding:'0 14px',background:'#0C6B3E',border:'none',borderRadius:10,color:'#fff',fontWeight:700,fontSize:13,cursor:'pointer'}}>+ Cadastrar medicamento</button>
     </div>
 
     {grupos.length===0&&<div style={{textAlign:'center',padding:32,color:'#94A3B8',fontSize:13}}>Nenhum medicamento encontrado.</div>}
@@ -9309,7 +9349,7 @@ function TabConferencia(props){
       var donos=donoCat[g.cat]||[];var euAqui=g.cat===minhaCat;
       return(<div key={g.cat} style={{marginBottom:12}}>
         <button onClick={function(){setCatAberta(function(p){var n=Object.assign({},p);n[g.cat]=!open;return n;});}} style={{width:'100%',display:'flex',alignItems:'center',gap:10,background:cor,border:euAqui?'2px solid #FBBF24':'none',borderRadius:open?'12px 12px 0 0':'12px',padding:'11px 14px',cursor:'pointer',textAlign:'left'}}>
-          <span style={{fontSize:19}}>{t.icon}</span>
+          <span style={{fontSize:19,display:'flex',color:'#fff'}}>{temaItaq?<Icon name={TIPOS_ICON[g.cat]||'pill'} size={17}/>:t.icon}</span>
           <div style={{flex:1,minWidth:0}}>
             <div style={{fontWeight:700,fontSize:14,color:'#fff'}}>{t.label}</div>
             {donos.length>0&&<div style={{fontSize:10,color:'rgba(255,255,255,.9)',marginTop:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>👤 {donos.map(function(p){return p.uid===user.uid?'você':p.nome;}).join(', ')}</div>}
@@ -9334,8 +9374,8 @@ function TabConferencia(props){
                   </div>
                   <span style={{fontSize:13,color:'#94A3B8'}}>{exp?'▲':'▼'}</span>
                 </button>
-                {podeGerir&&<button onClick={function(){abrirRename(m);}} title="Renomear medicamento" style={{flexShrink:0,alignSelf:'center',background:'#EFF6FF',color:'#1351B4',border:'none',borderRadius:8,padding:'6px 9px',fontSize:12,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap'}}>✏️</button>}
-                {podeGerir&&<button onClick={function(){excluirMed(m);}} title="Excluir do cadastro" style={{flexShrink:0,alignSelf:'center',marginLeft:6,marginRight:8,background:delMedId===m.id?'#DC2626':'#FEE2E2',color:delMedId===m.id?'#fff':'#DC2626',border:'none',borderRadius:8,padding:'6px 10px',fontSize:11,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap'}}>{delMedId===m.id?'Confirmar?':'🗑'}</button>}
+                {podeGerir&&<button onClick={function(){abrirRename(m);}} title="Renomear medicamento" style={{flexShrink:0,alignSelf:'center',background:'#EFF6FF',color:'#1351B4',border:'none',borderRadius:8,padding:'6px 9px',fontSize:12,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap',display:'flex',alignItems:'center'}}>{temaItaq?<Icon name="edit" size={13}/>:'✏️'}</button>}
+                {podeGerir&&<button onClick={function(){excluirMed(m);}} title="Excluir do cadastro" style={{flexShrink:0,alignSelf:'center',marginLeft:6,marginRight:8,background:delMedId===m.id?'#DC2626':'#FEE2E2',color:delMedId===m.id?'#fff':'#DC2626',border:'none',borderRadius:8,padding:'6px 10px',fontSize:11,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap',display:'flex',alignItems:'center'}}>{delMedId===m.id?'Confirmar?':(temaItaq?<Icon name="trash" size={13}/>:'🗑')}</button>}
               </div>
               {podeGerir&&renId===m.id&&<div style={{background:'#EFF6FF',borderTop:'1px solid #BFDBFE',padding:'10px 12px'}}>
                 <div style={{fontSize:11,fontWeight:700,color:'#1351B4',marginBottom:6}}>✏️ Renomear no cadastro</div>
@@ -11716,7 +11756,7 @@ return(
   {/* NAVBAR */}
   <div style={temaItaq?{background:'#fff',borderBottom:'1px solid var(--itq-line,#E3E9F6)',padding:'0 16px',display:'flex',alignItems:'center',justifyContent:'space-between',position:'sticky',top:0,zIndex:10,boxShadow:'0 1px 2px rgba(15,23,42,.04)',height:56}:{background:'linear-gradient(135deg,#0A2D6E 0%,#1351B4 100%)',padding:'0 16px',display:'flex',alignItems:'center',justifyContent:'space-between',position:'sticky',top:0,zIndex:10,boxShadow:'0 2px 20px rgba(10,45,110,.35)',height:56}}>
     <div style={{display:'flex',alignItems:'center',gap:10}}>
-      <div style={{width:34,height:34,borderRadius:10,background:temaItaq?'linear-gradient(135deg,var(--blue-900),var(--blue-700))':'rgba(255,255,255,0.18)',border:temaItaq?'none':'1.5px solid rgba(255,255,255,0.3)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+      <div className={temaItaq?'fc-badge':''} style={{width:34,height:34,borderRadius:10,background:temaItaq?'linear-gradient(135deg,var(--blue-900),var(--blue-700))':'rgba(255,255,255,0.18)',border:temaItaq?'none':'1.5px solid rgba(255,255,255,0.3)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
           <span className="fc-mark" style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:15,fontWeight:900,color:'#fff',letterSpacing:'-1px'}}>FC</span>
         </div>
       <div><div style={{fontWeight:800,fontSize:15,color:temaItaq?'var(--itq-ink)':'#fff',letterSpacing:'-.01em'}}>FarmaControl</div><div style={{fontSize:9,color:temaItaq?'var(--itq-faint)':'rgba(255,255,255,.5)',letterSpacing:'.02em'}}>{new Date().toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'short'}).toUpperCase()}</div></div>
@@ -11750,7 +11790,7 @@ return(
   <div className="fadeUp" data-tour="tab-content">
     {loading?(
       <div style={{minHeight:'60vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:40}}>
-        <div style={{width:64,height:64,borderRadius:16,background:'linear-gradient(135deg,#0D1B4B,#1351B4)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,color:'#fff',fontWeight:900,marginBottom:16,boxShadow:'0 8px 24px rgba(19,81,180,.3)'}}>
+        <div className={document.body.classList.contains('theme-itaq')?'fc-badge':''} style={{width:64,height:64,borderRadius:16,background:'linear-gradient(135deg,#0D1B4B,#1351B4)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,color:'#fff',fontWeight:900,marginBottom:16,boxShadow:'0 8px 24px rgba(19,81,180,.3)'}}>
           <span className="fc-mark" style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:28,fontWeight:900,color:'#fff',letterSpacing:'-1.5px'}}>FC</span>
         </div>
         <div style={{fontWeight:800,fontSize:18,color:'#0A2D6E',marginBottom:6}}>FarmaControl</div>
@@ -11796,7 +11836,7 @@ return(
   </div>}
 
   <nav className="itaq-sidebar">
-    <div className="itaq-sidebar-logo"><span className="fc-mark" style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:15,fontWeight:900,letterSpacing:'-1px'}}>FC</span></div>
+    <div className="itaq-sidebar-logo fc-badge"><span className="fc-mark" style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:15,fontWeight:900,letterSpacing:'-1px'}}>FC</span></div>
     <div className="itaq-sidebar-nav">
       {navPrincipal.map(function(t){return(
         <button key={t.id} className={'itaq-sidebar-btn'+(tab===t.id?' on':'')} onClick={function(){setTab(t.id);setMenuAberto(false);}}>
@@ -11804,7 +11844,7 @@ return(
           <span>{t.label}</span>
         </button>
       );})}
-      <button className="itaq-sidebar-btn" onClick={function(){setMenuAberto(!menuAberto);}} style={{marginTop:'auto'}}>
+      <button className={'itaq-sidebar-btn'+(menuAberto?' on':'')} onClick={function(){setMenuAberto(!menuAberto);}} style={{marginTop:'auto',borderTop:'1px solid var(--itq-line,#E3E9F6)',paddingTop:14,width:'100%'}}>
         <Icon name="menu" size={19}/>
         <span>Menu</span>
       </button>
@@ -11817,7 +11857,7 @@ return(
         <div data-tour="menu-panel" className={temaItaq?'menu-drawer':''} style={{position:'fixed',top:0,[temaItaq?'left':'right']:0,bottom:0,width:280,background:'#fff',zIndex:150,transform:menuAberto?'translateX(0)':(temaItaq?'translateX(calc(-100% - 100px))':'translateX(110%)'),transition:'transform .3s cubic-bezier(.4,0,.2,1)',boxShadow:menuAberto?(temaItaq?'8px 0 40px rgba(16,42,90,.18)':'-8px 0 40px rgba(0,0,0,0.2)'):'none',display:'flex',flexDirection:'column',willChange:'transform'}}>
           <div style={temaItaq?{background:'#fff',borderBottom:'1px solid var(--itq-line,#E3E9F6)',padding:'52px 20px 20px',flexShrink:0}:{background:'linear-gradient(135deg,#0D1B4B,#1351B4)',padding:'52px 20px 20px',flexShrink:0}}>
             <div style={{display:'flex',alignItems:'center',gap:12}}>
-              <div style={{width:42,height:42,borderRadius:12,background:temaItaq?'linear-gradient(135deg,var(--blue-900),var(--blue-700))':'rgba(255,255,255,0.15)',border:temaItaq?'none':'1.5px solid rgba(255,255,255,0.25)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+              <div className={temaItaq?'fc-badge':''} style={{width:42,height:42,borderRadius:12,background:temaItaq?'linear-gradient(135deg,var(--blue-900),var(--blue-700))':'rgba(255,255,255,0.15)',border:temaItaq?'none':'1.5px solid rgba(255,255,255,0.25)',display:'flex',alignItems:'center',justifyContent:'center'}}>
                 <span className="fc-mark" style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:17,fontWeight:900,color:'#fff',letterSpacing:'-1px'}}>FC</span>
               </div>
               <div>
