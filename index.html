@@ -11369,7 +11369,7 @@ useEffect(function(){var cfg=loadCfg();if(cfg&&initFB(cfg)){setReady(true);
   // salva ANTES da migração multi-tenant não tem esse campo, e usá-la faria o app filtrar por um
   // tenant vazio (nada bate, tudo "some" na tela até a busca de verdade no Firestore terminar).
   // Sem tenant_id, é melhor esperar a busca de verdade do que mostrar uma tela vazia enganosa.
-  var saved=localStorage.getItem('fc_user');if(saved){try{var su=JSON.parse(saved);if(su&&su.tenant_id)setUser(su);}catch(e){}}
+  var saved=null;try{saved=localStorage.getItem('fc_user');}catch(e){}if(saved){try{var su=JSON.parse(saved);if(su&&su.tenant_id)setUser(su);}catch(e){}}
   auth.onAuthStateChanged(function(firebaseUser){if(firebaseUser&&!skipAuthCheck){
     // Força renovar o token de login ANTES de ler qualquer coisa do Firestore: é o token
     // renovado que carrega a custom claim tenant_id (ver scripts/set_tenant_claims.js e a
@@ -11914,9 +11914,12 @@ return(
   </div>
 </div>
 );}
-(function(){var t=localStorage.getItem('fc_theme');if(t==='dark')document.body.classList.add('dark');})();
+// Protegido com try/catch: localStorage pode lançar exceção em alguns contextos de iframe/webview
+// restrito (ex.: pré-visualizações sandboxed) — sem isso, o erro acontecia ANTES do ReactDOM.render
+// abaixo e travava o script inteiro, deixando a tela em branco (nem a tela de carregamento aparecia).
+(function(){try{var t=localStorage.getItem('fc_theme');if(t==='dark')document.body.classList.add('dark');}catch(e){}})();
 // Interceptar botão voltar Android
-history.pushState(null, '', location.href);
+try{history.pushState(null, '', location.href);}catch(e){}
 window.addEventListener('popstate', function(){
   history.pushState(null, '', location.href);
   window._backPressed && window._backPressed();
