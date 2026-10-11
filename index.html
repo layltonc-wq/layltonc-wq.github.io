@@ -200,10 +200,125 @@ select.inp{cursor:pointer}
 /* ── SHIFT CARD ── */
 .shift-card{background:linear-gradient(135deg,var(--blue-900) 0%,var(--blue-800) 100%);border-radius:var(--r-xl);padding:16px 18px;margin-bottom:14px;color:#fff;box-shadow:var(--shadow-lg)}
 
+/* ── UTILITÁRIOS DE TEXTO/PAINEL (padroniza entre abas) ── */
+.text-strong{color:var(--gray-800)}
+.text-soft{color:var(--gray-500)}
+.text-faint{color:var(--gray-400)}
+.panel-soft{background:var(--blue-50);border:1.5px solid var(--blue-200);border-radius:12px}
+.row-item{display:flex;gap:10px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--gray-100)}
+.row-item:last-child{border-bottom:none}
+.row-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:var(--red-100);color:var(--red-700)}
+.cart-box{background:#FFFBEB;border:2px solid #F59E0B;border-radius:12px}
+.cart-item{background:#fff;border:1px solid #FCD34D;border-radius:8px}
+
 /* ── SCROLL ── */
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--gray-300);border-radius:4px}
+
+/* =====================================================================
+   IDENTIDADE VISUAL — ITAQUITINGA (v2, 10/2026)
+   Mantém a cor azul do gov.br (--blue-700 #1351B4) — pedido explícito da
+   usuária ("gosto das cores azul do padrão que está"). Não é um tema
+   escuro: é o MESMO azul, só com tipografia, espaçamento, cards, ícones
+   e navegação mais refinados e consistentes — ativado só quando
+   tenantDe(user)==='itaquitinga-pe' (classe .theme-itaq no <body>).
+   ===================================================================== */
+.theme-itaq{
+  --itq-ink:#101B33;--itq-text:#3C4A66;--itq-soft:#5B6B8C;--itq-faint:#94A3B8;
+  --itq-bg:#DCE6F5;--itq-line:#E3E9F6;--itq-tint:#EBF2FD;--itq-tint-line:#CFE0FA;
+  --itq-radius:16px;--itq-shadow:0 1px 2px rgba(15,23,42,.04),0 12px 28px -18px rgba(16,42,90,.22);
+  background:var(--itq-bg)!important;color:var(--itq-text)!important;
+  font-family:'IBM Plex Sans','Segoe UI',system-ui,sans-serif!important;
+}
+.theme-itaq .fc-mark{font-family:'IBM Plex Sans','Segoe UI',system-ui,sans-serif!important;font-weight:800!important;letter-spacing:-.03em!important;position:relative}
+/* Selo "FC" único e consistente em todo canto do app (navbar, sidebar, menu, tela de carregamento) —
+   pedido da usuária: o logo estava "fora do padrão" (formato/sombra diferentes em cada lugar). */
+.theme-itaq .fc-badge{border-radius:30%!important;box-shadow:0 3px 10px -2px rgba(13,27,75,.45),inset 0 1px 0 rgba(255,255,255,.18)!important;position:relative;overflow:hidden}
+.theme-itaq .fc-badge::after{content:'';position:absolute;top:0;left:0;right:0;height:45%;background:linear-gradient(rgba(255,255,255,.16),rgba(255,255,255,0));pointer-events:none}
+.theme-itaq .text-strong{color:var(--itq-ink)!important}
+.theme-itaq .text-soft{color:var(--itq-soft)!important}
+.theme-itaq .text-faint{color:var(--itq-faint)!important}
+
+/* Cards: um só raio, uma só sombra, em todo lugar */
+.theme-itaq .card,.theme-itaq .stat-card,.theme-itaq .menu-drawer,.theme-itaq .shift-empty{
+  background:#fff!important;border:1px solid var(--itq-line)!important;
+  border-radius:var(--itq-radius)!important;box-shadow:var(--itq-shadow)!important;
+}
+.theme-itaq .stat-card::before{display:none}
+.theme-itaq .stat-icon{background:var(--itq-tint)!important;color:var(--blue-700)!important;border-radius:12px!important}
+.theme-itaq .ch{background:#fff!important;border-bottom:1px solid var(--itq-line)!important;border-radius:var(--itq-radius) var(--itq-radius) 0 0!important}
+.theme-itaq .ch-title,.theme-itaq .ch-title span{color:var(--itq-ink)!important}
+
+/* Botões e controles — mesmo azul, bordas/raio consistentes */
+.theme-itaq .bp{border-radius:12px!important;box-shadow:0 8px 20px -8px rgba(19,81,180,.45)!important}
+.theme-itaq .bs{background:#fff!important;border-color:var(--itq-line)!important;color:var(--itq-text)!important;border-radius:12px!important}
+.theme-itaq .bg{border-radius:12px!important}
+.theme-itaq .br{border-radius:12px!important}
+.theme-itaq .inp,.theme-itaq textarea{border:1.5px solid var(--itq-line)!important;border-radius:12px!important;color:var(--itq-ink)!important}
+.theme-itaq .inp:focus{border-color:var(--blue-700)!important}
+.theme-itaq .pill{border-radius:10px!important;border-color:var(--itq-line)!important;color:var(--itq-soft)!important}
+.theme-itaq .pill.on{background:var(--blue-700)!important;border-color:var(--blue-700)!important;color:#fff!important}
+.theme-itaq .qb{border-radius:10px!important;border-color:var(--itq-line)!important;color:var(--itq-text)!important}
+.theme-itaq .qb.on{background:var(--blue-700)!important;border-color:var(--blue-700)!important;color:#fff!important}
+.theme-itaq .tab-sw{background:var(--itq-tint)!important;border-radius:12px!important}
+.theme-itaq .tab-sw button.on{background:#fff!important;color:var(--blue-700)!important;box-shadow:0 1px 4px rgba(15,23,42,.1)!important;border-radius:9px!important}
+.theme-itaq .tab-sw button:not(.on){color:var(--itq-soft)!important}
+.theme-itaq .sdrop{border-color:var(--blue-700)!important;border-radius:12px!important;box-shadow:0 16px 36px -12px rgba(16,42,90,.28)!important}
+.theme-itaq .sdi{border-bottom-color:var(--itq-line)!important}
+.theme-itaq .sdi:hover{background:var(--itq-tint)!important}
+.theme-itaq .panel-soft{background:var(--itq-tint)!important;border-color:var(--itq-tint-line)!important;border-radius:12px!important}
+.theme-itaq .row-item{border-bottom-color:var(--itq-line)!important}
+.theme-itaq .row-icon{background:var(--itq-tint)!important;color:var(--blue-700)!important}
+.theme-itaq .cart-box{border-radius:12px!important}
+.theme-itaq .cart-item{border-radius:10px!important}
+
+/* Navbar / menu-drawer já usam o degradê azul da marca — só refina cantos/sombra pra bater com o resto */
+.theme-itaq .menu-drawer-item{border-radius:0 12px 12px 0!important}
+.theme-itaq .menu-drawer-item.on{background:var(--itq-tint)!important}
+.theme-itaq .shift-empty{background:var(--itq-tint)!important;border:1.5px dashed var(--itq-tint-line)!important}
+
+/* ── BAR CHART / BARRA LATERAL / MENU DRAWER (estrutura, não cor) ── */
+.bar-fill{background:var(--blue-200)}
+.bar-fill-on{background:var(--blue-700)}
+.bar-lbl{color:var(--gray-400)}
+.bar-lbl-on{color:var(--blue-700)}
+
+.itaq-sidebar{display:none}
+@media (min-width:900px){
+  .theme-itaq .bnav{height:0!important;min-height:0!important;padding:0!important;border:none!important;box-shadow:none!important;background:transparent!important;overflow:visible!important;z-index:200!important}
+  .theme-itaq .bnav-row{display:none!important}
+  .theme-itaq .itaq-sidebar{
+    display:flex;flex-direction:column;align-items:center;gap:4px;
+    position:fixed;top:0;left:0;bottom:0;width:76px;z-index:60;
+    background:#fff;border-right:1px solid var(--itq-line,#E3E9F6);padding:16px 0 20px;
+    box-shadow:2px 0 16px -8px rgba(16,42,90,.12);
+  }
+  body.theme-itaq{padding-bottom:0;padding-left:76px}
+  .theme-itaq .menu-drawer{left:76px!important}
+  /* O fundo escurecido por trás do menu não pode cobrir a barra lateral — senão ela "some"
+     (vira uma coluna em branco/escurecida) enquanto o menu está aberto. */
+  .theme-itaq .itaq-backdrop{left:76px!important}
+}
+.itaq-sidebar-logo{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,var(--blue-900),var(--blue-700));display:flex;align-items:center;justify-content:center;color:#fff;margin-bottom:22px;flex-shrink:0}
+.itaq-sidebar-nav{display:flex;flex-direction:column;gap:6px;flex:1;width:100%;align-items:center}
+.itaq-sidebar-btn{display:flex;flex-direction:column;align-items:center;gap:4px;width:60px;padding:9px 2px;border:none;background:transparent;border-radius:12px;cursor:pointer;color:var(--gray-400);transition:background .15s,color .15s}
+.itaq-sidebar-btn span{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.02em;text-align:center;line-height:1.15}
+.itaq-sidebar-btn:hover{background:var(--gray-50);color:var(--gray-600)}
+.itaq-sidebar-btn.on{background:var(--blue-50);color:var(--blue-700)}
+
+/* ── MENU DRAWER (painel "Menu completo") ── */
+.menu-drawer{background:var(--white)}
+.menu-drawer-head{background:linear-gradient(135deg,#0D1B4B,#1351B4)}
+.menu-drawer-item{width:100%;display:flex;align-items:center;gap:14px;padding:13px 20px;border:none;background:transparent;cursor:pointer;position:relative;border-left:3px solid transparent;transition:background .15s;text-align:left}
+.menu-drawer-item:hover{background:var(--gray-50)}
+.menu-drawer-item.on{background:var(--blue-50);border-left-color:var(--blue-700)}
+.menu-drawer-ic{font-size:20px;width:26px;text-align:center;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;color:var(--gray-600)}
+.menu-drawer-item.on .menu-drawer-ic{color:var(--blue-700)}
+.menu-drawer-lbl{font-size:14px;font-weight:500;color:var(--gray-800);flex:1}
+.menu-drawer-item.on .menu-drawer-lbl{font-weight:700;color:var(--blue-700)}
+.menu-drawer-badge{background:var(--red-600);color:#fff;border-radius:99px;min-width:18px;height:18px;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 5px}
+.menu-drawer-footer{border-top:1px solid var(--gray-100)}
 </style>
 </head>
 <body>
@@ -286,9 +401,19 @@ var useState=React.useState,useEffect=React.useEffect,useRef=React.useRef,useMem
 var B='#1351B4',CFG_KEY='mt_firebase_cfg_permanent',db=null,auth=null,skipAuthCheck=false;
 var ROLES={gestor:'Gestor',farmaceutico:'Farmacêutico',auxiliar:'Auxiliar',tecnico:'Técnico',diarista:'Diarista'};
 var ROLE_ICON={gestor:'🏥',farmaceutico:'⚗️',tecnico:'🔧',auxiliar:'💊',diarista:'📋'};
+// Em Itaquitinga some o emoji do cargo (sem ícone de linha equivalente pra cada um ainda) em vez
+// de deixar um emoji solto — mantém texto limpo; Vicência continua com o emoji normalmente.
+function _roleIcon(role){return document.body.classList.contains('theme-itaq')?'':ROLE_ICON[role];}
 var PERMS={gestor:['saida','estoque','relatorio','gestao','perfil','editar','historico','log'],farmaceutico:['saida','estoque','perfil','historico'],auxiliar:['saida','estoque','perfil','historico'],tecnico:['saida','estoque','relatorio','gestao','perfil','editar','historico','log'],diarista:['saida','estoque','perfil','historico']};
 var PALETTE=['#1351B4','#0C7B4A','#D32F2F','#7B1FA2','#E65100','#00838F','#558B2F','#AD1457','#1565C0','#2E7D32','#6A1B9A','#0277BD'];
 var TIPOS={medicamento:{label:'Farm. Básica',icon:'💊',cor:'#1351B4'},controlado:{label:'Controlado',icon:'🔵',cor:'#DC2626'},injetavel:{label:'Injetável',icon:'💉',cor:'#7C3AED'},leite:{label:'Leite',icon:'🍼',cor:'#D97706'},penso:{label:'Penso/Material',icon:'🩹',cor:'#0891B2'}};
+// Nome do ícone de linha (Icon) equivalente a cada emoji de TIPOS — usado só quando temaItaq,
+// pra manter emoji em Vicência e ícone consistente em Itaquitinga (vistoria geral, 10/2026).
+var TIPOS_ICON={medicamento:'pill',controlado:'lock',injetavel:'droplet',leite:'package',penso:'clipboard'};
+// Remove um emoji solto do início de um rótulo tipo "💊 Básica" -> "Básica" — usado só em Itaquitinga,
+// pra rótulos curtos de filtro que hoje têm o emoji preso no texto (não dá pra trocar por Icon sem
+// reescrever o array todo).
+function _semEmoji(s){if(!document.body.classList.contains('theme-itaq'))return s;var m=String(s).match(/^[\u{1F000}-\u{1FFFF}\u{2190}-\u{2BFF}\u{2600}-\u{27BF}️]+\s*/u);return m?String(s).slice(m[0].length):s;}
 function can(role,a){return (PERMS[role]||[]).indexOf(a)>=0;}
 // ===== Multi-tenant =====
 function tenantDe(user){return (user&&user.tenant_id)||null;}
@@ -712,6 +837,47 @@ function _ehSaidaNaoReal(e){
 function playSound(type){try{var ctx=new (window.AudioContext||window.webkitAudioContext)();var o=ctx.createOscillator();var g=ctx.createGain();o.connect(g);g.connect(ctx.destination);if(type==='success'){o.frequency.setValueAtTime(523,ctx.currentTime);o.frequency.setValueAtTime(659,ctx.currentTime+0.1);g.gain.setValueAtTime(0.18,ctx.currentTime);g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.3);o.start(ctx.currentTime);o.stop(ctx.currentTime+0.3);}else{o.frequency.setValueAtTime(440,ctx.currentTime);g.gain.setValueAtTime(0.2,ctx.currentTime);g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.4);o.start(ctx.currentTime);o.stop(ctx.currentTime+0.4);}}catch(e){}}
 function compressPhoto(file,cb){var reader=new FileReader();reader.onload=function(ev){var img=new Image();img.onload=function(){var canvas=document.createElement('canvas');canvas.width=160;canvas.height=160;var ctx=canvas.getContext('2d');var size=Math.min(img.width,img.height);var sx=(img.width-size)/2;var sy=(img.height-size)/2;ctx.beginPath();ctx.arc(80,80,80,0,Math.PI*2);ctx.clip();ctx.drawImage(img,sx,sy,size,size,0,0,160,160);cb(canvas.toDataURL('image/jpeg',0.8));};img.src=ev.target.result;};reader.readAsDataURL(file);}
 function UserAvatar(p){var sz=p.size||28;var u=p.user;var st=p.style||{};if(u&&u.photoURL){return React.createElement('img',{src:u.photoURL,style:Object.assign({width:sz,height:sz,borderRadius:'50%',objectFit:'cover',flexShrink:0},st)});}return React.createElement('div',{className:'av',style:Object.assign({width:sz,height:sz,background:u&&u.color?u.color:B,fontSize:Math.round(sz*0.4),fontWeight:700},st)},u&&u.name?u.name.charAt(0):'?');}
+// Ícones em linha (SVG desenhado à mão, estilo "stroke" consistente) — substitui emoji nos pontos
+// mais visíveis (navegação, topo, cards), por pedido da usuária: identidade visual profissional.
+function Icon(props){
+  var n=props.name;var s=props.size||20;var sw=props.strokeWidth||1.8;
+  var cm={width:s,height:s,viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:sw,strokeLinecap:'round',strokeLinejoin:'round'};
+  var P={
+    home:<path d="M4 11.5 12 4l8 7.5M6 10v9h4.5v-5h3v5H18v-9"/>,
+    pill:<g><rect x="4.5" y="9.5" width="15" height="7" rx="3.5" transform="rotate(-45 12 13)"/><line x1="12" y1="9" x2="12" y2="17" transform="rotate(-45 12 13)"/></g>,
+    inbox:<g><path d="M3.5 12h4.2l1.6 2.6h5.4l1.6-2.6h4.2"/><path d="M4.3 12 5.6 5.8A1 1 0 0 1 6.6 5h10.8a1 1 0 0 1 1 .8L19.7 12"/><path d="M4.3 12v6a1 1 0 0 0 1 1h13.4a1 1 0 0 0 1-1v-6"/></g>,
+    hourglass:<path d="M6.5 3h11M6.5 21h11M7.5 3c0 5.5 9 5.5 9 0M7.5 21c0-5.5 9-5.5 9 0"/>,
+    trendDown:<g><polyline points="4 7 10 13 14 10 20 17"/><polyline points="14 17 20 17 20 11"/></g>,
+    trendUp:<g><polyline points="4 17 10 11 14 14 20 7"/><polyline points="14 7 20 7 20 13"/></g>,
+    truck:<g><rect x="2.3" y="7.5" width="11" height="8.5"/><path d="M13.3 10.3h4l3 3.2v2.5h-7z"/><circle cx="7" cy="18" r="1.6"/><circle cx="17.3" cy="18" r="1.6"/></g>,
+    scale:<g><line x1="12" y1="4" x2="12" y2="19"/><line x1="7" y1="19" x2="17" y2="19"/><line x1="5" y1="6.5" x2="19" y2="6.5"/><path d="M5 6.5 2.3 11.8a2.4 2.4 0 0 0 4.7 0z"/><path d="M19 6.5l-2.7 5.3a2.4 2.4 0 0 0 4.7 0z"/></g>,
+    check:<polyline points="4.5 12.5 9.5 17.5 19.5 6.5"/>,
+    x:<g><line x1="5.5" y1="5.5" x2="18.5" y2="18.5"/><line x1="18.5" y1="5.5" x2="5.5" y2="18.5"/></g>,
+    arrowRight:<g><line x1="4" y1="12" x2="18.5" y2="12"/><polyline points="13 6.5 18.5 12 13 17.5"/></g>,
+    edit:<g><path d="M14.5 4.5 19.5 9.5 8 21H3v-5z"/><line x1="12.5" y1="6.5" x2="17.5" y2="11.5"/></g>,
+    trash:<g><line x1="4" y1="7" x2="20" y2="7"/><path d="M9 7V4.5h6V7"/><path d="M6 7l1 13h10l1-13"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></g>,
+    recycle:<g><path d="M4.5 12a7.5 7.5 0 0 1 12.8-5.3"/><polyline points="17.3 2.5 17.3 6.7 13.1 6.7"/><path d="M19.5 12a7.5 7.5 0 0 1-12.8 5.3"/><polyline points="6.7 21.5 6.7 17.3 10.9 17.3"/></g>,
+    calendar:<g><rect x="4" y="5.5" width="16" height="15" rx="2"/><line x1="4" y1="10" x2="20" y2="10"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/></g>,
+    trophy:<g><path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 5H5a2.5 2.5 0 0 0 2.5 4.5M16 5h3a2.5 2.5 0 0 1-2.5 4.5"/><line x1="12" y1="13" x2="12" y2="17"/><path d="M8.5 20.5h7l-1-3.5h-5z"/></g>,
+    star:<path d="M12 3.3 14.6 9l6.2.6-4.7 4.1 1.4 6.1L12 16.8 6.5 19.8l1.4-6.1-4.7-4.1L9.4 9z"/>,
+    dna:<g><path d="M6 3c0 6 12 6 12 12M18 21c0-6-12-6-12-12"/><line x1="8" y1="6.5" x2="12.5" y2="6.5"/><line x1="11.5" y1="12" x2="16" y2="12"/><line x1="8" y1="17.5" x2="12.5" y2="17.5"/></g>,
+    menu:<g><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></g>,
+    search:<g><circle cx="10.8" cy="10.8" r="6.3"/><line x1="19.5" y1="19.5" x2="15.4" y2="15.4"/></g>,
+    bell:<path d="M12 3.2a4.8 4.8 0 0 0-4.8 4.8v3.2c0 1-.4 1.9-1.1 2.6L5 15h14l-1.1-1.2a3.7 3.7 0 0 1-1.1-2.6V8a4.8 4.8 0 0 0-4.8-4.8zM10.2 18.5a1.8 1.8 0 0 0 3.6 0"/>,
+    camera:<g><path d="M4 8h3.2l1.7-2h6.2l1.7 2H20v11H4z"/><circle cx="12" cy="13.3" r="3.4"/></g>,
+    gear:<g><circle cx="12" cy="12" r="2.8"/><path d="M19.4 12.9v-1.8l-2.1-.5a5.9 5.9 0 0 0-.7-1.7l1.1-1.9-1.3-1.3-1.9 1.1a5.9 5.9 0 0 0-1.7-.7L12.3 4.6h-1.8l-.5 2.1a5.9 5.9 0 0 0-1.7.7L6.4 6.3 5.1 7.6l1.1 1.9a5.9 5.9 0 0 0-.7 1.7l-2.1.5v1.8l2.1.5c.15.6.4 1.18.7 1.7l-1.1 1.9 1.3 1.3 1.9-1.1c.52.3 1.1.55 1.7.7l.5 2.1h1.8l.5-2.1c.6-.15 1.18-.4 1.7-.7l1.9 1.1 1.3-1.3-1.1-1.9c.3-.52.55-1.1.7-1.7z"/></g>,
+    chevronRight:<polyline points="9 6 15 12 9 18"/>,
+    logout:<g><path d="M9 4H6a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h3"/><polyline points="14 16 19 11 14 6"/><line x1="19" y1="11" x2="8.5" y2="11"/></g>,
+    package:<g><path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5z"/><path d="M3 7.5 12 12l9-4.5M12 12v9"/></g>,
+    lock:<g><rect x="5" y="10.5" width="14" height="9" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></g>,
+    clipboard:<g><rect x="5.5" y="4.5" width="13" height="16" rx="2"/><rect x="9" y="3" width="6" height="3" rx="1"/><line x1="8.5" y1="11" x2="15.5" y2="11"/><line x1="8.5" y1="14.5" x2="15.5" y2="14.5"/></g>,
+    droplet:<path d="M12 3c3 4 6 7.5 6 11a6 6 0 0 1-12 0c0-3.5 3-7 6-11z"/>,
+    barChart:<g><line x1="5" y1="20" x2="5" y2="12"/><line x1="12" y1="20" x2="12" y2="6"/><line x1="19" y1="20" x2="19" y2="15"/></g>,
+    users:<g><circle cx="9" cy="8" r="3"/><path d="M3.5 20c0-3.5 2.5-6 5.5-6s5.5 2.5 5.5 6"/><circle cx="17" cy="9" r="2.3"/><path d="M15.2 13.2c2.2.3 3.8 2.3 3.8 5.3"/></g>,
+    folder:<path d="M3.5 6.5a1 1 0 0 1 1-1H10l2 2.2h7.5a1 1 0 0 1 1 1V18a1 1 0 0 1-1 1H4.5a1 1 0 0 1-1-1z"/>,
+  };
+  return <svg {...cm}>{P[n]||null}</svg>;
+}
 function Lbl(props){return <div style={{fontSize:11,fontWeight:700,color:'#64748B',marginBottom:6,textTransform:'uppercase',letterSpacing:'.04em'}}>{props.c}</div>;}
 function Divider(){return <div style={{height:1,background:'#F1F5F9',margin:'16px 0'}}/>;}
 function SectionHeader(props){return(<div className="sec-header"><span className="sec-title">{props.c}</span><div className="sec-line"/></div>);}
@@ -789,7 +955,7 @@ var _showCarrinho=useState(false);var showCarrinho=_showCarrinho[0];var setShowC
   }
   return prev.concat([{id:u.id,nome:u.name,cargo:u.role,color:u.color}]);
 });}function startShift(){setSaving(true);var today=todayStr();var leader={id:user.uid,nome:user.name,cargo:user.role,color:user.color,status:'confirmado'};var members=team.map(function(m){return {id:m.id,nome:m.nome||m.name,cargo:m.cargo||m.role,color:m.color,status:'confirmado'};});var equipe=[leader].concat(members);db.collection('plantoes').doc(plantaoDocId(user,today)).set({iniciadoPor:user.uid,iniciadoPorNome:user.name,inicio:new Date().toISOString(),equipe:equipe,ativo:true,data:today,tenant_id:tenantDe(user)}).then(function(){return Promise.resolve();}).then(function(){onDone({plantao:{equipe:equipe,iniciadoPor:user.uid,iniciadoPorNome:user.name,inicio:new Date().toISOString(),ativo:true},isGuest:false,shiftId:today});setSaving(false);}).catch(function(e){alert('Erro: '+e.message);setSaving(false);});}
-return(<div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'linear-gradient(160deg,#0A2D6E,#1351B4)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:500,padding:16,overflowY:'auto'}}><div style={{background:'#fff',borderRadius:24,padding:'28px 22px',maxWidth:440,width:'100%',maxHeight:'90vh',overflowY:'auto',boxShadow:'0 24px 64px rgba(0,0,0,.25)'}}><div style={{textAlign:'center',marginBottom:20}}><div style={{fontSize:18,fontWeight:800,color:B,marginBottom:4}}>Abrir Plantão</div><div style={{fontSize:12,color:'#64748B'}}>Selecione sua equipe para hoje</div></div>{eligible.length>0&&(<div style={{display:'flex',flexDirection:'column',gap:8,marginBottom:16}}>{eligible.map(function(u){var sel=team.some(function(t){return t.id===u.id;});return(<div key={u.id} onClick={function(){toggle(u);}} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 14px',borderRadius:12,border:'1.5px solid '+(sel?B:'#E2E8F0'),background:sel?'#EFF6FF':'#fff',cursor:'pointer',transition:'all .15s'}}><UserAvatar user={u} size={40}/><div style={{flex:1}}><div style={{fontWeight:600,fontSize:14,color:sel?B:'#1E293B'}}>{u.name}</div><div style={{fontSize:12,color:'#64748B'}}>{ROLE_ICON[u.role]} {ROLES[u.role]||u.role}</div></div>{sel&&<div style={{width:22,height:22,borderRadius:'50%',background:B,display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:12,fontWeight:700}}>✓</div>}</div>);})}</div>)}<button onClick={startShift} disabled={saving} className="bp" style={{marginBottom:10,opacity:saving?0.7:1}}>{saving?'Abrindo...':'Abrir Plantão'}</button><button onClick={function(){onDone({plantao:null,isGuest:true,shiftId:null});}} className="bs">Entrar como Convidado</button></div></div>);}
+return(<div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'linear-gradient(160deg,#0A2D6E,#1351B4)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:500,padding:16,overflowY:'auto'}}><div style={{background:'#fff',borderRadius:24,padding:'28px 22px',maxWidth:440,width:'100%',maxHeight:'90vh',overflowY:'auto',boxShadow:'0 24px 64px rgba(0,0,0,.25)'}}><div style={{textAlign:'center',marginBottom:20}}><div style={{fontSize:18,fontWeight:800,color:B,marginBottom:4}}>Abrir Plantão</div><div style={{fontSize:12,color:'#64748B'}}>Selecione sua equipe para hoje</div></div>{eligible.length>0&&(<div style={{display:'flex',flexDirection:'column',gap:8,marginBottom:16}}>{eligible.map(function(u){var sel=team.some(function(t){return t.id===u.id;});return(<div key={u.id} onClick={function(){toggle(u);}} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 14px',borderRadius:12,border:'1.5px solid '+(sel?B:'#E2E8F0'),background:sel?'#EFF6FF':'#fff',cursor:'pointer',transition:'all .15s'}}><UserAvatar user={u} size={40}/><div style={{flex:1}}><div style={{fontWeight:600,fontSize:14,color:sel?B:'#1E293B'}}>{u.name}</div><div style={{fontSize:12,color:'#64748B'}}>{_roleIcon(u.role)} {ROLES[u.role]||u.role}</div></div>{sel&&<div style={{width:22,height:22,borderRadius:'50%',background:B,display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:12,fontWeight:700}}>✓</div>}</div>);})}</div>)}<button onClick={startShift} disabled={saving} className="bp" style={{marginBottom:10,opacity:saving?0.7:1}}>{saving?'Abrindo...':'Abrir Plantão'}</button><button onClick={function(){onDone({plantao:null,isGuest:true,shiftId:null});}} className="bs">Entrar como Convidado</button></div></div>);}
 
 function InviteScreen(props){return(<div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(15,23,42,.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:500,padding:16,backdropFilter:'blur(4px)'}}><div style={{background:'#fff',borderRadius:24,padding:'32px 24px',maxWidth:380,width:'100%',textAlign:'center',boxShadow:'0 24px 64px rgba(0,0,0,.25)'}}><div style={{width:56,height:56,borderRadius:16,background:'#EFF6FF',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px',fontSize:24}}>🏥</div><div style={{fontSize:18,fontWeight:800,color:B,marginBottom:8}}>Convite de Plantão</div><div style={{fontSize:14,color:'#64748B',marginBottom:24,lineHeight:1.7}}><strong style={{color:B}}>{props.invite.deNome}</strong><br/>te adicionou ao plantao de hoje.</div><div style={{display:'flex',gap:10}}><button onClick={function(){props.onDeny(props.invite);}} className="bs" style={{flex:1}}>Recusar</button><button onClick={function(){props.onConfirm(props.invite);}} className="bg" style={{flex:2}}>Aceitar Plantão</button></div></div></div>);}
 
@@ -836,12 +1002,13 @@ function ShiftCard(props){
     db.collection('plantoes').doc(plantaoDocId(user,shiftId)).update({equipe:novaEquipe}).catch(function(e){alert('Erro: '+e.message);});
   }
 
+  var temaItaq=tenantDe(user)==='itaquitinga-pe';
   if(!plantao){
     // Farmacêutico só abre dentro do horário de plantão; gestor/técnico podem abrir a qualquer hora
     // (eles já operam sem precisar de plantão, mas também podem formalizar/abrir um se quiserem).
     if(!user||!(user.role==='farmaceutico'||user.role==='gestor'||user.role==='tecnico'))return null;
     if(user.role==='farmaceutico'&&!isShiftTime())return null;
-    return(<div style={{background:'#EFF6FF',border:'1.5px dashed #BFDBFE',borderRadius:16,padding:'16px 18px',marginBottom:14,textAlign:'center'}}>
+    return(<div className={temaItaq?'shift-empty':''} style={temaItaq?{marginBottom:14,padding:'16px 18px',textAlign:'center'}:{background:'#EFF6FF',border:'1.5px dashed #BFDBFE',borderRadius:16,padding:'16px 18px',marginBottom:14,textAlign:'center'}}>
       <div style={{fontSize:13,color:'#64748B',marginBottom:10}}>Nenhum plantão ativo hoje</div>
       <button onClick={onIniciar} style={{background:B,border:'none',borderRadius:10,padding:'10px 24px',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer'}}>Abrir Plantão</button>
     </div>);
@@ -861,74 +1028,115 @@ function ShiftCard(props){
   return true;
 });
 
-  return(<div className="shift-card">
+  var ov1=temaItaq?'rgba(19,81,180,.08)':'rgba(255,255,255,.12)';
+  var ov2=temaItaq?'rgba(19,81,180,.05)':'rgba(255,255,255,.1)';
+  var ovLine=temaItaq?'1px solid rgba(19,81,180,.14)':'1px solid rgba(255,255,255,.15)';
+  var txtMain=temaItaq?'#1E293B':'#fff';
+  var txtSoft=temaItaq?'#64748B':'rgba(255,255,255,.65)';
+  var cardStyle=temaItaq?{background:'#fff',border:'1.5px solid var(--itq-line,#E3E9F6)',borderRadius:16,padding:'16px 18px',marginBottom:14,color:txtMain,boxShadow:'0 1px 2px rgba(15,23,42,.04),0 12px 28px -18px rgba(16,42,90,.22)'}:undefined;
+  return(<div className="shift-card" style={cardStyle}>
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
-      <div style={{fontWeight:700,fontSize:13,display:'flex',alignItems:'center',gap:6}}>
+      <div style={{fontWeight:700,fontSize:13,display:'flex',alignItems:'center',gap:6,color:txtMain}}>
         <div style={{width:8,height:8,borderRadius:'50%',background:'#4ADE80',boxShadow:'0 0 0 3px rgba(74,222,128,.3)'}}/>
         Plantão em andamento
       </div>
       <div style={{display:'flex',alignItems:'center',gap:6}}>
-        <div style={{fontSize:11,opacity:0.65}}>por {plantao.iniciadoPorNome}</div>
-        {isManager&&<button onClick={function(){setShowGestao(!showGestao);}} style={{background:'rgba(255,255,255,.2)',border:'1px solid rgba(255,255,255,.3)',borderRadius:8,padding:'4px 10px',color:'#fff',fontSize:11,fontWeight:700,cursor:'pointer'}}>⚙️ Equipe</button>}
+        <div style={{fontSize:11,color:txtSoft}}>por {plantao.iniciadoPorNome}</div>
+        {isManager&&<button onClick={function(){setShowGestao(!showGestao);}} style={{background:ov1,border:ovLine,borderRadius:8,padding:'4px 10px',color:txtMain,fontSize:11,fontWeight:700,cursor:'pointer',display:'flex',alignItems:'center',gap:4}}>{temaItaq?<Icon name="gear" size={12}/>:'⚙️'} Equipe</button>}
       </div>
     </div>
 
     {/* Equipe atual */}
     <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:10}}>
       {equipe.map(function(m,i){
+        var stIcon=m.status==='confirmado'?'check':m.status==='negou'?'x':m.status==='saiu'?'arrowRight':null;
         var st=m.status==='confirmado'?'✓':m.status==='negou'?'✗':m.status==='saiu'?'→':'…';
-        var stColor=m.status==='confirmado'?'rgba(74,222,128,.9)':m.status==='negou'?'rgba(248,113,113,.9)':'rgba(255,255,255,.5)';
-        return(<div key={i} style={{display:'flex',alignItems:'center',gap:5,background:'rgba(255,255,255,.12)',borderRadius:20,padding:'4px 10px',border:'1px solid rgba(255,255,255,.15)'}}>
-          <div className="av" style={{width:16,height:16,background:m.color||'rgba(255,255,255,.3)',fontSize:8}}>{m.nome?m.nome.charAt(0):''}</div>
-          <span style={{fontSize:11}}>{m.nome?m.nome.split(' ')[0]:''}</span>
-          <span style={{fontSize:10,color:stColor,fontWeight:700}}>{st}</span>
-          {isManager&&m.id!==user.uid&&<button onClick={function(){if(!confirm('Remover '+m.nome+' do plantão?'))return;removerMembro(m.id);}} style={{background:'none',border:'none',color:'rgba(255,100,100,.8)',cursor:'pointer',fontSize:12,padding:'0 2px',lineHeight:1}} title="Remover">×</button>}
+        var stColor=m.status==='confirmado'?(temaItaq?'#059669':'rgba(74,222,128,.9)'):m.status==='negou'?(temaItaq?'#DC2626':'rgba(248,113,113,.9)'):(temaItaq?'#94A3B8':'rgba(255,255,255,.5)');
+        return(<div key={i} style={{display:'flex',alignItems:'center',gap:5,background:ov1,borderRadius:20,padding:'4px 10px',border:ovLine}}>
+          <div className="av" style={{width:16,height:16,background:m.color||(temaItaq?'#94A3B8':'rgba(255,255,255,.3)'),fontSize:8}}>{m.nome?m.nome.charAt(0):''}</div>
+          <span style={{fontSize:11,color:txtMain}}>{m.nome?m.nome.split(' ')[0]:''}</span>
+          <span style={{color:stColor,fontWeight:700,display:'flex',alignItems:'center'}}>{temaItaq&&stIcon?<Icon name={stIcon} size={11} strokeWidth={2.5}/>:<span style={{fontSize:10}}>{st}</span>}</span>
+          {isManager&&m.id!==user.uid&&<button onClick={function(){if(!confirm('Remover '+m.nome+' do plantão?'))return;removerMembro(m.id);}} style={{background:'none',border:'none',color:temaItaq?'#DC2626':'rgba(255,100,100,.8)',cursor:'pointer',fontSize:12,padding:'0 2px',lineHeight:1}} title="Remover">×</button>}
         </div>);
       })}
     </div>
 
     {/* Painel de gestão de equipe para gestor/técnico */}
-    {isManager&&showGestao&&<div style={{background:'rgba(255,255,255,.1)',borderRadius:10,padding:'10px 12px',marginBottom:8,border:'1px solid rgba(255,255,255,.2)'}}>
-      <div style={{fontSize:12,fontWeight:700,color:'#fff',marginBottom:8}}>⚙️ Gerenciar Equipe</div>
-      {disponiveis.length===0&&<div style={{fontSize:11,color:'rgba(255,255,255,.6)'}}>Todos os funcionários já estão na equipe</div>}
+    {isManager&&showGestao&&<div style={{background:ov2,borderRadius:10,padding:'10px 12px',marginBottom:8,border:ovLine}}>
+      <div style={{fontSize:12,fontWeight:700,color:txtMain,marginBottom:8,display:'flex',alignItems:'center',gap:5}}>{temaItaq?<Icon name="gear" size={13}/>:'⚙️'} Gerenciar Equipe</div>
+      {disponiveis.length===0&&<div style={{fontSize:11,color:txtSoft}}>Todos os funcionários já estão na equipe</div>}
       {disponiveis.map(function(u){
-        return(<div key={u.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'6px 0',borderBottom:'1px solid rgba(255,255,255,.1)'}}>
-          <span style={{fontSize:12,color:'#fff'}}>{u.name||u.nome||u.email} <span style={{fontSize:10,opacity:0.6}}>({u.role})</span></span>
-          <button onClick={function(){adicionarMembro(u);}} style={{background:'rgba(74,222,128,.3)',border:'1px solid rgba(74,222,128,.5)',borderRadius:6,padding:'4px 10px',color:'#fff',fontSize:11,fontWeight:700,cursor:'pointer'}}>+ Adicionar</button>
+        return(<div key={u.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'6px 0',borderBottom:temaItaq?'1px solid rgba(19,81,180,.08)':'1px solid rgba(255,255,255,.1)'}}>
+          <span style={{fontSize:12,color:txtMain}}>{u.name||u.nome||u.email} <span style={{fontSize:10,color:txtSoft}}>({u.role})</span></span>
+          <button onClick={function(){adicionarMembro(u);}} style={{background:temaItaq?'#DCFCE7':'rgba(74,222,128,.3)',border:temaItaq?'1px solid #86EFAC':'1px solid rgba(74,222,128,.5)',borderRadius:6,padding:'4px 10px',color:temaItaq?'#0C6B3E':'#fff',fontSize:11,fontWeight:700,cursor:'pointer'}}>+ Adicionar</button>
         </div>);
       })}
     </div>}
 
-    {isGuest&&<div style={{fontSize:11,background:'rgba(255,255,255,.1)',borderRadius:8,padding:'5px 10px',marginBottom:8,color:'rgba(255,255,255,.8)',border:'1px solid rgba(255,255,255,.15)'}}>Você está no modo convidado</div>}
-    {canSolicitar&&<button onClick={onSolicitar} style={{width:'100%',background:'rgba(255,255,255,.15)',border:'1px solid rgba(255,255,255,.3)',borderRadius:10,padding:'9px',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer',marginBottom:6}}>Solicitar entrada no plantão</button>}
-    {canSair&&<button onClick={onSair} style={{width:'100%',background:'rgba(255,255,255,.08)',border:'1px solid rgba(255,255,255,.2)',borderRadius:10,padding:'8px',color:'rgba(255,255,255,.8)',fontSize:12,fontWeight:600,cursor:'pointer',marginBottom:6}}>Sair do plantão</button>}
-    {canEncerrar&&<button onClick={onEncerrar} style={{width:'100%',background:'rgba(220,38,38,.7)',border:'1px solid rgba(255,255,255,.2)',borderRadius:10,padding:'9px',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer'}}>Encerrar Plantão</button>}
+    {isGuest&&<div style={{fontSize:11,background:ov2,borderRadius:8,padding:'5px 10px',marginBottom:8,color:txtSoft,border:ovLine}}>Você está no modo convidado</div>}
+    {canSolicitar&&<button onClick={onSolicitar} style={{width:'100%',background:temaItaq?B:'rgba(255,255,255,.15)',border:temaItaq?'none':'1px solid rgba(255,255,255,.3)',borderRadius:10,padding:'9px',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer',marginBottom:6}}>Solicitar entrada no plantão</button>}
+    {canSair&&<button onClick={onSair} style={{width:'100%',background:ov1,border:ovLine,borderRadius:10,padding:'8px',color:txtSoft,fontSize:12,fontWeight:600,cursor:'pointer',marginBottom:6}}>Sair do plantão</button>}
+    {canEncerrar&&<button onClick={onEncerrar} style={{width:'100%',background:temaItaq?'#DC2626':'rgba(220,38,38,.7)',border:temaItaq?'none':'1px solid rgba(255,255,255,.2)',borderRadius:10,padding:'9px',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer'}}>Encerrar Plantão</button>}
   </div>);
 }
 
 function BarChart(props){var data=props.data||[];var max=1;for(var i=0;i<data.length;i++){if(data[i].v>max)max=data[i].v;}return(<div style={{display:'flex',alignItems:'flex-end',gap:6,height:80,padding:'0 4px'}}>{data.map(function(d,i){var h=Math.round((d.v/max)*58);var isToday=i===data.length-1;return(<div key={i} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:3}}><div style={{fontSize:10,color:isToday?B:'#94A3B8',fontWeight:isToday?700:500}}>{d.v||''}</div><div style={{width:'100%',background:isToday?B:'#BFDBFE',borderRadius:'5px 5px 0 0',height:h+'px',minHeight:d.v?4:0,transition:'height .3s ease'}}/><div style={{fontSize:9,color:isToday?B:'#94A3B8',fontWeight:isToday?700:400}}>{d.l}</div></div>);})}</div>);}
-function TabDashboard(props){var entries=props.entries;var medications=props.medications;var stock=props.stock;var user=props.user;var plantao=props.plantao;var isGuest=props.isGuest;var onSolicitar=props.onSolicitar;var onEncerrar=props.onEncerrar;var onSair=props.onSair;var onSolicitarEntrada=props.onSolicitarEntrada;var shiftId=props.shiftId;var onIniciar=props.onIniciar;var _aviso=useState('');var aviso=_aviso[0];var setAviso=_aviso[1];var _avisos=useState([]);var avisos=_avisos[0];var setAvisos=_avisos[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];
+function TabDashboard(props){var entries=props.entries;var medications=props.medications;var stock=props.stock;var user=props.user;var plantao=props.plantao;var isGuest=props.isGuest;var onSolicitar=props.onSolicitar;var onEncerrar=props.onEncerrar;var onSair=props.onSair;var onSolicitarEntrada=props.onSolicitarEntrada;var shiftId=props.shiftId;var onIniciar=props.onIniciar;var allUsers=props.allUsers||[];var _aviso=useState('');var aviso=_aviso[0];var setAviso=_aviso[1];var _avisos=useState([]);var avisos=_avisos[0];var setAvisos=_avisos[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];
 useEffect(function(){var u=db.collection('avisos').where('tenant_id','==',tenantDe(user)).limit(20).onSnapshot(function(s){var list=s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;});var agora=new Date().toISOString();list=list.filter(function(a){return !a.expiraEm||a.expiraEm>agora;});list.sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});setAvisos(list);});return u;},[]);
 var _fotoMural=useState('');var fotoMural=_fotoMural[0];var setFotoMural=_fotoMural[1];
 function handleFotoMural(e){var f=e.target.files[0];if(!f||!f.type.startsWith('image/'))return;compressPhoto(f,function(b64){setFotoMural(b64);});e.target.value='';}
 function post(){if(!aviso.trim()&&!fotoMural)return;setSaving(true);var expAt=new Date();expAt.setHours(expAt.getHours()+48);db.collection('avisos').add({texto:aviso.trim(),foto:fotoMural||'',autorNome:user.name,autorColor:user.color||B,autorFoto:user.photoURL||'',criadoEm:new Date().toISOString(),expiraEm:expAt.toISOString(),tenant_id:tenantDe(user)}).then(function(){setAviso('');setFotoMural('');setSaving(false);});}
 function del(id){db.collection('avisos').doc(id).delete();}
 var today=todayStr();var te=entries.filter(function(e){return (e.criadoEm||'').startsWith(today)&&!_ehSaidaNaoReal(e);});var ts=0;te.forEach(function(e){if(e.tipo==='saida')ts+=(e.quantidade||0);});var tin=0;te.forEach(function(e){if(e.tipo==='entrada')tin+=(e.quantidade||0);});var low=medications.filter(function(m){return m.minEstoque&&(stock[m.id]||0)<=m.minEstoque&&(stock[m.id]||0)>0;});
-var vencendoIds={};computeVencimentos(medications,entries,stock).venc30.forEach(function(v){vencendoIds[v.id]=true;});var vencendo=Object.keys(vencendoIds).length;
+var vencData=computeVencimentos(medications,entries,stock);var vencendoIds={};vencData.venc30.forEach(function(v){vencendoIds[v.id]=true;});var vencendo=Object.keys(vencendoIds).length;
 var week=[];for(var wi=0;wi<7;wi++){var wd=new Date();wd.setDate(wd.getDate()-(6-wi));var wk=fmtISO(wd);var wv=0;entries.forEach(function(e){if(e.tipo==='saida'&&!_ehSaidaNaoReal(e)&&(e.criadoEm||'').startsWith(wk))wv+=(e.quantidade||0);});week.push({l:wd.toLocaleDateString('pt-BR',{weekday:'short'}).slice(0,3),v:wv});}
+var temaItaq=tenantDe(user)==='itaquitinga-pe';
+// Painéis novos da home (só Itaquitinga, pedido da usuária pra substituir o Mural do Plantão):
+// "Vencendo em breve" e "Ranking do Mês" — essa última trocou o antigo "mais retirados da semana"
+// por um ranking de competição entre a equipe (quem mais registra saída+entrada), pra incentivar
+// todo mundo a se dedicar mais vendo a própria proporção em tempo real.
+var vencendoDestaque=temaItaq?vencData.vencidos.concat(vencData.venc30).sort(function(a,b){return a.dias-b.dias;}).slice(0,5):[];
+// Ranking do Mês + Destaque do Mês (visível pra todo mundo na home): quem mais registrou
+// saída+entrada no mês atual, com a % que isso representa do total da equipe.
+var rankingMesHome=temaItaq?(function(){
+  var mesAtual=todayStr().slice(0,7);
+  var porAutor={};var totalGeral=0;
+  entries.forEach(function(e){if((e.criadoEm||'').slice(0,7)!==mesAtual)return;if(e.tipo==='saida'&&_ehSaidaNaoReal(e))return;var k=e.autorNome||'?';if(!porAutor[k])porAutor[k]=0;porAutor[k]++;totalGeral++;});
+  return Object.keys(porAutor).map(function(k){return {nome:k,total:porAutor[k],pct:totalGeral>0?Math.round((porAutor[k]/totalGeral)*100):0};}).sort(function(a,b){return b.total-a.total;});
+})():[];
+var destaqueMes=(function(){
+  if(!temaItaq||rankingMesHome.length<2)return null;
+  var top=rankingMesHome[0];
+  var u=allUsers.find(function(x){return x.name===top.nome;});
+  return {nome:top.nome,total:top.total,pct:top.pct,foto:u?u.photoURL:'',cor:u?u.color:B};
+})();
 var stats=[
-  {icon:'💊',label:'Saídas hoje',val:ts,sub:te.filter(function(e){return e.tipo==='saida';}).length+' registros',color:'#DC2626',bg:'#FEE2E2'},
-  {icon:'📥',label:'Entradas hoje',val:tin,sub:te.filter(function(e){return e.tipo==='entrada';}).length+' registros',color:'#0C6B3E',bg:'#DCFCE7'},
-  {icon:'⏳',label:'Vencimento',val:vencendo,sub:'produtos',color:vencendo>0?'#DC2626':'#0C6B3E',bg:vencendo>0?'#FEE2E2':'#DCFCE7'},
-  {icon:'📉',label:'Estoque baixo',val:low.length,sub:'produtos',color:low.length>0?'#B45309':'#0C6B3E',bg:low.length>0?'#FEF3C7':'#DCFCE7'},
+  {icon:'💊',iconName:'pill',label:'Saídas hoje',val:ts,sub:te.filter(function(e){return e.tipo==='saida';}).length+' registros',color:'#DC2626',bg:'#FEE2E2'},
+  {icon:'📥',iconName:'inbox',label:'Entradas hoje',val:tin,sub:te.filter(function(e){return e.tipo==='entrada';}).length+' registros',color:'#0C6B3E',bg:'#DCFCE7'},
+  {icon:'⏳',iconName:'hourglass',label:'Vencimento',val:vencendo,sub:'produtos',color:vencendo>0?'#DC2626':'#0C6B3E',bg:vencendo>0?'#FEE2E2':'#DCFCE7'},
+  {icon:'📉',iconName:'trendDown',label:'Estoque baixo',val:low.length,sub:'produtos',color:low.length>0?'#B45309':'#0C6B3E',bg:low.length>0?'#FEF3C7':'#DCFCE7'},
 ];
 return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
   <ShiftCard plantao={plantao} isGuest={isGuest} user={user} onEncerrar={onEncerrar} shiftId={shiftId} onIniciar={onIniciar} onSolicitarEntrada={onSolicitarEntrada} onSair={onSair} db={db}/>
+  {destaqueMes&&<div style={{background:'linear-gradient(135deg,var(--blue-900),var(--blue-700))',borderRadius:18,padding:'16px 18px',marginBottom:14,display:'flex',alignItems:'center',gap:14,boxShadow:'0 8px 24px -8px rgba(16,42,90,.4)',position:'relative',overflow:'hidden'}}>
+    <div style={{position:'absolute',top:-40,right:-40,width:140,height:140,borderRadius:'50%',background:'rgba(255,255,255,.07)',pointerEvents:'none'}}/>
+    <div style={{position:'relative',flexShrink:0}}>
+      <div style={{width:58,height:58,borderRadius:'50%',padding:3,background:'linear-gradient(135deg,#FCD34D,#F59E0B)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+        {destaqueMes.foto?<img src={destaqueMes.foto} style={{width:'100%',height:'100%',borderRadius:'50%',objectFit:'cover',border:'2px solid #fff'}}/>:<div style={{width:'100%',height:'100%',borderRadius:'50%',background:destaqueMes.cor||B,border:'2px solid #fff',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontWeight:800,fontSize:20}}>{destaqueMes.nome.charAt(0)}</div>}
+      </div>
+      <div style={{position:'absolute',bottom:-3,right:-3,width:22,height:22,borderRadius:'50%',background:'linear-gradient(135deg,#FCD34D,#F59E0B)',border:'2px solid #0A2D6E',display:'flex',alignItems:'center',justifyContent:'center',color:'#78350F'}}><Icon name="trophy" size={11} strokeWidth={2.4}/></div>
+    </div>
+    <div style={{flex:1,minWidth:0}}>
+      <div style={{fontSize:10,fontWeight:800,color:'#FCD34D',textTransform:'uppercase',letterSpacing:'.06em'}}>Destaque do mês</div>
+      <div style={{fontSize:15,fontWeight:800,color:'#fff',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{destaqueMes.nome}</div>
+      <div style={{fontSize:11,color:'rgba(255,255,255,.75)',marginTop:1}}>{destaqueMes.total} registros · {destaqueMes.pct}% da equipe</div>
+    </div>
+  </div>}
   {isGuest&&(user.role==='farmaceutico'||user.role==='auxiliar'||user.role==='diarista')&&onSolicitar&&(<button onClick={onSolicitar} style={{width:'100%',marginBottom:14,padding:'13px',background:B,border:'none',borderRadius:14,color:'#fff',fontSize:14,fontWeight:700,cursor:'pointer',boxShadow:'0 4px 14px rgba(19,81,180,.3)'}}>📋 Solicitar Movimentacao</button>)}
   <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:10,marginBottom:14}}>
     {stats.map(function(s){return(
       <div key={s.label} className="stat-card" style={{color:s.color}}>
-        <div className="stat-icon" style={{background:s.bg}}>{s.icon}</div>
+        <div className="stat-icon" style={{background:s.bg}}>{temaItaq?<Icon name={s.iconName} size={18}/>:s.icon}</div>
         <div className="stat-val">{s.val}</div>
         <div className="stat-label">{s.label}</div>
         <div className="stat-sub">{s.sub}</div>
@@ -939,6 +1147,45 @@ return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
     <div className="ch"><div className="ch-title"><div className="ch-accent"/><span>Saídas — Ultimos 7 dias</span></div></div>
     <div style={{padding:'16px 16px 12px'}}><BarChart data={week}/></div>
   </div>
+  {temaItaq?(<React.Fragment>
+    <div className="card" style={{marginBottom:14}}>
+      <div className="ch"><div className="ch-title"><div className="ch-accent"/><span style={{display:'flex',alignItems:'center',gap:6}}><Icon name="hourglass" size={13}/> Vencendo em breve</span></div></div>
+      {vencendoDestaque.length===0
+        ?<div style={{padding:'24px',textAlign:'center',color:'#94A3B8',fontSize:13}}>Nenhum produto vencendo nos próximos 30 dias.</div>
+        :vencendoDestaque.map(function(v,i){var vencido=v.dias<0;return(
+          <div key={v.id+'_'+v.validade+'_'+i} style={{padding:'11px 16px',borderTop:i>0?'1px solid #F8FAFC':'none',display:'flex',alignItems:'center',gap:10}}>
+            <div className="row-icon" style={{background:vencido?'#FEE2E2':'var(--itq-tint)',color:vencido?'#B91C1C':'#B45309'}}><Icon name="hourglass" size={15}/></div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontWeight:600,fontSize:13,color:'var(--itq-ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{v.nome}</div>
+              <div style={{fontSize:11,color:'#94A3B8'}}>{v.est} un. · lote {v.lote||'—'}</div>
+            </div>
+            <span className={'badge '+(vencido?'badge-red':v.dias<=15?'badge-red':'badge-amber')} style={{whiteSpace:'nowrap'}}>{vencido?'Venceu há '+Math.abs(v.dias)+'d':'Vence em '+v.dias+'d'}</span>
+          </div>
+        );})}
+    </div>
+    <div className="card">
+      <div className="ch"><div className="ch-title"><div className="ch-accent"/><span style={{display:'flex',alignItems:'center',gap:6}}><Icon name="trophy" size={13}/> Ranking do Mês</span></div><span style={{fontSize:11,color:'#94A3B8'}}>quem será o melhor?</span></div>
+      {rankingMesHome.length===0
+        ?<div style={{padding:'24px',textAlign:'center',color:'#94A3B8',fontSize:13}}>Nenhuma movimentação registrada esse mês.</div>
+        :<div style={{padding:'12px 16px'}}>
+          {rankingMesHome.map(function(m,i){var medalha=i===0?['#FCD34D','#F59E0B']:i===1?['#E2E8F0','#94A3B8']:i===2?['#D6A571','#B45309']:null;var souEu=m.nome===user.name;return(
+            <div key={i} style={{display:'flex',alignItems:'center',gap:8,marginBottom:i<rankingMesHome.length-1?10:0,background:souEu?'var(--itq-tint)':'transparent',borderRadius:10,padding:souEu?'6px 8px':'0',marginLeft:souEu?-8:0,marginRight:souEu?-8:0}}>
+              {medalha
+                ?<div style={{width:20,height:20,borderRadius:'50%',background:'linear-gradient(135deg,'+medalha[0]+','+medalha[1]+')',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:800,color:'#fff'}}>{i+1}</div>
+                :<span style={{fontSize:11,fontWeight:700,color:'#94A3B8',width:20,textAlign:'center',flexShrink:0}}>{i+1}</span>}
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:12,fontWeight:souEu?800:600,color:'var(--itq-ink)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',marginBottom:3}}>{m.nome}{souEu?' (você)':''}</div>
+                <div style={{height:6,background:'var(--itq-tint)',borderRadius:3,overflow:'hidden'}}><div style={{width:m.pct+'%',height:'100%',background:medalha?'linear-gradient(90deg,'+medalha[0]+','+medalha[1]+')':B,borderRadius:3}}/></div>
+              </div>
+              <div style={{textAlign:'right',flexShrink:0,minWidth:36}}>
+                <div style={{fontSize:13,fontWeight:800,color:B}}>{m.total}</div>
+                <div style={{fontSize:9,color:'#94A3B8'}}>{m.pct}%</div>
+              </div>
+            </div>
+          );})}
+        </div>}
+    </div>
+  </React.Fragment>):(
   <div className="card">
     <div className="ch"><div className="ch-title"><div className="ch-accent"/><span>Mural do Plantão</span></div></div>
     <div style={{padding:'14px 16px',borderBottom:'1px solid #F1F5F9'}}>
@@ -976,6 +1223,7 @@ return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
         );})}
     </div>
   </div>
+  )}
 </div>);}
 
 function TabVisaoGeral(props){
@@ -997,11 +1245,12 @@ var saidasHoje=useMemo(function(){var hoje=todayStr();var porCat={};var totalGer
 
 var rankFunc=useMemo(function(){var d30=new Date();d30.setDate(d30.getDate()-30);var map={};entries.forEach(function(e){if(e.origemConferencia||e.isAjuste)return;if(_ehSaidaNaoReal(e))return;var dt=new Date(e.criadoEm||0);if(dt<d30)return;var nome=e.autorNome||'Desconhecido';if(!map[nome])map[nome]={nome:nome,total:0};map[nome].total+=(e.quantidade||0);});var arr=[];for(var k in map)arr.push(map[k]);arr.sort(function(a,b){return b.total-a.total;});return arr;},[entries]);
 
+var temaItaq=tenantDe(user)==='itaquitinga-pe';
 var kpi=[
-  {icon:'💊',label:'Medicamentos',val:totalMeds,sub:'cadastrados',color:'#1351B4',bg:'#DBEAFE'},
-  {icon:'📦',label:'Estoque Total',val:totalUnits,sub:'unidades',color:'#0C6B3E',bg:'#DCFCE7'},
-  {icon:'🔔',label:'Alertas Ativos',val:alertCount,sub:'vencimento + baixo',color:alertCount>0?'#DC2626':'#0C6B3E',bg:alertCount>0?'#FEE2E2':'#DCFCE7'},
-  {icon:'☠️',label:'Vencidos',val:medsVencidos,sub:'lotes vencidos',color:medsVencidos>0?'#DC2626':'#0C6B3E',bg:medsVencidos>0?'#FEE2E2':'#DCFCE7'},
+  {icon:'💊',iconName:'pill',label:'Medicamentos',val:totalMeds,sub:'cadastrados',color:'#1351B4',bg:'#DBEAFE'},
+  {icon:'📦',iconName:'package',label:'Estoque Total',val:totalUnits,sub:'unidades',color:'#0C6B3E',bg:'#DCFCE7'},
+  {icon:'🔔',iconName:'bell',label:'Alertas Ativos',val:alertCount,sub:'vencimento + baixo',color:alertCount>0?'#DC2626':'#0C6B3E',bg:alertCount>0?'#FEE2E2':'#DCFCE7'},
+  {icon:'☠️',iconName:'x',label:'Vencidos',val:medsVencidos,sub:'lotes vencidos',color:medsVencidos>0?'#DC2626':'#0C6B3E',bg:medsVencidos>0?'#FEE2E2':'#DCFCE7'},
 ];
 
 var donutTotal=0;catData.forEach(function(c){donutTotal+=c.val;});
@@ -1019,7 +1268,7 @@ return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
   <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:10,marginBottom:16}}>
     {kpi.map(function(s){return(
       <div key={s.label} className="stat-card" style={{color:s.color}}>
-        <div className="stat-icon" style={{background:s.bg}}>{s.icon}</div>
+        <div className="stat-icon" style={{background:s.bg}}>{temaItaq?<Icon name={s.iconName} size={18}/>:s.icon}</div>
         <div className="stat-val">{s.val}</div>
         <div className="stat-label">{s.label}</div>
         <div className="stat-sub">{s.sub}</div>
@@ -1042,7 +1291,7 @@ return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
               {catData.map(function(c){return(
                 <div key={c.key} style={{display:'flex',alignItems:'center',gap:6,fontSize:10,color:'#475569',marginBottom:3}}>
                   <div style={{width:8,height:8,borderRadius:2,background:c.cor,flexShrink:0}}/>
-                  <span style={{flex:1,textAlign:'left'}}>{c.icon} {c.label}</span>
+                  <span style={{flex:1,textAlign:'left',display:'flex',alignItems:'center',gap:4}}>{temaItaq?<Icon name={TIPOS_ICON[c.key]||'pill'} size={11}/>:c.icon} {c.label}</span>
                   <span style={{fontWeight:700}}>{c.val}</span>
                 </div>
               );})}
@@ -1084,7 +1333,7 @@ return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
           {saidasHoje.cats.map(function(c){var pct=saidasHoje.total>0?Math.round((c.val/saidasHoje.total)*100):0;return(
             <div key={c.key} style={{background:'#F8FAFC',borderRadius:10,padding:'10px 12px',border:'1px solid #E2E8F0'}}>
               <div style={{display:'flex',alignItems:'center',gap:5,marginBottom:6}}>
-                <span style={{fontSize:14}}>{c.icon}</span>
+                <span style={{fontSize:14,display:'flex',color:temaItaq?c.cor:undefined}}>{temaItaq?<Icon name={TIPOS_ICON[c.key]||'pill'} size={13}/>:c.icon}</span>
                 <span style={{fontSize:11,fontWeight:700,color:c.cor}}>{c.label}</span>
               </div>
               <div style={{fontSize:18,fontWeight:900,color:'#1E293B'}}>{c.val}</div>
@@ -1749,6 +1998,7 @@ var _showControlado=useState(false);var showControlado=_showControlado[0];var se
 var _controladoData=useState(null);var controladoData=_controladoData[0];var setControladoData=_controladoData[1];
 var _demoControlado=useState(false);var demoControlado=_demoControlado[0];var setDemoControlado=_demoControlado[1];
 var inStock=medications.filter(function(m){return (stock[m.id]||0)>0;});var filtered=[];if(search.trim()){var s=search.toLowerCase();filtered=inStock.filter(function(m){return m.nome.toLowerCase().indexOf(s)>=0;}).slice(0,8);}var cur=sel?(stock[sel.id]||0):0;
+var temaItaq=tenantDe(user)==='itaquitinga-pe';
 function adicionarCarrinho(){
     if(!sel){setErr('Selecione um medicamento.');return;}
     if(_ehMedControlado(sel.nome)){setErr('🔒 '+sel.nome+' é controlado (Morfina/Tramal) — retire individualmente em "Registrar Saída", não pelo carrinho.');return;}
@@ -1836,7 +2086,7 @@ var last10=entries.filter(function(e){return e.tipo==='saida'&&!_ehSaidaNaoReal(
 return(
 <div style={{maxWidth:600,margin:'0 auto',padding:'16px 14px'}}>
   <div className="card" style={{marginBottom:14}}>
-    <div className="ch"><div className="ch-title"><div style={{width:3,height:16,background:'#DC2626',borderRadius:2,flexShrink:0}}/><span>Registrar Saída</span></div></div>
+    <div className="ch"><div className="ch-title"><div style={{width:3,height:16,background:temaItaq?'var(--blue-700)':'#DC2626',borderRadius:2,flexShrink:0}}/><span>Registrar Saída</span></div></div>
     <div style={{padding:'16px',position:'relative'}}>
       <Lbl c="Medicamento"/>
       <div style={{position:'relative'}}>
@@ -1908,16 +2158,16 @@ return(
       {ok&&<div className="ok">{ok}</div>}
       {isGuest&&!canMove&&<div className="wn">Modo convidado — sera enviado para aprovação.</div>}
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginTop:4}}>
-        <button onClick={save} disabled={saving} className="br" style={{opacity:saving?0.5:1,margin:0}}>{isGuest&&!canMove?'Solicitar':'Registrar Saída'}</button>
-        <button onClick={adicionarCarrinho} disabled={saving} style={{padding:'14px',background:'#F59E0B',border:'none',borderRadius:12,color:'#fff',fontWeight:800,fontSize:14,cursor:'pointer',opacity:saving?0.5:1}}>+ Carrinho 🛒</button>
+        <button onClick={save} disabled={saving} className={temaItaq?'bp':'br'} style={{opacity:saving?0.5:1,margin:0}}>{isGuest&&!canMove?'Solicitar':'Registrar Saída'}</button>
+        <button onClick={adicionarCarrinho} disabled={saving} style={temaItaq?{padding:'14px',background:'var(--itq-tint)',border:'1.5px solid var(--blue-700)',borderRadius:12,color:'var(--blue-700)',fontWeight:800,fontSize:14,cursor:'pointer',opacity:saving?0.5:1}:{padding:'14px',background:'#F59E0B',border:'none',borderRadius:12,color:'#fff',fontWeight:800,fontSize:14,cursor:'pointer',opacity:saving?0.5:1}}>+ Carrinho{temaItaq?'':' 🛒'}</button>
       </div>
-      {carrinho.length>0&&<div style={{marginTop:12,background:'#FFFBEB',border:'2px solid #F59E0B',borderRadius:12,padding:14}}>
+      {carrinho.length>0&&<div style={temaItaq?{marginTop:12,background:'var(--itq-tint)',border:'1.5px solid var(--itq-tint-line)',borderRadius:12,padding:14}:{marginTop:12,background:'#FFFBEB',border:'2px solid #F59E0B',borderRadius:12,padding:14}}>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
-          <div style={{fontWeight:800,fontSize:14,color:'#92400E'}}>🛒 Carrinho ({carrinho.length} item{carrinho.length>1?'s':''})</div>
-          <button onClick={function(){setShowCarrinho(!showCarrinho);}} style={{background:'none',border:'none',color:'#92400E',cursor:'pointer',fontSize:12,fontWeight:700}}>{showCarrinho?'Fechar':'Ver itens'}</button>
+          <div style={{fontWeight:800,fontSize:14,color:temaItaq?'var(--blue-700)':'#92400E'}}>{temaItaq?'':'🛒 '}Carrinho ({carrinho.length} item{carrinho.length>1?'s':''})</div>
+          <button onClick={function(){setShowCarrinho(!showCarrinho);}} style={{background:'none',border:'none',color:temaItaq?'var(--blue-700)':'#92400E',cursor:'pointer',fontSize:12,fontWeight:700}}>{showCarrinho?'Fechar':'Ver itens'}</button>
         </div>
         {showCarrinho&&carrinho.map(function(item,i){return(
-          <div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',background:'#fff',borderRadius:8,padding:'8px 12px',marginBottom:6,border:'1px solid #FCD34D'}}>
+          <div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',background:'#fff',borderRadius:8,padding:'8px 12px',marginBottom:6,border:temaItaq?'1px solid var(--itq-tint-line)':'1px solid #FCD34D'}}>
             <div>
               <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>{item.medNome}</div>
               <div style={{fontSize:11,color:'#64748B'}}>{item.qty} un.{item.lote?' · Lote: '+item.lote:''}</div>
@@ -1926,7 +2176,7 @@ return(
           </div>
         );})}
         {saving
-          ?<div style={{textAlign:'center',color:'#92400E',fontWeight:700,padding:8}}>Registrando...</div>
+          ?<div style={{textAlign:'center',color:temaItaq?'var(--blue-700)':'#92400E',fontWeight:700,padding:8}}>Registrando...</div>
           :<button onClick={confirmarCarrinho} style={{width:'100%',padding:'13px',background:'#059669',border:'none',borderRadius:10,color:'#fff',fontWeight:800,fontSize:15,cursor:'pointer',marginTop:4}}>✅ Confirmar saida de tudo ({carrinho.length})</button>
         }
       </div>}
@@ -1934,10 +2184,10 @@ return(
   </div>
   {last10.length>0&&(
     <div className="card">
-      <div className="ch"><div className="ch-title"><div style={{width:3,height:16,background:'#DC2626',borderRadius:2}}/><span>Últimas saidas</span></div></div>
+      <div className="ch"><div className="ch-title"><div style={{width:3,height:16,background:temaItaq?'var(--blue-700)':'#DC2626',borderRadius:2}}/><span>Últimas saidas</span></div></div>
       {last10.map(function(e,i){return(
         <div key={e.id} style={{padding:'12px 16px',borderBottom:i<last10.length-1?'1px solid #F8FAFC':'none',display:'flex',gap:10,alignItems:'center'}}>
-          <div style={{width:36,height:36,borderRadius:10,background:'#FEE2E2',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0}}>💊</div>
+          <div className={temaItaq?'row-icon':''} style={temaItaq?{}:{width:36,height:36,borderRadius:10,background:'#FEE2E2',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0}}>{temaItaq?<Icon name="pill" size={16}/>:'💊'}</div>
           <div style={{flex:1}}><div style={{fontWeight:600,fontSize:13,color:'#1E293B'}}>{e.medicamentoNome}</div><div style={{fontSize:11,color:'#94A3B8',marginTop:2}}>{fmtD(e.criadoEm)} · {e.autorNome}</div></div>
           <div style={{fontWeight:800,fontSize:16,color:'#DC2626'}}>−{e.quantidade}</div>
         </div>
@@ -2340,7 +2590,10 @@ function salvarAjuste(){if(!ajusteMed)return;var nq=parseInt(ajusteQty);if(isNaN
   var brutoAtual=estoqueBruto[ajusteMed.id];var atual=loteSel?loteSel.qty:(brutoAtual!=null?brutoAtual:(stock[ajusteMed.id]||0));var diff=nq-atual;if(diff===0){setAjusteId(null);setAjusteMed(null);setAjusteQty('');setAjusteMotivo('');setLoteSel(null);return;}setSaving(true);db.collection('entries').add({medicamentoId:ajusteMed.id,medicamentoNome:ajusteMed.nome,ean:ajusteMed.ean||'',tipo:diff>0?'entrada':'saida',quantidade:Math.abs(diff),lote:loteSel?loteSel.lote:'',validade:loteSel?loteSel.validade:'',observacao:'Balanço: '+ajusteMotivo.trim()+' (era '+atual+', passou a '+nq+')',criadoEm:new Date().toISOString(),date:todayStr(),autorId:user.uid,autorNome:user.name,autorCargo:user.role,autorColor:user.color||B,isAjuste:true,tenant_id:tenantDe(user)}).then(function(){setAjusteId(null);setAjusteMed(null);setAjusteQty('');setAjusteMotivo('');setLoteSel(null);setSaving(false);}).catch(function(e){alert(e.message);setSaving(false);});}
 function handleImportXls(file){if(!file)return;setImporting(true);setImportStatus('Lendo arquivo...');var reader=new FileReader();reader.onload=function(ev){try{var data=new Uint8Array(ev.target.result);var wb=XLSX.read(data,{type:'array'});var catMap={'CONTROLADOS':'controlado','CONTROLADO':'controlado','FARMACIA BASICA':'medicamento','FARMACIA':'medicamento','LEITES':'leite','LEITE':'leite','INJETAVEIS':'injetavel','INJETAVEL':'injetavel','PENSOS':'penso','MATERIAIS':'penso'};var batch=[];for(var si=0;si<wb.SheetNames.length;si++){var sn=wb.SheetNames[si];if(sn.toUpperCase().indexOf('INSTRUC')>=0)continue;var ws2=wb.Sheets[sn];var rows=XLSX.utils.sheet_to_json(ws2,{defval:''});if(!rows||rows.length===0)continue;var su=sn.toUpperCase().trim();var sc='medicamento';for(var key in catMap){if(su.indexOf(key)>=0){sc=catMap[key];break;}}for(var i=0;i<rows.length;i++){var row=rows[i];var nome=row['Nome']||row['NOME']||row['nome']||'';if(!nome||!nome.trim())continue;var cat=row['Categoria']||row['CATEGORIA']||sc;var est2=parseInt(row['Estoque Inicial']||row['estoque']||0)||0;var min2=parseInt(row['Estoque Minimo']||row['minimo']||0)||0;var ean=(row['EAN (opcional)']||row['EAN']||'')+'';var val2=(row['Validade (MM/AAAA)']||row['Validade']||'')+'';var cl=cat.toLowerCase().trim();if(cl.indexOf('injet')>=0)cl='injetavel';else if(cl.indexOf('penso')>=0||cl.indexOf('material')>=0)cl='penso';else if(cl.indexOf('control')>=0)cl='controlado';else if(cl.indexOf('leite')>=0)cl='leite';else cl='medicamento';batch.push({nome:nome.trim(),categoria:cl,minEstoque:min2,ean:ean,validade:_normValidade(val2),estoque:est2,criadoEm:new Date().toISOString()});}}if(batch.length===0){setImportStatus('Nenhum item encontrado.');setImporting(false);return;}setImportStatus('Importando '+batch.length+' itens...');var idx=0,done=0;function next2(){if(idx>=batch.length){setImportStatus('Registrando estoques...');var ei=0;function ne(){if(ei>=batch.length){setImportStatus('Concluido! '+done+' itens!');setImporting(false);return;}var item=batch[ei++];if(item.estoque>0){db.collection('medicamentos').where('tenant_id','==',tenantDe(user)).where('nome','==',item.nome).limit(1).get().then(function(s){if(!s.empty){db.collection('entries').add({medicamentoId:s.docs[0].id,medicamentoNome:item.nome,ean:item.ean||'',tipo:'entrada',quantidade:item.estoque,lote:'',validade:item.validade||'',observacao:'Estoque inicial',criadoEm:new Date().toISOString(),date:todayStr(),autorId:user.uid,autorNome:user.name,autorCargo:user.role,autorColor:user.color||B,tenant_id:tenantDe(user)}).then(ne).catch(ne);}else ne();}).catch(ne);}else ne();}ne();return;}var item=batch[idx++];db.collection('medicamentos').add({nome:item.nome,categoria:item.categoria,minEstoque:item.minEstoque,ean:item.ean,criadoEm:item.criadoEm,tenant_id:tenantDe(user)}).then(function(){done++;next2();}).catch(function(){done++;next2();});}next2();}catch(ex){setImportStatus('Erro: '+ex.message);setImporting(false);}};reader.readAsArrayBuffer(file);}
 var _cutDesc=(function(){var d=new Date();d.setDate(d.getDate()-30);return d.toISOString().slice(0,10);})();var descartes30=(entries||[]).filter(function(e){return e.tipo==='saida'&&e.descarte&&(e.date||'')>=_cutDesc;});var subTabs=[{id:'estoque',label:'Estoque'},{id:'faltas',label:'Faltas'+(faltas.length>0?' ('+faltas.length+')':'')},{id:'vencimento',label:'Vencimentos'+(totalAlertas>0?' ('+totalAlertas+')':'')},{id:'descartes',label:'🗑️ Descartes'+(descartes30.length>0?' ('+descartes30.length+')':'')}];
-var TipoBtn=function(props){var t=TIPOS[props.k];var sel=props.sel===props.k;return <button onClick={function(){props.onClick(props.k);}} style={{padding:'7px 12px',borderRadius:20,border:'1.5px solid '+(sel?t.cor:'#E2E8F0'),background:sel?t.cor:'#fff',color:sel?'#fff':'#64748B',cursor:'pointer',fontWeight:sel?700:500,fontSize:12,transition:'all .15s'}}>{t.icon} {t.label}</button>;};
+// Usado em várias abas (Estoque, Conferência, Leites...) pra selecionar o tipo/categoria do
+// medicamento. Checa a classe do body (em vez de receber uma prop) porque é chamado em muitos
+// lugares diferentes e nem todos têm `user` à mão — mais simples tematizar aqui uma vez só.
+var TipoBtn=function(props){var t=TIPOS[props.k];var sel=props.sel===props.k;var temaItaq=document.body.classList.contains('theme-itaq');var cor=temaItaq?B:t.cor;return <button onClick={function(){props.onClick(props.k);}} style={{padding:'7px 12px',borderRadius:20,border:'1.5px solid '+(sel?cor:(temaItaq?'var(--itq-line,#E3E9F6)':'#E2E8F0')),background:sel?cor:'#fff',color:sel?'#fff':(temaItaq?'var(--itq-soft)':'#64748B'),cursor:'pointer',fontWeight:sel?700:500,fontSize:12,transition:'all .15s',display:'inline-flex',alignItems:'center',gap:5}}>{temaItaq?<Icon name={TIPOS_ICON[props.k]||'pill'} size={12}/>:t.icon} {t.label}</button>;};
 function darBaixaVencido(){
     if(!showBaixa)return;
     if(descarteMed&&descarteMed.lotes&&descarteMed.lotes.length>1&&!descarteLoteSel){alert2('Selecione qual lote está sendo descartado.');return;}
@@ -2442,18 +2695,48 @@ function darBaixaVencido(){
     </div>
   </Modal>;})()}
 <div className="tab-sw">{subTabs.map(function(t){return <button key={t.id} onClick={function(){setSub(t.id);}} className={sub===t.id?'on':''}>{t.label}</button>;})}</div>
-{sub==='estoque'&&(<div><div style={{display:'flex',gap:10,marginBottom:10,flexWrap:'wrap'}}><input value={search} onChange={function(e){setSearch(e.target.value);}} placeholder="Buscar medicamento..." className="inp" style={{marginBottom:0,flex:1}}/>{can(user.role,'editar')&&<button onClick={function(){setShowAdd(true);}} className="bp" style={{whiteSpace:'nowrap',padding:'0 18px',width:'auto'}}>+ Novo</button>}{can(user.role,'editar')&&<button onClick={function(){document.getElementById('importXlsInput').click();}} style={{whiteSpace:'nowrap',padding:'0 14px',background:'#7C3AED',border:'none',borderRadius:10,color:'#fff',fontSize:13,fontWeight:600,cursor:'pointer',boxShadow:'0 2px 8px rgba(124,58,237,.3)'}}>Importar Excel</button>}<input id="importXlsInput" type="file" accept=".xlsx,.xls" style={{display:'none'}} onChange={function(e){handleImportXls(e.target.files[0]);e.target.value='';  }}/></div>
-<div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:14,alignItems:'center'}}><button onClick={function(){setFiltCat('todos');}} className={'pill'+(filtCat==='todos'?' on':'')}>Todos</button>{Object.keys(TIPOS).map(function(k){var t=TIPOS[k];return <button key={k} onClick={function(){setFiltCat(k);}} className={'pill'+(filtCat===k?' on':'')} style={filtCat===k?{background:t.cor,borderColor:t.cor,color:'#fff'}:{}}>{t.icon} {t.label}</button>;}  )}<button onClick={imprimirEstoquePDF} style={{marginLeft:'auto',padding:'6px 12px',borderRadius:20,fontSize:11,fontWeight:600,cursor:'pointer',border:'1.5px solid #B91C1C',background:'#FEF2F2',color:'#B91C1C'}}>🖨️ PDF</button><button onClick={exportXL} style={{padding:'6px 12px',borderRadius:20,fontSize:11,fontWeight:600,cursor:'pointer',border:'1.5px solid #0C6B3E',background:'#F0FDF4',color:'#0C6B3E'}}>Excel</button></div>
+{sub==='estoque'&&(<div><div style={{display:'flex',gap:10,marginBottom:10,flexWrap:'wrap'}}><input value={search} onChange={function(e){setSearch(e.target.value);}} placeholder="Buscar medicamento..." className="inp" style={{marginBottom:0,flex:1}}/>{can(user.role,'editar')&&<button onClick={function(){setShowAdd(true);}} className="bp" style={{whiteSpace:'nowrap',padding:'0 18px',width:'auto'}}>+ Novo</button>}{can(user.role,'editar')&&<button onClick={function(){document.getElementById('importXlsInput').click();}} className={document.body.classList.contains('theme-itaq')?'bs':''} style={document.body.classList.contains('theme-itaq')?{whiteSpace:'nowrap',padding:'0 14px',width:'auto'}:{whiteSpace:'nowrap',padding:'0 14px',background:'#7C3AED',border:'none',borderRadius:10,color:'#fff',fontSize:13,fontWeight:600,cursor:'pointer',boxShadow:'0 2px 8px rgba(124,58,237,.3)'}}>Importar Excel</button>}<input id="importXlsInput" type="file" accept=".xlsx,.xls" style={{display:'none'}} onChange={function(e){handleImportXls(e.target.files[0]);e.target.value='';  }}/></div>
+<div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:14,alignItems:'center'}}><button onClick={function(){setFiltCat('todos');}} className={'pill'+(filtCat==='todos'?' on':'')}>Todos</button>{Object.keys(TIPOS).map(function(k){var t=TIPOS[k];var temaItaq=document.body.classList.contains('theme-itaq');var cor=temaItaq?B:t.cor;return <button key={k} onClick={function(){setFiltCat(k);}} className={'pill'+(filtCat===k?' on':'')} style={filtCat===k?{background:cor,borderColor:cor,color:'#fff'}:{}}>{temaItaq?<Icon name={TIPOS_ICON[k]||'pill'} size={12}/>:t.icon} {t.label}</button>;}  )}<button onClick={imprimirEstoquePDF} style={document.body.classList.contains('theme-itaq')?{marginLeft:'auto',padding:'6px 12px',borderRadius:20,fontSize:11,fontWeight:600,cursor:'pointer',border:'1.5px solid var(--itq-line,#E3E9F6)',background:'#fff',color:'var(--itq-soft)'}:{marginLeft:'auto',padding:'6px 12px',borderRadius:20,fontSize:11,fontWeight:600,cursor:'pointer',border:'1.5px solid #B91C1C',background:'#FEF2F2',color:'#B91C1C'}}>{_semEmoji('🖨️ PDF')}</button><button onClick={exportXL} style={document.body.classList.contains('theme-itaq')?{padding:'6px 12px',borderRadius:20,fontSize:11,fontWeight:600,cursor:'pointer',border:'1.5px solid var(--itq-line,#E3E9F6)',background:'#fff',color:'var(--itq-soft)'}:{padding:'6px 12px',borderRadius:20,fontSize:11,fontWeight:600,cursor:'pointer',border:'1.5px solid #0C6B3E',background:'#F0FDF4',color:'#0C6B3E'}}>Excel</button></div>
 {importing&&<div className="inf" style={{marginBottom:10}}>⏳ {importStatus}</div>}
 {!importing&&importStatus&&<div className="ok" style={{marginBottom:10}}>{importStatus}</div>}
 <div className="card"><div className="ch"><div className="ch-title"><div className="ch-accent"/><span>Estoque Atual</span></div><span style={{fontSize:12,color:'#94A3B8',fontWeight:500}}>{medList.length} produto(s)</span></div>
-{medList.length===0?<div style={{padding:48,textAlign:'center',color:'#94A3B8'}}>Nenhum medicamento cadastrado.</div>:(<div style={{overflowX:'auto'}}><table className="tbl"><thead><tr><th>Medicamento</th><th>Estoque</th><th>Status</th><th></th></tr></thead><tbody>
+{medList.length===0?<div style={{padding:48,textAlign:'center',color:'#94A3B8'}}>Nenhum medicamento cadastrado.</div>:(document.body.classList.contains('theme-itaq')?(
+<div>
+{medList.map(function(m){var low=m.minEstoque>0&&m.est<=m.minEstoque;var zero=m.est<=0;var neg=m.negativo!=null;var tp=TIPOS[m.cat]||TIPOS.medicamento;
+  var statusCor=zero?'#B91C1C':low?'#B45309':'#0C6B3E';
+  var acoes=[
+    can(user.role,'editar')&&{ic:'edit',cor:'#1351B4',bg:'#EFF6FF',title:'Editar',fn:function(){setEditId(m.id);setEditNome(m.nome);setEditMin(m.minEstoque||'');setEditTipo(m.cat||'medicamento');}},
+    can(user.role,'editar')&&{ic:'trash',cor:'#DC2626',bg:'#FEE2E2',title:'Excluir',fn:function(){delMed(m.id);}},
+    {ic:'scale',cor:'#B45309',bg:'#FEF3C7',title:'Balanço',fn:function(){setAjusteId(m.id);setAjusteMed(m);setAjusteQty(String(m.est));}},
+    {ic:'recycle',cor:'#DC2626',bg:'#FEE2E2',title:'Descarte por vencimento',fn:function(){setDescarteMed(m);setDescarteLoteSel(m.lotes&&m.lotes.length===1?m.lotes[0]:null);var loteInicial=m.lotes&&m.lotes.length===1?m.lotes[0]:null;setShowBaixa({id:m.id,medId:m.id,nome:m.nome,lote:loteInicial?loteInicial.lote:(m.info.lote||''),validade:loteInicial?loteInicial.validade:(m.info.validade||''),est:loteInicial?loteInicial.qty:m.est});setQtdBaixa('');}},
+    {ic:'calendar',cor:'#0C6B3E',bg:'#F0FDF4',title:'Lote/validade',fn:function(){var li=m.lotes&&m.lotes.length>0?m.lotes[0]:{entryId:'',lote:m.info.lote||'',validade:m.info.validade||''};setEditLote({entryId:li.entryId,medId:m.id,nome:m.nome});setEditLoteVal(li.lote||'');setEditLoteData(li.validade||'');}}
+  ].filter(Boolean);
+  return(<div key={m.id} style={{padding:'14px 16px',borderBottom:'1px solid var(--itq-line,#E3E9F6)'}}>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:10,marginBottom:8}}>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontWeight:700,color:'var(--itq-ink)',fontSize:14,cursor:can(user.role,'historico')?'pointer':'default'}} onClick={function(){if(can(user.role,'historico'))setHist(m);}}>{m.nome}</div>
+        <span style={{fontSize:10,padding:'2px 8px',borderRadius:20,background:'var(--itq-tint)',color:B,fontWeight:700,display:'inline-flex',alignItems:'center',gap:4,marginTop:5,whiteSpace:'nowrap'}}><Icon name={TIPOS_ICON[m.cat]||'pill'} size={10}/> {tp.label}</span>
+      </div>
+      <div style={{textAlign:'right',flexShrink:0}}>
+        <div style={{fontWeight:800,fontSize:20,color:'var(--itq-ink)',lineHeight:1}}>{m.est}</div>
+        <div style={{fontSize:10,color:'var(--itq-faint)',marginTop:2}}>un.</div>
+      </div>
+    </div>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+      {neg?<span className="badge badge-red" title={'Saídas registradas superam as entradas em '+Math.abs(m.negativo)+' un. — revise os lançamentos, não é falta de estoque comum.'}>Saldo negativo ({m.negativo})</span>:<span className={'badge '+(zero?'badge-red':low?'badge-amber':'badge-green')}>{zero?'Zerado':low?'Baixo':'OK'}</span>}
+      <div style={{display:'flex',gap:4}}>{acoes.map(function(a,i){return(
+        <button key={i} onClick={a.fn} title={a.title} style={{background:a.bg,border:'none',borderRadius:8,width:30,height:30,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:a.cor}}><Icon name={a.ic} size={14}/></button>
+      );})}</div>
+    </div>
+  </div>);})}
+</div>
+):(<div style={{overflowX:'auto'}}><table className="tbl"><thead><tr><th>Medicamento</th><th>Estoque</th><th>Status</th><th></th></tr></thead><tbody>
 {medList.map(function(m){var low=m.minEstoque>0&&m.est<=m.minEstoque;var zero=m.est<=0;var neg=m.negativo!=null;var tp=TIPOS[m.cat]||TIPOS.medicamento;return(<tr key={m.id}>
 <td><div style={{fontWeight:600,color:B,cursor:can(user.role,'historico')?'pointer':'default',marginBottom:4,fontSize:13}} onClick={function(){if(can(user.role,'historico'))setHist(m);}}>{m.nome}</div><span style={{fontSize:10,padding:'2px 8px',borderRadius:20,background:tp.cor+'18',color:tp.cor,fontWeight:700,border:'1px solid '+tp.cor+'40'}}>{tp.icon} {tp.label}</span></td>
 <td><span style={{fontWeight:900,fontSize:22,color:zero?'#B91C1C':low?'#B45309':'#0C6B3E'}}>{m.est}</span></td>
 <td>{neg?<span className="badge badge-red" title={'Saídas registradas superam as entradas em '+Math.abs(m.negativo)+' un. — revise os lançamentos, não é falta de estoque comum.'}>⚠️ Saldo negativo ({m.negativo})</span>:<span className={'badge '+(zero?'badge-red':low?'badge-amber':'badge-green')}>{zero?'Zerado':low?'Baixo':'OK'}</span>}</td>
 <td><div style={{display:'flex',gap:4}}>{can(user.role,'editar')&&<button onClick={function(){setEditId(m.id);setEditNome(m.nome);setEditMin(m.minEstoque||'');setEditTipo(m.cat||'medicamento');}} style={{background:'#EFF6FF',border:'none',borderRadius:8,width:32,height:32,cursor:'pointer',fontSize:14}}>✏️</button>}{can(user.role,'editar')&&<button onClick={function(){delMed(m.id);}} style={{background:'#FEE2E2',border:'none',borderRadius:8,width:32,height:32,cursor:'pointer',fontSize:14}}>🗑</button>}<button onClick={function(){setAjusteId(m.id);setAjusteMed(m);setAjusteQty(String(m.est));}} style={{background:'#FEF3C7',border:'none',borderRadius:8,width:32,height:32,cursor:'pointer',fontSize:14}}>⚖️</button><button onClick={function(){setDescarteMed(m);setDescarteLoteSel(m.lotes&&m.lotes.length===1?m.lotes[0]:null);var loteInicial=m.lotes&&m.lotes.length===1?m.lotes[0]:null;setShowBaixa({id:m.id,medId:m.id,nome:m.nome,lote:loteInicial?loteInicial.lote:(m.info.lote||''),validade:loteInicial?loteInicial.validade:(m.info.validade||''),est:loteInicial?loteInicial.qty:m.est});setQtdBaixa('');}} title="Descarte por vencimento" style={{background:'#FEE2E2',border:'none',borderRadius:8,width:32,height:32,cursor:'pointer',fontSize:14}}>♻️</button><button onClick={function(){var li=m.lotes&&m.lotes.length>0?m.lotes[0]:{entryId:'',lote:m.info.lote||'',validade:m.info.validade||''};setEditLote({entryId:li.entryId,medId:m.id,nome:m.nome});setEditLoteVal(li.lote||'');setEditLoteData(li.validade||'');}} style={{background:'#F0FDF4',border:'none',borderRadius:8,width:32,height:32,cursor:'pointer',fontSize:14}}>📅</button></div></td>
-</tr>);})}</tbody></table></div>)}</div></div>)}
+</tr>);})}</tbody></table></div>))}</div></div>)}
 {sub==='faltas'&&(<div><div style={{display:'flex',justifyContent:'flex-end',marginBottom:14}}><button onClick={exportAlertasXL} className="bg" style={{width:'auto',padding:'0 16px'}}>Excel Alertas</button></div>
 {faltas.length===0?<div className="card" style={{padding:48,textAlign:'center'}}><div style={{fontSize:40,marginBottom:12}}>✅</div><div style={{fontWeight:700,color:'#0C6B3E',fontSize:16}}>Nenhuma falta!</div></div>:(
 <div style={{display:'flex',flexDirection:'column',gap:10}}>
@@ -2736,7 +3019,7 @@ function imprimirResumoRelatorio(){
   if(!_imprimirDoc(html)){window.alert('Não foi possível abrir a impressão do relatório.');}
 }
 return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
-<div className="tab-sw">{[['mov','Movimentações'],['resumo','🗓️ Resumo'],['dia','Saídas do Dia'],['div','⚠️ Divergências'],['resp','Por Responsável'],['rank','Ranking']].map(function(t){return <button key={t[0]} onClick={function(){setSub(t[0]);}} className={sub===t[0]?'on':''}>{t[1]}</button>;})}</div>
+<div className="tab-sw">{[['mov','Movimentações'],['resumo','🗓️ Resumo'],['dia','Saídas do Dia'],['div','⚠️ Divergências'],['resp','Por Responsável'],['rank','Ranking']].map(function(t){return <button key={t[0]} onClick={function(){setSub(t[0]);}} className={sub===t[0]?'on':''}>{_semEmoji(t[1])}</button>;})}</div>
 {sub==='resumo'&&<div>
   <div className="card" style={{marginBottom:12,padding:14}}>
     <div style={{display:'flex',gap:8,marginBottom:relPeriodo==='mensal'?10:0}}>
@@ -2796,7 +3079,7 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
   <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:12}}>
     <button onClick={function(){setDiaCats([]);}} style={{padding:'5px 10px',borderRadius:20,border:'1.5px solid '+(diaCats.length===0?'#1351B4':'#E2E8F0'),background:diaCats.length===0?'#EFF6FF':'#fff',fontSize:11,fontWeight:diaCats.length===0?700:500,color:diaCats.length===0?'#1351B4':'#64748B',cursor:'pointer'}}>Todos</button>
     {[['medicamento','💊 Farm. Básica'],['controlado','🔒 Controlado'],['injetavel','💉 Injetável'],['leite','🍼 Leite'],['penso','🩹 Penso/Material']].map(function(c){var sel=diaCats.indexOf(c[0])>=0;return(
-      <button key={c[0]} onClick={function(){setDiaCats(sel?diaCats.filter(function(x){return x!==c[0];}):diaCats.concat([c[0]]));}} style={{padding:'5px 10px',borderRadius:20,border:'1.5px solid '+(sel?'#1351B4':'#E2E8F0'),background:sel?'#EFF6FF':'#fff',fontSize:11,fontWeight:sel?700:500,color:sel?'#1351B4':'#64748B',cursor:'pointer'}}>{c[1]}</button>
+      <button key={c[0]} onClick={function(){setDiaCats(sel?diaCats.filter(function(x){return x!==c[0];}):diaCats.concat([c[0]]));}} style={{padding:'5px 10px',borderRadius:20,border:'1.5px solid '+(sel?'#1351B4':'#E2E8F0'),background:sel?'#EFF6FF':'#fff',fontSize:11,fontWeight:sel?700:500,color:sel?'#1351B4':'#64748B',cursor:'pointer'}}>{_semEmoji(c[1])}</button>
     );})}
   </div>
   {(function(){
@@ -2896,10 +3179,10 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
       {porResp.map(function(r){return <option key={r.nome} value={r.nome}>{r.nome}</option>;})}
     </select>
     <div style={{marginTop:10,borderTop:'1px solid #F1F5F9',paddingTop:10}}>
-      <div style={{fontSize:12,fontWeight:700,color:'#1E293B',marginBottom:6}}>🔍 Filtrar por medicamento(s)</div>
+      <div style={{fontSize:12,fontWeight:700,color:'#1E293B',marginBottom:6}}>{_semEmoji('🔍 Filtrar por medicamento(s)')}</div>
       <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:6}}>
         {[['todos','Todas'],['medicamento','💊 Básica'],['controlado','🔵 Controlado'],['injetavel','💉 Injetável'],['leite','🍼 Leite'],['penso','🩹 Penso']].map(function(c){return(
-          <button key={c[0]} onClick={function(){setFiltBuscaCat(c[0]);}} style={{padding:'5px 10px',borderRadius:20,border:'1.5px solid '+(filtBuscaCat===c[0]?'#1351B4':'#E2E8F0'),background:filtBuscaCat===c[0]?'#EFF6FF':'#fff',fontSize:11,fontWeight:filtBuscaCat===c[0]?700:500,color:filtBuscaCat===c[0]?'#1351B4':'#64748B',cursor:'pointer'}}>{c[1]}</button>
+          <button key={c[0]} onClick={function(){setFiltBuscaCat(c[0]);}} style={{padding:'5px 10px',borderRadius:20,border:'1.5px solid '+(filtBuscaCat===c[0]?'#1351B4':'#E2E8F0'),background:filtBuscaCat===c[0]?'#EFF6FF':'#fff',fontSize:11,fontWeight:filtBuscaCat===c[0]?700:500,color:filtBuscaCat===c[0]?'#1351B4':'#64748B',cursor:'pointer'}}>{_semEmoji(c[1])}</button>
         );})}
       </div>
       <input value={filtBusca} onChange={function(e){setFiltBusca(e.target.value);}} placeholder="Digite o nome do medicamento..." className="inp" style={{margin:0}}/>
@@ -2925,8 +3208,8 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
     </div>
   </div>
   <div className="card" style={{padding:'10px 14px',marginBottom:12,display:'flex',gap:10,justifyContent:'space-between',alignItems:'center',flexWrap:'wrap'}}>
-    <div style={{fontSize:13}}>{filtMeds.length>0&&<div style={{fontWeight:700,color:'#1351B4',fontSize:12,marginBottom:2,width:'100%'}}>💊 {filtMeds.length===1?filtMeds[0]:filtMeds.length+' medicamentos selecionados'}</div>}<span style={{fontWeight:800,color:'#DC2626'}}>−{totS}</span> saídas &nbsp; <span style={{fontWeight:800,color:'#059669'}}>+{totE}</span> entradas</div>
-    <button onClick={doXL} style={{padding:'6px 12px',background:'#059669',border:'none',borderRadius:8,color:'#fff',fontSize:12,fontWeight:700,cursor:'pointer'}}>📥 Excel</button>
+    <div style={{fontSize:13}}>{filtMeds.length>0&&<div style={{fontWeight:700,color:'#1351B4',fontSize:12,marginBottom:2,width:'100%',display:'flex',alignItems:'center',gap:4}}>{document.body.classList.contains('theme-itaq')?<Icon name="pill" size={12}/>:'💊'} {filtMeds.length===1?filtMeds[0]:filtMeds.length+' medicamentos selecionados'}</div>}<span style={{fontWeight:800,color:'#DC2626'}}>−{totS}</span> saídas &nbsp; <span style={{fontWeight:800,color:'#059669'}}>+{totE}</span> entradas</div>
+    <button onClick={doXL} style={{padding:'6px 12px',background:'#059669',border:'none',borderRadius:8,color:'#fff',fontSize:12,fontWeight:700,cursor:'pointer'}}>{_semEmoji('📥 Excel')}</button>
   </div>
   {filtered.length===0
     ?<div className="card" style={{padding:40,textAlign:'center',color:'#94A3B8'}}>Nenhum registro no período.</div>
@@ -3025,7 +3308,7 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
       <div style={{fontSize:12,fontWeight:700,color:'#1E293B',marginBottom:6}}>📂 Categoria</div>
       <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
         {[['todos','Todas'],['medicamento','💊 Básica'],['controlado','🔵 Controlado'],['injetavel','💉 Injetável'],['leite','🍼 Leite'],['penso','🩹 Penso']].map(function(c){return(
-          <button key={c[0]} onClick={function(){setRankCat(c[0]);}} style={{padding:'6px 12px',borderRadius:20,border:'1.5px solid '+(rankCat===c[0]?'#1351B4':'#E2E8F0'),background:rankCat===c[0]?'#EFF6FF':'#fff',fontSize:11,fontWeight:rankCat===c[0]?700:500,color:rankCat===c[0]?'#1351B4':'#64748B',cursor:'pointer'}}>{c[1]}</button>
+          <button key={c[0]} onClick={function(){setRankCat(c[0]);}} style={{padding:'6px 12px',borderRadius:20,border:'1.5px solid '+(rankCat===c[0]?'#1351B4':'#E2E8F0'),background:rankCat===c[0]?'#EFF6FF':'#fff',fontSize:11,fontWeight:rankCat===c[0]?700:500,color:rankCat===c[0]?'#1351B4':'#64748B',cursor:'pointer'}}>{_semEmoji(c[1])}</button>
         );})}
       </div>
     </div>
@@ -3228,9 +3511,9 @@ function rejectSolicit(id){db.collection('solicitacoes').doc(id).update({status:
 var tabs=[['pending','Pendentes ('+pending.length+')'],['team','Equipe'],['solicit','Solicit.'+(solicitList.length>0?' ('+solicitList.length+')':'')],['alerts','Alertas'+(unread>0?' ('+unread+')':'')],['tutoriais','📚 Tutoriais'],['inativo','Inativos'],['reset','Reset']];
 var totalUsuarios=approved.length;
 return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
-<div className="tab-sw" style={{flexWrap:'wrap'}}>{tabs.map(function(t){return <button key={t[0]} onClick={function(){setSub(t[0]);}} className={sub===t[0]?'on':''}>{t[1]}</button>;})}</div>
-{sub==='pending'&&(pending.length===0?<div className="card" style={{padding:48,textAlign:'center',color:'#94A3B8'}}>Nenhuma conta pendente de aprovação.</div>:(<div style={{display:'flex',flexDirection:'column',gap:10}}>{pending.map(function(u){return(<div key={u.id} className="card" style={{padding:'16px',border:'1.5px solid #FCD34D'}}><div style={{display:'flex',alignItems:'center',gap:12,marginBottom:14}}><UserAvatar user={u} size={46}/><div style={{flex:1}}><div style={{fontWeight:700,fontSize:15,color:'#1E293B'}}>{u.name}</div><div style={{fontSize:12,color:'#64748B',marginTop:2}}>{ROLE_ICON[u.role]} {ROLES[u.role]||u.role} · {u.email}</div>{u.role==='farmaceutico'&&u.crf&&<div style={{fontSize:12,color:'#64748B'}}>CRF: {u.crf}</div>}</div></div><div style={{display:'flex',gap:10}}><button onClick={function(){approve(u.id);}} className="bg" style={{flex:1}}>Aprovar</button><button onClick={function(){reject(u.id);}} className="br" style={{flex:1}}>Recusar</button></div></div>);})}</div>))}
-{sub==='team'&&(<div style={{display:'flex',flexDirection:'column',gap:10}}>{approved.map(function(u){return(<div key={u.id} className="card" style={{padding:'14px 16px',display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}><UserAvatar user={u} size={42}/><div style={{flex:1}}><div style={{fontWeight:700,color:u.color||B,fontSize:14}}>{u.name}</div><div style={{fontSize:12,color:'#64748B',marginTop:2}}>{ROLE_ICON[u.role]} {ROLES[u.role]}{u.role==='farmaceutico'&&u.crf?' · CRF: '+u.crf:''}</div></div>{u.id!==currentUser.uid?(<div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}><select value={u.role} onChange={function(e){changeRole(u.id,e.target.value);}} className="inp" style={{width:'auto',marginBottom:0,fontSize:12,padding:'6px 10px'}}>{Object.keys(ROLES).map(function(k){return <option key={k} value={k}>{ROLES[k]}</option>;})}</select>{currentUser.role==='tecnico'&&<button onClick={function(){deactivate(u.id,u.name);}} style={{background:'#FEE2E2',border:'1px solid #FCA5A5',borderRadius:8,padding:'6px 12px',color:'#B91C1C',cursor:'pointer',fontSize:11,fontWeight:600,whiteSpace:'nowrap'}}>Desativar</button>}</div>):<span className="badge badge-blue">{ROLES[u.role]} (voce)</span>}</div>);})}</div>)}
+<div className="tab-sw" style={{flexWrap:'wrap'}}>{tabs.map(function(t){return <button key={t[0]} onClick={function(){setSub(t[0]);}} className={sub===t[0]?'on':''}>{_semEmoji(t[1])}</button>;})}</div>
+{sub==='pending'&&(pending.length===0?<div className="card" style={{padding:48,textAlign:'center',color:'#94A3B8'}}>Nenhuma conta pendente de aprovação.</div>:(<div style={{display:'flex',flexDirection:'column',gap:10}}>{pending.map(function(u){return(<div key={u.id} className="card" style={{padding:'16px',border:'1.5px solid #FCD34D'}}><div style={{display:'flex',alignItems:'center',gap:12,marginBottom:14}}><UserAvatar user={u} size={46}/><div style={{flex:1}}><div style={{fontWeight:700,fontSize:15,color:'#1E293B'}}>{u.name}</div><div style={{fontSize:12,color:'#64748B',marginTop:2}}>{_roleIcon(u.role)} {ROLES[u.role]||u.role} · {u.email}</div>{u.role==='farmaceutico'&&u.crf&&<div style={{fontSize:12,color:'#64748B'}}>CRF: {u.crf}</div>}</div></div><div style={{display:'flex',gap:10}}><button onClick={function(){approve(u.id);}} className="bg" style={{flex:1}}>Aprovar</button><button onClick={function(){reject(u.id);}} className="br" style={{flex:1}}>Recusar</button></div></div>);})}</div>))}
+{sub==='team'&&(<div style={{display:'flex',flexDirection:'column',gap:10}}>{approved.map(function(u){return(<div key={u.id} className="card" style={{padding:'14px 16px',display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}><UserAvatar user={u} size={42}/><div style={{flex:1}}><div style={{fontWeight:700,color:u.color||B,fontSize:14}}>{u.name}</div><div style={{fontSize:12,color:'#64748B',marginTop:2}}>{_roleIcon(u.role)} {ROLES[u.role]}{u.role==='farmaceutico'&&u.crf?' · CRF: '+u.crf:''}</div></div>{u.id!==currentUser.uid?(<div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}><select value={u.role} onChange={function(e){changeRole(u.id,e.target.value);}} className="inp" style={{width:'auto',marginBottom:0,fontSize:12,padding:'6px 10px'}}>{Object.keys(ROLES).map(function(k){return <option key={k} value={k}>{ROLES[k]}</option>;})}</select>{currentUser.role==='tecnico'&&<button onClick={function(){deactivate(u.id,u.name);}} style={{background:'#FEE2E2',border:'1px solid #FCA5A5',borderRadius:8,padding:'6px 12px',color:'#B91C1C',cursor:'pointer',fontSize:11,fontWeight:600,whiteSpace:'nowrap'}}>Desativar</button>}</div>):<span className="badge badge-blue">{ROLES[u.role]} (voce)</span>}</div>);})}</div>)}
 {sub==='solicit'&&(solicitList.length===0?<div className="card" style={{padding:40,textAlign:'center',color:'#94A3B8'}}>Nenhuma solicitação pendente.</div>:(<div style={{display:'flex',flexDirection:'column',gap:10}}>{solicitList.map(function(s){return(<div key={s.id} className="card" style={{padding:'14px 16px',border:'1.5px solid #BFDBFE'}}><div style={{display:'flex',justifyContent:'space-between',marginBottom:10,alignItems:'center'}}><div style={{display:'flex',alignItems:'center',gap:8}}><div className="av" style={{width:34,height:34,background:s.solicitanteColor||B,fontSize:13}}>{s.solicitanteNome?s.solicitanteNome.charAt(0):'?'}</div><div><div style={{fontWeight:600,fontSize:13,color:B}}>{s.solicitanteNome}</div><div style={{fontSize:11,color:'#64748B'}}>{ROLES[s.solicitanteCargo]||s.solicitanteCargo} · {fmtT(s.criadoEm)}</div></div></div><span className={s.tipo==='saida'?'tag-s':'tag-e'}>{s.tipo}</span></div><div style={{fontWeight:700,color:'#1E293B',fontSize:14,marginBottom:4}}>{s.medicamentoNome}</div><div style={{fontSize:13,color:'#64748B',marginBottom:s.observação?8:14}}>Qtd: <strong>{s.quantidade}</strong></div>{s.observação&&<div style={{fontSize:12,color:'#64748B',fontStyle:'italic',marginBottom:14,background:'#F8FAFC',padding:'8px 12px',borderRadius:8}}>"{s.observação}"</div>}<div style={{display:'flex',gap:8}}><button onClick={function(){rejectSolicit(s.id);}} className="br" style={{flex:1}}>Recusar</button><button onClick={function(){approveSolicit(s);}} className="bg" style={{flex:2}}>Aprovar</button></div></div>);})}</div>))}
 {sub==='alerts'&&(alertas.length===0?<div className="card" style={{padding:40,textAlign:'center',color:'#94A3B8'}}>Nenhum alerta registrado.</div>:(<div style={{display:'flex',flexDirection:'column',gap:10}}>{alertas.map(function(a){return(<div key={a.id} className="card" style={{padding:'14px 16px',opacity:a.lido?0.5:1}}><div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}><span className="badge badge-amber">Saida excessiva</span><span style={{fontSize:11,color:'#94A3B8'}}>{fmtD(a.criadoEm)}</span></div><div style={{fontWeight:600,color:'#1E293B',marginBottom:4,fontSize:14}}>{a.medicamentoNome}</div><div style={{fontSize:12,color:'#64748B',marginBottom:a.lido?0:12}}>Por: {a.autorNome} · {a.quantidade} un.</div>{!a.lido&&<button onClick={function(){db.collection('alertas').doc(a.id).update({lido:true});}} className="bs" style={{width:'auto',padding:'6px 16px',fontSize:12}}>Marcar como lido</button>}</div>);})}</div>))}
 {sub==='tutoriais'&&(<div style={{display:'flex',flexDirection:'column',gap:12}}>
@@ -3348,7 +3631,7 @@ function TabAdmin({user,entries,medications,db}){
       {ok&&<div style={{background:'#DCFCE7',color:'#065F46',padding:'10px 14px',borderRadius:10,marginBottom:12,fontWeight:700,fontSize:13}}>{ok}</div>}
       <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:14}}>
         {subItems.map(function(s){return(
-          <button key={s[0]} onClick={function(){setSub(s[0]);setBusca('');}} style={{padding:'8px 14px',borderRadius:10,border:'none',background:sub===s[0]?'#1351B4':'#F1F5F9',color:sub===s[0]?'#fff':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>{s[1]}</button>
+          <button key={s[0]} onClick={function(){setSub(s[0]);setBusca('');}} style={{padding:'8px 14px',borderRadius:10,border:'none',background:sub===s[0]?'#1351B4':'#F1F5F9',color:sub===s[0]?'#fff':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>{_semEmoji(s[1])}</button>
         );})}
       </div>
       <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="Buscar..." style={{width:'100%',padding:'10px 14px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:13,marginBottom:12,boxSizing:'border-box'}}/>
@@ -3992,18 +4275,43 @@ function TabLeites(props){
   </div>);
 }
 function TabPerfil(props){var user=props.user;var onUpdate=props.onUpdate;var onLogout=props.onLogout;var entries=props.entries;var medications=props.medications;var stock=props.stock;
+  var temaItaq=tenantDe(user)==='itaquitinga-pe';
   var _amb=useState((typeof window!=='undefined'&&window.__fcEnv)||'prod');var amb=_amb[0];var setAmb=_amb[1];
   var _showAmbSelector=useState(false);var showAmbSelector=_showAmbSelector[0];var setShowAmbSelector=_showAmbSelector[1];
-  var _darkMode=useState(localStorage.getItem('fc_theme')==='dark');var darkMode=_darkMode[0];var setDarkMode=_darkMode[1];var _showLogoutConfirm=useState(false);var showLogoutConfirm=_showLogoutConfirm[0];var setShowLogoutConfirm=_showLogoutConfirm[1];
+  var _darkModeInit=false;try{_darkModeInit=localStorage.getItem('fc_theme')==='dark';}catch(e){}
+  var _darkMode=useState(_darkModeInit);var darkMode=_darkMode[0];var setDarkMode=_darkMode[1];var _showLogoutConfirm=useState(false);var showLogoutConfirm=_showLogoutConfirm[0];var setShowLogoutConfirm=_showLogoutConfirm[1];
   function trocarAmbiente(novoAmb){localStorage.setItem('farmacontrol_env',novoAmb);setAmb(novoAmb);setShowAmbSelector(false);setTimeout(function(){window.location.reload();},500);}
   var _color=useState(user.color||PALETTE[0]);var color=_color[0];var setColor=_color[1];var _sessionH=useState(user.sessionTimeout||12);var sessionH=_sessionH[0];var setSessionH=_sessionH[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];var _ok=useState('');var ok=_ok[0];var setOk=_ok[1];var _photo=useState(user.photoURL||'');var photo=_photo[0];var setPhoto=_photo[1];var _crf=useState(user.crf||'');var crf=_crf[0];var setCrf=_crf[1];var _uploading=useState(false);var uploading=_uploading[0];var setUploading=_uploading[1];
+  // Itens conferidos (lifetime) — pra conquista de Conferências. Busca única (não precisa tempo real)
+  // sobre a coleção inteira de conferências do tenant: um doc por dia, então o volume é pequeno.
+  var _confItens=useState(0);var confItens=_confItens[0];var setConfItens=_confItens[1];
+  useEffect(function(){
+    if(!temaItaq)return;
+    db.collection('conferencias').where('tenant_id','==',tenantDe(user)).get().then(function(snap){
+      var n=0;snap.docs.forEach(function(d){var cp=(d.data()||{}).contadoPor||{};Object.keys(cp).forEach(function(k){if(cp[k]&&cp[k].nome===user.name)n++;});});
+      setConfItens(n);
+    }).catch(function(){});
+  },[temaItaq]);
 function handlePhotoChange(e){var file=e.target.files[0];if(!file)return;if(!file.type.startsWith('image/')){alert('Selecione uma imagem.');return;}if(file.size>8*1024*1024){alert('Max 8MB.');return;}setUploading(true);compressPhoto(file,function(b64){setPhoto(b64);setUploading(false);});}
 function save(){setSaving(true);var upd={color:color,sessionTimeout:parseInt(sessionH)||12,photoURL:photo||''};if(user.role==='farmaceutico')upd.crf=crf.trim();db.collection('users').doc(user.uid).update(upd).then(function(){var u={};for(var k in user)u[k]=user[k];u.color=color;u.sessionTimeout=parseInt(sessionH)||12;u.photoURL=photo||'';if(user.role==='farmaceutico')u.crf=crf.trim();localStorage.setItem('fc_user',JSON.stringify(u));onUpdate(u);setOk('Preferencias salvas com sucesso!');setTimeout(function(){setOk('');},3000);setSaving(false);}).catch(function(e){alert('Erro: '+e.message);setSaving(false);});}
 function exportBackup(){var wb=XLSX.utils.book_new();var rows=[['Data','Hora','Responsavel','Medicamento','Tipo','Qtd','Lote']];(entries||[]).forEach(function(e){rows.push([fmtD(e.criadoEm),fmtT(e.criadoEm),e.autorNome||'',e.medicamentoNome||'',e.tipo==='entrada'?'Entrada':'Saida',e.quantidade||0,e.lote||'']);});XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'Movimentacoes');var sr=[['Medicamento','EAN','Estoque']];(medications||[]).forEach(function(m){sr.push([m.nome,m.ean||'',(stock||{})[m.id]||0]);});XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(sr),'Estoque');XLSX.writeFile(wb,'backup_farmacontrol_'+todayStr()+'.xlsx');}
-var gradBg='linear-gradient(135deg,'+(color||B)+' 0%,'+((color||B)+'cc')+' 100%)';
+var gradBg=temaItaq?'linear-gradient(135deg,var(--blue-700) 0%,#2E7DE0 55%,#4C8FEF 100%)':'linear-gradient(135deg,'+(color||B)+' 0%,'+((color||B)+'cc')+' 100%)';
+// Medalha mais alta já conquistada (qualquer categoria) — usada no selo do topo do perfil, pra não
+// ficar desalinhada com as faixas novas (bem mais altas) de "Minhas Conquistas" mais abaixo.
+var melhorMedalha=(function(){
+  if(!temaItaq)return null;
+  var minhasSaidasTotal=(entries||[]).filter(function(e){return (e.autorId===user.uid||e.autorNome===user.name)&&e.tipo==='saida'&&!_ehSaidaNaoReal(e);}).length;
+  var minhasEntradasTotal=(entries||[]).filter(function(e){return (e.autorId===user.uid||e.autorNome===user.name)&&e.tipo==='entrada';}).length;
+  var tiersAlto=[{m:100000,n:'Diamante',c1:'#C4B5FD',c2:'#7C3AED'},{m:50000,n:'Platina',c1:'#93C5FD',c2:'#3B82F6'},{m:20000,n:'Ouro',c1:'#FCD34D',c2:'#F59E0B'},{m:5000,n:'Prata',c1:'#CBD5E1',c2:'#94A3B8'},{m:1000,n:'Bronze',c1:'#CD7F32',c2:'#A0522D'}];
+  var tiersBaixo=[{m:1000,n:'Diamante',c1:'#C4B5FD',c2:'#7C3AED'},{m:500,n:'Platina',c1:'#93C5FD',c2:'#3B82F6'},{m:100,n:'Ouro',c1:'#FCD34D',c2:'#F59E0B'},{m:50,n:'Prata',c1:'#CBD5E1',c2:'#94A3B8'},{m:10,n:'Bronze',c1:'#CD7F32',c2:'#A0522D'}];
+  var candidatos=[{count:minhasSaidasTotal,tiers:tiersAlto},{count:minhasEntradasTotal,tiers:tiersAlto},{count:confItens,tiers:tiersBaixo}];
+  var ordem=['Diamante','Platina','Ouro','Prata','Bronze'];var melhor=null;
+  candidatos.forEach(function(c){for(var i=0;i<c.tiers.length;i++){if(c.count>=c.tiers[i].m){if(!melhor||ordem.indexOf(c.tiers[i].n)<ordem.indexOf(melhor.n))melhor=c.tiers[i];break;}}});
+  return melhor;
+})();
 return(
 <div style={{maxWidth:440,margin:'0 auto',padding:'16px 14px'}}>
-  <div style={{background:gradBg,borderRadius:24,padding:'32px 24px 28px',marginBottom:16,color:'#fff',textAlign:'center',boxShadow:'0 12px 40px rgba(0,0,0,.2)',position:'relative',overflow:'hidden'}}>
+  <div style={{background:gradBg,borderRadius:24,padding:'32px 24px 28px',marginBottom:16,color:'#fff',textAlign:'center',boxShadow:temaItaq?'0 12px 32px -8px rgba(16,42,90,.45)':'0 12px 40px rgba(0,0,0,.2)',position:'relative',overflow:'hidden'}}>
     <div style={{position:'absolute',top:-60,right:-60,width:200,height:200,borderRadius:'50%',background:'rgba(255,255,255,.06)',pointerEvents:'none'}}/>
     <div style={{position:'absolute',bottom:-50,left:-50,width:160,height:160,borderRadius:'50%',background:'rgba(255,255,255,.04)',pointerEvents:'none'}}/>
     <div style={{position:'relative',zIndex:1}}>
@@ -4011,27 +4319,29 @@ return(
       <label htmlFor="photoInput" style={{cursor:'pointer',display:'inline-block',marginBottom:16}}>
         <div className="photo-wrap" style={{width:96,height:96,margin:'0 auto'}}>
           {photo?<img src={photo} style={{width:96,height:96,borderRadius:'50%',objectFit:'cover',border:'3px solid rgba(255,255,255,.7)',display:'block',boxShadow:'0 4px 16px rgba(0,0,0,.25)'}}/>:<div style={{width:96,height:96,borderRadius:'50%',background:'rgba(255,255,255,.18)',border:'3px dashed rgba(255,255,255,.5)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:38,fontWeight:800,color:'rgba(255,255,255,.9)'}}>{user.name?user.name.charAt(0):'?'}</div>}
-          <div className="photo-cam">{uploading?'⏳':'📷'}</div>
+          <div className="photo-cam">{uploading?'⏳':(temaItaq?<Icon name="camera" size={14}/>:'📷')}</div>
         </div>
         <div style={{fontSize:10,opacity:0.6,marginTop:8,letterSpacing:'.3px'}}>{uploading?'Processando...':'Toque para alterar foto'}</div>
       </label>
       <div style={{fontSize:22,fontWeight:800,letterSpacing:'-.02em',marginBottom:10}}>{user.name}</div>
       <div style={{display:'flex',justifyContent:'center',flexWrap:'wrap',gap:6,marginBottom:6}}>
         <div style={{display:'inline-flex',alignItems:'center',gap:6,background:'rgba(255,255,255,.15)',borderRadius:20,padding:'5px 14px',fontSize:13,fontWeight:600,border:'1px solid rgba(255,255,255,.2)'}}>
-          {ROLE_ICON[user.role]} {ROLES[user.role]||user.role}
+          {_roleIcon(user.role)} {ROLES[user.role]||user.role}
         </div>
         {user.role==='farmaceutico'&&crf&&<div style={{display:'inline-flex',alignItems:'center',gap:4,background:'rgba(255,255,255,.12)',borderRadius:20,padding:'5px 12px',fontSize:12,fontWeight:600,border:'1px solid rgba(255,255,255,.18)'}}>CRF {crf}</div>}
       </div>
       <div style={{fontSize:12,opacity:0.55,marginTop:4}}>{user.email}</div>
       <div style={{display:'flex',justifyContent:'center',gap:8,marginTop:14}}>
-        {(function(){var total=(entries||[]).filter(function(e){return e.autorId===user.uid||e.autorNome===user.name;}).length;var badge=total>=200?{icon:'🏆',label:'Experiente',color:'#F59E0B'}:total>=51?{icon:'⭐',label:'Ativo',color:'#1351B4'}:{icon:'🌱',label:'Iniciante',color:'#059669'};return <div style={{display:'inline-flex',alignItems:'center',gap:6,background:'rgba(255,255,255,.15)',borderRadius:20,padding:'5px 14px',fontSize:12,fontWeight:700,border:'1px solid rgba(255,255,255,.2)'}}>{badge.icon} {badge.label}</div>;})()}
+        {temaItaq
+          ?(melhorMedalha?<div style={{display:'inline-flex',alignItems:'center',gap:6,background:'linear-gradient(135deg,'+melhorMedalha.c1+','+melhorMedalha.c2+')',borderRadius:20,padding:'5px 14px',fontSize:12,fontWeight:700,color:'#fff',boxShadow:'0 2px 8px -2px rgba(0,0,0,.35)'}}><Icon name="trophy" size={13}/> {melhorMedalha.n}</div>:<div style={{display:'inline-flex',alignItems:'center',gap:6,background:'rgba(255,255,255,.12)',borderRadius:20,padding:'5px 14px',fontSize:12,fontWeight:600,color:'rgba(255,255,255,.75)',border:'1px solid rgba(255,255,255,.18)'}}>Sem medalha ainda</div>)
+          :(function(){var total=(entries||[]).filter(function(e){return e.autorId===user.uid||e.autorNome===user.name;}).length;var badge=total>=200?{icon:'🏆',label:'Experiente',color:'#F59E0B'}:total>=51?{icon:'⭐',label:'Ativo',color:'#1351B4'}:{icon:'🌱',label:'Iniciante',color:'#059669'};return <div style={{display:'inline-flex',alignItems:'center',gap:6,background:'rgba(255,255,255,.15)',borderRadius:20,padding:'5px 14px',fontSize:12,fontWeight:700,border:'1px solid rgba(255,255,255,.2)'}}>{badge.icon} {badge.label}</div>;})()}
       </div>
     </div>
   </div>
 
   <div className="card" style={{marginBottom:14,padding:'16px 18px'}}>
     <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:14}}>
-      <div style={{width:36,height:36,borderRadius:10,background:'linear-gradient(135deg,#1351B4,#1A6FD4)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>📊</div>
+      <div style={{width:36,height:36,borderRadius:10,background:'linear-gradient(135deg,#1351B4,#1A6FD4)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,color:'#fff'}}>{temaItaq?<Icon name="barChart" size={17}/>:'📊'}</div>
       <div style={{fontWeight:700,fontSize:15,color:'#1E293B'}}>Meu Desempenho</div>
     </div>
     {(function(){
@@ -4041,17 +4351,30 @@ return(
       var criadoEm=user.criadoEm?new Date(user.criadoEm):new Date();
       var diasAtivo=Math.max(1,Math.ceil((new Date()-criadoEm)/86400000));
       var ultimoAcesso=(entries||[]).filter(function(e){return e.autorId===user.uid||e.autorNome===user.name;}).sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});
-      return <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-        <div style={{background:'#EFF6FF',borderRadius:12,padding:'12px 14px'}}>
-          <div style={{fontSize:22,fontWeight:800,color:'#1351B4'}}>{minhasSaidas}</div>
+      var hoje=todayStr();
+      var minhasHoje=(entries||[]).filter(function(e){return (e.autorId===user.uid||e.autorNome===user.name)&&(e.criadoEm||'').startsWith(hoje);});
+      var saidasHoje=minhasHoje.filter(function(e){return e.tipo==='saida'&&!_ehSaidaNaoReal(e);}).length;
+      var entradasHoje=minhasHoje.filter(function(e){return e.tipo==='entrada';}).length;
+      return <div>
+      {temaItaq&&<div style={{display:'flex',alignItems:'center',gap:14,background:'linear-gradient(135deg,var(--blue-900),var(--blue-700))',borderRadius:12,padding:'12px 16px',marginBottom:12}}>
+        <div style={{flex:1}}>
+          <div style={{fontSize:10,fontWeight:800,color:'rgba(255,255,255,.65)',textTransform:'uppercase',letterSpacing:'.05em'}}>Hoje</div>
+          <div style={{fontSize:12,color:'#fff',marginTop:2}}>{saidasHoje+entradasHoje===0?'Nenhum registro ainda hoje':saidasHoje+entradasHoje+' movimentaç'+(saidasHoje+entradasHoje===1?'ão':'ões')+' registrada'+(saidasHoje+entradasHoje===1?'':'s')}</div>
+        </div>
+        <div style={{textAlign:'center'}}><div style={{fontSize:18,fontWeight:800,color:'#fff'}}>{saidasHoje}</div><div style={{fontSize:9,color:'rgba(255,255,255,.65)'}}>saídas</div></div>
+        <div style={{textAlign:'center'}}><div style={{fontSize:18,fontWeight:800,color:'#fff'}}>{entradasHoje}</div><div style={{fontSize:9,color:'rgba(255,255,255,.65)'}}>entradas</div></div>
+      </div>}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+        <div style={{background:temaItaq?'var(--itq-tint)':'#EFF6FF',borderRadius:12,padding:'12px 14px'}}>
+          <div style={{fontSize:22,fontWeight:800,color:B}}>{minhasSaidas}</div>
           <div style={{fontSize:11,color:'#64748B',marginTop:2}}>Saídas registradas</div>
         </div>
-        <div style={{background:'#F0FDF4',borderRadius:12,padding:'12px 14px'}}>
-          <div style={{fontSize:22,fontWeight:800,color:'#059669'}}>{minhasEntradas}</div>
+        <div style={{background:temaItaq?'var(--itq-tint)':'#F0FDF4',borderRadius:12,padding:'12px 14px'}}>
+          <div style={{fontSize:22,fontWeight:800,color:temaItaq?B:'#059669'}}>{minhasEntradas}</div>
           <div style={{fontSize:11,color:'#64748B',marginTop:2}}>Entradas registradas</div>
         </div>
-        <div style={{background:'#FFFBEB',borderRadius:12,padding:'12px 14px'}}>
-          <div style={{fontSize:22,fontWeight:800,color:'#F59E0B'}}>{total}</div>
+        <div style={{background:temaItaq?'var(--itq-tint)':'#FFFBEB',borderRadius:12,padding:'12px 14px'}}>
+          <div style={{fontSize:22,fontWeight:800,color:temaItaq?B:'#F59E0B'}}>{total}</div>
           <div style={{fontSize:11,color:'#64748B',marginTop:2}}>Total de registros</div>
         </div>
         <div style={{background:'#F8FAFC',borderRadius:12,padding:'12px 14px'}}>
@@ -4062,9 +4385,73 @@ return(
           <div style={{fontSize:12,color:'#64748B'}}>Último registro</div>
           <div style={{fontSize:12,fontWeight:700,color:'#1E293B'}}>{fmtD(ultimoAcesso[0].criadoEm)}</div>
         </div>}
+      </div>
       </div>;
     })()}
   </div>
+
+  {temaItaq&&(function(){
+    var minhasSaidasTotal=(entries||[]).filter(function(e){return (e.autorId===user.uid||e.autorNome===user.name)&&e.tipo==='saida'&&!_ehSaidaNaoReal(e);}).length;
+    var minhasEntradasTotal=(entries||[]).filter(function(e){return (e.autorId===user.uid||e.autorNome===user.name)&&e.tipo==='entrada';}).length;
+    // Tiers de medalha — cores de medalha de verdade (bronze/prata/ouro/platina/diamante), exceção
+    // deliberada ao azul único, igual já fazemos pro vermelho/âmbar/verde de status. Saídas/Entradas
+    // usam uma faixa bem mais alta que Conferências, porque o volume de movimentação é muito maior
+    // (pedido da usuária: bronze 1.000, nível máximo 100.000).
+    var tiersAlto=[{m:1000,n:'Bronze',c1:'#CD7F32',c2:'#A0522D'},{m:5000,n:'Prata',c1:'#CBD5E1',c2:'#94A3B8'},{m:20000,n:'Ouro',c1:'#FCD34D',c2:'#F59E0B'},{m:50000,n:'Platina',c1:'#93C5FD',c2:'#3B82F6'},{m:100000,n:'Diamante',c1:'#C4B5FD',c2:'#7C3AED'}];
+    var tiersBaixo=[{m:10,n:'Bronze',c1:'#CD7F32',c2:'#A0522D'},{m:50,n:'Prata',c1:'#CBD5E1',c2:'#94A3B8'},{m:100,n:'Ouro',c1:'#FCD34D',c2:'#F59E0B'},{m:500,n:'Platina',c1:'#93C5FD',c2:'#3B82F6'},{m:1000,n:'Diamante',c1:'#C4B5FD',c2:'#7C3AED'}];
+    var categorias=[
+      {key:'saidas',label:'Saídas',icon:'pill',count:minhasSaidasTotal,tiers:tiersAlto},
+      {key:'entradas',label:'Entradas',icon:'inbox',count:minhasEntradasTotal,tiers:tiersAlto},
+      {key:'conferencias',label:'Conferências',icon:'clipboard',count:confItens,tiers:tiersBaixo}
+    ];
+    // Destaque do mês: ranking entre toda a equipe por nº de registros no mês atual.
+    var mesAtual=todayStr().slice(0,7);
+    var porAutorMes={};(entries||[]).forEach(function(e){if((e.criadoEm||'').slice(0,7)!==mesAtual)return;if(e.tipo==='saida'&&_ehSaidaNaoReal(e))return;var k=e.autorNome||'?';if(!porAutorMes[k])porAutorMes[k]=0;porAutorMes[k]++;});
+    var rankingMes=Object.keys(porAutorMes).map(function(k){return {nome:k,total:porAutorMes[k]};}).sort(function(a,b){return b.total-a.total;});
+    var minhaPosicao=rankingMes.findIndex(function(r){return r.nome===user.name;})+1;
+    var meuTotalMes=porAutorMes[user.name]||0;
+    return(<React.Fragment>
+      <div className="card" style={{marginBottom:14,padding:'16px 18px'}}>
+        <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:14}}>
+          <div style={{width:36,height:36,borderRadius:10,background:'linear-gradient(135deg,var(--blue-900),var(--blue-700))',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff'}}><Icon name="trophy" size={17}/></div>
+          <div style={{fontWeight:700,fontSize:15,color:'#1E293B'}}>Minhas Conquistas</div>
+        </div>
+        {categorias.map(function(cat,ci){
+          var atual=null,prox=null;
+          for(var i=0;i<cat.tiers.length;i++){if(cat.count>=cat.tiers[i].m)atual=cat.tiers[i];else{prox=cat.tiers[i];break;}}
+          var pct=prox?Math.min(100,Math.round((cat.count/prox.m)*100)):100;
+          return(
+          <div key={cat.key} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 0',borderTop:ci>0?'1px solid var(--itq-line)':'none'}}>
+            <div style={{width:44,height:44,borderRadius:'50%',flexShrink:0,background:atual?'linear-gradient(135deg,'+atual.c1+','+atual.c2+')':'var(--itq-tint)',border:atual?'none':'1.5px solid var(--itq-line)',display:'flex',alignItems:'center',justifyContent:'center',color:atual?'#fff':'var(--itq-faint)',boxShadow:atual?'0 3px 8px -2px rgba(0,0,0,.35)':'none'}}><Icon name={cat.icon} size={19}/></div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:3}}>
+                <span style={{fontSize:13,fontWeight:700,color:'var(--itq-ink)'}}>{cat.label}</span>
+                <span style={{fontSize:11,fontWeight:700,color:atual?(atual.n==='Ouro'||atual.n==='Platina'||atual.n==='Diamante'?atual.c2:'#B45309'):'var(--itq-faint)'}}>{atual?atual.n:'Sem medalha'}</span>
+              </div>
+              <div style={{height:6,background:'var(--itq-tint)',borderRadius:3,overflow:'hidden',marginBottom:3}}><div style={{width:pct+'%',height:'100%',background:prox?'linear-gradient(90deg,'+prox.c1+','+prox.c2+')':'linear-gradient(90deg,#C4B5FD,#7C3AED)',borderRadius:3}}/></div>
+              <div style={{fontSize:10,color:'var(--itq-faint)'}}>{cat.count.toLocaleString('pt-BR')} total{prox?' · faltam '+(prox.m-cat.count).toLocaleString('pt-BR')+' pra '+prox.n:' · nível máximo!'}</div>
+            </div>
+          </div>
+          );})}
+      </div>
+      {rankingMes.length>1&&<div className="card" style={{marginBottom:14,padding:'16px 18px'}}>
+        <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:4}}>
+          <div style={{width:36,height:36,borderRadius:10,background:minhaPosicao===1?'linear-gradient(135deg,#B45309,#D97706)':'linear-gradient(135deg,var(--blue-900),var(--blue-700))',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',flexShrink:0}}><Icon name="star" size={17}/></div>
+          <div>
+            <div style={{fontWeight:700,fontSize:15,color:'#1E293B'}}>Destaque do Mês</div>
+            <div style={{fontSize:12,color:'#94A3B8'}}>Entre {rankingMes.length} pessoa{rankingMes.length>1?'s':''} da equipe</div>
+          </div>
+        </div>
+        <div style={{marginTop:10,background:minhaPosicao===1?'#FFFBEB':'var(--itq-tint)',border:'1.5px solid '+(minhaPosicao===1?'#FDE68A':'var(--itq-tint-line)'),borderRadius:12,padding:'12px 14px',display:'flex',alignItems:'center',gap:12}}>
+          <div style={{fontSize:24,fontWeight:900,color:minhaPosicao===1?'#B45309':B}}>#{minhaPosicao||'—'}</div>
+          <div style={{flex:1}}>
+            <div style={{fontSize:13,fontWeight:700,color:'var(--itq-ink)'}}>{minhaPosicao===1?'Você é quem mais registrou esse mês!':'Você registrou '+meuTotalMes+' movimentaç'+(meuTotalMes===1?'ão':'ões')+' esse mês'}</div>
+            <div style={{fontSize:11,color:'var(--itq-soft)',marginTop:1}}>{minhaPosicao===1?'Continue assim 🎉':'Mais que '+rankingMes.filter(function(r){return r.total<meuTotalMes;}).length+' colega(s) da equipe'}</div>
+          </div>
+        </div>
+      </div>}
+    </React.Fragment>);
+  })()}
 
   {user.role==='farmaceutico'&&(
     <div className="card" style={{padding:'20px',marginBottom:14}}>
@@ -4079,6 +4466,7 @@ return(
   )}
 
   <div className="card" style={{padding:'20px',marginBottom:14}}>
+    {!temaItaq&&(<React.Fragment>
     <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}>
       <div style={{width:40,height:40,borderRadius:12,background:'linear-gradient(135deg,#0D1B4B,#1351B4)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20}}>{darkMode?'🌙':'☀️'}</div>
       <div><div style={{fontWeight:700,color:'#1E293B',fontSize:15}}>Aparência</div><div style={{fontSize:12,color:'#94A3B8'}}>{darkMode?'Modo escuro ativado':'Modo claro ativado'}</div></div>
@@ -4087,9 +4475,10 @@ return(
       <button onClick={function(){setDarkMode(false);localStorage.setItem('fc_theme','light');document.body.classList.remove('dark');}} style={{flex:1,padding:'10px',borderRadius:9,border:'none',background:!darkMode?'#fff':'transparent',fontWeight:!darkMode?700:500,fontSize:13,color:!darkMode?'#1351B4':'#64748B',cursor:'pointer',boxShadow:!darkMode?'0 1px 4px rgba(0,0,0,0.08)':'none',transition:'all .2s'}}>☀️ Claro</button>
       <button onClick={function(){setDarkMode(true);localStorage.setItem('fc_theme','dark');document.body.classList.add('dark');}} style={{flex:1,padding:'10px',borderRadius:9,border:'none',background:darkMode?'#1E293B':'transparent',fontWeight:darkMode?700:500,fontSize:13,color:darkMode?'#60A5FA':'#64748B',cursor:'pointer',boxShadow:darkMode?'0 2px 8px rgba(0,0,0,0.2)':'none',transition:'all .2s'}}>🌙 Escuro</button>
     </div>
+    </React.Fragment>)}
     <div className="card" style={{marginBottom:14,padding:'16px 18px'}}>
     <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:14}}>
-      <div style={{width:36,height:36,borderRadius:10,background:'linear-gradient(135deg,#059669,#047857)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>📋</div>
+      <div style={{width:36,height:36,borderRadius:10,background:temaItaq?'linear-gradient(135deg,var(--blue-900),var(--blue-700))':'linear-gradient(135deg,#059669,#047857)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,color:'#fff'}}>{temaItaq?<Icon name="clipboard" size={17}/>:'📋'}</div>
       <div style={{fontWeight:700,fontSize:15,color:'#1E293B'}}>Meus Últimos Registros</div>
     </div>
     {(function(){
@@ -4119,13 +4508,13 @@ return(
     <button onClick={save} disabled={saving} className="bp" style={{opacity:saving?0.7:1}}>{saving?'Salvando...':'Salvar preferencias'}</button>
   </div>
 
-  <div className="card" style={{padding:'20px',marginBottom:14}}>
+  {(!temaItaq||user.role==='gestor'||user.role==='tecnico')&&<div className="card" style={{padding:'20px',marginBottom:14}}>
     <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}>
-      <div style={{width:40,height:40,borderRadius:12,background:'linear-gradient(135deg,#0C6B3E,#0891B2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20}}>💾</div>
+      <div style={{width:40,height:40,borderRadius:12,background:temaItaq?'linear-gradient(135deg,var(--blue-900),var(--blue-700))':'linear-gradient(135deg,#0C6B3E,#0891B2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,color:'#fff'}}>{temaItaq?<Icon name="package" size={18}/>:'💾'}</div>
       <div><div style={{fontWeight:700,color:'#1E293B',fontSize:15}}>Backup dos Dados</div><div style={{fontSize:12,color:'#94A3B8'}}>Excel com todas as movimentacoes e estoque</div></div>
     </div>
     <button onClick={exportBackup} className="bg">Baixar Excel completo</button>
-  </div>
+  </div>}
 
   {showLogoutConfirm&&<div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.7)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:20,backdropFilter:'blur(6px)'}}>
     <div style={{background:'#fff',borderRadius:24,padding:28,maxWidth:320,width:'100%',boxShadow:'0 24px 64px rgba(0,0,0,0.3)',textAlign:'center'}}>
@@ -4140,7 +4529,7 @@ return(
     </div>
   </div>}
   {(function(){var td=tenantDe(user)+'_'+todayStr();var flag=localStorage.getItem('fc_shift_enc_'+td)||localStorage.getItem('fc_shift_saiu_'+td);if(!flag)return null;return(<button onClick={function(){localStorage.removeItem('fc_shift_enc_'+td);localStorage.removeItem('fc_shift_saiu_'+td);window.location.reload();}} style={{width:'100%',padding:'12px',background:'#EFF6FF',border:'1.5px solid #BFDBFE',borderRadius:12,color:'#1351B4',fontWeight:700,fontSize:13,cursor:'pointer',marginBottom:10}}>🔓 Voltar ao Plantão de hoje</button>);})()}
-  <button onClick={function(){setShowLogoutConfirm(true);}} style={{width:'100%',padding:'14px',background:'#FEF2F2',border:'1.5px solid #FECACA',borderRadius:12,color:'#DC2626',fontWeight:700,fontSize:14,cursor:'pointer',marginBottom:12}}>👋 Sair da conta</button>
+  <button onClick={function(){setShowLogoutConfirm(true);}} style={{width:'100%',padding:'14px',background:'#FEF2F2',border:'1.5px solid #FECACA',borderRadius:12,color:'#DC2626',fontWeight:700,fontSize:14,cursor:'pointer',marginBottom:12}}>{_semEmoji('👋 Sair da conta')}</button>
   {(user.role==='gestor'||user.role==='tecnico')&&<div style={{textAlign:'center',fontSize:10,color:'#CBD5E1',marginBottom:12}}>Cache: {(typeof window!=='undefined'&&window.__fcPersist)||'verificando…'}</div>}
 </div>);}
 
@@ -4745,11 +5134,14 @@ function TabNotas({user,medications}){
 // (medicamento ou controlado) — só o agrupamento visual das abas do Judicial é que junta as duas,
 // pra ainda dar pra filtrar/relatar só os controlados depois se precisar.
 var PJ_PARENTESCOS=['Mãe','Pai','Irmão(ã)','Avô(ó)','Tio(a)','Cônjuge','Procurador(a)','Outro'];
+// Ícones e cor únicos (azul do padrão) — TabPedidosJudiciais só é usado em Itaquitinga, então
+// não precisa de gate .theme-itaq: as cores diferentes por categoria (roxo/ciano/âmbar de TIPOS)
+// destoavam do resto do app; aqui fica tudo no mesmo azul, como as outras abas.
 var PJ_ABAS=[
-  {key:'medicamento',label:'Medicamentos',icon:'💊',cor:'#1351B4',cats:['medicamento','controlado']},
-  {key:'injetavel',label:TIPOS.injetavel.label,icon:TIPOS.injetavel.icon,cor:TIPOS.injetavel.cor,cats:['injetavel']},
-  {key:'leite',label:TIPOS.leite.label,icon:TIPOS.leite.icon,cor:TIPOS.leite.cor,cats:['leite']},
-  {key:'penso',label:TIPOS.penso.label,icon:TIPOS.penso.icon,cor:TIPOS.penso.cor,cats:['penso']}
+  {key:'medicamento',label:'Medicamentos',icon:'pill',cor:B,cats:['medicamento','controlado']},
+  {key:'injetavel',label:TIPOS.injetavel.label,icon:'droplet',cor:B,cats:['injetavel']},
+  {key:'leite',label:TIPOS.leite.label,icon:'package',cor:B,cats:['leite']},
+  {key:'penso',label:TIPOS.penso.label,icon:'clipboard',cor:B,cats:['penso']}
 ];
 // Logo embutido como data URI (06/10/2026): o comprovante judicial imprime logo depois de salvar
 // no Firestore, e o iframe de impressao (_imprimirDoc) as vezes disparava o print() antes da imagem
@@ -5048,25 +5440,25 @@ function TabPedidosJudiciais(props){
   var histRetiradas=showHist?retiradasJud.filter(function(r){return r.pacienteId===showHist.id;}):[];
 
   return (<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
-    <div style={{fontSize:18,fontWeight:800,color:'#1E293B',marginBottom:4}}>⚖️ Pacientes Judiciais</div>
+    <div style={{fontSize:18,fontWeight:800,color:'#1E293B',marginBottom:4,display:'flex',alignItems:'center',gap:8}}><Icon name="scale" size={20}/> Pacientes Judiciais</div>
     <div style={{fontSize:13,color:'#64748B',marginBottom:16}}>Fornecimento obrigatório por decisão judicial — prioridade máxima.</div>
 
     <div style={{display:'flex',gap:6,marginBottom:12,flexWrap:'wrap'}}>
       {PJ_ABAS.map(function(t){var c=t.key;return(
-        <button key={c} onClick={function(){setSub(c);}} style={{padding:'9px 12px',borderRadius:10,border:'1.5px solid '+(sub===c?t.cor:'#E2E8F0'),background:sub===c?t.cor:'#fff',color:sub===c?'#fff':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>{t.icon} {t.label}</button>
+        <button key={c} onClick={function(){setSub(c);}} style={{padding:'9px 12px',borderRadius:10,border:'1.5px solid '+(sub===c?t.cor:'#E2E8F0'),background:sub===c?t.cor:'#fff',color:sub===c?'#fff':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:6}}><Icon name={t.icon} size={14}/> {t.label}</button>
       );})}
-      <button onClick={function(){setSub('estoque');}} style={{padding:'9px 12px',borderRadius:10,border:'1.5px solid '+(sub==='estoque'?B:'#E2E8F0'),background:sub==='estoque'?B:'#fff',color:sub==='estoque'?'#fff':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>📦 Estoque Judicial</button>
-      <button onClick={function(){setSub('saidas');}} style={{padding:'9px 12px',borderRadius:10,border:'1.5px solid '+(sub==='saidas'?B:'#E2E8F0'),background:sub==='saidas'?B:'#fff',color:sub==='saidas'?'#fff':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>📤 Saídas</button>
+      <button onClick={function(){setSub('estoque');}} style={{padding:'9px 12px',borderRadius:10,border:'1.5px solid '+(sub==='estoque'?B:'#E2E8F0'),background:sub==='estoque'?B:'#fff',color:sub==='estoque'?'#fff':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:6}}><Icon name="package" size={14}/> Estoque Judicial</button>
+      <button onClick={function(){setSub('saidas');}} style={{padding:'9px 12px',borderRadius:10,border:'1.5px solid '+(sub==='saidas'?B:'#E2E8F0'),background:sub==='saidas'?B:'#fff',color:sub==='saidas'?'#fff':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:6}}><Icon name="trendDown" size={14}/> Saídas</button>
     </div>
 
     {PJ_ABAS.some(function(a){return a.key===sub;})&&(<div>
       <div style={{display:'flex',gap:10,marginBottom:12,flexWrap:'wrap'}}>
-        <input value={busca} onChange={function(e){setBusca(e.target.value);}} className="inp" placeholder="🔍 Buscar paciente, responsável ou processo..." style={{marginBottom:0,flex:1,minWidth:200}}/>
+        <input value={busca} onChange={function(e){setBusca(e.target.value);}} className="inp" placeholder="Buscar paciente, responsável ou processo..." style={{marginBottom:0,flex:1,minWidth:200}}/>
         <button onClick={abrirNovo} className="bp" style={{whiteSpace:'nowrap',padding:'0 16px',width:'auto'}}>+ Novo Paciente</button>
       </div>
       <div className="tab-sw" style={{marginBottom:12}}>
-        <button onClick={function(){setSubStatus('pendente');}} className={subStatus==='pendente'?'on':''}>⏳ Pendentes ({filtrarPorCategoria(sub,'pendente').length})</button>
-        <button onClick={function(){setSubStatus('separado');}} className={subStatus==='separado'?'on':''}>✅ Separados ({filtrarPorCategoria(sub,'separado').length})</button>
+        <button onClick={function(){setSubStatus('pendente');}} className={subStatus==='pendente'?'on':''}><Icon name="hourglass" size={13}/> Pendentes ({filtrarPorCategoria(sub,'pendente').length})</button>
+        <button onClick={function(){setSubStatus('separado');}} className={subStatus==='separado'?'on':''}><Icon name="check" size={13}/> Separados ({filtrarPorCategoria(sub,'separado').length})</button>
       </div>
       {listaFiltrada.length===0&&<div style={{textAlign:'center',padding:40,color:'#94A3B8'}}>Nenhum paciente {subStatus} em {(PJ_ABAS.filter(function(a){return a.key===sub;})[0]||PJ_ABAS[0]).label.toLowerCase()}.</div>}
       {listaFiltrada.map(renderCard)}
@@ -6113,7 +6505,7 @@ function TabHistoricoNotas(props){
   }
   return(
     <div style={{maxWidth:700,margin:'0 auto',padding:'16px 12px 90px'}}>
-      <div style={{fontWeight:800,fontSize:22,color:'#1E293B',marginBottom:4}}>🗂️ Histórico de Notas</div>
+      <div style={{fontWeight:800,fontSize:22,color:'#1E293B',marginBottom:4,display:'flex',alignItems:'center',gap:8}}>{document.body.classList.contains('theme-itaq')?<Icon name="folder" size={20}/>:'🗂️'} Histórico de Notas</div>
       <div style={{fontSize:13,color:'#64748B',marginBottom:14}}>Entradas agrupadas por nota fiscal</div>
 
       {notasConf.length>0&&<div style={{marginBottom:18,border:'1.5px solid #86EFAC',borderRadius:16,overflow:'hidden'}}>
@@ -6145,7 +6537,7 @@ function TabHistoricoNotas(props){
         </div>
       </div>}
 
-      <input value={search} onChange={function(e){setSearch(e.target.value);}} placeholder="🔍 Buscar NF, fornecedor ou medicamento..." className="inp" style={{marginBottom:14}}/>
+      <input value={search} onChange={function(e){setSearch(e.target.value);}} placeholder={_semEmoji('🔍 Buscar NF, fornecedor ou medicamento...')} className="inp" style={{marginBottom:14}}/>
       {msg==='ok'&&<div className="ok" style={{marginBottom:10}}>✅ Salvo com sucesso!</div>}
       {msg.indexOf('e:')===0&&<div className="er" style={{marginBottom:10}}>❌ {msg.slice(2)}</div>}
       {lista.length===0&&<div style={{textAlign:'center',padding:'48px 0',color:'#94A3B8'}}><div style={{fontSize:40,marginBottom:8}}>📋</div><div style={{fontWeight:600}}>{search?'Nenhuma nota encontrada':'Nenhuma entrada registrada'}</div></div>}
@@ -6248,6 +6640,7 @@ function TabHistoricoNotas(props){
 
 function TabPrevisao(props){
   var user=props.user;var entries=props.entries;var medications=props.medications;var stock=props.stock;var db=props.db;
+  var temaItaq=tenantDe(user)==='itaquitinga-pe';
   var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};
   var isMan=user.role==='gestor'||user.role==='tecnico';
   var _atas=useState([]);var atas=_atas[0];var setAtas=_atas[1];
@@ -6324,7 +6717,7 @@ function TabPrevisao(props){
     return ataEd.itens.map(function(it){return {cands:_matchItemMeds(it.descricao||'',medications,6)};});
   },[editAta,medications,atas]);
 
-  var COR={medicamento:'#1351B4',controlado:'#DC2626',injetavel:'#7C3AED',leite:'#D97706',penso:'#0C6B3E'};
+  var COR=temaItaq?{medicamento:B,controlado:B,injetavel:B,leite:B,penso:B}:{medicamento:'#1351B4',controlado:'#DC2626',injetavel:'#7C3AED',leite:'#D97706',penso:'#0C6B3E'};
   var ICO={medicamento:'💊',controlado:'🔒',injetavel:'💉',leite:'🍼',penso:'🩹'};
   var LBL={medicamento:'Farm. Básica',controlado:'Controlado',injetavel:'Injetável',leite:'Leite',penso:'Penso/Material'};
   // As "Ordens de Fornecimento" oficiais de Itaquitinga (Hospital/Atenção Básica/Farmácia Básica,
@@ -7615,9 +8008,9 @@ function TabPrevisao(props){
 
       {/* Sub-abas */}
       <div style={{display:'flex',gap:6,marginBottom:16}}>
-        <button onClick={function(){setSub('previsao');}} className={'pill'+(sub==='previsao'?' act':'')} style={sub==='previsao'?{background:'#1351B4',color:'#fff',borderColor:'#1351B4'}:{}}>📊 Previsão</button>
-        <button onClick={function(){setSub('atas');}} className={'pill'+(sub==='atas'?' act':'')} style={sub==='atas'?{background:'#1351B4',color:'#fff',borderColor:'#1351B4'}:{}}>🗂️ Gerenciar Atas</button>
-        <button onClick={function(){setSub('config');}} className={'pill'+(sub==='config'?' act':'')} style={sub==='config'?{background:'#1351B4',color:'#fff',borderColor:'#1351B4'}:{}}>⚙️ Mín. e Consumo</button>
+        <button onClick={function(){setSub('previsao');}} className={'pill'+(sub==='previsao'?' act':'')} style={sub==='previsao'?{background:'#1351B4',color:'#fff',borderColor:'#1351B4'}:{}}>{_semEmoji('📊 Previsão')}</button>
+        <button onClick={function(){setSub('atas');}} className={'pill'+(sub==='atas'?' act':'')} style={sub==='atas'?{background:'#1351B4',color:'#fff',borderColor:'#1351B4'}:{}}>{_semEmoji('🗂️ Gerenciar Atas')}</button>
+        <button onClick={function(){setSub('config');}} className={'pill'+(sub==='config'?' act':'')} style={sub==='config'?{background:'#1351B4',color:'#fff',borderColor:'#1351B4'}:{}}>{_semEmoji('⚙️ Mín. e Consumo')}</button>
       </div>
 
       {sub==='previsao'&&<div>
@@ -7625,11 +8018,11 @@ function TabPrevisao(props){
         {(function(){
           var dias=diasHistorico();
           var fase=dias<25?1:(dias<55?2:3);
-          var fInfo={1:{txt:'Fase 1 — baseado no consumo estimado',cor:'#D97706',ico:'📊'},2:{txt:'Fase 2 — baseado no consumo médio real',cor:'#1351B4',ico:'📉'},3:{txt:'Fase 3 — baseado em tendência',cor:'#0C6B3E',ico:'📈'}};
+          var fInfo=temaItaq?{1:{txt:'Fase 1 — baseado no consumo estimado',cor:B,ico:'barChart'},2:{txt:'Fase 2 — baseado no consumo médio real',cor:B,ico:'trendDown'},3:{txt:'Fase 3 — baseado em tendência',cor:B,ico:'trendUp'}}:{1:{txt:'Fase 1 — baseado no consumo estimado',cor:'#D97706',ico:'📊'},2:{txt:'Fase 2 — baseado no consumo médio real',cor:'#1351B4',ico:'📉'},3:{txt:'Fase 3 — baseado em tendência',cor:'#0C6B3E',ico:'📈'}};
           var fi=fInfo[fase];
-          return(<div style={{background:fi.cor+'14',border:'1.5px solid '+fi.cor+'40',borderRadius:12,padding:'12px 14px',marginBottom:12}}>
+          return(<div style={{background:temaItaq?'var(--itq-tint)':fi.cor+'14',border:'1.5px solid '+(temaItaq?'var(--itq-tint-line)':fi.cor+'40'),borderRadius:12,padding:'12px 14px',marginBottom:12}}>
             <div style={{display:'flex',alignItems:'center',gap:10}}>
-              <span style={{fontSize:24}}>{fi.ico}</span>
+              <span style={{fontSize:24,display:'flex'}}>{temaItaq?<Icon name={fi.ico} size={22}/>:fi.ico}</span>
               <div>
                 <div style={{fontWeight:700,fontSize:13,color:fi.cor}}>{fi.txt}</div>
                 <div style={{fontSize:12,color:'#64748B'}}>{dias} dia(s) de histórico{fase<3?' · fica mais preciso com o tempo':''}</div>
@@ -7646,8 +8039,8 @@ function TabPrevisao(props){
             <option value={45}>45 dias</option>
             <option value={60}>60 dias</option>
           </select>
-          <input value={ajBusca||''} onChange={function(e){setAjBusca(e.target.value);}} placeholder="🔍 Buscar medicamento..." className="inp" style={{marginBottom:0,flex:1}}/>
-          <button onClick={function(){setSoUrg(!soUrg);}} style={{marginBottom:0,padding:'8px 14px',borderRadius:8,border:'1.5px solid '+(soUrg?'#DC2626':'#E2E8F0'),background:soUrg?'#DC2626':'#fff',color:soUrg?'#fff':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer',whiteSpace:'nowrap'}}>🚨 Só urgentes</button>
+          <input value={ajBusca||''} onChange={function(e){setAjBusca(e.target.value);}} placeholder={_semEmoji('🔍 Buscar medicamento...')} className="inp" style={{marginBottom:0,flex:1}}/>
+          <button onClick={function(){setSoUrg(!soUrg);}} style={{marginBottom:0,padding:'8px 14px',borderRadius:8,border:'1.5px solid '+(soUrg?'#DC2626':'#E2E8F0'),background:soUrg?'#DC2626':'#fff',color:soUrg?'#fff':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer',whiteSpace:'nowrap'}}>{_semEmoji('🚨 Só urgentes')}</button>
         </div>
         <div style={{fontSize:11,color:'#94A3B8',marginBottom:12,marginTop:-4}}>Itens ordenados por urgência (os que acabam antes aparecem primeiro).{soUrg?' Mostrando só ruptura em ≤30 dias.':''}</div>
 
@@ -7663,8 +8056,8 @@ function TabPrevisao(props){
             </div>
             <div><div style={{fontSize:11,color:'#64748B',marginBottom:3}}>Nome da Empresa</div><input value={empresa} onChange={function(e){setEmpresa(e.target.value);}} placeholder="Nome da empresa..." className="inp" style={{marginBottom:0,fontSize:13}}/></div>
           </>}
-          <div style={{display:'flex',gap:8,marginTop:10,flexWrap:'wrap'}}><button onClick={exportarExcel} className="bg" style={{flex:1}}>📥 Excel</button><button onClick={exportarPDF} className="bp" style={{flex:1,background:'#DC2626'}}>📄 PDF Pedido</button>{infoTenant.autoDescontarAta&&<button onClick={function(){fecharPedidoConsolidado();}} className="bp" style={{flex:1,background:'#0C6B3E'}}>🔒 Fechar Pedido</button>}</div>
-          {infoTenant.autoDescontarAta&&<div style={{fontSize:10,color:'#94A3B8',marginTop:6}}>Gerar o PDF só imprime — o saldo das ATAs só é descontado quando você clicar em "🔒 Fechar Pedido".</div>}
+          <div style={{display:'flex',gap:8,marginTop:10,flexWrap:'wrap'}}><button onClick={exportarExcel} className="bg" style={{flex:1}}>{_semEmoji('📥 Excel')}</button><button onClick={exportarPDF} className="bp" style={temaItaq?{flex:1}:{flex:1,background:'#DC2626'}}>{_semEmoji('📄 PDF Pedido')}</button>{infoTenant.autoDescontarAta&&<button onClick={function(){fecharPedidoConsolidado();}} className="bp" style={temaItaq?{flex:1}:{flex:1,background:'#0C6B3E'}}>{_semEmoji('🔒 Fechar Pedido')}</button>}</div>
+          {infoTenant.autoDescontarAta&&<div style={{fontSize:10,color:'#94A3B8',marginTop:6}}>Gerar o PDF só imprime — o saldo das ATAs só é descontado quando você clicar em "Fechar Pedido".</div>}
         </div>
 
         {/* Lista de medicamentos por categoria */}
@@ -7761,9 +8154,9 @@ function TabPrevisao(props){
             return(<div key={catKey} style={{marginBottom:10}}>
               {/* Pasta da Categoria */}
               <button onClick={function(){setPastasAbertas(function(p){var n=Object.assign({},p);n['prev_'+catKey]=!catAberta;return n;});}} style={{width:'100%',background:cor,border:'none',borderRadius:catAberta?'14px 14px 0 0':'14px',padding:'12px 16px',cursor:'pointer',display:'flex',alignItems:'center',gap:10,textAlign:'left'}}>
-                <span style={{fontSize:22}}>{ICO[catKey]||'💊'}</span>
+                <span style={{fontSize:22,display:'flex',color:'#fff'}}>{temaItaq?<Icon name={TIPOS_ICON[catKey]||'pill'} size={19}/>:(ICO[catKey]||'💊')}</span>
                 <div style={{flex:1}}>
-                  <div style={{fontWeight:800,fontSize:15,color:'#fff'}}>📁 {LBL[catKey]}</div>
+                  <div style={{fontWeight:800,fontSize:15,color:'#fff'}}>{temaItaq?'':'📁 '}{LBL[catKey]}</div>
                   <div style={{fontSize:12,color:'rgba(255,255,255,0.8)'}}>{medsCat.length} medicamento(s)</div>
                 </div>
                 <div style={{textAlign:'right',marginRight:6}}>
@@ -7821,7 +8214,7 @@ function TabPrevisao(props){
                 {semAta.length>0&&<div style={{marginBottom:8,borderRadius:12,overflow:'hidden',border:'1.5px solid #CBD5E1'}}>
                   <button onClick={function(){setPastasAbertas(function(p){var n=Object.assign({},p);n['prev_semata_'+catKey]=!pastasAbertas['prev_semata_'+catKey];return n;});}} style={{width:'100%',background:'#F1F5F9',border:'none',padding:'10px 14px',cursor:'pointer',display:'flex',alignItems:'center',gap:8,textAlign:'left'}}>
                     <div style={{flex:1}}>
-                      <div style={{fontWeight:700,fontSize:13,color:'#64748B'}}>📂 Sem ATA vinculada</div>
+                      <div style={{fontWeight:700,fontSize:13,color:'#64748B',display:'flex',alignItems:'center',gap:6}}>{temaItaq?<Icon name="folder" size={13}/>:'📂'} Sem ATA vinculada</div>
                       <div style={{fontSize:11,color:'#94A3B8'}}>{semAta.length} medicamento(s)</div>
                     </div>
                     <span style={{fontSize:14,color:'#94A3B8'}}>{pastasAbertas['prev_semata_'+catKey]?'▲':'▼'}</span>
@@ -8532,7 +8925,10 @@ function TabPrevisao(props){
 function confKey(medId,lote,val){return (medId+'--'+(lote||'SEM')+'--'+(val||'SEM')).replace(/[^A-Za-z0-9_-]/g,'_');}
 function TabConferencia(props){
   var user=props.user;var medications=props.medications||[];var entries=props.entries||[];var stock=props.stock||{};var estoqueBruto=props.estoqueBruto||{};
-  var CCOR={medicamento:'#1351B4',controlado:'#DC2626',injetavel:'#7C3AED',leite:'#D97706',penso:'#0891B2'};
+  var temaItaq=tenantDe(user)==='itaquitinga-pe';
+  // Em Itaquitinga todas as categorias usam o mesmo azul (pedido da usuária) — em Vicência cada
+  // categoria mantém sua cor própria (roxo/ciano/âmbar), sem alteração.
+  var CCOR=temaItaq?{medicamento:B,controlado:B,injetavel:B,leite:B,penso:B}:{medicamento:'#1351B4',controlado:'#DC2626',injetavel:'#7C3AED',leite:'#D97706',penso:'#0891B2'};
   var docRef=function(){return db.collection('conferencias').doc(plantaoDocId(user,todayStr()));};
   var _contagens=useState({});var contagens=_contagens[0];var setContagens=_contagens[1];
   var _contadoPor=useState({});var contadoPor=_contadoPor[0];var setContadoPor=_contadoPor[1];
@@ -9027,7 +9423,7 @@ function TabConferencia(props){
   return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
     <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,marginBottom:12}}>
       <div>
-        <div style={{fontWeight:800,fontSize:18,color:'#1E293B'}}>🧾 Conferência de Estoque</div>
+        <div style={{fontWeight:800,fontSize:18,color:'#1E293B',display:'flex',alignItems:'center',gap:8}}>{document.body.classList.contains('theme-itaq')?<Icon name="clipboard" size={18}/>:'🧾'} Conferência de Estoque</div>
         <div style={{fontSize:11,color:'#94A3B8'}}>Contagem física · {todayStr().split('-').reverse().join('/')}</div>
       </div>
       <button onClick={toggleCega} style={{display:'flex',alignItems:'center',gap:6,background:cega?'#1351B4':'#F1F5F9',border:'1.5px solid '+(cega?'#1351B4':'#E2E8F0'),borderRadius:20,padding:'7px 12px',cursor:'pointer'}}>
@@ -9053,7 +9449,7 @@ function TabConferencia(props){
     {/* Painel de colaboração — equipe na conferência e distribuição de categorias */}
     <div style={{background:'#fff',borderRadius:14,padding:'12px 14px',marginBottom:14,border:'1.5px solid #E2E8F0'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
-        <span style={{fontSize:13,fontWeight:800,color:'#1E293B'}}>👥 Equipe na conferência ({online.length})</span>
+        <span style={{fontSize:13,fontWeight:800,color:'#1E293B',display:'flex',alignItems:'center',gap:6}}>{document.body.classList.contains('theme-itaq')?<Icon name="users" size={14}/>:'👥'} Equipe na conferência ({online.length})</span>
         {catAtiva
           ?<button onClick={function(){setCatAtiva(null);}} style={{background:'#EFF6FF',border:'1px solid #BFDBFE',borderRadius:8,padding:'5px 10px',fontSize:11,fontWeight:700,color:'#1351B4',cursor:'pointer'}}>← Trocar categoria</button>
           :<span style={{fontSize:11,color:'#94A3B8'}}>Escolha uma categoria abaixo</span>
@@ -9094,7 +9490,7 @@ function TabConferencia(props){
     </div>}
 
     {catAtiva&&<div style={{background:CCOR[catAtiva]+'12',border:'1.5px solid '+CCOR[catAtiva]+'40',borderRadius:12,padding:'10px 14px',marginBottom:12,display:'flex',alignItems:'center',gap:10}}>
-      <span style={{fontSize:20}}>{(TIPOS[catAtiva]||TIPOS.medicamento).icon}</span>
+      <span style={{fontSize:20,display:'flex',color:temaItaq?CCOR[catAtiva]:undefined}}>{temaItaq?<Icon name={TIPOS_ICON[catAtiva]||'pill'} size={18}/>:(TIPOS[catAtiva]||TIPOS.medicamento).icon}</span>
       <div style={{flex:1,minWidth:0}}>
         <div style={{fontSize:13,fontWeight:800,color:'#1E293B'}}>Conferindo: {(TIPOS[catAtiva]||TIPOS.medicamento).label}</div>
         {finalizadas[catAtiva]&&<div style={{fontSize:11,color:'#0C6B3E',fontWeight:600}}>✓ Já finalizada hoje{finalizadas[catAtiva].por?' por '+finalizadas[catAtiva].por:''} — recontar gera nova finalização.</div>}
@@ -9112,12 +9508,12 @@ function TabConferencia(props){
       <div style={{height:10,background:'#F1F5F9',borderRadius:99,overflow:'hidden'}}>
         <div style={{height:'100%',width:pct+'%',background:pct===100&&totalItens>0?'linear-gradient(90deg,#0C6B3E,#22C55E)':'linear-gradient(90deg,#1351B4,#3B82F6)',borderRadius:99,transition:'width .3s ease'}}/>
       </div>
-      <button data-tour="conf-finalizar" onClick={function(){setShowResumo(true);}} disabled={resumoCat.total===0} style={{marginTop:12,width:'100%',padding:'11px',background:resumoCat.total===0?'#E2E8F0':'#0C6B3E',border:'none',borderRadius:10,color:resumoCat.total===0?'#94A3B8':'#fff',fontWeight:700,fontSize:13,cursor:resumoCat.total===0?'default':'pointer'}}>✅ Finalizar categoria{resumoCat.divergiram>0?' — '+resumoCat.divergiram+' diverg.':''}</button>
+      <button data-tour="conf-finalizar" onClick={function(){setShowResumo(true);}} disabled={resumoCat.total===0} style={{marginTop:12,width:'100%',padding:'11px',background:resumoCat.total===0?'#E2E8F0':(temaItaq?B:'#0C6B3E'),border:'none',borderRadius:10,color:resumoCat.total===0?'#94A3B8':'#fff',fontWeight:700,fontSize:13,cursor:resumoCat.total===0?'default':'pointer'}}>{_semEmoji('✅ Finalizar categoria')}{resumoCat.divergiram>0?' — '+resumoCat.divergiram+' diverg.':''}</button>
     </div>
 
     <div style={{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap'}}>
-      <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="🔍 Buscar medicamento..." className="inp" style={{marginBottom:0,flex:1,minWidth:180}}/>
-      <button onClick={abrirCadastro} style={{whiteSpace:'nowrap',padding:'0 14px',background:'#0C6B3E',border:'none',borderRadius:10,color:'#fff',fontWeight:700,fontSize:13,cursor:'pointer'}}>+ Cadastrar medicamento</button>
+      <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder={_semEmoji('🔍 Buscar medicamento...')} className="inp" style={{marginBottom:0,flex:1,minWidth:180}}/>
+      <button onClick={abrirCadastro} className={temaItaq?'bs':''} style={temaItaq?{whiteSpace:'nowrap',padding:'0 14px',width:'auto'}:{whiteSpace:'nowrap',padding:'0 14px',background:'#0C6B3E',border:'none',borderRadius:10,color:'#fff',fontWeight:700,fontSize:13,cursor:'pointer'}}>+ Cadastrar medicamento</button>
     </div>
 
     {grupos.length===0&&<div style={{textAlign:'center',padding:32,color:'#94A3B8',fontSize:13}}>Nenhum medicamento encontrado.</div>}
@@ -9129,7 +9525,7 @@ function TabConferencia(props){
       var donos=donoCat[g.cat]||[];var euAqui=g.cat===minhaCat;
       return(<div key={g.cat} style={{marginBottom:12}}>
         <button onClick={function(){setCatAberta(function(p){var n=Object.assign({},p);n[g.cat]=!open;return n;});}} style={{width:'100%',display:'flex',alignItems:'center',gap:10,background:cor,border:euAqui?'2px solid #FBBF24':'none',borderRadius:open?'12px 12px 0 0':'12px',padding:'11px 14px',cursor:'pointer',textAlign:'left'}}>
-          <span style={{fontSize:19}}>{t.icon}</span>
+          <span style={{fontSize:19,display:'flex',color:'#fff'}}>{temaItaq?<Icon name={TIPOS_ICON[g.cat]||'pill'} size={17}/>:t.icon}</span>
           <div style={{flex:1,minWidth:0}}>
             <div style={{fontWeight:700,fontSize:14,color:'#fff'}}>{t.label}</div>
             {donos.length>0&&<div style={{fontSize:10,color:'rgba(255,255,255,.9)',marginTop:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>👤 {donos.map(function(p){return p.uid===user.uid?'você':p.nome;}).join(', ')}</div>}
@@ -9154,8 +9550,8 @@ function TabConferencia(props){
                   </div>
                   <span style={{fontSize:13,color:'#94A3B8'}}>{exp?'▲':'▼'}</span>
                 </button>
-                {podeGerir&&<button onClick={function(){abrirRename(m);}} title="Renomear medicamento" style={{flexShrink:0,alignSelf:'center',background:'#EFF6FF',color:'#1351B4',border:'none',borderRadius:8,padding:'6px 9px',fontSize:12,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap'}}>✏️</button>}
-                {podeGerir&&<button onClick={function(){excluirMed(m);}} title="Excluir do cadastro" style={{flexShrink:0,alignSelf:'center',marginLeft:6,marginRight:8,background:delMedId===m.id?'#DC2626':'#FEE2E2',color:delMedId===m.id?'#fff':'#DC2626',border:'none',borderRadius:8,padding:'6px 10px',fontSize:11,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap'}}>{delMedId===m.id?'Confirmar?':'🗑'}</button>}
+                {podeGerir&&<button onClick={function(){abrirRename(m);}} title="Renomear medicamento" style={{flexShrink:0,alignSelf:'center',background:'#EFF6FF',color:'#1351B4',border:'none',borderRadius:8,padding:'6px 9px',fontSize:12,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap',display:'flex',alignItems:'center'}}>{temaItaq?<Icon name="edit" size={13}/>:'✏️'}</button>}
+                {podeGerir&&<button onClick={function(){excluirMed(m);}} title="Excluir do cadastro" style={{flexShrink:0,alignSelf:'center',marginLeft:6,marginRight:8,background:delMedId===m.id?'#DC2626':'#FEE2E2',color:delMedId===m.id?'#fff':'#DC2626',border:'none',borderRadius:8,padding:'6px 10px',fontSize:11,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap',display:'flex',alignItems:'center'}}>{delMedId===m.id?'Confirmar?':(temaItaq?<Icon name="trash" size={13}/>:'🗑')}</button>}
               </div>
               {podeGerir&&renId===m.id&&<div style={{background:'#EFF6FF',borderTop:'1px solid #BFDBFE',padding:'10px 12px'}}>
                 <div style={{fontSize:11,fontWeight:700,color:'#1351B4',marginBottom:6}}>✏️ Renomear no cadastro</div>
@@ -9239,7 +9635,7 @@ function TabConferencia(props){
         <div style={{marginBottom:10}}>
           <div style={{fontSize:11,fontWeight:700,color:'#475569',marginBottom:6}}>CATEGORIA *</div>
           <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
-            {Object.keys(TIPOS).map(function(k){var t=TIPOS[k];var sel=cadCat===k;return(<button key={k} onClick={function(){setCadCat(k);}} style={{padding:'7px 11px',borderRadius:20,border:'1.5px solid '+(sel?t.cor:'#E2E8F0'),background:sel?t.cor:'#fff',color:sel?'#fff':'#64748B',cursor:'pointer',fontWeight:sel?700:500,fontSize:12}}>{t.icon} {t.label}</button>);})}
+            {Object.keys(TIPOS).map(function(k){var t=TIPOS[k];var sel=cadCat===k;var temaItaq=document.body.classList.contains('theme-itaq');var cor=temaItaq?B:t.cor;return(<button key={k} onClick={function(){setCadCat(k);}} style={{padding:'7px 11px',borderRadius:20,border:'1.5px solid '+(sel?cor:'#E2E8F0'),background:sel?cor:'#fff',color:sel?'#fff':'#64748B',cursor:'pointer',fontWeight:sel?700:500,fontSize:12,display:'inline-flex',alignItems:'center',gap:5}}>{temaItaq?<Icon name={TIPOS_ICON[k]||'pill'} size={12}/>:t.icon} {t.label}</button>);})}
           </div>
         </div>
         <div style={{marginBottom:14}}>
@@ -9352,7 +9748,7 @@ function TourEngine(props){
 
   // Executa cliques reais nos elementos de navegação (que já têm data-tour) para preparar a tela do passo
   function tourClicar(sel){var el=null;try{el=document.querySelector(sel);}catch(e){el=null;}if(el&&el.click)el.click();}
-  function menuPanelAberto(){var p=document.querySelector('[data-tour="menu-panel"]');if(!p||!p.getBoundingClientRect)return false;var r=p.getBoundingClientRect();return r.left<window.innerWidth-20;}
+  function menuPanelAberto(){var p=document.querySelector('[data-tour="menu-panel"]');if(!p||!p.getBoundingClientRect)return false;var r=p.getBoundingClientRect();return r.left>-20&&r.left<window.innerWidth;}
   function executarAcao(acao){
     var lista=Array.isArray(acao)?acao:[acao];
     lista.forEach(function(a){
@@ -10058,7 +10454,7 @@ function ImportarNotas(props){
                     {sug.map(function(x){var m=x.m;return<button key={m.id} onClick={function(){escolherMedManual(it.key,m);}} style={{width:'100%',textAlign:'left',padding:'10px 12px',border:'none',borderBottom:'1px solid #F1F5F9',background:'#fff',cursor:'pointer',fontSize:13,color:'#1E293B'}}>{m.nome}</button>;})}
                   </div>}
                   {manualFoco===it.key&&it.busca.trim()&&sug.length===0&&<div style={{fontSize:11,color:'#94A3B8',marginTop:4}}>Nenhum medicamento encontrado no cadastro.</div>}
-                  <button type="button" onClick={function(){abrirNovoMedManual(it.key);}} style={{marginTop:6,width:'100%',padding:'9px',background:'#F0FDF4',border:'1.5px dashed #86EFAC',borderRadius:9,color:'#059669',fontWeight:700,fontSize:12,cursor:'pointer'}}>+ Cadastrar novo medicamento</button>
+                  <button type="button" onClick={function(){abrirNovoMedManual(it.key);}} style={document.body.classList.contains('theme-itaq')?{marginTop:6,width:'100%',padding:'9px',background:'var(--itq-tint)',border:'1.5px dashed var(--blue-700)',borderRadius:9,color:'var(--blue-700)',fontWeight:700,fontSize:12,cursor:'pointer'}:{marginTop:6,width:'100%',padding:'9px',background:'#F0FDF4',border:'1.5px dashed #86EFAC',borderRadius:9,color:'#059669',fontWeight:700,fontSize:12,cursor:'pointer'}}>+ Cadastrar novo medicamento</button>
                 </div>}
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
                 <div><div style={{fontSize:10,fontWeight:600,color:'#64748B',marginBottom:3}}>QTD *</div><input type="number" min="1" inputMode="numeric" value={it.qtd} onChange={function(e){setItemManual(it.key,{qtd:e.target.value.replace(/[^0-9]/g,'')});}} placeholder="0" style={inp}/></div>
@@ -10581,21 +10977,22 @@ function TabRecebimento(props){
     if(fStatus!=='todos'&&(r.status||'pendente')!==fStatus)return false;
     return true;
   });
-  var inp={width:'100%',padding:'11px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:14,boxSizing:'border-box'};
-  var lbl={fontSize:12,fontWeight:700,color:'#475569',display:'block',marginBottom:5};
+  var temaItaq=tenantDe(user)==='itaquitinga-pe';
+  var inp=temaItaq?{width:'100%',padding:'11px',borderRadius:12,border:'1.5px solid var(--itq-line,#E3E9F6)',fontSize:14,boxSizing:'border-box',color:'var(--itq-ink)',fontFamily:'inherit'}:{width:'100%',padding:'11px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:14,boxSizing:'border-box'};
+  var lbl=temaItaq?{fontSize:12,fontWeight:700,color:'var(--itq-soft)',display:'block',marginBottom:5}:{fontSize:12,fontWeight:700,color:'#475569',display:'block',marginBottom:5};
 
   return(
     <div style={{maxWidth:560,margin:'0 auto',padding:'16px 14px 40px'}}>
-      <div style={{background:'linear-gradient(135deg,#0D1B4B,#1351B4)',padding:'20px 18px',borderRadius:18,marginBottom:16}}>
-        <div style={{color:'rgba(255,255,255,.7)',fontSize:12,textTransform:'uppercase',letterSpacing:1}}>Entrada de mercadoria</div>
-        <div style={{color:'#fff',fontSize:20,fontWeight:800}}>📦 Recebimento</div>
-        <div style={{color:'rgba(255,255,255,.75)',fontSize:12,marginTop:4}}>Registre a mercadoria recebida — o estoque atualiza na hora e fica pendente de conciliação fiscal.</div>
+      <div style={temaItaq?{background:'#fff',border:'1px solid var(--itq-line,#E3E9F6)',padding:'20px 18px',borderRadius:18,marginBottom:16,boxShadow:'0 1px 2px rgba(15,23,42,.04),0 12px 28px -18px rgba(16,42,90,.22)'}:{background:'linear-gradient(135deg,#0D1B4B,#1351B4)',padding:'20px 18px',borderRadius:18,marginBottom:16}}>
+        <div style={{color:temaItaq?'var(--itq-faint)':'rgba(255,255,255,.7)',fontSize:12,textTransform:'uppercase',letterSpacing:1}}>Entrada de mercadoria</div>
+        <div style={{color:temaItaq?'var(--itq-ink)':'#fff',fontSize:20,fontWeight:800,display:'flex',alignItems:'center',gap:8}}>{temaItaq?<Icon name="truck" size={20} strokeWidth={2}/>:'📦'} Recebimento</div>
+        <div style={{color:temaItaq?'var(--itq-soft)':'rgba(255,255,255,.75)',fontSize:12,marginTop:4}}>Registre a mercadoria recebida — o estoque atualiza na hora e fica pendente de conciliação fiscal.</div>
       </div>
 
       {/* SUB-ABAS */}
       <div data-tour="receb-subabas" style={{display:'flex',gap:8,marginBottom:16,overflowX:'auto'}}>
         {[['fisico','📦 Recebimento'],['notas','📥 Importar Notas'],['divergencias','🚨 Divergências']].map(function(t){return(
-          <button key={t[0]} data-tour={'receb-sub-'+t[0]} onClick={function(){setAba(t[0]);}} style={{flexShrink:0,padding:'11px 14px',borderRadius:12,border:'none',background:aba===t[0]?B:'#F1F5F9',color:aba===t[0]?'#fff':'#64748B',fontWeight:700,fontSize:13,cursor:'pointer',whiteSpace:'nowrap'}}>{t[1]}</button>
+          <button key={t[0]} data-tour={'receb-sub-'+t[0]} onClick={function(){setAba(t[0]);}} style={{flexShrink:0,padding:'11px 14px',borderRadius:12,border:'none',background:aba===t[0]?B:'#F1F5F9',color:aba===t[0]?'#fff':'#64748B',fontWeight:700,fontSize:13,cursor:'pointer',whiteSpace:'nowrap'}}>{_semEmoji(t[1])}</button>
         );})}
       </div>
 
@@ -10607,10 +11004,10 @@ function TabRecebimento(props){
       <div data-tour="receb-form" style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9',marginBottom:16}}>
         <div style={{fontWeight:800,fontSize:15,color:'#1E293B',marginBottom:12}}>Novo recebimento</div>
         <div style={{display:'flex',gap:8,marginBottom:14}}>
-          <button type="button" onClick={function(){setModoRec('simples');}} style={{flex:1,padding:'11px',borderRadius:10,border:'1.5px solid '+(modoRec==='simples'?B:'#E2E8F0'),background:modoRec==='simples'?'#EFF6FF':'#fff',color:modoRec==='simples'?B:'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>📦 Recebimento simples</button>
-          <button type="button" onClick={function(){setModoRec('nota');}} style={{flex:1,padding:'11px',borderRadius:10,border:'1.5px solid '+(modoRec==='nota'?'#0C6B3E':'#E2E8F0'),background:modoRec==='nota'?'#F0FDF4':'#fff',color:modoRec==='nota'?'#0C6B3E':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>📄 Já tenho a Nota Fiscal</button>
+          <button type="button" onClick={function(){setModoRec('simples');}} style={{flex:1,padding:'11px',borderRadius:10,border:'1.5px solid '+(modoRec==='simples'?B:'#E2E8F0'),background:modoRec==='simples'?'#EFF6FF':'#fff',color:modoRec==='simples'?B:'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>{_semEmoji('📦 Recebimento simples')}</button>
+          <button type="button" onClick={function(){setModoRec('nota');}} style={{flex:1,padding:'11px',borderRadius:10,border:'1.5px solid '+(modoRec==='nota'?B:'#E2E8F0'),background:modoRec==='nota'?'#EFF6FF':'#fff',color:modoRec==='nota'?B:'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>{_semEmoji('📄 Já tenho a Nota Fiscal')}</button>
         </div>
-        {modoRec==='nota'&&<div style={{background:'#F0FDF4',border:'1px solid #86EFAC',borderRadius:10,padding:'10px 12px',marginBottom:12,fontSize:11,color:'#0C6B3E'}}>Tudo que chegou bate com a nota — esse recebimento já entra conciliado, sem precisar passar por Importar Notas depois.</div>}
+        {modoRec==='nota'&&<div style={temaItaq?{background:'var(--itq-tint)',border:'1px solid var(--itq-tint-line)',borderRadius:10,padding:'10px 12px',marginBottom:12,fontSize:11,color:'var(--blue-700)'}:{background:'#F0FDF4',border:'1px solid #86EFAC',borderRadius:10,padding:'10px 12px',marginBottom:12,fontSize:11,color:'#0C6B3E'}}>Tudo que chegou bate com a nota — esse recebimento já entra conciliado, sem precisar passar por Importar Notas depois.</div>}
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:12}}>
           <div><label style={lbl}>📅 Data do recebimento</label><input type="date" value={data} max={todayStr()} onChange={function(e){setData(e.target.value);}} style={inp}/></div>
           <div><label style={lbl}>Fornecedor (opcional)</label><input value={fornecedor} onChange={function(e){setFornecedor(e.target.value);}} placeholder="Nome do fornecedor" style={inp}/></div>
@@ -10641,7 +11038,7 @@ function TabRecebimento(props){
                     {sug.map(function(x){var m=x.m;return<button key={m.id} onClick={function(){escolherMed(it.key,m);}} style={{width:'100%',textAlign:'left',padding:'10px 12px',border:'none',borderBottom:'1px solid #F1F5F9',background:'#fff',cursor:'pointer',fontSize:13,color:'#1E293B'}}>{m.nome}</button>;})}
                   </div>}
                   {focoItem===it.key&&it.busca.trim()&&sug.length===0&&<div style={{fontSize:11,color:'#94A3B8',marginTop:4}}>Nenhum medicamento encontrado no cadastro.</div>}
-                  <button type="button" onClick={function(){abrirNovoMed(it.key);}} style={{marginTop:6,width:'100%',padding:'9px',background:'#F0FDF4',border:'1.5px dashed #86EFAC',borderRadius:9,color:'#059669',fontWeight:700,fontSize:12,cursor:'pointer'}}>+ Cadastrar novo medicamento</button>
+                  <button type="button" onClick={function(){abrirNovoMed(it.key);}} style={document.body.classList.contains('theme-itaq')?{marginTop:6,width:'100%',padding:'9px',background:'var(--itq-tint)',border:'1.5px dashed var(--blue-700)',borderRadius:9,color:'var(--blue-700)',fontWeight:700,fontSize:12,cursor:'pointer'}:{marginTop:6,width:'100%',padding:'9px',background:'#F0FDF4',border:'1.5px dashed #86EFAC',borderRadius:9,color:'#059669',fontWeight:700,fontSize:12,cursor:'pointer'}}>+ Cadastrar novo medicamento</button>
                 </div>}
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:8}}>
                 <div><label style={lbl}>Qtd *</label><input type="number" min="1" inputMode="numeric" value={it.qtd} onChange={function(e){setItem(it.key,{qtd:e.target.value.replace(/[^0-9]/g,'')});}} placeholder="0" style={inp}/></div>
@@ -10663,8 +11060,8 @@ function TabRecebimento(props){
         <input value={nmNome} onChange={function(e){setNmNome(e.target.value);}} placeholder="Ex: Dipirona 500mg" className="inp" autoFocus/>
         <Lbl c="Categoria"/>
         <div style={{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap'}}>
-          {Object.keys(TIPOS).map(function(k){var t=TIPOS[k];var sel=nmTipo===k;return(
-            <button key={k} type="button" onClick={function(){setNmTipo(k);}} style={{padding:'7px 12px',borderRadius:20,border:'1.5px solid '+(sel?t.cor:'#E2E8F0'),background:sel?t.cor:'#fff',color:sel?'#fff':'#64748B',cursor:'pointer',fontWeight:sel?700:500,fontSize:12}}>{t.icon} {t.label}</button>
+          {Object.keys(TIPOS).map(function(k){var t=TIPOS[k];var sel=nmTipo===k;var temaItaq=document.body.classList.contains('theme-itaq');var cor=temaItaq?B:t.cor;return(
+            <button key={k} type="button" onClick={function(){setNmTipo(k);}} style={{padding:'7px 12px',borderRadius:20,border:'1.5px solid '+(sel?cor:'#E2E8F0'),background:sel?cor:'#fff',color:sel?'#fff':'#64748B',cursor:'pointer',fontWeight:sel?700:500,fontSize:12,display:'inline-flex',alignItems:'center',gap:5}}>{temaItaq?<Icon name={TIPOS_ICON[k]||'pill'} size={12}/>:t.icon} {t.label}</button>
           );})}
         </div>
         <Lbl c="EAN (opcional)"/>
@@ -10687,10 +11084,10 @@ function TabRecebimento(props){
       </Modal>}
 
       {/* VERIFICAÇÃO / RECUPERAÇÃO DE ESTOQUE */}
-      <div style={{background:'#FFFBEB',border:'1.5px solid #FDE68A',borderRadius:12,padding:'12px 14px',marginBottom:16}}>
-        <div style={{fontWeight:700,fontSize:13,color:'#92400E',marginBottom:4}}>🔧 Estoque não bateu com o recebimento?</div>
-        <div style={{fontSize:12,color:'#B45309',marginBottom:10}}>Verifica se todo item de recebimento realmente virou entrada no estoque e recria as que faltaram (de bugs antigos), sem redigitar.</div>
-        <button onClick={verificarRecebimentos} disabled={verif&&verif.loading} style={{width:'100%',padding:'11px',background:verif&&verif.loading?'#94A3B8':'#D97706',border:'none',borderRadius:10,color:'#fff',fontWeight:700,fontSize:13,cursor:'pointer'}}>{verif&&verif.loading?'⏳ Verificando...':'🔍 Verificar estoque dos recebimentos'}</button>
+      <div style={temaItaq?{background:'var(--itq-tint)',border:'1.5px solid var(--itq-tint-line)',borderRadius:12,padding:'12px 14px',marginBottom:16}:{background:'#FFFBEB',border:'1.5px solid #FDE68A',borderRadius:12,padding:'12px 14px',marginBottom:16}}>
+        <div style={{fontWeight:700,fontSize:13,color:temaItaq?'var(--blue-700)':'#92400E',marginBottom:4}}>{_semEmoji('🔧 Estoque não bateu com o recebimento?')}</div>
+        <div style={{fontSize:12,color:temaItaq?'var(--itq-soft)':'#B45309',marginBottom:10}}>Verifica se todo item de recebimento realmente virou entrada no estoque e recria as que faltaram (de bugs antigos), sem redigitar.</div>
+        <button onClick={verificarRecebimentos} disabled={verif&&verif.loading} className={temaItaq?'bp':''} style={temaItaq?{width:'100%',margin:0}:{width:'100%',padding:'11px',background:verif&&verif.loading?'#94A3B8':'#D97706',border:'none',borderRadius:10,color:'#fff',fontWeight:700,fontSize:13,cursor:'pointer'}}>{verif&&verif.loading?_semEmoji('⏳ Verificando...'):_semEmoji('🔍 Verificar estoque dos recebimentos')}</button>
       </div>
 
       {/* LISTA DE RECEBIMENTOS */}
@@ -11188,7 +11585,7 @@ useEffect(function(){var cfg=loadCfg();if(cfg&&initFB(cfg)){setReady(true);
   // salva ANTES da migração multi-tenant não tem esse campo, e usá-la faria o app filtrar por um
   // tenant vazio (nada bate, tudo "some" na tela até a busca de verdade no Firestore terminar).
   // Sem tenant_id, é melhor esperar a busca de verdade do que mostrar uma tela vazia enganosa.
-  var saved=localStorage.getItem('fc_user');if(saved){try{var su=JSON.parse(saved);if(su&&su.tenant_id)setUser(su);}catch(e){}}
+  var saved=null;try{saved=localStorage.getItem('fc_user');}catch(e){}if(saved){try{var su=JSON.parse(saved);if(su&&su.tenant_id)setUser(su);}catch(e){}}
   auth.onAuthStateChanged(function(firebaseUser){if(firebaseUser&&!skipAuthCheck){
     // Força renovar o token de login ANTES de ler qualquer coisa do Firestore: é o token
     // renovado que carrega a custom claim tenant_id (ver scripts/set_tenant_claims.js e a
@@ -11199,6 +11596,20 @@ useEffect(function(){var cfg=loadCfg();if(cfg&&initFB(cfg)){setReady(true);
     db.collection('users').doc(firebaseUser.uid).get().then(function(s){if(s.exists){var d=s.data();if(d.status==='inativo'||d.status==='rejected'||d.status==='pending'){auth.signOut();localStorage.removeItem('fc_user');setUser(null);return;}var u={uid:firebaseUser.uid,name:d.name,role:d.role,color:d.color,email:d.email,status:d.status,tenant_id:d.tenant_id||'',sessionTimeout:d.sessionTimeout||12,photoURL:d.photoURL||'',crf:d.crf||''};localStorage.setItem('fc_user',JSON.stringify(u));setUser(u);}}).catch(function(){var s2=localStorage.getItem('fc_user');if(s2){try{var su2=JSON.parse(s2);if(su2&&su2.tenant_id)setUser(su2);}catch(e){}}});
     });}});}},[] );
 useEffect(function(){function on(){setOnline(true);}function off(){setOnline(false);}window.addEventListener('online',on);window.addEventListener('offline',off);return function(){window.removeEventListener('online',on);window.removeEventListener('offline',off);};},[]);
+// Identidade visual v2 (azul, não é tema escuro) ativada só para Itaquitinga — ver CSS .theme-itaq.
+useEffect(function(){
+  var ativo=user&&tenantDe(user)==='itaquitinga-pe';
+  document.body.classList.toggle('theme-itaq',!!ativo);
+  // Carrega a fonte IBM Plex Sans só quando necessário, pra não gerar requisição extra pra quem não usa o tema.
+  if(ativo&&!document.getElementById('fc-itaq-font')){
+    try{
+      var l1=document.createElement('link');l1.rel='preconnect';l1.href='https://fonts.googleapis.com';
+      var l2=document.createElement('link');l2.rel='preconnect';l2.href='https://fonts.gstatic.com';l2.crossOrigin='anonymous';
+      var l3=document.createElement('link');l3.id='fc-itaq-font';l3.rel='stylesheet';l3.href='https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700;800&display=swap';
+      document.head.appendChild(l1);document.head.appendChild(l2);document.head.appendChild(l3);
+    }catch(e){}
+  }
+},[user&&user.tenant_id]);
 useEffect(function(){if(!user)return;var stored=localStorage.getItem('fc_last_act');if(stored)lastAct.current=parseInt(stored);var timeout=(user.sessionTimeout||12)*3600000;function reset(){lastAct.current=Date.now();localStorage.setItem('fc_last_act',String(Date.now()));}function check(){if(Date.now()-lastAct.current>timeout){localStorage.removeItem('fc_last_act');logout();}}document.addEventListener('touchstart',reset);document.addEventListener('click',reset);var t=setInterval(check,60000);return function(){document.removeEventListener('touchstart',reset);document.removeEventListener('click',reset);clearInterval(t);};},[user]);
 // Popup automático "MEDICAMENTOS VENCENDO!" REMOVIDO por pedido explícito da usuária (28/09/2026):
 // mesmo depois de 3 correções seguidas (reabrindo toda hora, não reconhecendo descarte já feito,
@@ -11489,8 +11900,18 @@ if(!user)return <Auth onLogin={function(u){setUser(u);}}/>;
 if(showShift||showShiftModal)return <ShiftScreen user={user} allUsers={allUsers} onDone={handleShiftDone}/>;
 if(pendingInvite)return <InviteScreen invite={pendingInvite} onConfirm={handleConfirmInvite} onDeny={handleDenyInvite}/>;
 var isManagerRole=(user.role==='gestor'||user.role==='tecnico');
+var temaItaq=tenantDe(user)==='itaquitinga-pe';
 var canMove=isManagerRole||!isGuest;
 var badge=pending+alertCount+solicitCount;
+// Mapa emoji -> ícone de linha, só usado quando temaItaq (ver function Icon). Mantém os emojis
+// como estão para Vicência — pedido explícito da usuária de não alterar o visual lá.
+function menuIconName(id){
+  var m={dashboard:'home',saida:'pill',recebimento:'truck',antibiotico:'dna',pedidosjudiciais:'scale',
+    visaogeral:'trendUp',comparapedido:'search',estoque:'package',pacientes:'lock',conferencia:'clipboard',
+    leites:'droplet',relatorio:'barChart',gestao:'users',log:'lock',histnotas:'folder',previsao:'clipboard',
+    histcontas:'clipboard',admin:'gear',perfil:'users'};
+  return m[id]||'folder';
+}
 // Para gestor/técnico em Itaquitinga, o slot de maior destaque da navegação (sempre visível) troca
 // ATB por Pedidos Judiciais — é o que essa cidade usa no dia a dia (tratamento de antibiótico é um
 // fluxo específico do hospital de Vicência, inclusive com mensagens de WhatsApp com "Hospital de
@@ -11521,25 +11942,25 @@ return(
       O alerta continua disponível sob demanda em Estoque → Vencimentos. */}
 
   {/* NAVBAR */}
-  <div style={{background:'linear-gradient(135deg,#0A2D6E 0%,#1351B4 100%)',padding:'0 16px',display:'flex',alignItems:'center',justifyContent:'space-between',position:'sticky',top:0,zIndex:10,boxShadow:'0 2px 20px rgba(10,45,110,.35)',height:56}}>
+  <div style={temaItaq?{background:'#fff',borderBottom:'1px solid var(--itq-line,#E3E9F6)',padding:'0 16px',display:'flex',alignItems:'center',justifyContent:'space-between',position:'sticky',top:0,zIndex:10,boxShadow:'0 1px 2px rgba(15,23,42,.04)',height:56}:{background:'linear-gradient(135deg,#0A2D6E 0%,#1351B4 100%)',padding:'0 16px',display:'flex',alignItems:'center',justifyContent:'space-between',position:'sticky',top:0,zIndex:10,boxShadow:'0 2px 20px rgba(10,45,110,.35)',height:56}}>
     <div style={{display:'flex',alignItems:'center',gap:10}}>
-      <div style={{width:34,height:34,borderRadius:10,background:'rgba(255,255,255,0.18)',border:'1.5px solid rgba(255,255,255,0.3)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-          <span style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:15,fontWeight:900,color:'#fff',letterSpacing:'-1px'}}>FC</span>
+      <div className={temaItaq?'fc-badge':''} style={{width:34,height:34,borderRadius:10,background:temaItaq?'linear-gradient(135deg,var(--blue-900),var(--blue-700))':'rgba(255,255,255,0.18)',border:temaItaq?'none':'1.5px solid rgba(255,255,255,0.3)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+          <span className="fc-mark" style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:15,fontWeight:900,color:'#fff',letterSpacing:'-1px'}}>FC</span>
         </div>
-      <div><div style={{fontWeight:800,fontSize:15,color:'#fff',letterSpacing:'-.01em'}}>FarmaControl</div><div style={{fontSize:9,color:'rgba(255,255,255,.5)',letterSpacing:'.02em'}}>{new Date().toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'short'}).toUpperCase()}</div></div>
+      <div><div style={{fontWeight:800,fontSize:15,color:temaItaq?'var(--itq-ink)':'#fff',letterSpacing:'-.01em'}}>FarmaControl</div><div style={{fontSize:9,color:temaItaq?'var(--itq-faint)':'rgba(255,255,255,.5)',letterSpacing:'.02em'}}>{new Date().toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'short'}).toUpperCase()}</div></div>
     </div>
     <div style={{display:'flex',alignItems:'center',gap:8}}>
-      {lowCount>0&&<div style={{background:'rgba(245,158,11,.2)',border:'1px solid rgba(245,158,11,.4)',borderRadius:20,padding:'3px 9px',fontSize:10,color:'#FCD34D',fontWeight:700}}>⚠ {lowCount}</div>}
-      <button onClick={function(){setBusca(true);}} style={{background:'rgba(255,255,255,.12)',border:'1px solid rgba(255,255,255,.18)',borderRadius:9,width:34,height:34,cursor:'pointer',fontSize:15,color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',transition:'background .15s'}} title="Buscar">🔍</button>
-      <div onClick={function(){setTab('perfil');}} style={{display:'flex',alignItems:'center',gap:8,background:'rgba(255,255,255,.12)',border:'1px solid rgba(255,255,255,.18)',borderRadius:12,padding:'5px 10px',cursor:'pointer',transition:'background .15s'}}>
+      {lowCount>0&&<div style={{background:temaItaq?'#FEF3C7':'rgba(245,158,11,.2)',border:temaItaq?'1px solid #FCD34D':'1px solid rgba(245,158,11,.4)',borderRadius:20,padding:'3px 9px',fontSize:10,color:temaItaq?'#92400E':'#FCD34D',fontWeight:700}}>⚠ {lowCount}</div>}
+      <button onClick={function(){setBusca(true);}} style={{background:temaItaq?'var(--itq-tint)':'rgba(255,255,255,.12)',border:temaItaq?'1px solid var(--itq-tint-line)':'1px solid rgba(255,255,255,.18)',borderRadius:9,width:34,height:34,cursor:'pointer',fontSize:15,color:temaItaq?'var(--blue-700)':'#fff',display:'flex',alignItems:'center',justifyContent:'center',transition:'background .15s'}} title="Buscar">{temaItaq?<Icon name="search" size={16}/>:'🔍'}</button>
+      <div onClick={function(){setTab('perfil');}} style={{display:'flex',alignItems:'center',gap:8,background:temaItaq?'var(--itq-tint)':'rgba(255,255,255,.12)',border:temaItaq?'1px solid var(--itq-tint-line)':'1px solid rgba(255,255,255,.18)',borderRadius:12,padding:'5px 10px',cursor:'pointer',transition:'background .15s'}}>
         {(convites.length>0||(user.role==='gestor'&&lowStock.filter(function(m){return (stock[m.id]||0)<=m.estoqueMin;}).length>0))&&<div style={{position:'relative',marginRight:4}}>
-          <div style={{fontSize:20,cursor:'pointer'}} onClick={function(){setTab('dashboard');}}>🔔</div>
+          <div style={{fontSize:20,cursor:'pointer',display:'flex',color:temaItaq?'var(--blue-700)':undefined}} onClick={function(){setTab('dashboard');}}>{temaItaq?<Icon name="bell" size={18}/>:'🔔'}</div>
           <span style={{position:'absolute',top:-4,right:-4,background:'#DC2626',color:'#fff',borderRadius:99,width:14,height:14,fontSize:8,fontWeight:800,display:'flex',alignItems:'center',justifyContent:'center'}}>
             {convites.length+(user.role==='gestor'?lowStock.filter(function(m){return (stock[m.id]||0)<=m.estoqueMin;}).length:0)}
           </span>
         </div>}
-        {user.photoURL?<img src={user.photoURL} style={{width:26,height:26,borderRadius:'50%',objectFit:'cover',border:'1.5px solid rgba(255,255,255,.5)',flexShrink:0}}/>:<div className="av" style={{width:26,height:26,background:user.color||'rgba(255,255,255,.25)',fontSize:11,fontWeight:700}}>{user.name?user.name.charAt(0):'?'}</div>}
-        <div><div style={{fontSize:12,fontWeight:700,color:'#fff',lineHeight:1.2}}>{(user.name||'').split(' ')[0]}</div><div style={{fontSize:9,color:'rgba(255,255,255,.5)',lineHeight:1.2}}>{isGuest?'Convidado':(ROLES[user.role]||user.role)}</div></div>
+        {user.photoURL?<img src={user.photoURL} style={{width:26,height:26,borderRadius:'50%',objectFit:'cover',border:temaItaq?'1.5px solid var(--itq-line)':'1.5px solid rgba(255,255,255,.5)',flexShrink:0}}/>:<div className="av" style={{width:26,height:26,background:user.color||(temaItaq?'var(--blue-700)':'rgba(255,255,255,.25)'),fontSize:11,fontWeight:700}}>{user.name?user.name.charAt(0):'?'}</div>}
+        <div><div style={{fontSize:12,fontWeight:700,color:temaItaq?'var(--itq-ink)':'#fff',lineHeight:1.2}}>{(user.name||'').split(' ')[0]}</div><div style={{fontSize:9,color:temaItaq?'var(--itq-faint)':'rgba(255,255,255,.5)',lineHeight:1.2}}>{isGuest?'Convidado':(ROLES[user.role]||user.role)}</div></div>
       </div>
     </div>
   </div>
@@ -11557,15 +11978,15 @@ return(
   <div className="fadeUp" data-tour="tab-content">
     {loading?(
       <div style={{minHeight:'60vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:40}}>
-        <div style={{width:64,height:64,borderRadius:16,background:'linear-gradient(135deg,#0D1B4B,#1351B4)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,color:'#fff',fontWeight:900,marginBottom:16,boxShadow:'0 8px 24px rgba(19,81,180,.3)'}}>
-          <span style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:28,fontWeight:900,color:'#fff',letterSpacing:'-1.5px'}}>FC</span>
+        <div className={document.body.classList.contains('theme-itaq')?'fc-badge':''} style={{width:64,height:64,borderRadius:16,background:'linear-gradient(135deg,#0D1B4B,#1351B4)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,color:'#fff',fontWeight:900,marginBottom:16,boxShadow:'0 8px 24px rgba(19,81,180,.3)'}}>
+          <span className="fc-mark" style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:28,fontWeight:900,color:'#fff',letterSpacing:'-1.5px'}}>FC</span>
         </div>
         <div style={{fontWeight:800,fontSize:18,color:'#0A2D6E',marginBottom:6}}>FarmaControl</div>
         <div style={{fontSize:13,color:'#94A3B8'}}>Carregando dados...</div>
       </div>
     ):(
       <div>
-        {tab==='dashboard'&&<TabDashboard entries={entries} medications={meds} stock={stock} user={user} plantao={plantao} isGuest={isGuest} onSolicitar={abrirSolicitarStable} onEncerrar={encerrarPlantaoStable} onSair={sairDoPlantaoStable} onSolicitarEntrada={solicitarEntradaPlantaoStable} shiftId={shiftId} onIniciar={abrirIniciarTurnoStable}/>}
+        {tab==='dashboard'&&<TabDashboard entries={entries} medications={meds} stock={stock} user={user} plantao={plantao} isGuest={isGuest} onSolicitar={abrirSolicitarStable} onEncerrar={encerrarPlantaoStable} onSair={sairDoPlantaoStable} onSolicitarEntrada={solicitarEntradaPlantaoStable} shiftId={shiftId} onIniciar={abrirIniciarTurnoStable} allUsers={allUsers}/>}
         {tab==='visaogeral'&&isManagerRole&&<TabVisaoGeral entries={entries} medications={meds} stock={stock} user={user}/>}
         {tab==='comparapedido'&&isManagerRole&&tenantDe(user)!=='itaquitinga-pe'&&<ErrBoundary><TabComparacaoPedido/></ErrBoundary>}
         {tab==='saida'&&<TabSaida user={user} medications={meds} stock={stock} entries={entries} onSave={addEntryStable} onSolicitar={addSolicitacaoStable} latest={latest} isGuest={isGuest} canMove={canMove} confirm2={confirm2} alert2={alert2}/>}
@@ -11602,19 +12023,34 @@ return(
     </div>
   </div>}
 
+  <nav className="itaq-sidebar">
+    <div className="itaq-sidebar-logo fc-badge"><span className="fc-mark" style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:15,fontWeight:900,letterSpacing:'-1px'}}>FC</span></div>
+    <div className="itaq-sidebar-nav">
+      {navPrincipal.map(function(t){return(
+        <button key={t.id} className={'itaq-sidebar-btn'+(tab===t.id?' on':'')} onClick={function(){setTab(t.id);setMenuAberto(false);}}>
+          <Icon name={menuIconName(t.id)} size={19}/>
+          <span>{t.label}</span>
+        </button>
+      );})}
+      <button className={'itaq-sidebar-btn'+(menuAberto?' on':'')} onClick={function(){setMenuAberto(!menuAberto);}} style={{marginTop:'auto',borderTop:'1px solid var(--itq-line,#E3E9F6)',paddingTop:14,width:'100%'}}>
+        <Icon name="menu" size={19}/>
+        <span>Menu</span>
+      </button>
+    </div>
+  </nav>
   <nav className="bnav">
     {(user.role==='gestor'||user.role==='tecnico')
       ?<div style={{width:'100%'}}>
-        {menuAberto&&<div onClick={function(){setMenuAberto(false);}} style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.6)',zIndex:149,backdropFilter:'blur(6px)'}}/>}
-        <div data-tour="menu-panel" style={{position:'fixed',top:0,right:0,bottom:0,width:280,background:'#fff',zIndex:150,transform:menuAberto?'translateX(0)':'translateX(110%)',transition:'transform .3s cubic-bezier(.4,0,.2,1)',boxShadow:menuAberto?'-8px 0 40px rgba(0,0,0,0.2)':'none',display:'flex',flexDirection:'column',willChange:'transform'}}>
-          <div style={{background:'linear-gradient(135deg,#0D1B4B,#1351B4)',padding:'52px 20px 20px',flexShrink:0}}>
+        {menuAberto&&<div className={temaItaq?'itaq-backdrop':''} onClick={function(){setMenuAberto(false);}} style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.6)',zIndex:149,backdropFilter:'blur(6px)'}}/>}
+        <div data-tour="menu-panel" className={temaItaq?'menu-drawer':''} style={{position:'fixed',top:0,[temaItaq?'left':'right']:0,bottom:0,width:280,background:'#fff',zIndex:150,transform:menuAberto?'translateX(0)':(temaItaq?'translateX(calc(-100% - 100px))':'translateX(110%)'),transition:'transform .3s cubic-bezier(.4,0,.2,1)',boxShadow:menuAberto?(temaItaq?'8px 0 40px rgba(16,42,90,.18)':'-8px 0 40px rgba(0,0,0,0.2)'):'none',display:'flex',flexDirection:'column',willChange:'transform'}}>
+          <div style={temaItaq?{background:'#fff',borderBottom:'1px solid var(--itq-line,#E3E9F6)',padding:'52px 20px 20px',flexShrink:0}:{background:'linear-gradient(135deg,#0D1B4B,#1351B4)',padding:'52px 20px 20px',flexShrink:0}}>
             <div style={{display:'flex',alignItems:'center',gap:12}}>
-              <div style={{width:42,height:42,borderRadius:12,background:'rgba(255,255,255,0.15)',border:'1.5px solid rgba(255,255,255,0.25)',display:'flex',alignItems:'center',justifyContent:'center'}}>
-                <span style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:17,fontWeight:900,color:'#fff',letterSpacing:'-1px'}}>FC</span>
+              <div className={temaItaq?'fc-badge':''} style={{width:42,height:42,borderRadius:12,background:temaItaq?'linear-gradient(135deg,var(--blue-900),var(--blue-700))':'rgba(255,255,255,0.15)',border:temaItaq?'none':'1.5px solid rgba(255,255,255,0.25)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                <span className="fc-mark" style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:17,fontWeight:900,color:'#fff',letterSpacing:'-1px'}}>FC</span>
               </div>
               <div>
-                <div style={{fontWeight:800,fontSize:15,color:'#fff',letterSpacing:'-.01em'}}>FarmaControl</div>
-                <div style={{fontSize:11,color:'rgba(255,255,255,0.5)',marginTop:1}}>{user.name}</div>
+                <div style={{fontWeight:800,fontSize:15,color:temaItaq?'var(--itq-ink)':'#fff',letterSpacing:'-.01em'}}>FarmaControl</div>
+                <div style={{fontSize:11,color:temaItaq?'var(--itq-faint)':'rgba(255,255,255,0.5)',marginTop:1}}>{user.name}</div>
               </div>
             </div>
           </div>
@@ -11635,24 +12071,24 @@ return(
               {id:'histcontas',icon:'📋',label:'Hist. de Contas',show:can(user.role,'log')},
               {id:'admin',icon:'🔧',label:'Painel Admin',show:user.role==='tecnico'},
             ].filter(function(t){return t.show;}).map(function(t){return(
-              <button key={t.id} data-tour={'nav-'+t.id} onClick={function(){setTab(t.id);setMenuAberto(false);}} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'13px 20px',border:'none',background:tab===t.id?'#EFF6FF':'transparent',cursor:'pointer',position:'relative',borderLeft:tab===t.id?'3px solid #1351B4':'3px solid transparent',transition:'background .15s'}}>
-                <span style={{fontSize:20,width:26,textAlign:'center'}}>{t.icon}</span>
-                <span style={{fontSize:14,fontWeight:tab===t.id?700:500,color:tab===t.id?'#1351B4':'#1E293B',flex:1,textAlign:'left'}}>{t.label}</span>
-                {t.badge>0&&<span style={{background:'#DC2626',color:'#fff',borderRadius:99,minWidth:18,height:18,fontSize:10,fontWeight:800,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 5px'}}>{t.badge}</span>}
+              <button key={t.id} data-tour={'nav-'+t.id} className={temaItaq?'menu-drawer-item'+(tab===t.id?' on':''):''} onClick={function(){setTab(t.id);setMenuAberto(false);}} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'13px 20px',border:'none',background:temaItaq?undefined:(tab===t.id?'#EFF6FF':'transparent'),cursor:'pointer',position:'relative',borderLeft:temaItaq?undefined:(tab===t.id?'3px solid #1351B4':'3px solid transparent'),transition:'background .15s'}}>
+                <span className={temaItaq?'menu-drawer-ic':''} style={{fontSize:20,width:26,textAlign:'center'}}>{temaItaq?<Icon name={menuIconName(t.id)} size={18}/>:t.icon}</span>
+                <span className={temaItaq?'menu-drawer-lbl':''} style={{fontSize:14,fontWeight:tab===t.id?700:500,color:temaItaq?undefined:(tab===t.id?'#1351B4':'#1E293B'),flex:1,textAlign:'left'}}>{t.label}</span>
+                {t.badge>0&&<span className={temaItaq?'menu-drawer-badge':''} style={temaItaq?undefined:{background:'#DC2626',color:'#fff',borderRadius:99,minWidth:18,height:18,fontSize:10,fontWeight:800,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 5px'}}>{t.badge}</span>}
               </button>
             );})}
           </div>
-          <div style={{borderTop:'1px solid #F1F5F9',padding:'8px 0'}}>
-            <button onClick={function(){setTab('perfil');setMenuAberto(false);}} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'13px 20px',border:'none',background:tab==='perfil'?'#EFF6FF':'transparent',cursor:'pointer',borderLeft:tab==='perfil'?'3px solid #1351B4':'3px solid transparent'}}>
+          <div className={temaItaq?'menu-drawer-footer':''} style={{borderTop:'1px solid #F1F5F9',padding:'8px 0'}}>
+            <button className={temaItaq?'menu-drawer-item'+(tab==='perfil'?' on':''):''} onClick={function(){setTab('perfil');setMenuAberto(false);}} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'13px 20px',border:'none',background:temaItaq?undefined:(tab==='perfil'?'#EFF6FF':'transparent'),cursor:'pointer',borderLeft:temaItaq?undefined:(tab==='perfil'?'3px solid #1351B4':'3px solid transparent')}}>
               {user.photoURL?<img src={user.photoURL} style={{width:26,height:26,borderRadius:'50%',objectFit:'cover',border:'2px solid #E2E8F0'}}/>:<div style={{width:26,height:26,borderRadius:'50%',background:user.color||'#1351B4',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:700,color:'#fff'}}>{user.name?user.name.charAt(0):'?'}</div>}
-              <span style={{fontSize:14,fontWeight:tab==='perfil'?700:500,color:tab==='perfil'?'#1351B4':'#1E293B',flex:1,textAlign:'left'}}>Meu Perfil</span>
+              <span className={temaItaq?'menu-drawer-lbl':''} style={{fontSize:14,fontWeight:tab==='perfil'?700:500,color:temaItaq?undefined:(tab==='perfil'?'#1351B4':'#1E293B'),flex:1,textAlign:'left'}}>Meu Perfil</span>
             </button>
           </div>
         </div>
-        <div style={{display:'flex',justifyContent:'space-around',alignItems:'center',padding:'8px 8px 0'}}>
+        <div className="bnav-row" style={{display:'flex',justifyContent:'space-around',alignItems:'center',padding:'8px 8px 0'}}>
           {navPrincipal.map(function(t){return(
             <button key={t.id} data-tour={'nav-'+t.id} className={'nb'+(tab===t.id?' on':'')} onClick={function(){setTab(t.id);setMenuAberto(false);}}>
-              <span className="ni">{t.icon}</span>
+              <span className="ni">{temaItaq?<Icon name={menuIconName(t.id)} size={18}/>:t.icon}</span>
               <span className="nl">{t.label}</span>
             </button>
           );})}
@@ -11665,31 +12101,31 @@ return(
         </div>
       </div>
       :<div style={{width:'100%'}}>
-        {menuAberto&&<div onClick={function(){setMenuAberto(false);}} style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.5)',zIndex:149,backdropFilter:'blur(4px)'}}/>}
-        <div data-tour="menu-panel" style={{position:'fixed',top:0,right:0,bottom:0,width:260,background:'#fff',zIndex:150,transform:menuAberto?'translateX(0)':'translateX(110%)',transition:'transform .3s cubic-bezier(.4,0,.2,1)',boxShadow:menuAberto?'-8px 0 40px rgba(0,0,0,0.15)':'none',display:'flex',flexDirection:'column'}}>
-          <div style={{background:'linear-gradient(135deg,#0D1B4B,#1351B4)',padding:'52px 20px 20px',flexShrink:0}}>
-            <div style={{fontWeight:800,fontSize:15,color:'#fff'}}>{user.name}</div>
-            <div style={{fontSize:11,color:'rgba(255,255,255,0.5)',marginTop:2}}>{ROLES[user.role]||user.role}</div>
+        {menuAberto&&<div className={temaItaq?'itaq-backdrop':''} onClick={function(){setMenuAberto(false);}} style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.5)',zIndex:149,backdropFilter:'blur(4px)'}}/>}
+        <div data-tour="menu-panel" className={temaItaq?'menu-drawer':''} style={{position:'fixed',top:0,[temaItaq?'left':'right']:0,bottom:0,width:260,background:'#fff',zIndex:150,transform:menuAberto?'translateX(0)':(temaItaq?'translateX(calc(-100% - 100px))':'translateX(110%)'),transition:'transform .3s cubic-bezier(.4,0,.2,1)',boxShadow:menuAberto?(temaItaq?'8px 0 40px rgba(16,42,90,.18)':'-8px 0 40px rgba(0,0,0,0.15)'):'none',display:'flex',flexDirection:'column'}}>
+          <div style={temaItaq?{background:'#fff',borderBottom:'1px solid var(--itq-line,#E3E9F6)',padding:'52px 20px 20px',flexShrink:0}:{background:'linear-gradient(135deg,#0D1B4B,#1351B4)',padding:'52px 20px 20px',flexShrink:0}}>
+            <div style={{fontWeight:800,fontSize:15,color:temaItaq?'var(--itq-ink)':'#fff'}}>{user.name}</div>
+            <div style={{fontSize:11,color:temaItaq?'var(--itq-faint)':'rgba(255,255,255,0.5)',marginTop:2}}>{ROLES[user.role]||user.role}</div>
           </div>
           <div style={{flex:1,overflowY:'auto',padding:'8px 0'}}>
             {[{id:'estoque',icon:'📦',label:'Estoque'},{id:'recebimento',icon:'🚚',label:'Recebimento'},{id:'pacientes',icon:'🔒',label:'Pacientes (Controlados)'},{id:'conferencia',icon:'🧾',label:'Conferência'},{id:'leites',icon:'🍼',label:'Leites'},{id:'relatorio',icon:'📊',label:'Relatório'}].filter(function(t){return t.id!=='pacientes'||tenantDe(user)!=='itaquitinga-pe';}).map(function(t){return(
-              <button key={t.id} data-tour={'nav-'+t.id} onClick={function(){setTab(t.id);setMenuAberto(false);}} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'13px 20px',border:'none',background:tab===t.id?'#EFF6FF':'transparent',cursor:'pointer',borderLeft:tab===t.id?'3px solid #1351B4':'3px solid transparent'}}>
-                <span style={{fontSize:20}}>{t.icon}</span>
-                <span style={{fontSize:14,fontWeight:tab===t.id?700:500,color:tab===t.id?'#1351B4':'#1E293B'}}>{t.label}</span>
+              <button key={t.id} data-tour={'nav-'+t.id} className={temaItaq?'menu-drawer-item'+(tab===t.id?' on':''):''} onClick={function(){setTab(t.id);setMenuAberto(false);}} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'13px 20px',border:'none',background:temaItaq?undefined:(tab===t.id?'#EFF6FF':'transparent'),cursor:'pointer',borderLeft:temaItaq?undefined:(tab===t.id?'3px solid #1351B4':'3px solid transparent')}}>
+                <span className={temaItaq?'menu-drawer-ic':''} style={{fontSize:20}}>{temaItaq?<Icon name={menuIconName(t.id)} size={18}/>:t.icon}</span>
+                <span className={temaItaq?'menu-drawer-lbl':''} style={{fontSize:14,fontWeight:tab===t.id?700:500,color:temaItaq?undefined:(tab===t.id?'#1351B4':'#1E293B')}}>{t.label}</span>
               </button>
             );})}
           </div>
-          <div style={{borderTop:'1px solid #F1F5F9',padding:'8px 0'}}>
-            <button onClick={function(){setTab('perfil');setMenuAberto(false);}} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'13px 20px',border:'none',background:tab==='perfil'?'#EFF6FF':'transparent',cursor:'pointer',borderLeft:tab==='perfil'?'3px solid #1351B4':'3px solid transparent'}}>
-              <span style={{fontSize:20}}>👤</span>
-              <span style={{fontSize:14,fontWeight:500,color:'#1E293B'}}>Meu Perfil</span>
+          <div className={temaItaq?'menu-drawer-footer':''} style={{borderTop:'1px solid #F1F5F9',padding:'8px 0'}}>
+            <button className={temaItaq?'menu-drawer-item'+(tab==='perfil'?' on':''):''} onClick={function(){setTab('perfil');setMenuAberto(false);}} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'13px 20px',border:'none',background:temaItaq?undefined:(tab==='perfil'?'#EFF6FF':'transparent'),cursor:'pointer',borderLeft:temaItaq?undefined:(tab==='perfil'?'3px solid #1351B4':'3px solid transparent')}}>
+              <span className={temaItaq?'menu-drawer-ic':''} style={{fontSize:20}}>{temaItaq?<Icon name="users" size={18}/>:'👤'}</span>
+              <span className={temaItaq?'menu-drawer-lbl':''} style={{fontSize:14,fontWeight:500,color:temaItaq?undefined:'#1E293B'}}>Meu Perfil</span>
             </button>
           </div>
         </div>
-        <div style={{display:'flex',justifyContent:'space-around',alignItems:'center',padding:'8px 8px 0'}}>
+        <div className="bnav-row" style={{display:'flex',justifyContent:'space-around',alignItems:'center',padding:'8px 8px 0'}}>
           {navPrincipal.map(function(t){return(
             <button key={t.id} data-tour={'nav-'+t.id} className={'nb'+(tab===t.id?' on':'')} onClick={function(){setTab(t.id);setMenuAberto(false);}}>
-              <span className="ni">{t.icon}</span>
+              <span className="ni">{temaItaq?<Icon name={menuIconName(t.id)} size={18}/>:t.icon}</span>
               <span className="nl">{t.label}</span>
             </button>
           );})}
@@ -11706,9 +12142,12 @@ return(
   </div>
 </div>
 );}
-(function(){var t=localStorage.getItem('fc_theme');if(t==='dark')document.body.classList.add('dark');})();
+// Protegido com try/catch: localStorage pode lançar exceção em alguns contextos de iframe/webview
+// restrito (ex.: pré-visualizações sandboxed) — sem isso, o erro acontecia ANTES do ReactDOM.render
+// abaixo e travava o script inteiro, deixando a tela em branco (nem a tela de carregamento aparecia).
+(function(){try{var t=localStorage.getItem('fc_theme');if(t==='dark')document.body.classList.add('dark');}catch(e){}})();
 // Interceptar botão voltar Android
-history.pushState(null, '', location.href);
+try{history.pushState(null, '', location.href);}catch(e){}
 window.addEventListener('popstate', function(){
   history.pushState(null, '', location.href);
   window._backPressed && window._backPressed();
