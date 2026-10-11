@@ -5,9 +5,6 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>FarmaControl</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%231351B4'/><text x='50%25' y='54%25' font-family='Georgia,serif' font-size='28' font-weight='900' fill='white' text-anchor='middle' dominant-baseline='middle' letter-spacing='-2'>FC</text></svg>"/>
-<link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700;800&display=swap"/>
 <script>
 // ===== Auto-atualização: checa em segundo plano se existe uma versão mais nova no servidor e,
 // se existir, força um recarregamento de verdade (com um parâmetro novo na URL, que nunca bate
@@ -11600,7 +11597,19 @@ useEffect(function(){var cfg=loadCfg();if(cfg&&initFB(cfg)){setReady(true);
     });}});}},[] );
 useEffect(function(){function on(){setOnline(true);}function off(){setOnline(false);}window.addEventListener('online',on);window.addEventListener('offline',off);return function(){window.removeEventListener('online',on);window.removeEventListener('offline',off);};},[]);
 // Identidade visual v2 (azul, não é tema escuro) ativada só para Itaquitinga — ver CSS .theme-itaq.
-useEffect(function(){var ativo=user&&tenantDe(user)==='itaquitinga-pe';document.body.classList.toggle('theme-itaq',!!ativo);},[user&&user.tenant_id]);
+useEffect(function(){
+  var ativo=user&&tenantDe(user)==='itaquitinga-pe';
+  document.body.classList.toggle('theme-itaq',!!ativo);
+  // Carrega a fonte IBM Plex Sans só quando necessário, pra não gerar requisição extra pra quem não usa o tema.
+  if(ativo&&!document.getElementById('fc-itaq-font')){
+    try{
+      var l1=document.createElement('link');l1.rel='preconnect';l1.href='https://fonts.googleapis.com';
+      var l2=document.createElement('link');l2.rel='preconnect';l2.href='https://fonts.gstatic.com';l2.crossOrigin='anonymous';
+      var l3=document.createElement('link');l3.id='fc-itaq-font';l3.rel='stylesheet';l3.href='https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700;800&display=swap';
+      document.head.appendChild(l1);document.head.appendChild(l2);document.head.appendChild(l3);
+    }catch(e){}
+  }
+},[user&&user.tenant_id]);
 useEffect(function(){if(!user)return;var stored=localStorage.getItem('fc_last_act');if(stored)lastAct.current=parseInt(stored);var timeout=(user.sessionTimeout||12)*3600000;function reset(){lastAct.current=Date.now();localStorage.setItem('fc_last_act',String(Date.now()));}function check(){if(Date.now()-lastAct.current>timeout){localStorage.removeItem('fc_last_act');logout();}}document.addEventListener('touchstart',reset);document.addEventListener('click',reset);var t=setInterval(check,60000);return function(){document.removeEventListener('touchstart',reset);document.removeEventListener('click',reset);clearInterval(t);};},[user]);
 // Popup automático "MEDICAMENTOS VENCENDO!" REMOVIDO por pedido explícito da usuária (28/09/2026):
 // mesmo depois de 3 correções seguidas (reabrindo toda hora, não reconhecendo descarte já feito,
