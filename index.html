@@ -861,6 +861,8 @@ function Icon(props){
     trash:<g><line x1="4" y1="7" x2="20" y2="7"/><path d="M9 7V4.5h6V7"/><path d="M6 7l1 13h10l1-13"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></g>,
     recycle:<g><path d="M4.5 12a7.5 7.5 0 0 1 12.8-5.3"/><polyline points="17.3 2.5 17.3 6.7 13.1 6.7"/><path d="M19.5 12a7.5 7.5 0 0 1-12.8 5.3"/><polyline points="6.7 21.5 6.7 17.3 10.9 17.3"/></g>,
     calendar:<g><rect x="4" y="5.5" width="16" height="15" rx="2"/><line x1="4" y1="10" x2="20" y2="10"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/></g>,
+    trophy:<g><path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 5H5a2.5 2.5 0 0 0 2.5 4.5M16 5h3a2.5 2.5 0 0 1-2.5 4.5"/><line x1="12" y1="13" x2="12" y2="17"/><path d="M8.5 20.5h7l-1-3.5h-5z"/></g>,
+    star:<path d="M12 3.3 14.6 9l6.2.6-4.7 4.1 1.4 6.1L12 16.8 6.5 19.8l1.4-6.1-4.7-4.1L9.4 9z"/>,
     dna:<g><path d="M6 3c0 6 12 6 12 12M18 21c0-6-12-6-12-12"/><line x1="8" y1="6.5" x2="12.5" y2="6.5"/><line x1="11.5" y1="12" x2="16" y2="12"/><line x1="8" y1="17.5" x2="12.5" y2="17.5"/></g>,
     menu:<g><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></g>,
     search:<g><circle cx="10.8" cy="10.8" r="6.3"/><line x1="19.5" y1="19.5" x2="15.4" y2="15.4"/></g>,
@@ -1089,9 +1091,18 @@ function handleFotoMural(e){var f=e.target.files[0];if(!f||!f.type.startsWith('i
 function post(){if(!aviso.trim()&&!fotoMural)return;setSaving(true);var expAt=new Date();expAt.setHours(expAt.getHours()+48);db.collection('avisos').add({texto:aviso.trim(),foto:fotoMural||'',autorNome:user.name,autorColor:user.color||B,autorFoto:user.photoURL||'',criadoEm:new Date().toISOString(),expiraEm:expAt.toISOString(),tenant_id:tenantDe(user)}).then(function(){setAviso('');setFotoMural('');setSaving(false);});}
 function del(id){db.collection('avisos').doc(id).delete();}
 var today=todayStr();var te=entries.filter(function(e){return (e.criadoEm||'').startsWith(today)&&!_ehSaidaNaoReal(e);});var ts=0;te.forEach(function(e){if(e.tipo==='saida')ts+=(e.quantidade||0);});var tin=0;te.forEach(function(e){if(e.tipo==='entrada')tin+=(e.quantidade||0);});var low=medications.filter(function(m){return m.minEstoque&&(stock[m.id]||0)<=m.minEstoque&&(stock[m.id]||0)>0;});
-var vencendoIds={};computeVencimentos(medications,entries,stock).venc30.forEach(function(v){vencendoIds[v.id]=true;});var vencendo=Object.keys(vencendoIds).length;
+var vencData=computeVencimentos(medications,entries,stock);var vencendoIds={};vencData.venc30.forEach(function(v){vencendoIds[v.id]=true;});var vencendo=Object.keys(vencendoIds).length;
 var week=[];for(var wi=0;wi<7;wi++){var wd=new Date();wd.setDate(wd.getDate()-(6-wi));var wk=fmtISO(wd);var wv=0;entries.forEach(function(e){if(e.tipo==='saida'&&!_ehSaidaNaoReal(e)&&(e.criadoEm||'').startsWith(wk))wv+=(e.quantidade||0);});week.push({l:wd.toLocaleDateString('pt-BR',{weekday:'short'}).slice(0,3),v:wv});}
 var temaItaq=tenantDe(user)==='itaquitinga-pe';
+// Painéis novos da home (só Itaquitinga, pedido da usuária pra substituir o Mural do Plantão):
+// "Vencendo em breve" (vencidos + até 30 dias, mais urgentes primeiro) e "Mais retirados da semana".
+var vencendoDestaque=temaItaq?vencData.vencidos.concat(vencData.venc30).sort(function(a,b){return a.dias-b.dias;}).slice(0,5):[];
+var maisRetiradosSemana=temaItaq?(function(){
+  var d7=new Date();d7.setDate(d7.getDate()-7);var d7s=fmtISO(d7);
+  var map={};entries.forEach(function(e){if(e.tipo!=='saida'||_ehSaidaNaoReal(e))return;if((e.criadoEm||'').slice(0,10)<d7s)return;var k=e.medicamentoId||e.medicamentoNome;if(!k)return;if(!map[k])map[k]={nome:e.medicamentoNome||k,total:0};map[k].total+=(e.quantidade||0);});
+  return Object.keys(map).map(function(k){return map[k];}).sort(function(a,b){return b.total-a.total;}).slice(0,5);
+})():[];
+var maisRetiradosMax=1;maisRetiradosSemana.forEach(function(m){if(m.total>maisRetiradosMax)maisRetiradosMax=m.total;});
 var stats=[
   {icon:'💊',iconName:'pill',label:'Saídas hoje',val:ts,sub:te.filter(function(e){return e.tipo==='saida';}).length+' registros',color:'#DC2626',bg:'#FEE2E2'},
   {icon:'📥',iconName:'inbox',label:'Entradas hoje',val:tin,sub:te.filter(function(e){return e.tipo==='entrada';}).length+' registros',color:'#0C6B3E',bg:'#DCFCE7'},
@@ -1115,6 +1126,40 @@ return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
     <div className="ch"><div className="ch-title"><div className="ch-accent"/><span>Saídas — Ultimos 7 dias</span></div></div>
     <div style={{padding:'16px 16px 12px'}}><BarChart data={week}/></div>
   </div>
+  {temaItaq?(<React.Fragment>
+    <div className="card" style={{marginBottom:14}}>
+      <div className="ch"><div className="ch-title"><div className="ch-accent"/><span style={{display:'flex',alignItems:'center',gap:6}}><Icon name="hourglass" size={13}/> Vencendo em breve</span></div></div>
+      {vencendoDestaque.length===0
+        ?<div style={{padding:'24px',textAlign:'center',color:'#94A3B8',fontSize:13}}>Nenhum produto vencendo nos próximos 30 dias.</div>
+        :vencendoDestaque.map(function(v,i){var vencido=v.dias<0;return(
+          <div key={v.id+'_'+v.validade+'_'+i} style={{padding:'11px 16px',borderTop:i>0?'1px solid #F8FAFC':'none',display:'flex',alignItems:'center',gap:10}}>
+            <div className="row-icon" style={{background:vencido?'#FEE2E2':'var(--itq-tint)',color:vencido?'#B91C1C':'#B45309'}}><Icon name="hourglass" size={15}/></div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontWeight:600,fontSize:13,color:'var(--itq-ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{v.nome}</div>
+              <div style={{fontSize:11,color:'#94A3B8'}}>{v.est} un. · lote {v.lote||'—'}</div>
+            </div>
+            <span className={'badge '+(vencido?'badge-red':v.dias<=15?'badge-red':'badge-amber')} style={{whiteSpace:'nowrap'}}>{vencido?'Venceu há '+Math.abs(v.dias)+'d':'Vence em '+v.dias+'d'}</span>
+          </div>
+        );})}
+    </div>
+    <div className="card">
+      <div className="ch"><div className="ch-title"><div className="ch-accent"/><span style={{display:'flex',alignItems:'center',gap:6}}><Icon name="trendDown" size={13}/> Mais retirados — 7 dias</span></div></div>
+      {maisRetiradosSemana.length===0
+        ?<div style={{padding:'24px',textAlign:'center',color:'#94A3B8',fontSize:13}}>Nenhuma saída registrada nos últimos 7 dias.</div>
+        :<div style={{padding:'12px 16px'}}>
+          {maisRetiradosSemana.map(function(m,i){var w=Math.round((m.total/maisRetiradosMax)*100);return(
+            <div key={i} style={{display:'flex',alignItems:'center',gap:8,marginBottom:i<maisRetiradosSemana.length-1?10:0}}>
+              <span style={{fontSize:11,fontWeight:700,color:'#94A3B8',width:14,textAlign:'right',flexShrink:0}}>{i+1}</span>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:12,fontWeight:600,color:'var(--itq-ink)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',marginBottom:3}}>{m.nome}</div>
+                <div style={{height:6,background:'var(--itq-tint)',borderRadius:3,overflow:'hidden'}}><div style={{width:w+'%',height:'100%',background:B,borderRadius:3}}/></div>
+              </div>
+              <span style={{fontSize:13,fontWeight:800,color:B,minWidth:28,textAlign:'right',flexShrink:0}}>{m.total}</span>
+            </div>
+          );})}
+        </div>}
+    </div>
+  </React.Fragment>):(
   <div className="card">
     <div className="ch"><div className="ch-title"><div className="ch-accent"/><span>Mural do Plantão</span></div></div>
     <div style={{padding:'14px 16px',borderBottom:'1px solid #F1F5F9'}}>
@@ -1152,6 +1197,7 @@ return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
         );})}
     </div>
   </div>
+  )}
 </div>);}
 
 function TabVisaoGeral(props){
@@ -4278,6 +4324,56 @@ return(
       </div>;
     })()}
   </div>
+
+  {temaItaq&&(function(){
+    var meusTotal=(entries||[]).filter(function(e){return (e.autorId===user.uid||e.autorNome===user.name)&&!(e.tipo==='saida'&&_ehSaidaNaoReal(e));}).length;
+    var marcos=[
+      {marco:1,label:'Primeiro passo',icon:'check'},
+      {marco:10,label:'Em ritmo',icon:'trendUp'},
+      {marco:50,label:'Dedicado',icon:'star'},
+      {marco:100,label:'Veterano',icon:'barChart'},
+      {marco:200,label:'Experiente',icon:'trophy'}
+    ];
+    // Destaque do mês: ranking entre toda a equipe por nº de registros no mês atual.
+    var mesAtual=todayStr().slice(0,7);
+    var porAutorMes={};(entries||[]).forEach(function(e){if((e.criadoEm||'').slice(0,7)!==mesAtual)return;if(e.tipo==='saida'&&_ehSaidaNaoReal(e))return;var k=e.autorNome||'?';if(!porAutorMes[k])porAutorMes[k]=0;porAutorMes[k]++;});
+    var rankingMes=Object.keys(porAutorMes).map(function(k){return {nome:k,total:porAutorMes[k]};}).sort(function(a,b){return b.total-a.total;});
+    var minhaPosicao=rankingMes.findIndex(function(r){return r.nome===user.name;})+1;
+    var meuTotalMes=porAutorMes[user.name]||0;
+    return(<React.Fragment>
+      <div className="card" style={{marginBottom:14,padding:'16px 18px'}}>
+        <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:14}}>
+          <div style={{width:36,height:36,borderRadius:10,background:'linear-gradient(135deg,var(--blue-900),var(--blue-700))',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff'}}><Icon name="trophy" size={17}/></div>
+          <div style={{fontWeight:700,fontSize:15,color:'#1E293B'}}>Minhas Conquistas</div>
+        </div>
+        <div style={{display:'flex',gap:10,overflowX:'auto',paddingBottom:4}}>
+          {marcos.map(function(m){var feito=meusTotal>=m.marco;return(
+            <div key={m.marco} style={{flexShrink:0,width:84,textAlign:'center',padding:'12px 6px',borderRadius:12,background:feito?'var(--itq-tint)':'var(--itq-bg)',border:'1.5px solid '+(feito?'var(--itq-tint-line)':'var(--itq-line)'),opacity:feito?1:.55}}>
+              <div style={{width:34,height:34,borderRadius:'50%',background:feito?B:'#fff',color:feito?'#fff':'var(--itq-faint)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 6px',border:feito?'none':'1.5px solid var(--itq-line)'}}><Icon name={m.icon} size={15}/></div>
+              <div style={{fontSize:10,fontWeight:700,color:feito?'var(--itq-ink)':'var(--itq-faint)',lineHeight:1.3}}>{m.label}</div>
+              <div style={{fontSize:9,color:'var(--itq-faint)',marginTop:2}}>{m.marco} reg.</div>
+            </div>
+          );})}
+        </div>
+      </div>
+      {rankingMes.length>1&&<div className="card" style={{marginBottom:14,padding:'16px 18px'}}>
+        <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:4}}>
+          <div style={{width:36,height:36,borderRadius:10,background:minhaPosicao===1?'linear-gradient(135deg,#B45309,#D97706)':'linear-gradient(135deg,var(--blue-900),var(--blue-700))',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',flexShrink:0}}><Icon name="star" size={17}/></div>
+          <div>
+            <div style={{fontWeight:700,fontSize:15,color:'#1E293B'}}>Destaque do Mês</div>
+            <div style={{fontSize:12,color:'#94A3B8'}}>Entre {rankingMes.length} pessoa{rankingMes.length>1?'s':''} da equipe</div>
+          </div>
+        </div>
+        <div style={{marginTop:10,background:minhaPosicao===1?'#FFFBEB':'var(--itq-tint)',border:'1.5px solid '+(minhaPosicao===1?'#FDE68A':'var(--itq-tint-line)'),borderRadius:12,padding:'12px 14px',display:'flex',alignItems:'center',gap:12}}>
+          <div style={{fontSize:24,fontWeight:900,color:minhaPosicao===1?'#B45309':B}}>#{minhaPosicao||'—'}</div>
+          <div style={{flex:1}}>
+            <div style={{fontSize:13,fontWeight:700,color:'var(--itq-ink)'}}>{minhaPosicao===1?'Você é quem mais registrou esse mês!':'Você registrou '+meuTotalMes+' movimentaç'+(meuTotalMes===1?'ão':'ões')+' esse mês'}</div>
+            <div style={{fontSize:11,color:'var(--itq-soft)',marginTop:1}}>{minhaPosicao===1?'Continue assim 🎉':'Mais que '+rankingMes.filter(function(r){return r.total<meuTotalMes;}).length+' colega(s) da equipe'}</div>
+          </div>
+        </div>
+      </div>}
+    </React.Fragment>);
+  })()}
 
   {user.role==='farmaceutico'&&(
     <div className="card" style={{padding:'20px',marginBottom:14}}>
