@@ -1084,7 +1084,7 @@ function ShiftCard(props){
 }
 
 function BarChart(props){var data=props.data||[];var max=1;for(var i=0;i<data.length;i++){if(data[i].v>max)max=data[i].v;}return(<div style={{display:'flex',alignItems:'flex-end',gap:6,height:80,padding:'0 4px'}}>{data.map(function(d,i){var h=Math.round((d.v/max)*58);var isToday=i===data.length-1;return(<div key={i} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:3}}><div style={{fontSize:10,color:isToday?B:'#94A3B8',fontWeight:isToday?700:500}}>{d.v||''}</div><div style={{width:'100%',background:isToday?B:'#BFDBFE',borderRadius:'5px 5px 0 0',height:h+'px',minHeight:d.v?4:0,transition:'height .3s ease'}}/><div style={{fontSize:9,color:isToday?B:'#94A3B8',fontWeight:isToday?700:400}}>{d.l}</div></div>);})}</div>);}
-function TabDashboard(props){var entries=props.entries;var medications=props.medications;var stock=props.stock;var user=props.user;var plantao=props.plantao;var isGuest=props.isGuest;var onSolicitar=props.onSolicitar;var onEncerrar=props.onEncerrar;var onSair=props.onSair;var onSolicitarEntrada=props.onSolicitarEntrada;var shiftId=props.shiftId;var onIniciar=props.onIniciar;var _aviso=useState('');var aviso=_aviso[0];var setAviso=_aviso[1];var _avisos=useState([]);var avisos=_avisos[0];var setAvisos=_avisos[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];
+function TabDashboard(props){var entries=props.entries;var medications=props.medications;var stock=props.stock;var user=props.user;var plantao=props.plantao;var isGuest=props.isGuest;var onSolicitar=props.onSolicitar;var onEncerrar=props.onEncerrar;var onSair=props.onSair;var onSolicitarEntrada=props.onSolicitarEntrada;var shiftId=props.shiftId;var onIniciar=props.onIniciar;var allUsers=props.allUsers||[];var _aviso=useState('');var aviso=_aviso[0];var setAviso=_aviso[1];var _avisos=useState([]);var avisos=_avisos[0];var setAvisos=_avisos[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];
 useEffect(function(){var u=db.collection('avisos').where('tenant_id','==',tenantDe(user)).limit(20).onSnapshot(function(s){var list=s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;});var agora=new Date().toISOString();list=list.filter(function(a){return !a.expiraEm||a.expiraEm>agora;});list.sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});setAvisos(list);});return u;},[]);
 var _fotoMural=useState('');var fotoMural=_fotoMural[0];var setFotoMural=_fotoMural[1];
 function handleFotoMural(e){var f=e.target.files[0];if(!f||!f.type.startsWith('image/'))return;compressPhoto(f,function(b64){setFotoMural(b64);});e.target.value='';}
@@ -1103,6 +1103,20 @@ var maisRetiradosSemana=temaItaq?(function(){
   return Object.keys(map).map(function(k){return map[k];}).sort(function(a,b){return b.total-a.total;}).slice(0,5);
 })():[];
 var maisRetiradosMax=1;maisRetiradosSemana.forEach(function(m){if(m.total>maisRetiradosMax)maisRetiradosMax=m.total;});
+// Destaque do Mês (visível pra todo mundo na home): quem mais registrou saída+entrada no mês atual,
+// com a % que isso representa do total da equipe — pedido da usuária pra incentivar o time.
+var destaqueMes=(function(){
+  if(!temaItaq)return null;
+  var mesAtual=todayStr().slice(0,7);
+  var porAutor={};var totalGeral=0;
+  entries.forEach(function(e){if((e.criadoEm||'').slice(0,7)!==mesAtual)return;if(e.tipo==='saida'&&_ehSaidaNaoReal(e))return;var k=e.autorNome||'?';if(!porAutor[k])porAutor[k]=0;porAutor[k]++;totalGeral++;});
+  var nomes=Object.keys(porAutor);
+  if(nomes.length<2||totalGeral===0)return null;
+  var top=nomes.reduce(function(a,b){return porAutor[a]>=porAutor[b]?a:b;});
+  var u=allUsers.find(function(x){return x.name===top;});
+  var pct=Math.round((porAutor[top]/totalGeral)*100);
+  return {nome:top,total:porAutor[top],pct:pct,foto:u?u.photoURL:'',cor:u?u.color:B};
+})();
 var stats=[
   {icon:'💊',iconName:'pill',label:'Saídas hoje',val:ts,sub:te.filter(function(e){return e.tipo==='saida';}).length+' registros',color:'#DC2626',bg:'#FEE2E2'},
   {icon:'📥',iconName:'inbox',label:'Entradas hoje',val:tin,sub:te.filter(function(e){return e.tipo==='entrada';}).length+' registros',color:'#0C6B3E',bg:'#DCFCE7'},
@@ -1111,6 +1125,20 @@ var stats=[
 ];
 return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
   <ShiftCard plantao={plantao} isGuest={isGuest} user={user} onEncerrar={onEncerrar} shiftId={shiftId} onIniciar={onIniciar} onSolicitarEntrada={onSolicitarEntrada} onSair={onSair} db={db}/>
+  {destaqueMes&&<div style={{background:'linear-gradient(135deg,var(--blue-900),var(--blue-700))',borderRadius:18,padding:'16px 18px',marginBottom:14,display:'flex',alignItems:'center',gap:14,boxShadow:'0 8px 24px -8px rgba(16,42,90,.4)',position:'relative',overflow:'hidden'}}>
+    <div style={{position:'absolute',top:-40,right:-40,width:140,height:140,borderRadius:'50%',background:'rgba(255,255,255,.07)',pointerEvents:'none'}}/>
+    <div style={{position:'relative',flexShrink:0}}>
+      <div style={{width:58,height:58,borderRadius:'50%',padding:3,background:'linear-gradient(135deg,#FCD34D,#F59E0B)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+        {destaqueMes.foto?<img src={destaqueMes.foto} style={{width:'100%',height:'100%',borderRadius:'50%',objectFit:'cover',border:'2px solid #fff'}}/>:<div style={{width:'100%',height:'100%',borderRadius:'50%',background:destaqueMes.cor||B,border:'2px solid #fff',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontWeight:800,fontSize:20}}>{destaqueMes.nome.charAt(0)}</div>}
+      </div>
+      <div style={{position:'absolute',bottom:-3,right:-3,width:22,height:22,borderRadius:'50%',background:'linear-gradient(135deg,#FCD34D,#F59E0B)',border:'2px solid #0A2D6E',display:'flex',alignItems:'center',justifyContent:'center',color:'#78350F'}}><Icon name="trophy" size={11} strokeWidth={2.4}/></div>
+    </div>
+    <div style={{flex:1,minWidth:0}}>
+      <div style={{fontSize:10,fontWeight:800,color:'#FCD34D',textTransform:'uppercase',letterSpacing:'.06em'}}>Destaque do mês</div>
+      <div style={{fontSize:15,fontWeight:800,color:'#fff',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{destaqueMes.nome}</div>
+      <div style={{fontSize:11,color:'rgba(255,255,255,.75)',marginTop:1}}>{destaqueMes.total} registros · {destaqueMes.pct}% da equipe</div>
+    </div>
+  </div>}
   {isGuest&&(user.role==='farmaceutico'||user.role==='auxiliar'||user.role==='diarista')&&onSolicitar&&(<button onClick={onSolicitar} style={{width:'100%',marginBottom:14,padding:'13px',background:B,border:'none',borderRadius:14,color:'#fff',fontSize:14,fontWeight:700,cursor:'pointer',boxShadow:'0 4px 14px rgba(19,81,180,.3)'}}>📋 Solicitar Movimentacao</button>)}
   <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:10,marginBottom:14}}>
     {stats.map(function(s){return(
@@ -4256,13 +4284,23 @@ function TabPerfil(props){var user=props.user;var onUpdate=props.onUpdate;var on
   var _darkMode=useState(_darkModeInit);var darkMode=_darkMode[0];var setDarkMode=_darkMode[1];var _showLogoutConfirm=useState(false);var showLogoutConfirm=_showLogoutConfirm[0];var setShowLogoutConfirm=_showLogoutConfirm[1];
   function trocarAmbiente(novoAmb){localStorage.setItem('farmacontrol_env',novoAmb);setAmb(novoAmb);setShowAmbSelector(false);setTimeout(function(){window.location.reload();},500);}
   var _color=useState(user.color||PALETTE[0]);var color=_color[0];var setColor=_color[1];var _sessionH=useState(user.sessionTimeout||12);var sessionH=_sessionH[0];var setSessionH=_sessionH[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];var _ok=useState('');var ok=_ok[0];var setOk=_ok[1];var _photo=useState(user.photoURL||'');var photo=_photo[0];var setPhoto=_photo[1];var _crf=useState(user.crf||'');var crf=_crf[0];var setCrf=_crf[1];var _uploading=useState(false);var uploading=_uploading[0];var setUploading=_uploading[1];
+  // Itens conferidos (lifetime) — pra conquista de Conferências. Busca única (não precisa tempo real)
+  // sobre a coleção inteira de conferências do tenant: um doc por dia, então o volume é pequeno.
+  var _confItens=useState(0);var confItens=_confItens[0];var setConfItens=_confItens[1];
+  useEffect(function(){
+    if(!temaItaq)return;
+    db.collection('conferencias').where('tenant_id','==',tenantDe(user)).get().then(function(snap){
+      var n=0;snap.docs.forEach(function(d){var cp=(d.data()||{}).contadoPor||{};Object.keys(cp).forEach(function(k){if(cp[k]&&cp[k].nome===user.name)n++;});});
+      setConfItens(n);
+    }).catch(function(){});
+  },[temaItaq]);
 function handlePhotoChange(e){var file=e.target.files[0];if(!file)return;if(!file.type.startsWith('image/')){alert('Selecione uma imagem.');return;}if(file.size>8*1024*1024){alert('Max 8MB.');return;}setUploading(true);compressPhoto(file,function(b64){setPhoto(b64);setUploading(false);});}
 function save(){setSaving(true);var upd={color:color,sessionTimeout:parseInt(sessionH)||12,photoURL:photo||''};if(user.role==='farmaceutico')upd.crf=crf.trim();db.collection('users').doc(user.uid).update(upd).then(function(){var u={};for(var k in user)u[k]=user[k];u.color=color;u.sessionTimeout=parseInt(sessionH)||12;u.photoURL=photo||'';if(user.role==='farmaceutico')u.crf=crf.trim();localStorage.setItem('fc_user',JSON.stringify(u));onUpdate(u);setOk('Preferencias salvas com sucesso!');setTimeout(function(){setOk('');},3000);setSaving(false);}).catch(function(e){alert('Erro: '+e.message);setSaving(false);});}
 function exportBackup(){var wb=XLSX.utils.book_new();var rows=[['Data','Hora','Responsavel','Medicamento','Tipo','Qtd','Lote']];(entries||[]).forEach(function(e){rows.push([fmtD(e.criadoEm),fmtT(e.criadoEm),e.autorNome||'',e.medicamentoNome||'',e.tipo==='entrada'?'Entrada':'Saida',e.quantidade||0,e.lote||'']);});XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'Movimentacoes');var sr=[['Medicamento','EAN','Estoque']];(medications||[]).forEach(function(m){sr.push([m.nome,m.ean||'',(stock||{})[m.id]||0]);});XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(sr),'Estoque');XLSX.writeFile(wb,'backup_farmacontrol_'+todayStr()+'.xlsx');}
-var gradBg='linear-gradient(135deg,'+(color||B)+' 0%,'+((color||B)+'cc')+' 100%)';
+var gradBg=temaItaq?'linear-gradient(135deg,var(--blue-900),var(--blue-700) 60%,var(--blue-600))':'linear-gradient(135deg,'+(color||B)+' 0%,'+((color||B)+'cc')+' 100%)';
 return(
 <div style={{maxWidth:440,margin:'0 auto',padding:'16px 14px'}}>
-  <div style={{background:gradBg,borderRadius:24,padding:'32px 24px 28px',marginBottom:16,color:'#fff',textAlign:'center',boxShadow:'0 12px 40px rgba(0,0,0,.2)',position:'relative',overflow:'hidden'}}>
+  <div style={{background:gradBg,borderRadius:24,padding:'32px 24px 28px',marginBottom:16,color:'#fff',textAlign:'center',boxShadow:temaItaq?'0 12px 32px -8px rgba(16,42,90,.45)':'0 12px 40px rgba(0,0,0,.2)',position:'relative',overflow:'hidden'}}>
     <div style={{position:'absolute',top:-60,right:-60,width:200,height:200,borderRadius:'50%',background:'rgba(255,255,255,.06)',pointerEvents:'none'}}/>
     <div style={{position:'absolute',bottom:-50,left:-50,width:160,height:160,borderRadius:'50%',background:'rgba(255,255,255,.04)',pointerEvents:'none'}}/>
     <div style={{position:'relative',zIndex:1}}>
@@ -4300,7 +4338,20 @@ return(
       var criadoEm=user.criadoEm?new Date(user.criadoEm):new Date();
       var diasAtivo=Math.max(1,Math.ceil((new Date()-criadoEm)/86400000));
       var ultimoAcesso=(entries||[]).filter(function(e){return e.autorId===user.uid||e.autorNome===user.name;}).sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});
-      return <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+      var hoje=todayStr();
+      var minhasHoje=(entries||[]).filter(function(e){return (e.autorId===user.uid||e.autorNome===user.name)&&(e.criadoEm||'').startsWith(hoje);});
+      var saidasHoje=minhasHoje.filter(function(e){return e.tipo==='saida'&&!_ehSaidaNaoReal(e);}).length;
+      var entradasHoje=minhasHoje.filter(function(e){return e.tipo==='entrada';}).length;
+      return <div>
+      {temaItaq&&<div style={{display:'flex',alignItems:'center',gap:14,background:'linear-gradient(135deg,var(--blue-900),var(--blue-700))',borderRadius:12,padding:'12px 16px',marginBottom:12}}>
+        <div style={{flex:1}}>
+          <div style={{fontSize:10,fontWeight:800,color:'rgba(255,255,255,.65)',textTransform:'uppercase',letterSpacing:'.05em'}}>Hoje</div>
+          <div style={{fontSize:12,color:'#fff',marginTop:2}}>{saidasHoje+entradasHoje===0?'Nenhum registro ainda hoje':saidasHoje+entradasHoje+' movimentaç'+(saidasHoje+entradasHoje===1?'ão':'ões')+' registrada'+(saidasHoje+entradasHoje===1?'':'s')}</div>
+        </div>
+        <div style={{textAlign:'center'}}><div style={{fontSize:18,fontWeight:800,color:'#fff'}}>{saidasHoje}</div><div style={{fontSize:9,color:'rgba(255,255,255,.65)'}}>saídas</div></div>
+        <div style={{textAlign:'center'}}><div style={{fontSize:18,fontWeight:800,color:'#fff'}}>{entradasHoje}</div><div style={{fontSize:9,color:'rgba(255,255,255,.65)'}}>entradas</div></div>
+      </div>}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
         <div style={{background:temaItaq?'var(--itq-tint)':'#EFF6FF',borderRadius:12,padding:'12px 14px'}}>
           <div style={{fontSize:22,fontWeight:800,color:B}}>{minhasSaidas}</div>
           <div style={{fontSize:11,color:'#64748B',marginTop:2}}>Saídas registradas</div>
@@ -4321,18 +4372,22 @@ return(
           <div style={{fontSize:12,color:'#64748B'}}>Último registro</div>
           <div style={{fontSize:12,fontWeight:700,color:'#1E293B'}}>{fmtD(ultimoAcesso[0].criadoEm)}</div>
         </div>}
+      </div>
       </div>;
     })()}
   </div>
 
   {temaItaq&&(function(){
-    var meusTotal=(entries||[]).filter(function(e){return (e.autorId===user.uid||e.autorNome===user.name)&&!(e.tipo==='saida'&&_ehSaidaNaoReal(e));}).length;
-    var marcos=[
-      {marco:1,label:'Primeiro passo',icon:'check'},
-      {marco:10,label:'Em ritmo',icon:'trendUp'},
-      {marco:50,label:'Dedicado',icon:'star'},
-      {marco:100,label:'Veterano',icon:'barChart'},
-      {marco:200,label:'Experiente',icon:'trophy'}
+    var minhasSaidasTotal=(entries||[]).filter(function(e){return (e.autorId===user.uid||e.autorNome===user.name)&&e.tipo==='saida'&&!_ehSaidaNaoReal(e);}).length;
+    var minhasEntradasTotal=(entries||[]).filter(function(e){return (e.autorId===user.uid||e.autorNome===user.name)&&e.tipo==='entrada';}).length;
+    // Tiers de medalha (iguais pras 3 categorias) — pedido da usuária: 500/1000... "como se fosse emblemas",
+    // pra incentivar o time. Cores de medalha de verdade (bronze/prata/ouro/platina/diamante) — exceção
+    // deliberada ao azul único, igual já fazemos pro vermelho/âmbar/verde de status.
+    var tiersDef=[{m:10,n:'Bronze',c1:'#CD7F32',c2:'#A0522D'},{m:50,n:'Prata',c1:'#CBD5E1',c2:'#94A3B8'},{m:100,n:'Ouro',c1:'#FCD34D',c2:'#F59E0B'},{m:500,n:'Platina',c1:'#93C5FD',c2:'#3B82F6'},{m:1000,n:'Diamante',c1:'#C4B5FD',c2:'#7C3AED'}];
+    var categorias=[
+      {key:'saidas',label:'Saídas',icon:'pill',count:minhasSaidasTotal},
+      {key:'entradas',label:'Entradas',icon:'inbox',count:minhasEntradasTotal},
+      {key:'conferencias',label:'Conferências',icon:'clipboard',count:confItens}
     ];
     // Destaque do mês: ranking entre toda a equipe por nº de registros no mês atual.
     var mesAtual=todayStr().slice(0,7);
@@ -4346,15 +4401,23 @@ return(
           <div style={{width:36,height:36,borderRadius:10,background:'linear-gradient(135deg,var(--blue-900),var(--blue-700))',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff'}}><Icon name="trophy" size={17}/></div>
           <div style={{fontWeight:700,fontSize:15,color:'#1E293B'}}>Minhas Conquistas</div>
         </div>
-        <div style={{display:'flex',gap:10,overflowX:'auto',paddingBottom:4}}>
-          {marcos.map(function(m){var feito=meusTotal>=m.marco;return(
-            <div key={m.marco} style={{flexShrink:0,width:84,textAlign:'center',padding:'12px 6px',borderRadius:12,background:feito?'var(--itq-tint)':'var(--itq-bg)',border:'1.5px solid '+(feito?'var(--itq-tint-line)':'var(--itq-line)'),opacity:feito?1:.55}}>
-              <div style={{width:34,height:34,borderRadius:'50%',background:feito?B:'#fff',color:feito?'#fff':'var(--itq-faint)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 6px',border:feito?'none':'1.5px solid var(--itq-line)'}}><Icon name={m.icon} size={15}/></div>
-              <div style={{fontSize:10,fontWeight:700,color:feito?'var(--itq-ink)':'var(--itq-faint)',lineHeight:1.3}}>{m.label}</div>
-              <div style={{fontSize:9,color:'var(--itq-faint)',marginTop:2}}>{m.marco} reg.</div>
+        {categorias.map(function(cat,ci){
+          var atual=null,prox=null;
+          for(var i=0;i<tiersDef.length;i++){if(cat.count>=tiersDef[i].m)atual=tiersDef[i];else{prox=tiersDef[i];break;}}
+          var pct=prox?Math.min(100,Math.round((cat.count/prox.m)*100)):100;
+          return(
+          <div key={cat.key} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 0',borderTop:ci>0?'1px solid var(--itq-line)':'none'}}>
+            <div style={{width:44,height:44,borderRadius:'50%',flexShrink:0,background:atual?'linear-gradient(135deg,'+atual.c1+','+atual.c2+')':'var(--itq-tint)',border:atual?'none':'1.5px solid var(--itq-line)',display:'flex',alignItems:'center',justifyContent:'center',color:atual?'#fff':'var(--itq-faint)',boxShadow:atual?'0 3px 8px -2px rgba(0,0,0,.35)':'none'}}><Icon name={cat.icon} size={19}/></div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:3}}>
+                <span style={{fontSize:13,fontWeight:700,color:'var(--itq-ink)'}}>{cat.label}</span>
+                <span style={{fontSize:11,fontWeight:700,color:atual?(atual.n==='Ouro'||atual.n==='Platina'||atual.n==='Diamante'?atual.c2:'#B45309'):'var(--itq-faint)'}}>{atual?atual.n:'Sem medalha'}</span>
+              </div>
+              <div style={{height:6,background:'var(--itq-tint)',borderRadius:3,overflow:'hidden',marginBottom:3}}><div style={{width:pct+'%',height:'100%',background:prox?'linear-gradient(90deg,'+prox.c1+','+prox.c2+')':'linear-gradient(90deg,#C4B5FD,#7C3AED)',borderRadius:3}}/></div>
+              <div style={{fontSize:10,color:'var(--itq-faint)'}}>{cat.count} total{prox?' · faltam '+(prox.m-cat.count)+' pra '+prox.n:' · nível máximo!'}</div>
             </div>
+          </div>
           );})}
-        </div>
       </div>
       {rankingMes.length>1&&<div className="card" style={{marginBottom:14,padding:'16px 18px'}}>
         <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:4}}>
@@ -4388,6 +4451,7 @@ return(
   )}
 
   <div className="card" style={{padding:'20px',marginBottom:14}}>
+    {!temaItaq&&(<React.Fragment>
     <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}>
       <div style={{width:40,height:40,borderRadius:12,background:'linear-gradient(135deg,#0D1B4B,#1351B4)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20}}>{darkMode?'🌙':'☀️'}</div>
       <div><div style={{fontWeight:700,color:'#1E293B',fontSize:15}}>Aparência</div><div style={{fontSize:12,color:'#94A3B8'}}>{darkMode?'Modo escuro ativado':'Modo claro ativado'}</div></div>
@@ -4396,6 +4460,7 @@ return(
       <button onClick={function(){setDarkMode(false);localStorage.setItem('fc_theme','light');document.body.classList.remove('dark');}} style={{flex:1,padding:'10px',borderRadius:9,border:'none',background:!darkMode?'#fff':'transparent',fontWeight:!darkMode?700:500,fontSize:13,color:!darkMode?'#1351B4':'#64748B',cursor:'pointer',boxShadow:!darkMode?'0 1px 4px rgba(0,0,0,0.08)':'none',transition:'all .2s'}}>☀️ Claro</button>
       <button onClick={function(){setDarkMode(true);localStorage.setItem('fc_theme','dark');document.body.classList.add('dark');}} style={{flex:1,padding:'10px',borderRadius:9,border:'none',background:darkMode?'#1E293B':'transparent',fontWeight:darkMode?700:500,fontSize:13,color:darkMode?'#60A5FA':'#64748B',cursor:'pointer',boxShadow:darkMode?'0 2px 8px rgba(0,0,0,0.2)':'none',transition:'all .2s'}}>🌙 Escuro</button>
     </div>
+    </React.Fragment>)}
     <div className="card" style={{marginBottom:14,padding:'16px 18px'}}>
     <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:14}}>
       <div style={{width:36,height:36,borderRadius:10,background:temaItaq?'linear-gradient(135deg,var(--blue-900),var(--blue-700))':'linear-gradient(135deg,#059669,#047857)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,color:'#fff'}}>{temaItaq?<Icon name="clipboard" size={17}/>:'📋'}</div>
@@ -4428,13 +4493,13 @@ return(
     <button onClick={save} disabled={saving} className="bp" style={{opacity:saving?0.7:1}}>{saving?'Salvando...':'Salvar preferencias'}</button>
   </div>
 
-  <div className="card" style={{padding:'20px',marginBottom:14}}>
+  {(!temaItaq||user.role==='gestor'||user.role==='tecnico')&&<div className="card" style={{padding:'20px',marginBottom:14}}>
     <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}>
       <div style={{width:40,height:40,borderRadius:12,background:temaItaq?'linear-gradient(135deg,var(--blue-900),var(--blue-700))':'linear-gradient(135deg,#0C6B3E,#0891B2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,color:'#fff'}}>{temaItaq?<Icon name="package" size={18}/>:'💾'}</div>
       <div><div style={{fontWeight:700,color:'#1E293B',fontSize:15}}>Backup dos Dados</div><div style={{fontSize:12,color:'#94A3B8'}}>Excel com todas as movimentacoes e estoque</div></div>
     </div>
     <button onClick={exportBackup} className="bg">Baixar Excel completo</button>
-  </div>
+  </div>}
 
   {showLogoutConfirm&&<div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.7)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:20,backdropFilter:'blur(6px)'}}>
     <div style={{background:'#fff',borderRadius:24,padding:28,maxWidth:320,width:'100%',boxShadow:'0 24px 64px rgba(0,0,0,0.3)',textAlign:'center'}}>
@@ -11894,7 +11959,7 @@ return(
       </div>
     ):(
       <div>
-        {tab==='dashboard'&&<TabDashboard entries={entries} medications={meds} stock={stock} user={user} plantao={plantao} isGuest={isGuest} onSolicitar={abrirSolicitarStable} onEncerrar={encerrarPlantaoStable} onSair={sairDoPlantaoStable} onSolicitarEntrada={solicitarEntradaPlantaoStable} shiftId={shiftId} onIniciar={abrirIniciarTurnoStable}/>}
+        {tab==='dashboard'&&<TabDashboard entries={entries} medications={meds} stock={stock} user={user} plantao={plantao} isGuest={isGuest} onSolicitar={abrirSolicitarStable} onEncerrar={encerrarPlantaoStable} onSair={sairDoPlantaoStable} onSolicitarEntrada={solicitarEntradaPlantaoStable} shiftId={shiftId} onIniciar={abrirIniciarTurnoStable} allUsers={allUsers}/>}
         {tab==='visaogeral'&&isManagerRole&&<TabVisaoGeral entries={entries} medications={meds} stock={stock} user={user}/>}
         {tab==='comparapedido'&&isManagerRole&&tenantDe(user)!=='itaquitinga-pe'&&<ErrBoundary><TabComparacaoPedido/></ErrBoundary>}
         {tab==='saida'&&<TabSaida user={user} medications={meds} stock={stock} entries={entries} onSave={addEntryStable} onSolicitar={addSolicitacaoStable} latest={latest} isGuest={isGuest} canMove={canMove} confirm2={confirm2} alert2={alert2}/>}
