@@ -1095,27 +1095,23 @@ var vencData=computeVencimentos(medications,entries,stock);var vencendoIds={};ve
 var week=[];for(var wi=0;wi<7;wi++){var wd=new Date();wd.setDate(wd.getDate()-(6-wi));var wk=fmtISO(wd);var wv=0;entries.forEach(function(e){if(e.tipo==='saida'&&!_ehSaidaNaoReal(e)&&(e.criadoEm||'').startsWith(wk))wv+=(e.quantidade||0);});week.push({l:wd.toLocaleDateString('pt-BR',{weekday:'short'}).slice(0,3),v:wv});}
 var temaItaq=tenantDe(user)==='itaquitinga-pe';
 // Painéis novos da home (só Itaquitinga, pedido da usuária pra substituir o Mural do Plantão):
-// "Vencendo em breve" (vencidos + até 30 dias, mais urgentes primeiro) e "Mais retirados da semana".
+// "Vencendo em breve" e "Ranking do Mês" — essa última trocou o antigo "mais retirados da semana"
+// por um ranking de competição entre a equipe (quem mais registra saída+entrada), pra incentivar
+// todo mundo a se dedicar mais vendo a própria proporção em tempo real.
 var vencendoDestaque=temaItaq?vencData.vencidos.concat(vencData.venc30).sort(function(a,b){return a.dias-b.dias;}).slice(0,5):[];
-var maisRetiradosSemana=temaItaq?(function(){
-  var d7=new Date();d7.setDate(d7.getDate()-7);var d7s=fmtISO(d7);
-  var map={};entries.forEach(function(e){if(e.tipo!=='saida'||_ehSaidaNaoReal(e))return;if((e.criadoEm||'').slice(0,10)<d7s)return;var k=e.medicamentoId||e.medicamentoNome;if(!k)return;if(!map[k])map[k]={nome:e.medicamentoNome||k,total:0};map[k].total+=(e.quantidade||0);});
-  return Object.keys(map).map(function(k){return map[k];}).sort(function(a,b){return b.total-a.total;}).slice(0,5);
-})():[];
-var maisRetiradosMax=1;maisRetiradosSemana.forEach(function(m){if(m.total>maisRetiradosMax)maisRetiradosMax=m.total;});
-// Destaque do Mês (visível pra todo mundo na home): quem mais registrou saída+entrada no mês atual,
-// com a % que isso representa do total da equipe — pedido da usuária pra incentivar o time.
-var destaqueMes=(function(){
-  if(!temaItaq)return null;
+// Ranking do Mês + Destaque do Mês (visível pra todo mundo na home): quem mais registrou
+// saída+entrada no mês atual, com a % que isso representa do total da equipe.
+var rankingMesHome=temaItaq?(function(){
   var mesAtual=todayStr().slice(0,7);
   var porAutor={};var totalGeral=0;
   entries.forEach(function(e){if((e.criadoEm||'').slice(0,7)!==mesAtual)return;if(e.tipo==='saida'&&_ehSaidaNaoReal(e))return;var k=e.autorNome||'?';if(!porAutor[k])porAutor[k]=0;porAutor[k]++;totalGeral++;});
-  var nomes=Object.keys(porAutor);
-  if(nomes.length<2||totalGeral===0)return null;
-  var top=nomes.reduce(function(a,b){return porAutor[a]>=porAutor[b]?a:b;});
-  var u=allUsers.find(function(x){return x.name===top;});
-  var pct=Math.round((porAutor[top]/totalGeral)*100);
-  return {nome:top,total:porAutor[top],pct:pct,foto:u?u.photoURL:'',cor:u?u.color:B};
+  return Object.keys(porAutor).map(function(k){return {nome:k,total:porAutor[k],pct:totalGeral>0?Math.round((porAutor[k]/totalGeral)*100):0};}).sort(function(a,b){return b.total-a.total;});
+})():[];
+var destaqueMes=(function(){
+  if(!temaItaq||rankingMesHome.length<2)return null;
+  var top=rankingMesHome[0];
+  var u=allUsers.find(function(x){return x.name===top.nome;});
+  return {nome:top.nome,total:top.total,pct:top.pct,foto:u?u.photoURL:'',cor:u?u.color:B};
 })();
 var stats=[
   {icon:'💊',iconName:'pill',label:'Saídas hoje',val:ts,sub:te.filter(function(e){return e.tipo==='saida';}).length+' registros',color:'#DC2626',bg:'#FEE2E2'},
@@ -1171,18 +1167,23 @@ return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
         );})}
     </div>
     <div className="card">
-      <div className="ch"><div className="ch-title"><div className="ch-accent"/><span style={{display:'flex',alignItems:'center',gap:6}}><Icon name="trendDown" size={13}/> Mais retirados — 7 dias</span></div></div>
-      {maisRetiradosSemana.length===0
-        ?<div style={{padding:'24px',textAlign:'center',color:'#94A3B8',fontSize:13}}>Nenhuma saída registrada nos últimos 7 dias.</div>
+      <div className="ch"><div className="ch-title"><div className="ch-accent"/><span style={{display:'flex',alignItems:'center',gap:6}}><Icon name="trophy" size={13}/> Ranking do Mês</span></div><span style={{fontSize:11,color:'#94A3B8'}}>quem será o melhor?</span></div>
+      {rankingMesHome.length===0
+        ?<div style={{padding:'24px',textAlign:'center',color:'#94A3B8',fontSize:13}}>Nenhuma movimentação registrada esse mês.</div>
         :<div style={{padding:'12px 16px'}}>
-          {maisRetiradosSemana.map(function(m,i){var w=Math.round((m.total/maisRetiradosMax)*100);return(
-            <div key={i} style={{display:'flex',alignItems:'center',gap:8,marginBottom:i<maisRetiradosSemana.length-1?10:0}}>
-              <span style={{fontSize:11,fontWeight:700,color:'#94A3B8',width:14,textAlign:'right',flexShrink:0}}>{i+1}</span>
+          {rankingMesHome.map(function(m,i){var medalha=i===0?['#FCD34D','#F59E0B']:i===1?['#E2E8F0','#94A3B8']:i===2?['#D6A571','#B45309']:null;var souEu=m.nome===user.name;return(
+            <div key={i} style={{display:'flex',alignItems:'center',gap:8,marginBottom:i<rankingMesHome.length-1?10:0,background:souEu?'var(--itq-tint)':'transparent',borderRadius:10,padding:souEu?'6px 8px':'0',marginLeft:souEu?-8:0,marginRight:souEu?-8:0}}>
+              {medalha
+                ?<div style={{width:20,height:20,borderRadius:'50%',background:'linear-gradient(135deg,'+medalha[0]+','+medalha[1]+')',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:800,color:'#fff'}}>{i+1}</div>
+                :<span style={{fontSize:11,fontWeight:700,color:'#94A3B8',width:20,textAlign:'center',flexShrink:0}}>{i+1}</span>}
               <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:12,fontWeight:600,color:'var(--itq-ink)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',marginBottom:3}}>{m.nome}</div>
-                <div style={{height:6,background:'var(--itq-tint)',borderRadius:3,overflow:'hidden'}}><div style={{width:w+'%',height:'100%',background:B,borderRadius:3}}/></div>
+                <div style={{fontSize:12,fontWeight:souEu?800:600,color:'var(--itq-ink)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',marginBottom:3}}>{m.nome}{souEu?' (você)':''}</div>
+                <div style={{height:6,background:'var(--itq-tint)',borderRadius:3,overflow:'hidden'}}><div style={{width:m.pct+'%',height:'100%',background:medalha?'linear-gradient(90deg,'+medalha[0]+','+medalha[1]+')':B,borderRadius:3}}/></div>
               </div>
-              <span style={{fontSize:13,fontWeight:800,color:B,minWidth:28,textAlign:'right',flexShrink:0}}>{m.total}</span>
+              <div style={{textAlign:'right',flexShrink:0,minWidth:36}}>
+                <div style={{fontSize:13,fontWeight:800,color:B}}>{m.total}</div>
+                <div style={{fontSize:9,color:'#94A3B8'}}>{m.pct}%</div>
+              </div>
             </div>
           );})}
         </div>}
@@ -4380,14 +4381,16 @@ return(
   {temaItaq&&(function(){
     var minhasSaidasTotal=(entries||[]).filter(function(e){return (e.autorId===user.uid||e.autorNome===user.name)&&e.tipo==='saida'&&!_ehSaidaNaoReal(e);}).length;
     var minhasEntradasTotal=(entries||[]).filter(function(e){return (e.autorId===user.uid||e.autorNome===user.name)&&e.tipo==='entrada';}).length;
-    // Tiers de medalha (iguais pras 3 categorias) — pedido da usuária: 500/1000... "como se fosse emblemas",
-    // pra incentivar o time. Cores de medalha de verdade (bronze/prata/ouro/platina/diamante) — exceção
-    // deliberada ao azul único, igual já fazemos pro vermelho/âmbar/verde de status.
-    var tiersDef=[{m:10,n:'Bronze',c1:'#CD7F32',c2:'#A0522D'},{m:50,n:'Prata',c1:'#CBD5E1',c2:'#94A3B8'},{m:100,n:'Ouro',c1:'#FCD34D',c2:'#F59E0B'},{m:500,n:'Platina',c1:'#93C5FD',c2:'#3B82F6'},{m:1000,n:'Diamante',c1:'#C4B5FD',c2:'#7C3AED'}];
+    // Tiers de medalha — cores de medalha de verdade (bronze/prata/ouro/platina/diamante), exceção
+    // deliberada ao azul único, igual já fazemos pro vermelho/âmbar/verde de status. Saídas/Entradas
+    // usam uma faixa bem mais alta que Conferências, porque o volume de movimentação é muito maior
+    // (pedido da usuária: bronze 1.000, nível máximo 100.000).
+    var tiersAlto=[{m:1000,n:'Bronze',c1:'#CD7F32',c2:'#A0522D'},{m:5000,n:'Prata',c1:'#CBD5E1',c2:'#94A3B8'},{m:20000,n:'Ouro',c1:'#FCD34D',c2:'#F59E0B'},{m:50000,n:'Platina',c1:'#93C5FD',c2:'#3B82F6'},{m:100000,n:'Diamante',c1:'#C4B5FD',c2:'#7C3AED'}];
+    var tiersBaixo=[{m:10,n:'Bronze',c1:'#CD7F32',c2:'#A0522D'},{m:50,n:'Prata',c1:'#CBD5E1',c2:'#94A3B8'},{m:100,n:'Ouro',c1:'#FCD34D',c2:'#F59E0B'},{m:500,n:'Platina',c1:'#93C5FD',c2:'#3B82F6'},{m:1000,n:'Diamante',c1:'#C4B5FD',c2:'#7C3AED'}];
     var categorias=[
-      {key:'saidas',label:'Saídas',icon:'pill',count:minhasSaidasTotal},
-      {key:'entradas',label:'Entradas',icon:'inbox',count:minhasEntradasTotal},
-      {key:'conferencias',label:'Conferências',icon:'clipboard',count:confItens}
+      {key:'saidas',label:'Saídas',icon:'pill',count:minhasSaidasTotal,tiers:tiersAlto},
+      {key:'entradas',label:'Entradas',icon:'inbox',count:minhasEntradasTotal,tiers:tiersAlto},
+      {key:'conferencias',label:'Conferências',icon:'clipboard',count:confItens,tiers:tiersBaixo}
     ];
     // Destaque do mês: ranking entre toda a equipe por nº de registros no mês atual.
     var mesAtual=todayStr().slice(0,7);
@@ -4403,7 +4406,7 @@ return(
         </div>
         {categorias.map(function(cat,ci){
           var atual=null,prox=null;
-          for(var i=0;i<tiersDef.length;i++){if(cat.count>=tiersDef[i].m)atual=tiersDef[i];else{prox=tiersDef[i];break;}}
+          for(var i=0;i<cat.tiers.length;i++){if(cat.count>=cat.tiers[i].m)atual=cat.tiers[i];else{prox=cat.tiers[i];break;}}
           var pct=prox?Math.min(100,Math.round((cat.count/prox.m)*100)):100;
           return(
           <div key={cat.key} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 0',borderTop:ci>0?'1px solid var(--itq-line)':'none'}}>
@@ -4414,7 +4417,7 @@ return(
                 <span style={{fontSize:11,fontWeight:700,color:atual?(atual.n==='Ouro'||atual.n==='Platina'||atual.n==='Diamante'?atual.c2:'#B45309'):'var(--itq-faint)'}}>{atual?atual.n:'Sem medalha'}</span>
               </div>
               <div style={{height:6,background:'var(--itq-tint)',borderRadius:3,overflow:'hidden',marginBottom:3}}><div style={{width:pct+'%',height:'100%',background:prox?'linear-gradient(90deg,'+prox.c1+','+prox.c2+')':'linear-gradient(90deg,#C4B5FD,#7C3AED)',borderRadius:3}}/></div>
-              <div style={{fontSize:10,color:'var(--itq-faint)'}}>{cat.count} total{prox?' · faltam '+(prox.m-cat.count)+' pra '+prox.n:' · nível máximo!'}</div>
+              <div style={{fontSize:10,color:'var(--itq-faint)'}}>{cat.count.toLocaleString('pt-BR')} total{prox?' · faltam '+(prox.m-cat.count).toLocaleString('pt-BR')+' pra '+prox.n:' · nível máximo!'}</div>
             </div>
           </div>
           );})}
