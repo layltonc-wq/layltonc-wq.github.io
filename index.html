@@ -476,6 +476,10 @@ var TOURS=[
   ]}
 ];
 function todayStr(){return new Date().toISOString().slice(0,10);}
+// Mês anterior ao atual, no formato YYYY-MM (lida com virada de ano: janeiro -> dezembro do ano passado).
+// Usado só pelo "Destaque do Mês": o vencedor do mês fechado, que não muda mais até o próximo mês acabar.
+function mesAnteriorStr(){var d=new Date();d.setDate(1);d.setMonth(d.getMonth()-1);return d.toISOString().slice(0,7);}
+function nomeMes(ym){var meses=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];var p=(ym||'').split('-');var i=parseInt(p[1],10)-1;return meses[i]||'';}
 function fmtT(iso){return iso?new Date(iso).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'--:--';}
 function fmtD(iso){return iso?new Date(iso).toLocaleDateString('pt-BR'):'--/--';}
 function fmtISO(d){return d.toISOString().slice(0,10);}
@@ -1105,11 +1109,20 @@ var rankingMesHome=temaItaq?(function(){
   entries.forEach(function(e){if((e.criadoEm||'').slice(0,7)!==mesAtual)return;if(e.tipo==='saida'&&_ehSaidaNaoReal(e))return;var k=e.autorNome||'?';if(!porAutor[k])porAutor[k]=0;porAutor[k]++;totalGeral++;});
   return Object.keys(porAutor).map(function(k){return {nome:k,total:porAutor[k],pct:totalGeral>0?Math.round((porAutor[k]/totalGeral)*100):0};}).sort(function(a,b){return b.total-a.total;});
 })():[];
+// Destaque do Mês = vencedor do MÊS ANTERIOR (fechado), não do mês atual em andamento — senão o
+// destaque ficaria trocando toda hora conforme a disputa do mês corrente muda de líder. O "Ranking
+// do Mês" acima continua ao vivo no mês atual; quando ele fechar, vira o destaque do mês seguinte.
+var mesDestaque=mesAnteriorStr();
+var rankingMesAnteriorHome=temaItaq?(function(){
+  var porAutor={};var totalGeral=0;
+  entries.forEach(function(e){if((e.criadoEm||'').slice(0,7)!==mesDestaque)return;if(e.tipo==='saida'&&_ehSaidaNaoReal(e))return;var k=e.autorNome||'?';if(!porAutor[k])porAutor[k]=0;porAutor[k]++;totalGeral++;});
+  return Object.keys(porAutor).map(function(k){return {nome:k,total:porAutor[k],pct:totalGeral>0?Math.round((porAutor[k]/totalGeral)*100):0};}).sort(function(a,b){return b.total-a.total;});
+})():[];
 var destaqueMes=(function(){
-  if(!temaItaq||rankingMesHome.length<2)return null;
-  var top=rankingMesHome[0];
+  if(!temaItaq||rankingMesAnteriorHome.length<2)return null;
+  var top=rankingMesAnteriorHome[0];
   var u=allUsers.find(function(x){return x.name===top.nome;});
-  return {nome:top.nome,total:top.total,pct:top.pct,foto:u?u.photoURL:'',cor:u?u.color:B};
+  return {nome:top.nome,total:top.total,pct:top.pct,foto:u?u.photoURL:'',cor:u?u.color:B,mes:nomeMes(mesDestaque)};
 })();
 var stats=[
   {icon:'💊',iconName:'pill',label:'Saídas hoje',val:ts,sub:te.filter(function(e){return e.tipo==='saida';}).length+' registros',color:'#DC2626',bg:'#FEE2E2'},
@@ -1128,7 +1141,7 @@ return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
       <div style={{position:'absolute',bottom:-3,right:-3,width:22,height:22,borderRadius:'50%',background:'linear-gradient(135deg,#FCD34D,#F59E0B)',border:'2px solid #0A2D6E',display:'flex',alignItems:'center',justifyContent:'center',color:'#78350F'}}><Icon name="trophy" size={11} strokeWidth={2.4}/></div>
     </div>
     <div style={{flex:1,minWidth:0}}>
-      <div style={{fontSize:10,fontWeight:800,color:'#FCD34D',textTransform:'uppercase',letterSpacing:'.06em'}}>Destaque do mês</div>
+      <div style={{fontSize:10,fontWeight:800,color:'#FCD34D',textTransform:'uppercase',letterSpacing:'.06em'}}>Destaque de {destaqueMes.mes}</div>
       <div style={{fontSize:15,fontWeight:800,color:'#fff',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{destaqueMes.nome}</div>
       <div style={{fontSize:11,color:'rgba(255,255,255,.75)',marginTop:1}}>{destaqueMes.total} registros · {destaqueMes.pct}% da equipe</div>
     </div>
@@ -4405,7 +4418,9 @@ return(
       {key:'entradas',label:'Entradas',icon:'inbox',count:minhasEntradasTotal,tiers:tiersAlto},
       {key:'conferencias',label:'Conferências',icon:'clipboard',count:confItens,tiers:tiersBaixo}
     ];
-    // Destaque do mês: ranking entre toda a equipe por nº de registros no mês atual.
+    // Minha posição no ranking do mês ATUAL (ainda em andamento) — é só pra motivar, não é o
+    // "Destaque do Mês" (esse é sempre do mês anterior já fechado, pra não ficar trocando de
+    // nome toda hora que a disputa muda de líder; ver TabDashboard).
     var mesAtual=todayStr().slice(0,7);
     var porAutorMes={};(entries||[]).forEach(function(e){if((e.criadoEm||'').slice(0,7)!==mesAtual)return;if(e.tipo==='saida'&&_ehSaidaNaoReal(e))return;var k=e.autorNome||'?';if(!porAutorMes[k])porAutorMes[k]=0;porAutorMes[k]++;});
     var rankingMes=Object.keys(porAutorMes).map(function(k){return {nome:k,total:porAutorMes[k]};}).sort(function(a,b){return b.total-a.total;});
@@ -4439,14 +4454,14 @@ return(
         <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:4}}>
           <div style={{width:36,height:36,borderRadius:10,background:minhaPosicao===1?'linear-gradient(135deg,#B45309,#D97706)':'linear-gradient(135deg,var(--blue-900),var(--blue-700))',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',flexShrink:0}}><Icon name="star" size={17}/></div>
           <div>
-            <div style={{fontWeight:700,fontSize:15,color:'#1E293B'}}>Destaque do Mês</div>
-            <div style={{fontSize:12,color:'#94A3B8'}}>Entre {rankingMes.length} pessoa{rankingMes.length>1?'s':''} da equipe</div>
+            <div style={{fontWeight:700,fontSize:15,color:'#1E293B'}}>Ranking do Mês</div>
+            <div style={{fontSize:12,color:'#94A3B8'}}>Sua posição entre {rankingMes.length} pessoa{rankingMes.length>1?'s':''} da equipe — disputa deste mês, ainda em andamento</div>
           </div>
         </div>
         <div style={{marginTop:10,background:minhaPosicao===1?'#FFFBEB':'var(--itq-tint)',border:'1.5px solid '+(minhaPosicao===1?'#FDE68A':'var(--itq-tint-line)'),borderRadius:12,padding:'12px 14px',display:'flex',alignItems:'center',gap:12}}>
           <div style={{fontSize:24,fontWeight:900,color:minhaPosicao===1?'#B45309':B}}>#{minhaPosicao||'—'}</div>
           <div style={{flex:1}}>
-            <div style={{fontSize:13,fontWeight:700,color:'var(--itq-ink)'}}>{minhaPosicao===1?'Você é quem mais registrou esse mês!':'Você registrou '+meuTotalMes+' movimentaç'+(meuTotalMes===1?'ão':'ões')+' esse mês'}</div>
+            <div style={{fontSize:13,fontWeight:700,color:'var(--itq-ink)'}}>{minhaPosicao===1?'Você está liderando a disputa deste mês!':'Você registrou '+meuTotalMes+' movimentaç'+(meuTotalMes===1?'ão':'ões')+' esse mês'}</div>
             <div style={{fontSize:11,color:'var(--itq-soft)',marginTop:1}}>{minhaPosicao===1?'Continue assim 🎉':'Mais que '+rankingMes.filter(function(r){return r.total<meuTotalMes;}).length+' colega(s) da equipe'}</div>
           </div>
         </div>
