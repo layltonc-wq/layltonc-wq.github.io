@@ -1002,7 +1002,7 @@ function ShiftCard(props){
     db.collection('plantoes').doc(plantaoDocId(user,shiftId)).update({equipe:novaEquipe}).catch(function(e){alert('Erro: '+e.message);});
   }
 
-  var temaItaq=tenantDe(user)==='itaquitinga-pe';
+  var temaItaq=true;// identidade visual v2 agora é o padrão pra todos os municípios (Itaquitinga + Vicência)
   if(!plantao){
     // Farmacêutico só abre dentro do horário de plantão; gestor/técnico podem abrir a qualquer hora
     // (eles já operam sem precisar de plantão, mas também podem formalizar/abrir um se quiserem).
@@ -1090,7 +1090,7 @@ function del(id){db.collection('avisos').doc(id).delete();}
 var today=todayStr();var te=entries.filter(function(e){return (e.criadoEm||'').startsWith(today)&&!_ehSaidaNaoReal(e);});var ts=0;te.forEach(function(e){if(e.tipo==='saida')ts+=(e.quantidade||0);});var tin=0;te.forEach(function(e){if(e.tipo==='entrada')tin+=(e.quantidade||0);});var low=medications.filter(function(m){return m.minEstoque&&(stock[m.id]||0)<=m.minEstoque&&(stock[m.id]||0)>0;});
 var vencData=computeVencimentos(medications,entries,stock);var vencendoIds={};vencData.venc30.forEach(function(v){vencendoIds[v.id]=true;});var vencendo=Object.keys(vencendoIds).length;
 var week=[];for(var wi=0;wi<7;wi++){var wd=new Date();wd.setDate(wd.getDate()-(6-wi));var wk=fmtISO(wd);var wv=0;entries.forEach(function(e){if(e.tipo==='saida'&&!_ehSaidaNaoReal(e)&&(e.criadoEm||'').startsWith(wk))wv+=(e.quantidade||0);});week.push({l:wd.toLocaleDateString('pt-BR',{weekday:'short'}).slice(0,3),v:wv});}
-var temaItaq=tenantDe(user)==='itaquitinga-pe';
+var temaItaq=true;// identidade visual v2 agora é o padrão pra todos os municípios (Itaquitinga + Vicência)
 // Painéis novos da home (só Itaquitinga, pedido da usuária pra substituir o Mural do Plantão):
 // "Vencendo em breve" e "Ranking do Mês" — essa última trocou o antigo "mais retirados da semana"
 // por um ranking de competição entre a equipe (quem mais registra saída+entrada), pra incentivar
@@ -1245,7 +1245,7 @@ var saidasHoje=useMemo(function(){var hoje=todayStr();var porCat={};var totalGer
 
 var rankFunc=useMemo(function(){var d30=new Date();d30.setDate(d30.getDate()-30);var map={};entries.forEach(function(e){if(e.origemConferencia||e.isAjuste)return;if(_ehSaidaNaoReal(e))return;var dt=new Date(e.criadoEm||0);if(dt<d30)return;var nome=e.autorNome||'Desconhecido';if(!map[nome])map[nome]={nome:nome,total:0};map[nome].total+=(e.quantidade||0);});var arr=[];for(var k in map)arr.push(map[k]);arr.sort(function(a,b){return b.total-a.total;});return arr;},[entries]);
 
-var temaItaq=tenantDe(user)==='itaquitinga-pe';
+var temaItaq=true;// identidade visual v2 agora é o padrão pra todos os municípios (Itaquitinga + Vicência)
 var kpi=[
   {icon:'💊',iconName:'pill',label:'Medicamentos',val:totalMeds,sub:'cadastrados',color:'#1351B4',bg:'#DBEAFE'},
   {icon:'📦',iconName:'package',label:'Estoque Total',val:totalUnits,sub:'unidades',color:'#0C6B3E',bg:'#DCFCE7'},
@@ -1998,7 +1998,7 @@ var _showControlado=useState(false);var showControlado=_showControlado[0];var se
 var _controladoData=useState(null);var controladoData=_controladoData[0];var setControladoData=_controladoData[1];
 var _demoControlado=useState(false);var demoControlado=_demoControlado[0];var setDemoControlado=_demoControlado[1];
 var inStock=medications.filter(function(m){return (stock[m.id]||0)>0;});var filtered=[];if(search.trim()){var s=search.toLowerCase();filtered=inStock.filter(function(m){return m.nome.toLowerCase().indexOf(s)>=0;}).slice(0,8);}var cur=sel?(stock[sel.id]||0):0;
-var temaItaq=tenantDe(user)==='itaquitinga-pe';
+var temaItaq=true;// identidade visual v2 agora é o padrão pra todos os municípios (Itaquitinga + Vicência)
 function adicionarCarrinho(){
     if(!sel){setErr('Selecione um medicamento.');return;}
     if(_ehMedControlado(sel.nome)){setErr('🔒 '+sel.nome+' é controlado (Morfina/Tramal) — retire individualmente em "Registrar Saída", não pelo carrinho.');return;}
@@ -4275,7 +4275,7 @@ function TabLeites(props){
   </div>);
 }
 function TabPerfil(props){var user=props.user;var onUpdate=props.onUpdate;var onLogout=props.onLogout;var entries=props.entries;var medications=props.medications;var stock=props.stock;
-  var temaItaq=tenantDe(user)==='itaquitinga-pe';
+  var temaItaq=true;// identidade visual v2 agora é o padrão pra todos os municípios (Itaquitinga + Vicência)
   var _amb=useState((typeof window!=='undefined'&&window.__fcEnv)||'prod');var amb=_amb[0];var setAmb=_amb[1];
   var _showAmbSelector=useState(false);var showAmbSelector=_showAmbSelector[0];var setShowAmbSelector=_showAmbSelector[1];
   var _darkModeInit=false;try{_darkModeInit=localStorage.getItem('fc_theme')==='dark';}catch(e){}
@@ -5871,25 +5871,25 @@ function TabAntibiotico({user,medications,stock,allUsers}){
 
   return (
     <div style={{padding:'0 0 80px'}}>
-      <div style={{background:'linear-gradient(135deg,#0D1B4B,#1351B4)',padding:'20px 16px 24px',borderRadius:'0 0 24px 24px',marginBottom:16}}>
+      <div style={{background:'linear-gradient(135deg,var(--blue-700) 0%,#2E7DE0 55%,#4C8FEF 100%)',padding:'20px 16px 24px',borderRadius:'0 0 24px 24px',marginBottom:16}}>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
           <div>
             <div style={{color:'rgba(255,255,255,.7)',fontSize:12,textTransform:'uppercase',letterSpacing:1}}>Farmácia Hospitalar</div>
-            <div style={{color:'#fff',fontSize:20,fontWeight:700}}>🧬 Tratamento ATB</div>
+            <div style={{color:'#fff',fontSize:20,fontWeight:700,display:'flex',alignItems:'center',gap:8}}><Icon name="dna" size={18}/> Tratamento ATB</div>
           </div>
           <div style={{display:'flex',gap:8}}>
-            <button onClick={function(){setShowStats(function(v){return!v;});}} style={{background:showStats?'rgba(255,255,255,.35)':'rgba(255,255,255,.2)',border:'1.5px solid rgba(255,255,255,.4)',borderRadius:12,padding:'10px 12px',color:'#fff',fontWeight:700,fontSize:13,cursor:'pointer'}}>📊</button>
+            <button onClick={function(){setShowStats(function(v){return!v;});}} style={{background:showStats?'rgba(255,255,255,.35)':'rgba(255,255,255,.2)',border:'1.5px solid rgba(255,255,255,.4)',borderRadius:12,padding:'10px 12px',color:'#fff',cursor:'pointer',display:'flex',alignItems:'center'}}><Icon name="barChart" size={16}/></button>
             <button onClick={function(){setShowForm(true);}} style={{background:'rgba(255,255,255,.2)',border:'1.5px solid rgba(255,255,255,.4)',borderRadius:12,padding:'10px 16px',color:'#fff',fontWeight:700,fontSize:13,cursor:'pointer'}}>+ Novo</button>
           </div>
         </div>
         <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8}}>
           <div style={{background:'rgba(255,255,255,.12)',borderRadius:12,padding:'8px 4px',textAlign:'center',border:'1px solid rgba(255,255,255,.15)'}}>
-            <div style={{fontSize:16}}>💉</div>
+            <div style={{display:'flex',justifyContent:'center',color:'#fff'}}><Icon name="droplet" size={15}/></div>
             <div style={{color:'#fff',fontSize:18,fontWeight:800}}>{tratamentos.filter(function(t){return cSt(t)==='ativo';}).length}</div>
             <div style={{color:'rgba(255,255,255,.7)',fontSize:9}}>Tratamento</div>
           </div>
           <div style={{background:'rgba(255,255,255,.12)',borderRadius:12,padding:'8px 4px',textAlign:'center',border:'1px solid rgba(255,255,255,.15)'}}>
-            <div style={{fontSize:16}}>⏳</div>
+            <div style={{display:'flex',justifyContent:'center',color:'#fff'}}><Icon name="hourglass" size={15}/></div>
             <div style={{color:'#fff',fontSize:18,fontWeight:800}}>{tratamentos.filter(function(t){return cSt(t)==='espera';}).length}</div>
             <div style={{color:'rgba(255,255,255,.7)',fontSize:9}}>Aguardando</div>
           </div>
@@ -5899,7 +5899,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
             <div style={{color:'rgba(255,255,255,.7)',fontSize:9}}>Dose Ataque</div>
           </div>
           <div style={{background:'rgba(255,255,255,.12)',borderRadius:12,padding:'8px 4px',textAlign:'center',border:'1px solid rgba(255,255,255,.15)'}}>
-            <div style={{fontSize:16}}>✅</div>
+            <div style={{display:'flex',justifyContent:'center',color:'#fff'}}><Icon name="check" size={15}/></div>
             <div style={{color:'#fff',fontSize:18,fontWeight:800}}>{tratamentos.filter(function(t){return['concluido','finalizado'].includes(cSt(t));}).length}</div>
             <div style={{color:'rgba(255,255,255,.7)',fontSize:9}}>Concluídos</div>
           </div>
@@ -5913,7 +5913,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
         var interrTotal=st.slices.reduce(function(a,x){return a+(x.key!=='concl'?x.count:0);},0);
         return(<div style={{padding:'0 16px',marginBottom:12}}>
           <div style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9'}}>
-            <div style={{fontWeight:800,fontSize:15,color:'#1E293B',marginBottom:2}}>📊 Estatísticas dos tratamentos</div>
+            <div style={{fontWeight:800,fontSize:15,color:'#1E293B',marginBottom:2,display:'flex',alignItems:'center',gap:6}}><Icon name="barChart" size={14}/> Estatísticas dos tratamentos</div>
             <div style={{fontSize:11,color:'#94A3B8',marginBottom:14}}>Concluídos vs. interrompidos (por dias de duração até a interrupção). Toque numa fatia para ver o detalhe.</div>
             {st.total===0?<div style={{textAlign:'center',color:'#94A3B8',padding:'24px 0',fontSize:13}}>Sem dados de tratamentos concluídos ou interrompidos ainda.</div>:
             <div style={{display:'flex',flexWrap:'wrap',gap:16,alignItems:'center',justifyContent:'center'}}>
@@ -6640,7 +6640,7 @@ function TabHistoricoNotas(props){
 
 function TabPrevisao(props){
   var user=props.user;var entries=props.entries;var medications=props.medications;var stock=props.stock;var db=props.db;
-  var temaItaq=tenantDe(user)==='itaquitinga-pe';
+  var temaItaq=true;// identidade visual v2 agora é o padrão pra todos os municípios (Itaquitinga + Vicência)
   var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};
   var isMan=user.role==='gestor'||user.role==='tecnico';
   var _atas=useState([]);var atas=_atas[0];var setAtas=_atas[1];
@@ -8925,7 +8925,7 @@ function TabPrevisao(props){
 function confKey(medId,lote,val){return (medId+'--'+(lote||'SEM')+'--'+(val||'SEM')).replace(/[^A-Za-z0-9_-]/g,'_');}
 function TabConferencia(props){
   var user=props.user;var medications=props.medications||[];var entries=props.entries||[];var stock=props.stock||{};var estoqueBruto=props.estoqueBruto||{};
-  var temaItaq=tenantDe(user)==='itaquitinga-pe';
+  var temaItaq=true;// identidade visual v2 agora é o padrão pra todos os municípios (Itaquitinga + Vicência)
   // Em Itaquitinga todas as categorias usam o mesmo azul (pedido da usuária) — em Vicência cada
   // categoria mantém sua cor própria (roxo/ciano/âmbar), sem alteração.
   var CCOR=temaItaq?{medicamento:B,controlado:B,injetavel:B,leite:B,penso:B}:{medicamento:'#1351B4',controlado:'#DC2626',injetavel:'#7C3AED',leite:'#D97706',penso:'#0891B2'};
@@ -10977,7 +10977,7 @@ function TabRecebimento(props){
     if(fStatus!=='todos'&&(r.status||'pendente')!==fStatus)return false;
     return true;
   });
-  var temaItaq=tenantDe(user)==='itaquitinga-pe';
+  var temaItaq=true;// identidade visual v2 agora é o padrão pra todos os municípios (Itaquitinga + Vicência)
   var inp=temaItaq?{width:'100%',padding:'11px',borderRadius:12,border:'1.5px solid var(--itq-line,#E3E9F6)',fontSize:14,boxSizing:'border-box',color:'var(--itq-ink)',fontFamily:'inherit'}:{width:'100%',padding:'11px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:14,boxSizing:'border-box'};
   var lbl=temaItaq?{fontSize:12,fontWeight:700,color:'var(--itq-soft)',display:'block',marginBottom:5}:{fontSize:12,fontWeight:700,color:'#475569',display:'block',marginBottom:5};
 
@@ -11439,7 +11439,7 @@ function TabPacientes(props){
 
   return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
     <div className="card" style={{marginBottom:14}}>
-      <div className="ch"><div className="ch-title"><div style={{width:3,height:16,background:'#7C3AED',borderRadius:2,flexShrink:0}}/><span>🔒 Pacientes — Controlados</span></div><span style={{fontSize:12,color:'#94A3B8',fontWeight:500}}>{listaPacientes.length} cadastrado{listaPacientes.length!==1?'s':''}</span></div>
+      <div className="ch"><div className="ch-title"><div className="ch-accent"/><span style={{display:'flex',alignItems:'center',gap:6}}><Icon name="lock" size={14}/> Pacientes — Controlados</span></div><span style={{fontSize:12,color:'#94A3B8',fontWeight:500}}>{listaPacientes.length} cadastrado{listaPacientes.length!==1?'s':''}</span></div>
       <div style={{padding:'12px 16px 16px'}}>
         <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="Buscar por nome do paciente..." className="inp"/>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
@@ -11447,14 +11447,14 @@ function TabPacientes(props){
           <div><label style={{fontSize:11,fontWeight:700,color:'#475569',display:'block',marginBottom:4}}>Até</label><input type="date" value={fAte} onChange={function(e){setFAte(e.target.value);}} className="inp" style={{marginBottom:0}}/></div>
         </div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
-          <button data-tour="pac-novo" onClick={function(){setShowNovo(true);}} style={{padding:'11px',background:'#F5F3FF',border:'1.5px dashed #C4B5FD',borderRadius:10,color:'#7C3AED',fontWeight:700,fontSize:13,cursor:'pointer'}}>+ Novo Paciente</button>
-          <button onClick={function(){setShowRelatorio(true);}} style={{padding:'11px',background:'#EFF6FF',border:'1.5px solid #BFDBFE',borderRadius:10,color:'#1351B4',fontWeight:700,fontSize:13,cursor:'pointer'}}>📊 Relatório</button>
+          <button data-tour="pac-novo" onClick={function(){setShowNovo(true);}} className="bs" style={{padding:'11px',background:'var(--itq-tint)',border:'1.5px dashed var(--blue-700)',color:'var(--blue-700)',fontWeight:700,fontSize:13}}>+ Novo Paciente</button>
+          <button onClick={function(){setShowRelatorio(true);}} className="bs" style={{padding:'11px',display:'flex',alignItems:'center',justifyContent:'center',gap:6,fontWeight:700,fontSize:13}}><Icon name="barChart" size={14}/> Relatório</button>
         </div>
       </div>
     </div>
     {listaPacientes.length===0
       ?<div className="card" style={{padding:40,textAlign:'center',color:'#94A3B8'}}>
-        <div style={{fontSize:40,marginBottom:8}}>👤</div>
+        <div style={{display:'flex',justifyContent:'center',marginBottom:8,color:'#CBD5E1'}}><Icon name="users" size={36}/></div>
         <div style={{fontWeight:600}}>{q?'Nenhum paciente encontrado':'Nenhum paciente cadastrado ainda'}</div>
         <div style={{fontSize:12,marginTop:4}}>{q?'Tente buscar por outro nome.':'Use "+ Novo Paciente" acima, ou cadastre direto no popup de saída de um controlado.'}</div>
       </div>
@@ -11464,10 +11464,10 @@ function TabPacientes(props){
             <div>
               <div style={{fontWeight:700,fontSize:15,color:'#1E293B'}}>{p.nome}</div>
               {hist.length>0
-                ?<div style={{fontSize:12,color:'#7C3AED',fontWeight:600,marginTop:4}}>🔒 {hist.length} saída{hist.length!==1?'s':''} · última em {fD(hist[0].dataSaida)}</div>
+                ?<div style={{fontSize:12,color:'var(--blue-700)',fontWeight:600,marginTop:4,display:'flex',alignItems:'center',gap:4}}><Icon name="lock" size={11}/> {hist.length} saída{hist.length!==1?'s':''} · última em {fD(hist[0].dataSaida)}</div>
                 :<div style={{fontSize:12,color:'#94A3B8',fontWeight:500,marginTop:4}}>Nenhuma saída registrada ainda</div>}
             </div>
-            {podeExcluir&&<button onClick={function(e){e.stopPropagation();excluirPaciente(p);}} title="Excluir paciente" style={{background:'#FEF2F2',border:'1px solid #FECACA',borderRadius:8,width:34,height:34,flexShrink:0,cursor:'pointer',fontSize:14,color:'#DC2626'}}>🗑️</button>}
+            {podeExcluir&&<button onClick={function(e){e.stopPropagation();excluirPaciente(p);}} title="Excluir paciente" style={{background:'#FEF2F2',border:'1px solid #FECACA',borderRadius:8,width:34,height:34,flexShrink:0,cursor:'pointer',color:'#DC2626',display:'flex',alignItems:'center',justifyContent:'center'}}><Icon name="trash" size={15}/></button>}
           </div>
         );})}
       </div>
@@ -11484,10 +11484,10 @@ function TabPacientes(props){
       <div style={{background:'#fff',borderRadius:20,padding:20,maxWidth:560,width:'100%',maxHeight:'92vh',overflowY:'auto'}} onClick={function(e){e.stopPropagation();}}>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:4}}>
           <div>
-            <div style={{fontWeight:800,fontSize:17,color:'#1E293B'}}>📊 Relatório — Controlados</div>
+            <div style={{fontWeight:800,fontSize:17,color:'#1E293B',display:'flex',alignItems:'center',gap:8}}><Icon name="barChart" size={16}/> Relatório — Controlados</div>
             <div style={{fontSize:11,color:'#94A3B8',marginTop:2}}>{periodoTxt()}</div>
           </div>
-          <button onClick={function(){setShowRelatorio(false);}} style={{background:'#F1F5F9',border:'none',borderRadius:10,width:36,height:36,cursor:'pointer',fontSize:18,flexShrink:0}}>✕</button>
+          <button onClick={function(){setShowRelatorio(false);}} style={{background:'#F1F5F9',border:'none',borderRadius:10,width:36,height:36,cursor:'pointer',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}}><Icon name="x" size={16}/></button>
         </div>
         <div style={{fontSize:11,color:'#94A3B8',marginBottom:14}}>Pra mudar o período, ajuste os filtros "De/Até" na tela principal antes de abrir o relatório.</div>
 
@@ -11524,7 +11524,7 @@ function TabPacientes(props){
             </div>
           </>
         }
-        <button onClick={imprimirRelatorioControlados} disabled={relatorio.totalGeral===0} className="bp" style={{marginTop:18,opacity:relatorio.totalGeral===0?0.5:1}}>🖨️ Imprimir relatório</button>
+        <button onClick={imprimirRelatorioControlados} disabled={relatorio.totalGeral===0} className="bp" style={{marginTop:18,opacity:relatorio.totalGeral===0?0.5:1}}>Imprimir relatório</button>
       </div>
     </div>}
 
@@ -11537,11 +11537,11 @@ function TabPacientes(props){
               <div style={{fontSize:11,color:'#94A3B8',marginTop:2}}>Cadastrado em {fD((sel.criadoEm||'').slice(0,10))}{sel.criadoPor?' por '+sel.criadoPor:''}</div>
             </div>
             <div style={{display:'flex',gap:6,flexShrink:0}}>
-              {podeExcluir&&<button onClick={function(){excluirPaciente(sel);}} title="Excluir paciente" style={{background:'#FEF2F2',border:'1px solid #FECACA',borderRadius:10,width:36,height:36,cursor:'pointer',fontSize:15,color:'#DC2626'}}>🗑️</button>}
-              <button onClick={function(){setSel(null);}} style={{background:'#F1F5F9',border:'none',borderRadius:10,width:36,height:36,cursor:'pointer',fontSize:18}}>✕</button>
+              {podeExcluir&&<button onClick={function(){excluirPaciente(sel);}} title="Excluir paciente" style={{background:'#FEF2F2',border:'1px solid #FECACA',borderRadius:10,width:36,height:36,cursor:'pointer',color:'#DC2626',display:'flex',alignItems:'center',justifyContent:'center'}}><Icon name="trash" size={16}/></button>}
+              <button onClick={function(){setSel(null);}} style={{background:'#F1F5F9',border:'none',borderRadius:10,width:36,height:36,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}><Icon name="x" size={16}/></button>
             </div>
           </div>
-          <div style={{fontWeight:700,fontSize:13,color:'#334155',marginBottom:10}}>🔒 Histórico de saídas de controlados</div>
+          <div style={{fontWeight:700,fontSize:13,color:'#334155',marginBottom:10,display:'flex',alignItems:'center',gap:6}}><Icon name="lock" size={13}/> Histórico de saídas de controlados</div>
           {hist.length===0
             ?<div style={{textAlign:'center',color:'#94A3B8',padding:24,fontSize:13}}>Nenhuma saída no período filtrado.</div>
             :<div style={{display:'flex',flexDirection:'column',gap:8}}>
@@ -11554,7 +11554,7 @@ function TabPacientes(props){
                 {s.observacao&&<div style={{fontSize:11,color:'#475569',marginBottom:2}}>Obs: {s.observacao}</div>}
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
                   <div style={{fontSize:11,color:'#94A3B8'}}>Liberado por: {s.liberadoPorNome||'—'}</div>
-                  {podeExcluir&&<button onClick={function(){apagarSaidaControlada(s);}} style={{padding:'4px 10px',background:'#FEF2F2',border:'none',borderRadius:8,color:'#DC2626',fontSize:11,fontWeight:700,cursor:'pointer',flexShrink:0}}>🗑️ Apagar</button>}
+                  {podeExcluir&&<button onClick={function(){apagarSaidaControlada(s);}} style={{padding:'4px 10px',background:'#FEF2F2',border:'none',borderRadius:8,color:'#DC2626',fontSize:11,fontWeight:700,cursor:'pointer',flexShrink:0,display:'inline-flex',alignItems:'center',gap:4}}><Icon name="trash" size={11}/> Apagar</button>}
                 </div>
               </div>);})}
             </div>
@@ -11596,9 +11596,9 @@ useEffect(function(){var cfg=loadCfg();if(cfg&&initFB(cfg)){setReady(true);
     db.collection('users').doc(firebaseUser.uid).get().then(function(s){if(s.exists){var d=s.data();if(d.status==='inativo'||d.status==='rejected'||d.status==='pending'){auth.signOut();localStorage.removeItem('fc_user');setUser(null);return;}var u={uid:firebaseUser.uid,name:d.name,role:d.role,color:d.color,email:d.email,status:d.status,tenant_id:d.tenant_id||'',sessionTimeout:d.sessionTimeout||12,photoURL:d.photoURL||'',crf:d.crf||''};localStorage.setItem('fc_user',JSON.stringify(u));setUser(u);}}).catch(function(){var s2=localStorage.getItem('fc_user');if(s2){try{var su2=JSON.parse(s2);if(su2&&su2.tenant_id)setUser(su2);}catch(e){}}});
     });}});}},[] );
 useEffect(function(){function on(){setOnline(true);}function off(){setOnline(false);}window.addEventListener('online',on);window.addEventListener('offline',off);return function(){window.removeEventListener('online',on);window.removeEventListener('offline',off);};},[]);
-// Identidade visual v2 (azul, não é tema escuro) ativada só para Itaquitinga — ver CSS .theme-itaq.
+// Identidade visual v2 (azul, não é tema escuro) — padrão pra todos os municípios, ver CSS .theme-itaq.
 useEffect(function(){
-  var ativo=user&&tenantDe(user)==='itaquitinga-pe';
+  var ativo=!!user;
   document.body.classList.toggle('theme-itaq',!!ativo);
   // Carrega a fonte IBM Plex Sans só quando necessário, pra não gerar requisição extra pra quem não usa o tema.
   if(ativo&&!document.getElementById('fc-itaq-font')){
@@ -11900,11 +11900,11 @@ if(!user)return <Auth onLogin={function(u){setUser(u);}}/>;
 if(showShift||showShiftModal)return <ShiftScreen user={user} allUsers={allUsers} onDone={handleShiftDone}/>;
 if(pendingInvite)return <InviteScreen invite={pendingInvite} onConfirm={handleConfirmInvite} onDeny={handleDenyInvite}/>;
 var isManagerRole=(user.role==='gestor'||user.role==='tecnico');
-var temaItaq=tenantDe(user)==='itaquitinga-pe';
+var temaItaq=true;// identidade visual v2 agora é o padrão pra todos os municípios (Itaquitinga + Vicência)
 var canMove=isManagerRole||!isGuest;
 var badge=pending+alertCount+solicitCount;
-// Mapa emoji -> ícone de linha, só usado quando temaItaq (ver function Icon). Mantém os emojis
-// como estão para Vicência — pedido explícito da usuária de não alterar o visual lá.
+// Mapa emoji -> ícone de linha, usado quando temaItaq (ver function Icon). A partir de 10/2026 a
+// identidade visual v2 passou a ser o padrão pra todos os municípios (antes era só Itaquitinga).
 function menuIconName(id){
   var m={dashboard:'home',saida:'pill',recebimento:'truck',antibiotico:'dna',pedidosjudiciais:'scale',
     visaogeral:'trendUp',comparapedido:'search',estoque:'package',pacientes:'lock',conferencia:'clipboard',
