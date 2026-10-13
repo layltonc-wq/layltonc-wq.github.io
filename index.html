@@ -872,6 +872,7 @@ function Icon(props){
     lock:<g><rect x="5" y="10.5" width="14" height="9" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></g>,
     clipboard:<g><rect x="5.5" y="4.5" width="13" height="16" rx="2"/><rect x="9" y="3" width="6" height="3" rx="1"/><line x1="8.5" y1="11" x2="15.5" y2="11"/><line x1="8.5" y1="14.5" x2="15.5" y2="14.5"/></g>,
     droplet:<path d="M12 3c3 4 6 7.5 6 11a6 6 0 0 1-12 0c0-3.5 3-7 6-11z"/>,
+    vial:<g><rect x="8.5" y="8" width="7" height="13" rx="2.2"/><path d="M10.2 8V5a1 1 0 0 1 1-1h1.6a1 1 0 0 1 1 1v3"/><line x1="8.5" y1="14" x2="15.5" y2="14"/></g>,
     barChart:<g><line x1="5" y1="20" x2="5" y2="12"/><line x1="12" y1="20" x2="12" y2="6"/><line x1="19" y1="20" x2="19" y2="15"/></g>,
     users:<g><circle cx="9" cy="8" r="3"/><path d="M3.5 20c0-3.5 2.5-6 5.5-6s5.5 2.5 5.5 6"/><circle cx="17" cy="9" r="2.3"/><path d="M15.2 13.2c2.2.3 3.8 2.3 3.8 5.3"/></g>,
     folder:<path d="M3.5 6.5a1 1 0 0 1 1-1H10l2 2.2h7.5a1 1 0 0 1 1 1V18a1 1 0 0 1-1 1H4.5a1 1 0 0 1-1-1z"/>,
@@ -5778,7 +5779,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
   }
   function cCor(s){if(s==='ativo')return'#10B981';if(s==='espera')return'#F59E0B';if(s==='dose_ataque')return'#8B5CF6';if(s==='concluido'||s==='finalizado')return'#3B82F6';if(s==='desistiu')return'#EF4444';return'#64748B';}
   function cLbl(s){if(s==='ativo')return'Em Tratamento';if(s==='espera')return'Aguardando';if(s==='dose_ataque')return'Dose de Ataque';if(s==='concluido')return'Concluído';if(s==='finalizado')return'Concluído';if(s==='desistiu')return'Desistiu';return s;}
-  function cIconName(s){if(s==='ativo')return'droplet';if(s==='espera')return'hourglass';if(s==='dose_ataque')return'star';if(s==='concluido'||s==='finalizado')return'check';if(s==='desistiu')return'x';return'folder';}
+  function cIconName(s){if(s==='ativo')return'vial';if(s==='espera')return'hourglass';if(s==='dose_ataque')return'star';if(s==='concluido'||s==='finalizado')return'check';if(s==='desistiu')return'x';return'folder';}
   function rForm(){setNomePac('');setDiasTrat('');setDataIni(new Date().toISOString().split('T')[0]);setDiaAt('1');setDiasAntes('0');setDosesDia('1');setObsForm('');setMedSel('');setNomeMed('');setCrmMed('');setStatusIni('ativo');setQtdEsp(2);setTelefone('');setTelDono('paciente');setRespNome('');}
   // ===== Lembretes via WhatsApp =====
   function mascaraTel(v){var d=String(v||'').replace(/\D/g,'').slice(0,11);if(!d)return'';if(d.length<=2)return'('+d;if(d.length<=6)return'('+d.slice(0,2)+') '+d.slice(2);if(d.length<=10)return'('+d.slice(0,2)+') '+d.slice(2,6)+'-'+d.slice(6);return'('+d.slice(0,2)+') '+d.slice(2,7)+'-'+d.slice(7);}
@@ -5875,7 +5876,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
           <div>
             <div style={{color:'rgba(255,255,255,.7)',fontSize:12,textTransform:'uppercase',letterSpacing:1}}>Farmácia Hospitalar</div>
-            <div style={{color:'#fff',fontSize:20,fontWeight:700,display:'flex',alignItems:'center',gap:8}}><Icon name="droplet" size={18}/> Tratamento ATB</div>
+            <div style={{color:'#fff',fontSize:20,fontWeight:700,display:'flex',alignItems:'center',gap:8}}><Icon name="vial" size={18}/> Tratamento ATB</div>
           </div>
           <div style={{display:'flex',gap:8}}>
             <button onClick={function(){setShowStats(function(v){return!v;});}} style={{background:showStats?'rgba(255,255,255,.35)':'rgba(255,255,255,.2)',border:'1.5px solid rgba(255,255,255,.4)',borderRadius:12,padding:'10px 12px',color:'#fff',cursor:'pointer',display:'flex',alignItems:'center'}}><Icon name="barChart" size={16}/></button>
@@ -5884,7 +5885,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
         </div>
         <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8}}>
           <div style={{background:'rgba(255,255,255,.12)',borderRadius:12,padding:'8px 4px',textAlign:'center',border:'1px solid rgba(255,255,255,.15)'}}>
-            <div style={{display:'flex',justifyContent:'center',color:'#fff'}}><Icon name="droplet" size={15}/></div>
+            <div style={{display:'flex',justifyContent:'center',color:'#fff'}}><Icon name="vial" size={15}/></div>
             <div style={{color:'#fff',fontSize:18,fontWeight:800}}>{tratamentos.filter(function(t){return cSt(t)==='ativo';}).length}</div>
             <div style={{color:'rgba(255,255,255,.7)',fontSize:9}}>Tratamento</div>
           </div>
@@ -6008,10 +6009,10 @@ function TabAntibiotico({user,medications,stock,allUsers}){
                 </div>
               </div>}
               {s==='espera'&&<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginTop:8}}>
-                <button onClick={function(e){e.stopPropagation();iniciarEspera(t);}} style={{padding:'9px',background:'#F0FDF4',border:'1.5px solid #BBF7D0',borderRadius:10,color:'#059669',fontWeight:700,fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:5}}><Icon name="droplet" size={13}/> Iniciar</button>
+                <button onClick={function(e){e.stopPropagation();iniciarEspera(t);}} style={{padding:'9px',background:'#F0FDF4',border:'1.5px solid #BBF7D0',borderRadius:10,color:'#059669',fontWeight:700,fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:5}}><Icon name="vial" size={13}/> Iniciar</button>
                 <button onClick={function(e){e.stopPropagation();ataqueBtn(t);}} style={{padding:'9px',background:'#F5F3FF',border:'1.5px solid #DDD6FE',borderRadius:10,color:'#7C3AED',fontWeight:700,fontSize:12,cursor:'pointer'}}>Dose Ataque</button>
               </div>}
-              {pHj(t)&&<button data-tour="atb-registrar-dose" onClick={function(e){e.stopPropagation();abrirDoseDia(t,hojeStrF());}} style={{width:'100%',padding:'10px',background:B,border:'none',borderRadius:10,color:'#fff',fontWeight:700,fontSize:14,cursor:'pointer',marginTop:6,display:'flex',alignItems:'center',justifyContent:'center',gap:6}}><Icon name="droplet" size={14}/> Registrar Dose de Hoje{atrasadas>0?' / atrasadas ('+atrasadas+')':''}</button>}
+              {pHj(t)&&<button data-tour="atb-registrar-dose" onClick={function(e){e.stopPropagation();abrirDoseDia(t,hojeStrF());}} style={{width:'100%',padding:'10px',background:B,border:'none',borderRadius:10,color:'#fff',fontWeight:700,fontSize:14,cursor:'pointer',marginTop:6,display:'flex',alignItems:'center',justifyContent:'center',gap:6}}><Icon name="vial" size={14}/> Registrar Dose de Hoje{atrasadas>0?' / atrasadas ('+atrasadas+')':''}</button>}
               {(function(){var w=waMostra(t);if(!w.inicio&&!w.dose&&!w.fim)return null;var bs={display:'inline-flex',alignItems:'center',gap:4,padding:'5px 9px',background:'#F0FDF4',border:'1px solid #BBF7D0',borderRadius:8,color:'#059669',fontWeight:700,fontSize:11,cursor:'pointer'};return(<div style={{display:'flex',flexWrap:'wrap',gap:6,marginTop:8,alignItems:'center'}}>
                 <span style={{fontSize:10,color:'#94A3B8',fontWeight:600}}>Lembrete:</span>
                 {w.inicio&&<button title="Enviar lembrete de início" onClick={function(e){e.stopPropagation();abrirWhats(t,'inicio');}} style={bs}>Início</button>}
@@ -6033,7 +6034,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
             <label style={{fontSize:12,fontWeight:700,color:'#475569',display:'block',marginBottom:8}}>Status *</label>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
               <button onClick={function(){setStatusIni('ativo');}} style={{padding:'14px 10px',borderRadius:14,border:statusIni==='ativo'?'2px solid #10B981':'2px solid #E2E8F0',background:statusIni==='ativo'?'#F0FDF4':'#F8FAFC',cursor:'pointer',textAlign:'center'}}>
-                <div style={{display:'flex',justifyContent:'center',marginBottom:3,color:statusIni==='ativo'?'#10B981':'#94A3B8'}}><Icon name="droplet" size={20}/></div>
+                <div style={{display:'flex',justifyContent:'center',marginBottom:3,color:statusIni==='ativo'?'#10B981':'#94A3B8'}}><Icon name="vial" size={20}/></div>
                 <div style={{fontSize:12,fontWeight:700,color:statusIni==='ativo'?'#10B981':'#64748B'}}>Iniciar Tratamento</div>
               </button>
               <button onClick={function(){setStatusIni('espera');}} style={{padding:'14px 10px',borderRadius:14,border:statusIni==='espera'?'2px solid #F59E0B':'2px solid #E2E8F0',background:statusIni==='espera'?'#FFFBEB':'#F8FAFC',cursor:'pointer',textAlign:'center'}}>
@@ -6136,7 +6137,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
 
       {showDose&&(function(){var hojeStr=new Date().toISOString().split('T')[0];var retroSel=dataDose&&dataDose<hojeStr;return(<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:1100,display:'flex',alignItems:'center',justifyContent:'center',padding:20}} onClick={function(){setShowDose(null);setQtdDose(2);setDataDose('');setDoseQtdDia(1);}}>
         <div style={{background:'#fff',borderRadius:20,padding:28,width:'100%',maxWidth:360,textAlign:'center'}} onClick={function(e){e.stopPropagation();}}>
-          <div style={{display:'flex',justifyContent:'center',marginBottom:8,color:B}}><Icon name="droplet" size={38}/></div>
+          <div style={{display:'flex',justifyContent:'center',marginBottom:8,color:B}}><Icon name="vial" size={38}/></div>
           <div style={{fontWeight:800,fontSize:18,color:'#1E293B',marginBottom:4}}>{doseQtdDia>1?'Dar baixa do dia':'Registrar Dose'}</div>
           <div style={{fontSize:14,color:'#64748B',marginBottom:2}}>Paciente: <strong>{showDose.pacienteNome}</strong></div>
           {showDose.nomeMedico&&<div style={{fontSize:12,color:'#94A3B8',marginBottom:8,display:'flex',alignItems:'center',justifyContent:'center',gap:4}}><Icon name="users" size={11}/> {showDose.nomeMedico}{showDose.crmMedico?' · CRM '+showDose.crmMedico:''}</div>}
@@ -6239,7 +6240,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
                       <div style={{fontSize:12,fontWeight:700,color:completo?'#059669':atras?'#B45309':'#2563EB'}}>{completo?day.total+' dose'+(day.total>1?'s':'')+' concluída'+(day.total>1?'s':''):day.feitas+' de '+day.total+' · '+day.pendentes+' pendente'+(day.pendentes>1?'s':'')}</div>
                     </div>
                     {day.pendentes>0&&<div style={{marginTop:8}}>
-                      <button data-tour={day.ehHoje?'atb-registrar-dose':undefined} onClick={function(){abrirDoseDia(detT,day.data);}} style={{width:'100%',padding:'9px 12px',background:atras?'#F59E0B':B,border:'none',borderRadius:8,color:'#fff',fontWeight:700,fontSize:13,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:6}}><Icon name="droplet" size={13}/> Dar baixa do dia{day.pendentes>1?' ('+day.pendentes+' doses)':''}</button>
+                      <button data-tour={day.ehHoje?'atb-registrar-dose':undefined} onClick={function(){abrirDoseDia(detT,day.data);}} style={{width:'100%',padding:'9px 12px',background:atras?'#F59E0B':B,border:'none',borderRadius:8,color:'#fff',fontWeight:700,fontSize:13,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:6}}><Icon name="vial" size={13}/> Dar baixa do dia{day.pendentes>1?' ('+day.pendentes+' doses)':''}</button>
                     </div>}
                   </div>);
                 })}
@@ -6252,7 +6253,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
               <div style={{width:Math.min(100,(dEsp(detT)/3)*100)+'%',height:'100%',background:dEsp(detT)>=3?'#EF4444':'#F59E0B',borderRadius:99}}/>
             </div>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-              <button onClick={function(){iniciarEspera(detT);}} style={{padding:'12px',background:'#F0FDF4',border:'1.5px solid #BBF7D0',borderRadius:12,color:'#059669',fontWeight:700,fontSize:13,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:5}}><Icon name="droplet" size={13}/> Iniciar</button>
+              <button onClick={function(){iniciarEspera(detT);}} style={{padding:'12px',background:'#F0FDF4',border:'1.5px solid #BBF7D0',borderRadius:12,color:'#059669',fontWeight:700,fontSize:13,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:5}}><Icon name="vial" size={13}/> Iniciar</button>
               <button onClick={function(){ataqueBtn(detT);}} style={{padding:'12px',background:'#F5F3FF',border:'1.5px solid #DDD6FE',borderRadius:12,color:'#7C3AED',fontWeight:700,fontSize:13,cursor:'pointer'}}>Dose Ataque</button>
             </div>
           </div>}
@@ -11906,7 +11907,7 @@ var badge=pending+alertCount+solicitCount;
 // Mapa emoji -> ícone de linha, usado quando temaItaq (ver function Icon). A partir de 10/2026 a
 // identidade visual v2 passou a ser o padrão pra todos os municípios (antes era só Itaquitinga).
 function menuIconName(id){
-  var m={dashboard:'home',saida:'pill',recebimento:'truck',antibiotico:'droplet',pedidosjudiciais:'scale',
+  var m={dashboard:'home',saida:'pill',recebimento:'truck',antibiotico:'vial',pedidosjudiciais:'scale',
     visaogeral:'trendUp',comparapedido:'search',estoque:'package',pacientes:'lock',conferencia:'clipboard',
     leites:'droplet',relatorio:'barChart',gestao:'users',log:'lock',histnotas:'folder',previsao:'clipboard',
     histcontas:'clipboard',admin:'gear',perfil:'users'};
