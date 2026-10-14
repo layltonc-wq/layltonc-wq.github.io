@@ -81,6 +81,9 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stro
 @keyframes ping{0%{box-shadow:0 0 0 0 rgba(91,240,188,.6)}70%{box-shadow:0 0 0 10px rgba(91,240,188,0)}100%{box-shadow:0 0 0 0 rgba(91,240,188,0)}}
 .hero h1{font-size:clamp(34px,5.2vw,60px);line-height:1.04;font-weight:800}
 .rot{display:inline-block;position:relative;color:#C9F2FF;white-space:nowrap}
+.hero-grid>*{min-width:0}
+@media (max-width:620px){.hero h1{font-size:clamp(28px,8.2vw,34px)}.rot{white-space:normal}}
+@media (max-width:520px){.hide-sm{display:none}.btn-sm{padding:9px 13px;font-size:12.5px}.toggle button{padding:12px 15px;font-size:13px}}
 .rot span{display:inline-block;transition:opacity .35s,transform .35s}
 .rot span.out{opacity:0;transform:translateY(-12px)}
 .hero .lede{margin-top:22px;font-size:17.5px;line-height:1.6;color:rgba(255,255,255,.88);max-width:52ch}
@@ -296,7 +299,7 @@ footer .brand .chip{background:linear-gradient(135deg,var(--blue),var(--blue-3))
       <a href="#simulador">Economia</a>
       <a href="#duvidas">Dúvidas</a>
     </nav>
-    <a href="#contato" class="btn btn-sm">Agendar demonstração</a>
+    <a href="#contato" class="btn btn-sm">Agendar<span class="hide-sm">&nbsp;demonstração</span></a>
   </div>
 </header>
 
