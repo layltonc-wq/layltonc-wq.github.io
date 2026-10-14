@@ -321,12 +321,36 @@ function _loteFEFOAsync(medicamentoId,tenantId){
     return {lote:lotes[0].lote,validade:lotes[0].validade};
   }).catch(function(){return null;});
 }
+// Perf (14/10/2026): agrupa as entries por medicamento UMA vez (O(entries)) em vez de filtrar a lista
+// inteira (~19 mil) pra cada medicamento (O(medicamentos × entries) — ~1,3s travado no desktop, vários
+// segundos no celular). O resultado é guardado por identidade do array (WeakMap): todas as telas que usam
+// o mesmo `entries` compartilham o mesmo agrupamento, e a ordem original dentro de cada medicamento é mantida.
+var _entPorMedCache=new WeakMap();
+function entriesPorMed(entries){
+  var c=_entPorMedCache.get(entries);if(c)return c;
+  var g={};
+  for(var i=0;i<entries.length;i++){var e=entries[i];var k=e.medicamentoId;var a=g[k];if(a)a.push(e);else g[k]=[e];}
+  _entPorMedCache.set(entries,g);return g;
+}
+// Memo do último cálculo: o Dashboard chamava computeVencimentos a CADA render (sem useMemo).
+var _vencMemo={m:null,e:null,s:null,r:null};
 function computeVencimentos(medications,entries,stock){
+  if(_vencMemo.r&&_vencMemo.m===medications&&_vencMemo.e===entries&&_vencMemo.s===stock){
+    var hj=new Date();var hk=hj.getFullYear()+'-'+hj.getMonth()+'-'+hj.getDate();
+    if(_vencMemo.d===hk)return _vencMemo.r;
+  }
+  var r=_computeVencimentos(medications,entries,stock);
+  var hn=new Date();_vencMemo={m:medications,e:entries,s:stock,r:r,d:hn.getFullYear()+'-'+hn.getMonth()+'-'+hn.getDate()};
+  return r;
+}
+function _computeVencimentos(medications,entries,stock){
   var hoje=new Date();
+  var _g=entriesPorMed(entries);
   var medList=medications.map(function(m){
-    var me=entries.filter(function(e){return e.medicamentoId===m.id&&e.tipo==='entrada'&&e.lote;});
+    var _mine=_g[m.id]||[];
+    var me=_mine.filter(function(e){return e.tipo==='entrada'&&e.lote;});
     var loteMap={};me.forEach(function(e){if(!e.lote)return;var lk=e.lote;if(!loteMap[lk])loteMap[lk]={lote:e.lote,validade:e.validade||'',entrada:0,saida:0};loteMap[lk].entrada+=(e.quantidade||0);if(e.validade&&!loteMap[lk].validade)loteMap[lk].validade=e.validade;});
-    var saidas=entries.filter(function(e){return e.medicamentoId===m.id&&e.tipo==='saida'&&e.lote;});
+    var saidas=_mine.filter(function(e){return e.tipo==='saida'&&e.lote;});
     saidas.forEach(function(e){var lk=e.lote;if(loteMap[lk])loteMap[lk].saida+=(e.quantidade||0);});
     var lotes=Object.keys(loteMap).map(function(k){var l=loteMap[k];return Object.assign({},l,{qty:Math.max(0,l.entrada-l.saida)});}).filter(function(l){return l.qty>0;});
     var ul=me.slice().sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});
@@ -695,7 +719,9 @@ function post(){if(!aviso.trim()&&!fotoMural)return;setSaving(true);var expAt=ne
 function del(id){db.collection('avisos').doc(id).delete();}
 var today=todayStr();var te=entries.filter(function(e){return (e.criadoEm||'').startsWith(today)&&!_ehSaidaNaoReal(e);});var ts=0;te.forEach(function(e){if(e.tipo==='saida')ts+=(e.quantidade||0);});var tin=0;te.forEach(function(e){if(e.tipo==='entrada')tin+=(e.quantidade||0);});var low=medications.filter(function(m){return m.minEstoque&&(stock[m.id]||0)<=m.minEstoque&&(stock[m.id]||0)>0;});
 var vencData=computeVencimentos(medications,entries,stock);var vencendoIds={};vencData.venc30.forEach(function(v){vencendoIds[v.id]=true;});var vencendo=Object.keys(vencendoIds).length;
-var week=[];for(var wi=0;wi<7;wi++){var wd=new Date();wd.setDate(wd.getDate()-(6-wi));var wk=fmtISO(wd);var wv=0;entries.forEach(function(e){if(e.tipo==='saida'&&!_ehSaidaNaoReal(e)&&(e.criadoEm||'').startsWith(wk))wv+=(e.quantidade||0);});week.push({l:wd.toLocaleDateString('pt-BR',{weekday:'short'}).slice(0,3),v:wv});}
+var week=[];var _wkIx={};for(var wi=0;wi<7;wi++){var wd=new Date();wd.setDate(wd.getDate()-(6-wi));var wk=fmtISO(wd);_wkIx[wk]=week.length;week.push({l:wd.toLocaleDateString('pt-BR',{weekday:'short'}).slice(0,3),v:0});}
+// 1 passada só (antes eram 7 passadas sobre ~19 mil entries); testa a data (barato) antes de _ehSaidaNaoReal (caro).
+entries.forEach(function(e){if(e.tipo!=='saida')return;var ix=_wkIx[(e.criadoEm||'').slice(0,10)];if(ix===undefined)return;if(!_ehSaidaNaoReal(e))week[ix].v+=(e.quantidade||0);});
 var temaItaq=true;// identidade visual v2 agora é o padrão pra todos os municípios (Itaquitinga + Vicência)
 // Painéis novos da home (só Itaquitinga, pedido da usuária pra substituir o Mural do Plantão):
 // "Vencendo em breve" e "Ranking do Mês" — essa última trocou o antigo "mais retirados da semana"
@@ -2048,6 +2074,8 @@ function HistModal(props){
     </div>}
   </Modal>);}
 function TabEstoque(props){var user=props.user;var medications=props.medications;var entries=props.entries;var stock=props.stock;var estoqueBruto=props.estoqueBruto||{};var onSave=props.onSave;var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};var alert2=props.alert2||function(m){window.alert(m);};var _search=useState('');var search=_search[0];var setSearch=_search[1];var _sub=useState('estoque');var sub=_sub[0];var setSub=_sub[1];var _showAdd=useState(false);var showAdd=_showAdd[0];var setShowAdd=_showAdd[1];var _hist=useState(null);var hist=_hist[0];var setHist=_hist[1];var _editId=useState(null);var editId=_editId[0];var setEditId=_editId[1];var _editNome=useState('');var editNome=_editNome[0];var setEditNome=_editNome[1];var _editMin=useState('');var editMin=_editMin[0];var setEditMin=_editMin[1];var _editTipo=useState('medicamento');var editTipo=_editTipo[0];var setEditTipo=_editTipo[1];var _newNome=useState('');var newNome=_newNome[0];var setNewNome=_newNome[1];var _newEan=useState('');var newEan=_newEan[0];var setNewEan=_newEan[1];var _newMin=useState('');var newMin=_newMin[0];var setNewMin=_newMin[1];var _newTipo=useState('medicamento');var newTipo=_newTipo[0];var setNewTipo=_newTipo[1];
+// Perf: a lista de ~350 itens era montada de uma vez (~2s travado no celular). Agora entram 40 já na abertura e o resto em lotes pequenos logo em seguida.
+var _limEst=useState(40);var limEst=_limEst[0];var setLimEst=_limEst[1];
   var _showBaixa=useState(null);var showBaixa=_showBaixa[0];var setShowBaixa=_showBaixa[1];
   var _motivoBaixa=useState('descarte');var motivoBaixa=_motivoBaixa[0];var setMotivoBaixa=_motivoBaixa[1];
   var _motivoLivre=useState('');var motivoLivre=_motivoLivre[0];var setMotivoLivre=_motivoLivre[1];
@@ -2096,6 +2124,7 @@ var medList=medListBase;
 if(search.trim())medList=medList.filter(function(m){return m.nome.toLowerCase().indexOf(search.toLowerCase())>=0;});
 if(filtCat&&filtCat!=='todos')medList=medList.filter(function(m){return m.cat===filtCat;});
 medList=medList.slice().sort(function(a,b){return a.est-b.est;});
+useEffect(function(){if(limEst<medList.length){var _t=setTimeout(function(){setLimEst(function(l){return l+60;});},30);return function(){clearTimeout(_t);};}});
 var venc30=[],venc60=[],venc90=[],vencidos=[];medList.forEach(function(m){
   var est=stock[m.id]||0;if(est<=0)return;
   var temLoteValidade=false;
@@ -2325,7 +2354,7 @@ function darBaixaVencido(){
 <div className="card"><div className="ch"><div className="ch-title"><div className="ch-accent"/><span>Estoque Atual</span></div><span style={{fontSize:12,color:'#94A3B8',fontWeight:500}}>{medList.length} produto(s)</span></div>
 {medList.length===0?<div style={{padding:48,textAlign:'center',color:'#94A3B8'}}>Nenhum medicamento cadastrado.</div>:(document.body.classList.contains('theme-itaq')?(
 <div>
-{medList.map(function(m){var low=m.minEstoque>0&&m.est<=m.minEstoque;var zero=m.est<=0;var neg=m.negativo!=null;var tp=TIPOS[m.cat]||TIPOS.medicamento;
+{medList.slice(0,limEst).map(function(m){var low=m.minEstoque>0&&m.est<=m.minEstoque;var zero=m.est<=0;var neg=m.negativo!=null;var tp=TIPOS[m.cat]||TIPOS.medicamento;
   var statusCor=zero?'#B91C1C':low?'#B45309':'#0C6B3E';
   var acoes=[
     can(user.role,'editar')&&{ic:'edit',cor:'#1351B4',bg:'#EFF6FF',title:'Editar',fn:function(){setEditId(m.id);setEditNome(m.nome);setEditMin(m.minEstoque||'');setEditTipo(m.cat||'medicamento');}},
@@ -2354,7 +2383,7 @@ function darBaixaVencido(){
   </div>);})}
 </div>
 ):(<div style={{overflowX:'auto'}}><table className="tbl"><thead><tr><th>Medicamento</th><th>Estoque</th><th>Status</th><th></th></tr></thead><tbody>
-{medList.map(function(m){var low=m.minEstoque>0&&m.est<=m.minEstoque;var zero=m.est<=0;var neg=m.negativo!=null;var tp=TIPOS[m.cat]||TIPOS.medicamento;return(<tr key={m.id}>
+{medList.slice(0,limEst).map(function(m){var low=m.minEstoque>0&&m.est<=m.minEstoque;var zero=m.est<=0;var neg=m.negativo!=null;var tp=TIPOS[m.cat]||TIPOS.medicamento;return(<tr key={m.id}>
 <td><div style={{fontWeight:600,color:B,cursor:can(user.role,'historico')?'pointer':'default',marginBottom:4,fontSize:13}} onClick={function(){if(can(user.role,'historico'))setHist(m);}}>{m.nome}</div><span style={{fontSize:10,padding:'2px 8px',borderRadius:20,background:tp.cor+'18',color:tp.cor,fontWeight:700,border:'1px solid '+tp.cor+'40'}}>{tp.icon} {tp.label}</span></td>
 <td><span style={{fontWeight:900,fontSize:22,color:zero?'#B91C1C':low?'#B45309':'#0C6B3E'}}>{m.est}</span></td>
 <td>{neg?<span className="badge badge-red" title={'Saídas registradas superam as entradas em '+Math.abs(m.negativo)+' un. — revise os lançamentos, não é falta de estoque comum.'}>⚠️ Saldo negativo ({m.negativo})</span>:<span className={'badge '+(zero?'badge-red':low?'badge-amber':'badge-green')}>{zero?'Zerado':low?'Baixo':'OK'}</span>}</td>
@@ -8814,10 +8843,12 @@ function TabConferencia(props){
 
   // Computa lotes por medicamento (mesma lógica da aba Estoque)
   var medList=useMemo(function(){
+    var _g=entriesPorMed(entries);
     return medications.map(function(m){
-      var me=entries.filter(function(e){return e.medicamentoId===m.id&&e.tipo==='entrada'&&e.lote;});
+      var _mine=_g[m.id]||[];
+      var me=_mine.filter(function(e){return e.tipo==='entrada'&&e.lote;});
       var loteMap={};me.forEach(function(e){if(!e.lote)return;var lk=e.lote;if(!loteMap[lk])loteMap[lk]={lote:e.lote,validade:e.validade||'',entrada:0,saida:0};loteMap[lk].entrada+=(e.quantidade||0);if(e.validade&&!loteMap[lk].validade)loteMap[lk].validade=e.validade;});
-      var saidas=entries.filter(function(e){return e.medicamentoId===m.id&&e.tipo==='saida'&&e.lote;});
+      var saidas=_mine.filter(function(e){return e.tipo==='saida'&&e.lote;});
       saidas.forEach(function(e){var lk=e.lote;if(loteMap[lk])loteMap[lk].saida+=(e.quantidade||0);});
       var lotes=Object.keys(loteMap).map(function(k){var l=loteMap[k];return {lote:l.lote,validade:l.validade,qty:Math.max(0,l.entrada-l.saida)};}).filter(function(l){return l.qty>0;});
       var est=stock[m.id]||0;
@@ -11409,12 +11440,20 @@ useEffect(function(){if(!ready||!user)return;
 // Camada 2: entries = partição limpa. Do histórico usamos SÓ a parte antiga (< janela); a parte recente
 // vem do listener em tempo real (assim exclusão/edição recente reflete na hora e não há duplicata).
 // Fronteira idêntica à do listener (_fcWinStart) — sem gap nem sobreposição. calcStock vê o mesmo conjunto.
-var entries=useMemo(function(){
+// Perf: o histórico antigo (~19 mil) só é filtrado/ordenado quando ELE muda; a cada movimentação nova (listener em
+// tempo real) só a parte recente (poucos itens) é reordenada e anexada no fim. Equivalente ao sort do conjunto todo,
+// porque tudo que está em recentEntries tem criadoEm >= ws > criadoEm de qualquer item de histAntigo (e itens sem
+// criadoEm ficam no início, como antes). Comparação direta de strings ISO (mesma ordem do localeCompare).
+var histAntigo=useMemo(function(){
   var ws=_fcWinStart.current;
-  var out=histEntries.filter(function(e){return !e.criadoEm||e.criadoEm<ws;}).concat(recentEntries);
-  out.sort(function(a,b){return (a.criadoEm||'').localeCompare(b.criadoEm||'');});
+  var out=histEntries.filter(function(e){return !e.criadoEm||e.criadoEm<ws;});
+  out.sort(function(a,b){var x=a.criadoEm||'',y=b.criadoEm||'';return x<y?-1:x>y?1:0;});
   return out;
-},[histEntries,recentEntries]);
+},[histEntries]);
+var entries=useMemo(function(){
+  var rec=recentEntries.slice().sort(function(a,b){var x=a.criadoEm||'',y=b.criadoEm||'';return x<y?-1:x>y?1:0;});
+  return histAntigo.concat(rec);
+},[histAntigo,recentEntries]);
 // Perf DEFINITIVA (19/09/2026): stock/estoqueBruto não dependem mais de somar TODO o histórico
 // de entries (calcStock/calcStockBruto ficam mantidas só pra outros usos pontuais que ainda
 // processam um subconjunto de entries, ex.: por lote). Uma Cloud Function (functions/index.js)
