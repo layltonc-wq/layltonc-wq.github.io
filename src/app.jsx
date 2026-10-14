@@ -230,6 +230,9 @@ function fcHistorico(o){
   function seguinte(){var p=pendente;pendente=null;if(p&&p.v!==ver)return mudou(p).catch(function(){});return Promise.resolve();}
   // Algo antigo mudou (em qualquer aparelho): tenta rebuscar só os ids citados; se não der, recarrega tudo.
   function mudou(meta){return remendar(meta).then(function(ok){if(!ok)return completo(meta.v);});}
+  // Porta única de entrada: o doc de versão pode chegar tanto pela leitura inicial quanto pelo listener ao mesmo tempo —
+  // sem isto os dois disparavam recargas completas em paralelo (19 mil leituras em dobro).
+  function sincronizar(meta){if(carregando){pendente=meta;return Promise.resolve();}return mudou(meta);}
   function atualizarDelta(){
     return o.db.collection('entries').where('tenant_id','==',o.tenant).where('criadoEm','>=',cut).get().then(function(snap){
       var dd=toDocs(snap).sort(porId),js=JSON.stringify(dd);
@@ -252,14 +255,14 @@ function fcHistorico(o){
         if(hid&&meta===null)return;                                    // sem rede: segue com o cache
         if(!hid)return completo(meta?meta.v:null).catch(function(){}); // sem cache (ou ilegível/velho)
         if(meta.v===ver)return atualizarDelta().catch(function(){});   // nada antigo mudou: só os dias recentes
-        return mudou(meta).then(function(){return atualizarDelta();}).catch(function(){});
+        return sincronizar(meta).then(function(){return morto?null:atualizarDelta();}).catch(function(){});
       });
     });
   }
   return {
     iniciar:iniciar,
     // chamado a cada mudança do doc de versão (snapshot vindo do servidor)
-    onVersao:function(meta){if(morto||ver===null||meta.v===ver)return;if(carregando){pendente=meta;return;}mudou(meta).catch(function(){});},
+    onVersao:function(meta){if(morto||ver===null||meta.v===ver)return;sincronizar(meta).catch(function(){});},
     cancelar:function(){morto=true;}
   };
 }
