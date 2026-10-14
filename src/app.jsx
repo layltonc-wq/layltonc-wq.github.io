@@ -587,7 +587,17 @@ function _matchItemMeds(itemDesc,meds,limite){
 // Destino da saída (pedido da coordenadora, 14/10/2026): 'sus' = usuário SUS | 'emergencia'. Saídas antigas ou de fluxos
 // sem destino ficam como 'nc' (não classificado) — nunca assumimos um dos dois.
 var DESTINOS={sus:{label:'SUS (usuário)',curto:'SUS',cor:'#1351B4',bg:'#EFF6FF',borda:'#BFDBFE'},emergencia:{label:'Emergência',curto:'Emergência',cor:'#B91C1C',bg:'#FEF2F2',borda:'#FCA5A5'},nc:{label:'Não classificado',curto:'N/C',cor:'#64748B',bg:'#F1F5F9',borda:'#CBD5E1'}};
-function destinoDe(e){var d=e&&e.destino;return d==='sus'||d==='emergencia'?d:'nc';}
+// Saídas ANTERIORES a esta função não têm o campo: aplica a mesma regra dos fluxos fixos quando dá pra identificar —
+// leite (viaLeitePac) e pedido judicial = SUS; ATB (obs começa/contém "ATB") e Morfina/Tramal = Emergência. O resto fica 'nc'.
+function destinoDe(e){
+  if(!e)return 'nc';
+  var d=e.destino;if(d==='sus'||d==='emergencia')return d;
+  if(e.tipo!=='saida')return 'nc';
+  if(e.viaLeitePac||e.pedidoJudicialId)return 'sus';
+  var o=String(e.obs||e.observacao||'');
+  if(/(^|[^A-Za-z])ATB([^A-Za-z]|$)/.test(o)||_ehMedControlado(e.medicamentoNome||''))return 'emergencia';
+  return 'nc';
+}
 function _ehSaidaNaoReal(e){
   if(e.ficticioDiv)return true;
   if(e.divergenciaTipo==='real')return true;
