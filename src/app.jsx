@@ -129,7 +129,140 @@ function initFB(c){try{
 // editado/excluído (fora da janela de 3 dias o listener não pega). Todos os aparelhos escutam esse doc e,
 // ao mudar, rebuscam o histórico completo do servidor. Adições não chamam isto (o listener de 3 dias já pega).
 // Fire-and-forget: nunca bloqueia nem quebra a mutação original.
-function _bumpEntriesVersion(user){try{if(db&&tenantDe(user))db.collection('_meta').doc('entries_version__'+tenantDe(user)).set({v:Date.now(),at:new Date().toISOString(),tenant_id:tenantDe(user)},{merge:true}).catch(function(){});}catch(e){}}
+// ids = ids dos lançamentos ANTIGOS que mudaram/foram apagados (os outros aparelhos rebuscam só esses, via "log" no próprio
+// doc de versão, em vez de baixar o histórico inteiro). Sem ids (undefined) = "não sei quais" -> os outros aparelhos recarregam
+// tudo (comportamento antigo, sempre seguro). ids=[] = nada antigo mudou (só adições). Cada entrada do log traz o "prev" (versão
+// anterior), formando uma corrente que o cliente confere — qualquer buraco (ex.: aparelho com versão antiga do app que só grava
+// {v}) faz o cliente recarregar tudo. Guarda só as 40 últimas entradas.
+function _bumpEntriesVersion(user,ids){try{
+  if(!db||!tenantDe(user))return;
+  var ref=db.collection('_meta').doc('entries_version__'+tenantDe(user));
+  var lista=null;
+  if(Array.isArray(ids)&&ids.length<=400){var vistos={};lista=[];ids.forEach(function(i){if(i&&!vistos[i]){vistos[i]=1;lista.push(i);}});}
+  var agora=Date.now(),t=tenantDe(user);
+  var simples=function(){ref.set({v:agora,at:new Date().toISOString(),tenant_id:t},{merge:true}).catch(function(){});};
+  if(!db.runTransaction){simples();return;}
+  db.runTransaction(function(tx){return tx.get(ref).then(function(sn){
+    var d=sn.exists?sn.data():{};var prev=d.v||0;var log=Array.isArray(d.log)?d.log.slice():[];
+    var nv=Math.max(agora,prev+1);
+    log.push({v:nv,prev:prev,ids:lista});
+    while(log.length>40)log.shift();
+    tx.set(ref,{v:nv,at:new Date().toISOString(),tenant_id:t,log:log},{merge:true});
+  });}).catch(simples);
+}catch(e){}}
+// ===== Histórico de entries: cache local (IndexedDB) + sincronização só do que mudou =====
+// Problema: toda abertura baixava ~19 mil lançamentos do servidor (lento em 4G, cobra leituras, e a persistência
+// do próprio Firestore chegou a levar 31s só pra ler esse volume do cache). Padrão usado por apps "local-first"
+// (stale-while-revalidate): 1) mostra na hora o que já está guardado no aparelho; 2) confere com o servidor se algo
+// ANTIGO mudou (doc _meta/entries_version, bumpado em toda edição/exclusão de lançamento antigo); 3) se não mudou,
+// baixa só os lançamentos dos últimos dias (delta) e substitui essa janela pelo que o servidor diz; se mudou
+// (ou o cache é velho/ausente), recarrega tudo (paginado, como antes) e regrava o cache.
+// Qualquer falha de IndexedDB/rede cai no comportamento de antes — o cache nunca é obrigatório.
+// Guardado em 2 registros: "base" (lançamentos antigos, gravado só nos recarregamentos completos) e "delta" (janela
+// recente, pequena, regravada a cada abertura que traz novidade) — assim a gravação frequente é barata.
+var _HC_DB='fc_hist_cache_v1',_HC_ST='h';
+function _hcAbrir(){return new Promise(function(res,rej){try{var r=indexedDB.open(_HC_DB,1);r.onupgradeneeded=function(){try{r.result.createObjectStore(_HC_ST);}catch(e){}};r.onsuccess=function(){res(r.result);};r.onerror=function(){rej(r.error||new Error('idb'));};r.onblocked=function(){rej(new Error('idb blocked'));};}catch(e){rej(e);}});}
+function _hcLer(k){return _hcAbrir().then(function(idb){return new Promise(function(res,rej){var q;try{var t=idb.transaction(_HC_ST,'readonly');q=t.objectStore(_HC_ST).get(k);t.oncomplete=function(){idb.close();res(q.result||null);};t.onerror=t.onabort=function(){idb.close();rej(t.error||new Error('idb'));};}catch(e){try{idb.close();}catch(e2){}rej(e);}});});}
+function _hcGravar(itens){return _hcAbrir().then(function(idb){return new Promise(function(res,rej){try{var t=idb.transaction(_HC_ST,'readwrite');var st=t.objectStore(_HC_ST);for(var k in itens)st.put(itens[k],k);t.oncomplete=function(){idb.close();res();};t.onerror=t.onabort=function(){idb.close();rej(t.error||new Error('idb'));};}catch(e){try{idb.close();}catch(e2){}rej(e);}});});}
+function fcHistorico(o){
+  var chave=(o.projectId||'p')+'__'+o.tenant,KB='base__'+chave,KD='delta__'+chave;
+  var PAGINA=o.pagina||2000,TTL=14*86400000,MARGEM=7*86400000,MAXDELTA=4000,MAXIDS=400;
+  var morto=false,carregando=false,pendente=null,ver=null,cut=null,baseDocs=[],deltaJson='[]',baseEm=0;
+  function copiar(d){var x={id:d.id};var data=d.data();for(var k in data)x[k]=data[k];return x;}
+  function toDocs(snap){var a=[];snap.docs.forEach(function(d){a.push(copiar(d));});return a;}
+  function porId(a,b){return a.id<b.id?-1:a.id>b.id?1:0;}
+  function emitir(l,f){if(!morto)o.onDocs(l,f);}
+  function pronto(){if(!morto&&o.onPronto)o.onPronto();}
+  function guardar(itens){setTimeout(function(){try{_hcGravar(itens).catch(function(){});}catch(e){}},100);}
+  function lerMeta(){return o.db.collection('_meta').doc('entries_version__'+o.tenant).get({source:'server'}).then(function(s){var d=s.exists?s.data():null;return {v:(d&&d.v)||0,log:(d&&Array.isArray(d.log))?d.log:[]};});}
+  function completo(v){
+    carregando=true;var acc=[],ultimo=null;
+    function pg(){
+      var q=o.db.collection('entries').where('tenant_id','==',o.tenant).orderBy('__name__').limit(PAGINA);
+      if(ultimo)q=q.startAfter(ultimo);
+      return q.get().then(function(snap){
+        if(!snap.empty){snap.docs.forEach(function(d){acc.push(copiar(d));});ultimo=snap.docs[snap.docs.length-1];}
+        if(snap.size===PAGINA)return pg();
+      });
+    }
+    return pg().then(function(){
+      // IMPORTANTE: 1 emissão só no final (várias disparavam recálculo pesado a cada página — incidente 18/09/2026).
+      var novoCut=new Date(Date.now()-MARGEM).toISOString(),b=[],dl=[];
+      acc.forEach(function(e){if(!e.criadoEm||e.criadoEm<novoCut)b.push(e);else dl.push(e);});
+      dl.sort(porId);baseDocs=b;cut=novoCut;baseEm=Date.now();deltaJson=JSON.stringify(dl);if(v!=null)ver=v;
+      emitir(acc,'servidor');pronto();
+      if(v!=null)guardar({[KB]:{cut:novoCut,savedAt:baseEm,gen:baseEm,json:JSON.stringify(b)},[KD]:{ver:v,savedAt:Date.now(),gen:baseEm,json:deltaJson}});
+    }).then(function(){carregando=false;return seguinte();},function(e){carregando=false;pronto();throw e;});
+  }
+  // Corrente de versões: acha, no log do doc de versão, o caminho ver -> meta.v. Devolve os ids a rebuscar, ou null
+  // (corrente quebrada / alguma mudança sem lista de ids / lista grande demais) = precisa recarregar tudo.
+  function caminho(meta){
+    var cur=ver,ids={},guard=0;
+    while(cur!==meta.v&&guard++<100){
+      var e=null;for(var i=0;i<meta.log.length;i++){if(meta.log[i]&&meta.log[i].prev===cur){e=meta.log[i];break;}}
+      if(!e||!Array.isArray(e.ids))return null;
+      e.ids.forEach(function(x){ids[x]=1;});cur=e.v;
+    }
+    if(cur!==meta.v)return null;
+    var arr=Object.keys(ids);return arr.length>MAXIDS?null:arr;
+  }
+  function remendar(meta){
+    var ids=caminho(meta);if(ids===null)return Promise.resolve(false);
+    carregando=true;var achados={},tocados={};
+    ids.forEach(function(id){tocados[id]=1;});
+    function lote(i){
+      if(i>=ids.length)return Promise.resolve();
+      return Promise.all(ids.slice(i,i+20).map(function(id){return o.db.collection('entries').doc(id).get().then(function(sn){if(sn.exists){var x=copiar(sn);if(x.tenant_id===o.tenant)achados[id]=x;}});})).then(function(){return lote(i+20);});
+    }
+    return lote(0).then(function(){
+      var dl;try{dl=JSON.parse(deltaJson);}catch(e){dl=[];}
+      function sem(a){return a.filter(function(e){return !tocados[e.id];});}
+      var nBase=baseDocs.length;baseDocs=sem(baseDocs);dl=sem(dl);var baseTocada=baseDocs.length!==nBase;
+      Object.keys(achados).forEach(function(id){var x=achados[id];if(x.criadoEm&&x.criadoEm>=cut)dl.push(x);else{baseDocs.push(x);baseTocada=true;}});
+      dl.sort(porId);deltaJson=JSON.stringify(dl);ver=meta.v;
+      if(ids.length>0)emitir(baseDocs.concat(dl),'remendo');
+      var itens={};itens[KD]={ver:ver,savedAt:Date.now(),gen:baseEm,json:deltaJson};
+      if(baseTocada)itens[KB]={cut:cut,savedAt:baseEm,gen:baseEm,json:JSON.stringify(baseDocs)};
+      guardar(itens);
+      carregando=false;return true;
+    }).then(function(ok){return seguinte().then(function(){return ok;});},function(e){carregando=false;return false;});
+  }
+  function seguinte(){var p=pendente;pendente=null;if(p&&p.v!==ver)return mudou(p).catch(function(){});return Promise.resolve();}
+  // Algo antigo mudou (em qualquer aparelho): tenta rebuscar só os ids citados; se não der, recarrega tudo.
+  function mudou(meta){return remendar(meta).then(function(ok){if(!ok)return completo(meta.v);});}
+  function atualizarDelta(){
+    return o.db.collection('entries').where('tenant_id','==',o.tenant).where('criadoEm','>=',cut).get().then(function(snap){
+      var dd=toDocs(snap).sort(porId),js=JSON.stringify(dd);
+      if(js===deltaJson)return;                       // nada novo desde a última vez
+      deltaJson=js;emitir(baseDocs.concat(dd),'delta');
+      guardar({[KD]:{ver:ver,savedAt:Date.now(),gen:baseEm,json:js}});
+    });
+  }
+  function iniciar(){
+    return Promise.all([_hcLer(KB).catch(function(){return null;}),_hcLer(KD).catch(function(){return null;})]).then(function(r){
+      var b=r[0],d=r[1],hid=false;
+      try{
+        if(b&&d&&typeof b.json==='string'&&typeof d.json==='string'&&b.cut&&d.ver!=null&&b.gen===d.gen&&(Date.now()-b.savedAt)<TTL){
+          var bd=JSON.parse(b.json),dd=JSON.parse(d.json);
+          if(Array.isArray(bd)&&Array.isArray(dd)&&dd.length<=MAXDELTA){cut=b.cut;ver=d.ver;baseEm=b.savedAt;baseDocs=bd;deltaJson=d.json;emitir(bd.concat(dd),'cache');pronto();hid=true;}
+        }
+      }catch(e){hid=false;}
+      return lerMeta().then(function(m){return m;},function(){return null;}).then(function(meta){
+        if(morto)return;
+        if(hid&&meta===null)return;                                    // sem rede: segue com o cache
+        if(!hid)return completo(meta?meta.v:null).catch(function(){}); // sem cache (ou ilegível/velho)
+        if(meta.v===ver)return atualizarDelta().catch(function(){});   // nada antigo mudou: só os dias recentes
+        return mudou(meta).then(function(){return atualizarDelta();}).catch(function(){});
+      });
+    });
+  }
+  return {
+    iniciar:iniciar,
+    // chamado a cada mudança do doc de versão (snapshot vindo do servidor)
+    onVersao:function(meta){if(morto||ver===null||meta.v===ver)return;if(carregando){pendente=meta;return;}mudou(meta).catch(function(){});},
+    cancelar:function(){morto=true;}
+  };
+}
 // Impressão/PDF robusta: usa um IFRAME oculto em vez de window.open('_blank').
 // Por quê: no celular, abrir uma janela em branco e chamar print() com frequência TRAVA a aba
 // principal (o app "congela") e ainda esbarra em bloqueador de pop-up. O iframe imprime só o seu
@@ -1910,7 +2043,7 @@ function HistModal(props){
     if(!editLote)return;
     var entsDoLote=entries.filter(function(e){return e.medicamentoId===med.id&&e.tipo==='entrada'&&e.lote===editLote.lote;});
     var batch=entsDoLote.map(function(e){return db.collection('entries').doc(e.id).update({lote:novoLote||editLote.lote,validade:_normValidade(novaVal||editLote.validade)});});
-    Promise.all(batch).then(function(){_bumpEntriesVersion(user);setEditLote(null);}).catch(function(e){alert('Erro: '+e.message);});
+    Promise.all(batch).then(function(){_bumpEntriesVersion(user,entsDoLote.map(function(e){return e.id;}));setEditLote(null);}).catch(function(e){alert('Erro: '+e.message);});
   }
 
   function ajustarLote(){
@@ -1926,7 +2059,7 @@ function HistModal(props){
     if(!loteAjuste)return;
     if(!window.confirm('Excluir todas as entradas do lote '+loteAjuste.lote+'?'))return;
     var entsDoLote=entries.filter(function(e){return e.medicamentoId===med.id&&e.tipo==='entrada'&&e.lote===loteAjuste.lote;});
-    Promise.all(entsDoLote.map(function(e){return db.collection('entries').doc(e.id).delete();})).then(function(){_bumpEntriesVersion(user);setLoteAjuste(null);});
+    Promise.all(entsDoLote.map(function(e){return db.collection('entries').doc(e.id).delete();})).then(function(){_bumpEntriesVersion(user,entsDoLote.map(function(e){return e.id;}));setLoteAjuste(null);});
   }
 
   // EXCLUSÃO PERMANENTE de um lançamento individual — TÉCNICO e GESTOR (coordenadora). Remove o doc de
@@ -1939,7 +2072,7 @@ function HistModal(props){
     setExcSaving(true);
     db.collection('entries').doc(e.id).delete().then(function(){
       try{db.collection('logs_acesso').add({uid:user.uid||'',nome:user.name||'',cargo:user.role||'',acao:'entry_excluida_permanente',detalhe:(e.tipo||'')+' '+(e.quantidade||0)+'x '+(med.nome||'')+(e.lote?' lote '+e.lote:'')+(e.observacao?' — '+e.observacao:'')+' (entryId '+e.id+')',criadoEm:new Date().toISOString(),tenant_id:tenantDe(user)}).catch(function(){});}catch(_){}
-      _bumpEntriesVersion(user);setExcId(null);setExcSaving(false);
+      _bumpEntriesVersion(user,[e.id]);setExcId(null);setExcSaving(false);
     }).catch(function(err){alert('Erro ao excluir: '+(err&&err.message?err.message:err));setExcSaving(false);});
   }
 
@@ -2221,7 +2354,7 @@ function saveNew(){if(!newNome.trim())return;setSaving(true);db.collection('medi
     if(!window.confirm('Excluir este descarte de '+(e.quantidade||0)+'x '+(e.medicamentoNome||'')+'? A quantidade volta pro estoque.'))return;
     db.collection('entries').doc(e.id).delete().then(function(){
       try{db.collection('logs_acesso').add({uid:user.uid||'',nome:user.name||'',cargo:user.role||'',acao:'descarte_excluido',detalhe:(e.quantidade||0)+'x '+(e.medicamentoNome||'')+(e.lote?' lote '+e.lote:'')+(e.observacao?' — '+e.observacao:'')+' (entryId '+e.id+')',criadoEm:new Date().toISOString(),tenant_id:tenantDe(user)}).catch(function(){});}catch(_){}
-      _bumpEntriesVersion(user);
+      _bumpEntriesVersion(user,[e.id]);
     }).catch(function(err){alert('Erro ao excluir: '+(err&&err.message?err.message:err));});
   }
 function saveEdit(){setSaving(true);db.collection('medicamentos').doc(editId).update({nome:editNome.trim(),minEstoque:parseInt(editMin)||0,categoria:editTipo}).then(function(){setEditId(null);setSaving(false);});}
@@ -2234,7 +2367,7 @@ function delMed(id){if(!confirm('Excluir medicamento?'))return;db.collection('me
 // nunca era verdadeira e a atualização de "entries" era pulada silenciosamente. Pra quem
 // editava, parecia que a alteração simplesmente não salvava. Agora busca e atualiza TODOS
 // os lançamentos de entrada daquele lote, igual já faz o editor de lote do histórico (HistModal).
-function salvarEditLote(){if(!editLote)return;setSaving(true);var ps=[];if(editLote.medId)ps.push(db.collection('medicamentos').doc(editLote.medId).update({loteAtual:editLoteVal.trim(),validadeAtual:_normValidade(editLoteData)}));var entsDoLote=(editLote.medId&&editLote.lote)?entries.filter(function(e){return e.medicamentoId===editLote.medId&&e.tipo==='entrada'&&e.lote===editLote.lote;}):[];entsDoLote.forEach(function(e){ps.push(db.collection('entries').doc(e.id).update({lote:editLoteVal.trim(),validade:_normValidade(editLoteData)}));});Promise.all(ps).then(function(){if(entsDoLote.length>0)_bumpEntriesVersion(user);setEditLote(null);setSaving(false);}).catch(function(e){alert('Erro: '+e.message);setSaving(false);});}
+function salvarEditLote(){if(!editLote)return;setSaving(true);var ps=[];if(editLote.medId)ps.push(db.collection('medicamentos').doc(editLote.medId).update({loteAtual:editLoteVal.trim(),validadeAtual:_normValidade(editLoteData)}));var entsDoLote=(editLote.medId&&editLote.lote)?entries.filter(function(e){return e.medicamentoId===editLote.medId&&e.tipo==='entrada'&&e.lote===editLote.lote;}):[];entsDoLote.forEach(function(e){ps.push(db.collection('entries').doc(e.id).update({lote:editLoteVal.trim(),validade:_normValidade(editLoteData)}));});Promise.all(ps).then(function(){if(entsDoLote.length>0)_bumpEntriesVersion(user,entsDoLote.map(function(e){return e.id;}));setEditLote(null);setSaving(false);}).catch(function(e){alert('Erro: '+e.message);setSaving(false);});}
 function salvarAjuste(){if(!ajusteMed)return;var nq=parseInt(ajusteQty);if(isNaN(nq)||nq<0){alert('Quantidade inválida.');return;}if(!ajusteMotivo.trim()){alert('Informe o motivo.');return;}
   // Usa o saldo BRUTO (sem zerar negativo) como base do ajuste — se não usasse, um medicamento com saída
   // registrada a mais que entrada (saldo real negativo, mas exibido como "0") nunca fecharia o balanço:
@@ -2300,7 +2433,7 @@ function darBaixaVencido(){
     setVerifDescartes(Object.assign({},verifDescartes,{corrigindo:true}));
     var CHUNK=400;var i=0;
     function nextChunk(){
-      if(i>=f.length){setVerifDescartes({corrigido:f.length});return;}
+      if(i>=f.length){_bumpEntriesVersion(user,f.map(function(e){return e.id;}));setVerifDescartes({corrigido:f.length});return;}
       var batch=db.batch();
       f.slice(i,i+CHUNK).forEach(function(e){batch.update(db.collection('entries').doc(e.id),{descarte:true,observacao:e.observacao||'Vencido — baixa automática (alerta de vencimento)'});});
       i+=CHUNK;
@@ -6145,7 +6278,7 @@ function TabHistoricoNotas(props){
     var batch=editGrupo.itens.slice();
     var i=0;
     function nx(){
-      if(i>=batch.length){_bumpEntriesVersion(user);setSavingG(false);setEditGrupo(null);setEditGF({});setMsg('ok');setTimeout(function(){setMsg('');},3000);return;}
+      if(i>=batch.length){_bumpEntriesVersion(user,batch.map(function(e){return e.id;}));setSavingG(false);setEditGrupo(null);setEditGF({});setMsg('ok');setTimeout(function(){setMsg('');},3000);return;}
       var entry=batch[i++];
       var upd={nfNumero:editGF.nota,nfFornecedor:editGF.forn,editadoPor:user.name,editadoEm:new Date().toISOString()};if(editGF.data){upd.nfData=editGF.data;}db.collection('entries').doc(entry.id).update(upd).then(nx).catch(nx);
     }
@@ -6155,7 +6288,7 @@ function TabHistoricoNotas(props){
   function salvar(){
     if(!editEntry||saving)return;
     setSaving(true);
-    db.collection('entries').doc(editEntry.id).update({nfNumero:editF.nota,nfFornecedor:editF.forn,medicamentoNome:editF.med,quantidade:parseInt(editF.qty)||editEntry.quantidade,lote:editF.lote,validade:editF.val,editadoPor:user.name,editadoEm:new Date().toISOString()}).then(function(){_bumpEntriesVersion(user);setSaving(false);setEditEntry(null);setEditF({});setMsg('ok');setTimeout(function(){setMsg('');},3000);}).catch(function(e){setSaving(false);setMsg('e:'+e.message);});
+    db.collection('entries').doc(editEntry.id).update({nfNumero:editF.nota,nfFornecedor:editF.forn,medicamentoNome:editF.med,quantidade:parseInt(editF.qty)||editEntry.quantidade,lote:editF.lote,validade:editF.val,editadoPor:user.name,editadoEm:new Date().toISOString()}).then(function(){_bumpEntriesVersion(user,[editEntry.id]);setSaving(false);setEditEntry(null);setEditF({});setMsg('ok');setTimeout(function(){setMsg('');},3000);}).catch(function(e){setSaving(false);setMsg('e:'+e.message);});
   }
   return(
     <div style={{maxWidth:700,margin:'0 auto',padding:'16px 12px 90px'}}>
@@ -6216,7 +6349,7 @@ function TabHistoricoNotas(props){
             <button onClick={function(e){e.stopPropagation();
               if(!window.confirm('Excluir TODOS os '+g.itens.length+' item(ns) desta nota (NF '+g.nf+')? Esta ação não pode ser desfeita.'))return;
               Promise.all(g.itens.map(function(it){return db.collection('entries').doc(it.id).delete();}))
-                .then(function(){_bumpEntriesVersion(user);setMsg('ok');setTimeout(function(){setMsg('');},3000);})
+                .then(function(){_bumpEntriesVersion(user,g.itens.map(function(it){return it.id;}));setMsg('ok');setTimeout(function(){setMsg('');},3000);})
                 .catch(function(er){setMsg('e:Erro ao excluir: '+er.message);});
             }} style={{background:'#FEF2F2',border:'1.5px solid #FCA5A5',borderRadius:8,padding:'6px 14px',color:'#DC2626',fontWeight:700,fontSize:12,cursor:'pointer'}}>
               🗑️ Excluir nota
@@ -8781,7 +8914,7 @@ function TabConferencia(props){
       ops.push(db.collection('entries').add({medicamentoId:m.id,medicamentoNome:m.nome,tipo:'entrada',quantidade:semLote,lote:lote,validade:val,observacao:'Conferência: atribuição de lote',origemConferencia:true,divergenciaTipo:'conferencia',autorNome:user.name,autorId:user.uid||'',autorCor:user.color||B,criadoEm:now,date:todayStr(),tenant_id:tenantDe(user)}));
       ops.push(db.collection('entries').add({medicamentoId:m.id,medicamentoNome:m.nome,tipo:'saida',quantidade:semLote,lote:'',validade:'',observacao:'Conferência: atribuição de lote (reclassificação)',origemConferencia:true,divergenciaTipo:'conferencia',autorNome:user.name,autorId:user.uid||'',autorCor:user.color||B,criadoEm:now,date:todayStr(),tenant_id:tenantDe(user)}));
     }
-    Promise.all(ops).then(function(){if(semLote>0)_bumpEntriesVersion(user);setLcSaving(false);setLcId(null);setLcLote('');setLcVal('');setErro('');})
+    Promise.all(ops).then(function(){if(semLote>0)_bumpEntriesVersion(user,[]);setLcSaving(false);setLcId(null);setLcLote('');setLcVal('');setErro('');})
       .catch(function(e){setLcSaving(false);erroEscrita(e);});
   }
 
@@ -11383,30 +11516,12 @@ useEffect(function(){if(!ready||!user)return;
   // chegava, MULTIPLICANDO o custo total em vez de reduzir — foi isso que travou o navegador no
   // incidente de 18/09/2026, não a rede. Paginar a BUSCA continua bom (evita 1 pedido gigante
   // frágil em conexão fraca); só a atualização de tela que precisa ser 1x só.
-  function carregarHistoricoPaginado(){
-    var acumulado=[];var ultimoDoc=null;var PAGINA=2000;
-    function pagina(){
-      var q=db.collection('entries').where('tenant_id','==',tenantDe(user)).orderBy('__name__').limit(PAGINA);
-      if(ultimoDoc)q=q.startAfter(ultimoDoc);
-      return q.get().then(function(snap){
-        if(!snap.empty){
-          snap.docs.forEach(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];acumulado.push(o);});
-          ultimoDoc=snap.docs[snap.docs.length-1];
-        }
-        if(snap.size===PAGINA)return pagina();
-      });
-    }
-    return pagina().then(function(){setHistEntries(acumulado);setLoading(false);setHistPronto(true);});
-  }
-  // Medido em produção (18/09/2026): ler o histórico do CACHE LOCAL (col.get({source:'cache'}))
-  // levou 31s pra ~19 mil docs, e travou a fila interna do SDK do Firestore — até a leitura do
-  // PRÓPRIO PERFIL do usuário (1 documento só!) ficou presa atrás disso, levando 42s. O cache local
-  // parece de fato degradar bastante nesse volume. Solução: nem tenta o cache pro histórico grande
-  // — vai direto pro servidor, paginado (mais rápido que o cache local nesse caso, na prática).
-  function carregarHistorico(fonte){
-    return carregarHistoricoPaginado().catch(function(){setLoading(false);setHistPronto(true);});
-  }
-  carregarHistorico('cache');
+  // Histórico antigo: cache local + só o que mudou (ver fcHistorico acima). Substitui a carga completa a cada abertura.
+  var _hist=fcHistorico({db:db,tenant:tenantDe(user),projectId:(firebase.apps&&firebase.apps[0]&&firebase.apps[0].options&&firebase.apps[0].options.projectId)||'p',
+    onDocs:function(lista){setHistEntries(lista);setLoading(false);},
+    onPronto:function(){setHistPronto(true);}});
+  unsubs.push(function(){_hist.cancelar();});
+  _hist.iniciar().catch(function(){setLoading(false);setHistPronto(true);});
   // Tempo real SÓ dos últimos 3 dias (o que muda). Exclusão/edição recente reflete na hora.
   // Filtro de data agora feito no SERVIDOR (where('criadoEm','>=',_ws) junto do tenant_id) —
   // índice composto (entries: tenant_id Asc, criadoEm Asc) criado em produção em 18/09/2026.
@@ -11415,9 +11530,9 @@ useEffect(function(){if(!ready||!user)return;
   // deixava o carregamento inicial muito lento/travado em conexões mais fracas, especialmente
   // pra quem abria o app pela primeira vez num aparelho (cache local do Firestore ainda vazio).
   unsubs.push(db.collection('entries').where('tenant_id','==',tenantDe(user)).where('criadoEm','>=',_ws).onSnapshot(function(s){var list=s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;});setRecentEntries(list);setLoading(false);},function(){setLoading(false);}));
-  // Versão do histórico: quando muda (edição/exclusão de lançamento ANTIGO), rebusca o histórico do SERVIDOR uma vez.
-  var _metaFirst=true;
-  unsubs.push(db.collection('_meta').doc('entries_version__'+tenantDe(user)).onSnapshot(function(){if(_metaFirst){_metaFirst=false;return;}carregarHistorico('server');},function(){}));
+  // Versão do histórico: quando muda (edição/exclusão de lançamento ANTIGO em qualquer aparelho), recarrega tudo do servidor.
+  // Ignora snapshots vindos só do cache local do SDK (podem estar defasados).
+  unsubs.push(db.collection('_meta').doc('entries_version__'+tenantDe(user)).onSnapshot(function(s){if(s.metadata&&s.metadata.fromCache)return;var d=s.exists?s.data():null;_hist.onVersao({v:(d&&d.v)||0,log:(d&&Array.isArray(d.log))?d.log:[]});},function(){}));
   unsubs.push(db.collection('medicamentos').where('tenant_id','==',tenantDe(user)).onSnapshot(function(s){var list=s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;});list.sort(function(a,b){return a.nome.localeCompare(b.nome);});setMeds(list);}));
   unsubs.push(db.collection('users').where('tenant_id','==',tenantDe(user)).where('status','==','approved').onSnapshot(function(s){setAllUsers(s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;}));}));
   // Convites de plantão do usuário atual (fora do callback de users p/ não recriar/vazar). user.uid: currentUser não existe no escopo do App.
