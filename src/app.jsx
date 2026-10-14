@@ -11232,6 +11232,7 @@ TabSaida=React.memo(TabSaida);
 
 function App(){
 var {confirm2,alert2,ModalRender,modal}=useModal();
+var _histPronto=useState(false);var histPronto=_histPronto[0];var setHistPronto=_histPronto[1];
 var _ready=useState(false);var ready=_ready[0];var setReady=_ready[1];var _user=useState(null);var user=_user[0];var setUser=_user[1];var _histEntries=useState([]);var histEntries=_histEntries[0];var setHistEntries=_histEntries[1];var _recentEntries=useState([]);var recentEntries=_recentEntries[0];var setRecentEntries=_recentEntries[1];var _fcWinStart=useRef(null);if(!_fcWinStart.current){var _w0=new Date();_w0.setDate(_w0.getDate()-3);_fcWinStart.current=_w0.toISOString();}var _meds=useState([]);var meds=_meds[0];var setMeds=_meds[1];var _loading=useState(true);var loading=_loading[0];var setLoading=_loading[1];var _tab=useState('dashboard');var tab=_tab[0];var setTab=_tab[1];var _menuAberto=useState(false);var menuAberto=_menuAberto[0];var setMenuAberto=_menuAberto[1];var _showSairModal=useState(false);var showSairModal=_showSairModal[0];var setShowSairModal=_showSairModal[1];var _pending=useState(0);var pending=_pending[0];var setPending=_pending[1];var _alertCount=useState(0);var alertCount=_alertCount[0];var setAlertCount=_alertCount[1];
 var _convites=useState([]);var convites=_convites[0];var setConvites=_convites[1];
 var _lowStock=useState([]);var lowStock=_lowStock[0];var setLowStock=_lowStock[1];var _solicitCount=useState(0);var solicitCount=_solicitCount[0];var setSolicitCount=_solicitCount[1];var _online=useState(navigator.onLine);var online=_online[0];var setOnline=_online[1];var _busca=useState(false);var busca=_busca[0];var setBusca=_busca[1];var _showSolicit=useState(false);var showSolicit=_showSolicit[0];var setShowSolicit=_showSolicit[1];var _showShift=useState(false);var showShift=_showShift[0];var setShowShift=_showShift[1];var _showShiftModal=useState(false);var showShiftModal=_showShiftModal[0];var setShowShiftModal=_showShiftModal[1];
@@ -11395,7 +11396,7 @@ useEffect(function(){if(!ready||!user)return;
         if(snap.size===PAGINA)return pagina();
       });
     }
-    return pagina().then(function(){setHistEntries(acumulado);setLoading(false);});
+    return pagina().then(function(){setHistEntries(acumulado);setLoading(false);setHistPronto(true);});
   }
   // Medido em produção (18/09/2026): ler o histórico do CACHE LOCAL (col.get({source:'cache'}))
   // levou 31s pra ~19 mil docs, e travou a fila interna do SDK do Firestore — até a leitura do
@@ -11403,7 +11404,7 @@ useEffect(function(){if(!ready||!user)return;
   // parece de fato degradar bastante nesse volume. Solução: nem tenta o cache pro histórico grande
   // — vai direto pro servidor, paginado (mais rápido que o cache local nesse caso, na prática).
   function carregarHistorico(fonte){
-    return carregarHistoricoPaginado().catch(function(){setLoading(false);});
+    return carregarHistoricoPaginado().catch(function(){setLoading(false);setHistPronto(true);});
   }
   carregarHistorico('cache');
   // Tempo real SÓ dos últimos 3 dias (o que muda). Exclusão/edição recente reflete na hora.
@@ -11637,6 +11638,7 @@ return(
     </div>
     <button onClick={function(){db.collection('plantao_convites').doc(convites[0].id).update({status:'confirmado'});}} style={{background:'rgba(255,255,255,0.2)',border:'1.5px solid rgba(255,255,255,0.4)',borderRadius:8,padding:'6px 12px',color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer',whiteSpace:'nowrap'}}>✅ Confirmar</button>
   </div>}
+  {!loading&&!histPronto&&online&&<div style={{background:'#EFF6FF',color:'#1351B4',textAlign:'center',padding:'6px 10px',fontSize:12,fontWeight:600,borderBottom:'1px solid #BFDBFE'}}>Carregando histórico… totais podem estar incompletos</div>}
   {!online&&<div style={{background:'#475569',color:'#fff',textAlign:'center',padding:'7px',fontSize:12,fontWeight:600}}>Sem conexao com a internet</div>}
 
   <div className="fadeUp" data-tour="tab-content">
