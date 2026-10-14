@@ -2752,16 +2752,18 @@ var _relPeriodo=useState('mensal');var relPeriodo=_relPeriodo[0];var setRelPerio
 var _relMes=useState(todayStr().slice(0,7));var relMes=_relMes[0];var setRelMes=_relMes[1];
 // Filtro de destino das saídas (SUS / Emergência / Não classificado). Com filtro ativo, só entram SAÍDAS daquele destino.
 var _filtDestino=useState('todos');var filtDestino=_filtDestino[0];var setFiltDestino=_filtDestino[1];
-function passaDestino(e){if(filtDestino==='todos')return true;if(e.tipo!=='saida')return false;return destinoDe(e)===filtDestino;}
+function passaDestino(e){if(filtDestino==='todos')return true;if(e.tipo!=='saida')return false;if(filtDestino==='ambos')return destinoDe(e)!=='nc';return destinoDe(e)===filtDestino;}
+// 'ambos' = SUS + Emergência juntos, sem os não classificados. Mostra as colunas/totais separados, como 'todos'.
+var _mostraSplit=filtDestino==='todos'||filtDestino==='ambos';
 function DestinoChips(){return(
   <div data-tour="rel-destino" style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center',marginTop:10}}>
     <span style={{fontSize:11,fontWeight:700,color:'#64748B'}}>Destino das saídas:</span>
-    {[['todos','Todos'],['sus','SUS (usuário)'],['emergencia','Emergência'],['nc','Não classificado']].map(function(c){var on=filtDestino===c[0];var d=DESTINOS[c[0]]||{cor:'#1351B4',bg:'#EFF6FF'};return(
+    {[['todos','Todos'],['sus','SUS (usuário)'],['emergencia','Emergência'],['ambos','SUS + Emergência'],['nc','Não classificado']].map(function(c){var on=filtDestino===c[0];var d=DESTINOS[c[0]]||{cor:'#1351B4',bg:'#EFF6FF'};return(
       <button key={c[0]} onClick={function(){setFiltDestino(c[0]);}} style={{padding:'5px 11px',borderRadius:20,border:'1.5px solid '+(on?d.cor:'#E2E8F0'),background:on?d.bg:'#fff',color:on?d.cor:'#64748B',fontSize:11,fontWeight:on?800:600,cursor:'pointer',fontFamily:'inherit'}}>{c[1]}</button>
     );})}
   </div>
 );}
-var _nomeDestFiltro=filtDestino==='todos'?'':DESTINOS[filtDestino].label;
+var _nomeDestFiltro=filtDestino==='todos'?'':(filtDestino==='ambos'?'SUS + Emergência (sem não classificadas)':DESTINOS[filtDestino].label);
 var filtered=entries.filter(function(e){if(e.ficticioDiv)return false;if(e.divergenciaTipo==='real')return false;if(_ehSaidaNaoReal(e))return false;/* ajustes de conferência/balanço/descarte fora dos relatórios */if(!passaDestino(e))return false;var dt=(e.criadoEm||'').slice(0,10);if(dt<dF||dt>dT)return false;if(tipo!=='todos'&&e.tipo!==tipo)return false;if(filtResp&&(e.autorNome||'?')!==filtResp)return false;if(filtMeds&&filtMeds.length>0&&filtMeds.indexOf(e.medicamentoNome)===-1)return false;if(filtCatRel&&filtCatRel!=='todos'){var meds=medications.filter(function(m){return m.nome===e.medicamentoNome&&((m.categoria||'medicamento'))===filtCatRel;});if(meds.length===0)return false;}return true;}).sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});
 var totE=0,totS=0;filtered.forEach(function(e){if(e.tipo==='entrada')totE+=(e.quantidade||0);if(e.tipo==='saida')totS+=(e.quantidade||0);});
 // _norm e _ehSaidaNaoReal agora são globais (fonte única, reaproveitada por ranking, conferência e previsão)
@@ -2838,8 +2840,8 @@ function imprimirResumoRelatorio(){
     '<div><div class="n">−'+relTotS+'</div><div class="l">Saídas</div></div>'+
     '<div><div class="n">'+relLista.length+'</div><div class="l">Medicamentos/materiais</div></div>'+
     '</div>';
-  html+='<div class="dados" style="margin-top:6px">'+(filtDestino==='todos'?'Saídas por destino — SUS (usuário): <b>'+relTotSus+'</b> · Emergência: <b>'+relTotEm+'</b>'+(relTotNc?' · Não classificadas: <b>'+relTotNc+'</b>':''):'<b>Filtro: apenas saídas de '+_escHtml(_nomeDestFiltro)+'</b>')+'</div>';
-  var _col3=filtDestino==='todos';
+  html+='<div class="dados" style="margin-top:6px">'+(_mostraSplit?(filtDestino==='ambos'?'<b>Filtro: SUS + Emergência (sem não classificadas)</b><br>':'')+'Saídas por destino — SUS (usuário): <b>'+relTotSus+'</b> · Emergência: <b>'+relTotEm+'</b>'+(relTotNc?' · Não classificadas: <b>'+relTotNc+'</b>':''):'<b>Filtro: apenas saídas de '+_escHtml(_nomeDestFiltro)+'</b>')+'</div>';
+  var _col3=_mostraSplit;
   html+='<table><thead><tr><th>Medicamento</th><th style="width:110px">Categoria</th><th style="width:70px">Entradas</th><th style="width:70px">Saídas</th>'+(_col3?'<th style="width:60px">SUS</th><th style="width:70px">Emerg.</th>':'')+'</tr></thead><tbody>';
   relLista.forEach(function(it){
     var t=TIPOS[it.cat]||TIPOS.medicamento;
@@ -2872,7 +2874,7 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
       <div><span style={{fontWeight:800,color:'#DC2626',fontSize:19}}>−{relTotS}</span><div style={{fontSize:11,color:'#94A3B8'}}>Saídas</div></div>
       <div><span style={{fontWeight:800,color:'#1351B4',fontSize:19}}>{relLista.length}</span><div style={{fontSize:11,color:'#94A3B8'}}>Medicamentos/materiais</div></div>
     </div>
-    {filtDestino==='todos'&&<div style={{display:'flex',gap:16,flexWrap:'wrap',marginTop:10,paddingTop:10,borderTop:'1px solid #F1F5F9'}}>
+    {_mostraSplit&&<div style={{display:'flex',gap:16,flexWrap:'wrap',marginTop:10,paddingTop:10,borderTop:'1px solid #F1F5F9'}}>
       <div><span style={{fontWeight:800,color:DESTINOS.sus.cor,fontSize:17}}>{relTotSus}</span><div style={{fontSize:11,color:'#94A3B8'}}>Saídas SUS</div></div>
       <div><span style={{fontWeight:800,color:DESTINOS.emergencia.cor,fontSize:17}}>{relTotEm}</span><div style={{fontSize:11,color:'#94A3B8'}}>Saídas Emergência</div></div>
       {relTotNc>0&&<div><span style={{fontWeight:800,color:DESTINOS.nc.cor,fontSize:17}}>{relTotNc}</span><div style={{fontSize:11,color:'#94A3B8'}}>Não classificadas</div></div>}
@@ -2886,8 +2888,8 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
           <th style={{padding:'10px 14px',textAlign:'left',fontSize:11,color:'#64748B',textTransform:'uppercase',letterSpacing:'.05em'}}>Medicamento</th>
           <th style={{padding:'10px 6px',textAlign:'center',fontSize:11,color:'#64748B',textTransform:'uppercase',letterSpacing:'.05em'}}>Entradas</th>
           <th style={{padding:'10px 6px',textAlign:'center',fontSize:11,color:'#64748B',textTransform:'uppercase',letterSpacing:'.05em'}}>Saídas</th>
-          {filtDestino==='todos'&&<th style={{padding:'10px 6px',textAlign:'center',fontSize:11,color:DESTINOS.sus.cor,textTransform:'uppercase',letterSpacing:'.05em'}}>SUS</th>}
-          {filtDestino==='todos'&&<th style={{padding:'10px 6px',textAlign:'center',fontSize:11,color:DESTINOS.emergencia.cor,textTransform:'uppercase',letterSpacing:'.05em'}}>Emerg.</th>}
+          {_mostraSplit&&<th style={{padding:'10px 6px',textAlign:'center',fontSize:11,color:DESTINOS.sus.cor,textTransform:'uppercase',letterSpacing:'.05em'}}>SUS</th>}
+          {_mostraSplit&&<th style={{padding:'10px 6px',textAlign:'center',fontSize:11,color:DESTINOS.emergencia.cor,textTransform:'uppercase',letterSpacing:'.05em'}}>Emerg.</th>}
         </tr></thead>
         <tbody>
           {relLista.map(function(it){var t=TIPOS[it.cat]||TIPOS.medicamento;return(
@@ -2895,8 +2897,8 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
               <td style={{padding:'10px 10px 10px 14px'}}><div style={{fontWeight:600,color:'#1E293B'}}>{it.nome}</div><span style={{fontSize:11,color:'#94A3B8'}}>{t.icon} {t.label}</span></td>
               <td style={{padding:'10px 6px',textAlign:'center',fontWeight:700,color:it.qtdE?'#059669':'#CBD5E1'}}>{it.qtdE||'—'}</td>
               <td style={{padding:'10px 6px',textAlign:'center',fontWeight:700,color:it.qtdS?'#DC2626':'#CBD5E1'}}>{it.qtdS||'—'}</td>
-              {filtDestino==='todos'&&<td style={{padding:'10px 6px',textAlign:'center',fontWeight:700,color:it.qtdSus?DESTINOS.sus.cor:'#CBD5E1'}}>{it.qtdSus||'—'}</td>}
-              {filtDestino==='todos'&&<td style={{padding:'10px 6px',textAlign:'center',fontWeight:700,color:it.qtdEm?DESTINOS.emergencia.cor:'#CBD5E1'}}>{it.qtdEm||'—'}</td>}
+              {_mostraSplit&&<td style={{padding:'10px 6px',textAlign:'center',fontWeight:700,color:it.qtdSus?DESTINOS.sus.cor:'#CBD5E1'}}>{it.qtdSus||'—'}</td>}
+              {_mostraSplit&&<td style={{padding:'10px 6px',textAlign:'center',fontWeight:700,color:it.qtdEm?DESTINOS.emergencia.cor:'#CBD5E1'}}>{it.qtdEm||'—'}</td>}
             </tr>
           );})}
         </tbody>
