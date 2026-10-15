@@ -18,6 +18,62 @@ function _semEmoji(s){if(!document.body.classList.contains('theme-itaq'))return 
 function can(role,a){return (PERMS[role]||[]).indexOf(a)>=0;}
 // ===== Multi-tenant =====
 function tenantDe(user){return (user&&user.tenant_id)||null;}
+// ===== Ficha da prefeitura (config por tenant) =====
+// Tudo que antes estava escrito no código "por prefeitura" (cabeçalho/rodapé dos PDFs, logo, módulos que aparecem no menu) vem daqui.
+// Ordem de prioridade: padrão embutido dos municípios que já existem (idêntico ao que estava no código — nada muda pra eles) <
+// doc do Firestore tenants/<id> (campos planos da ficha: nome, subtitulo, cnpj, endereco, cidadeUf, cor, assinatura, logoB64, nomeFarmacia,
+// rodape, pedidoLinha1/2, ordemDados, modulos). Prefeitura nova só precisa do doc — sem mexer no código.
+var _MODULOS_NENHUM={atb:true,judicial:false,controlados:false,comparaPedido:false,ordemFornecimento:false,destinos:false};
+function _padraoTenant(id){
+  if(id==='vicencia-pe')return {
+    nome:'Fundo Municipal de Saúde de Vicência',cidadeUf:'Vicência/PE',cor:'#1351B4',assinatura:'COORDENADORA DA FARMÁCIA',nomeFarmacia:'Farmácia do Hospital de Vicência',
+    org:{l1:'Fundo Municipal de Saúde de Vicência',l2:'Secretaria de Saúde e Departamento de Compras — CAF-Unidade Hospitalar',rodape:'Fundo Municipal de Saúde de Vicência - CNPJ: 10.566.414/0001-36<br>Rua José Candido de Oliveira, 79 - Centro - Vicência - PE; CEP: 558580-000'},
+    logoPrint:VIC_LOGO_B64,logoPedidoPath:'/assets/vicencia-brasao.png',
+    pedido:{orgLinha1:'SECRETARIA DE SAÚDE E DEPARTAMENTO DE COMPRAS',orgLinha2:'Fundo Municipal de Saúde — CAF-Unidade Hospitalar',mostrarBoxEmpresa:true,autoDescontarAta:true,mostrarColunaMarca:false},
+    ordemDados:'',
+    modulos:{atb:true,judicial:false,controlados:true,comparaPedido:true,ordemFornecimento:false,destinos:true}
+  };
+  if(id==='itaquitinga-pe')return {
+    nome:'Prefeitura Municipal de Itaquitinga',cidadeUf:'Itaquitinga/PE',cor:'#15803D',assinatura:'COORDENADOR DA FARMÁCIA',nomeFarmacia:'Farmácia Municipal',
+    org:{l1:'Prefeitura Municipal de Itaquitinga',l2:'Secretaria Municipal de Saúde — Coordenação de Assistência Farmacêutica',rodape:'Secretaria Municipal de Saúde de Itaquitinga - PE'},
+    logoPrint:PJ_LOGO_B64,logoPedidoPath:'/assets/itaquitinga-bandeira.png',
+    pedido:{orgLinha1:'PREFEITURA DE ITAQUITINGA',orgLinha2:'Secretaria Municipal de Saúde — Coordenação de Assistência Farmacêutica',mostrarBoxEmpresa:false,autoDescontarAta:true,mostrarColunaMarca:true},
+    ordemDados:'FUNDO MUNICIPAL DE SAÚDE DE ITAQUITINGA<br>CNPJ/MF: 12.848.758/0001-63<br>'+
+      '<b>DADOS PARA ENTREGA:</b><br>Entregar na Farmácia Municipal ao lado UNIDADE MISTA ADELINA AZEVEDO<br>'+
+      'Rua da União, nº 347, Centro - Itaquitinga -PE, CEP: 55.950-000<br>Horário para entrega: de segunda a sexta-feira das 08h00 às 14h00.<br>'+
+      '<b>DADOS PARA CONTATO:</b><br>E-mail: cafitaquitinga@hotmail.com<br>Fones: (81) 9.9168-8103',
+    modulos:{atb:true,judicial:true,controlados:false,comparaPedido:false,ordemFornecimento:true,destinos:false}
+  };
+  return {nome:'',cidadeUf:'',cor:'#1351B4',assinatura:'COORDENADOR(A) DA FARMÁCIA',nomeFarmacia:'Farmácia Municipal',
+    org:{l1:'',l2:'',rodape:''},logoPrint:'',logoPedidoPath:'',pedido:{orgLinha1:'',orgLinha2:'',mostrarBoxEmpresa:true,autoDescontarAta:true,mostrarColunaMarca:false},ordemDados:'',modulos:_MODULOS_NENHUM};
+}
+var _tenantDocs={};   // id -> dados do doc tenants/<id> (preenchido pelo App)
+function tcfg(u){
+  var id=typeof u==='string'?u:tenantDe(u);var b=_padraoTenant(id);var d=_tenantDocs[id];
+  if(!d)return Object.assign({},b,{pedido:Object.assign({cor:b.cor,cidadeUf:b.cidadeUf,rodape:b.org.rodape,assinatura:b.assinatura},b.pedido),id:id});
+  var c=Object.assign({},b);
+  ['nome','cidadeUf','cor','assinatura','nomeFarmacia','ordemDados'].forEach(function(k){if(typeof d[k]==='string'&&d[k]!=='')c[k]=d[k];});
+  var org=Object.assign({},b.org);
+  if(typeof d.nome==='string'&&d.nome)org.l1=d.nome;
+  if(typeof d.subtitulo==='string'&&d.subtitulo)org.l2=d.subtitulo;
+  if(typeof d.rodape==='string'&&d.rodape)org.rodape=d.rodape;
+  else if(d.cnpj||d.endereco){org.rodape=(d.nome||org.l1)+(d.cnpj?' - CNPJ: '+d.cnpj:'')+(d.endereco?'<br>'+d.endereco:'');}
+  c.org=org;
+  if(typeof d.logoB64==='string'&&d.logoB64.indexOf('data:image')===0){c.logoPrint=d.logoB64;c.logoPedidoPath='';}
+  var ped=Object.assign({},b.pedido);
+  if(typeof d.pedidoLinha1==='string'&&d.pedidoLinha1)ped.orgLinha1=d.pedidoLinha1;else if(d.nome&&id!=='vicencia-pe'&&id!=='itaquitinga-pe')ped.orgLinha1=String(d.nome).toUpperCase();
+  if(typeof d.pedidoLinha2==='string'&&d.pedidoLinha2)ped.orgLinha2=d.pedidoLinha2;else if(d.subtitulo&&id!=='vicencia-pe'&&id!=='itaquitinga-pe')ped.orgLinha2=d.subtitulo;
+  ped.cor=c.cor;ped.cidadeUf=c.cidadeUf;ped.rodape=org.rodape;ped.assinatura=c.assinatura;
+  c.pedido=ped;
+  c.modulos=Object.assign({},b.modulos,d.modulos&&typeof d.modulos==='object'?d.modulos:{});
+  c.id=id;
+  return c;
+}
+function temModulo(u,m){var c=tcfg(u);return !!(c.modulos&&c.modulos[m]);}
+function _logoImg(c){return c.logoPrint?'<img src="'+c.logoPrint+'"/>':'';}
+// l2 em 1 ou 2 linhas ("A — B" vira duas linhas) — usado nos comprovantes/ordens que mostram o cabeçalho em 3 linhas
+function _orgLinhasHtml(c){var partes=String(c.org.l2||'').split(' — ');return '<div class="l1">'+_escHtml(c.org.l1||'')+'</div>'+partes.filter(function(x){return x;}).map(function(x){return '<div class="l2">'+_escHtml(x)+'</div>';}).join('');}
+
 // Lê ?tenant= da URL de convite (ex.: .../?tenant=itaquitinga-pe). Guarda em sessionStorage pra
 // sobreviver a um reload da tela de cadastro sem o parâmetro na URL (ex.: depois de trocar de aba
 // login/cadastro). Sem link de convite válido, cadastro novo não é permitido (ver Auth.register()).
@@ -2415,12 +2471,11 @@ function exportAlertasXL(){var rows=[['Tipo','Medicamento','Estoque','Min','Vali
   // relatórios impressos (brasão embutido, sem depender de rede). Usa a lista JÁ FILTRADA na tela
   // (categoria + busca), igual o Excel. Cabeçalho muda por tenant (Vicência/Itaquitinga).
   function imprimirEstoquePDF(){
-    var ten=tenantDe(user);
-    var isItaq=ten==='itaquitinga-pe';
-    var logo=isItaq?PJ_LOGO_B64:VIC_LOGO_B64;
-    var orgL1=isItaq?'Prefeitura Municipal de Itaquitinga':'Fundo Municipal de Saúde de Vicência';
-    var orgL2=isItaq?'Secretaria Municipal de Saúde — Coordenação de Assistência Farmacêutica':'Secretaria de Saúde e Departamento de Compras — CAF-Unidade Hospitalar';
-    var rodapeOrg=isItaq?'Secretaria Municipal de Saúde de Itaquitinga - PE':'Fundo Municipal de Saúde de Vicência - CNPJ: 10.566.414/0001-36<br>Rua José Candido de Oliveira, 79 - Centro - Vicência - PE; CEP: 558580-000';
+    var _C=tcfg(user);
+    var logo=_C.logoPrint;
+    var orgL1=_C.org.l1;
+    var orgL2=_C.org.l2;
+    var rodapeOrg=_C.org.rodape;
     var totalUnidades=medList.reduce(function(s,m){return s+(m.est||0);},0);
     var qtdBaixos=medList.filter(function(m){return m.minEstoque>0&&m.est>0&&m.est<=m.minEstoque;}).length;
     var qtdZerados=medList.filter(function(m){return m.est<=0;}).length;
@@ -2443,7 +2498,7 @@ function exportAlertasXL(){var rows=[['Tipo','Medicamento','Estoque','Min','Vali
       '.rodape{margin-top:26px;font-size:9.5px;color:#64748B;text-align:center;line-height:1.6}'+
       '@media print{.pagina{padding:14px 18px}}</style>';
     var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Relatório de Estoque</title>'+css+'</head><body><div class="pagina">';
-    html+='<div class="cab"><img src="'+logo+'"/><div class="l1">'+_escHtml(orgL1)+'</div><div class="l2">'+_escHtml(orgL2)+'</div></div>';
+    html+='<div class="cab">'+(logo?'<img src="'+logo+'"/>':'')+'<div class="l1">'+_escHtml(orgL1)+'</div><div class="l2">'+_escHtml(orgL2)+'</div></div>';
     html+='<div class="titulo">Relatório de Estoque Atual</div>';
     html+='<div class="dados"><b>'+_escHtml(filtroTxt)+'</b><br>Gerado em '+_escHtml(new Date().toLocaleString('pt-BR'))+'</div>';
     html+='<div class="resumo">'+
@@ -2953,8 +3008,8 @@ function imprimirResumoRelatorio(){
     'tfoot td{font-weight:700;background:#F8FAFC}'+
     '.rodape{margin-top:26px;font-size:9.5px;color:#64748B;text-align:center;line-height:1.6}'+
     '@media print{.pagina{padding:14px 18px}}</style>';
-  var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Relatório de Movimentação — Vicência</title>'+css+'</head><body><div class="pagina">';
-  html+='<div class="cab"><img src="'+VIC_LOGO_B64+'"/><div class="l1">Fundo Municipal de Saúde de Vicência</div><div class="l2">Secretaria de Saúde e Departamento de Compras — CAF-Unidade Hospitalar</div></div>';
+  var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Relatório de Movimentação — '+_escHtml(tcfg(user).org.l1)+'</title>'+css+'</head><body><div class="pagina">';
+  html+='<div class="cab">'+_logoImg(tcfg(user))+'<div class="l1">'+_escHtml(tcfg(user).org.l1)+'</div><div class="l2">'+_escHtml(tcfg(user).org.l2)+'</div></div>';
   html+='<div class="titulo">Relatório de Movimentação de Medicamentos e Materiais</div>';
   html+='<div class="dados"><b>Período: '+_escHtml(tituloPeriodoRel())+'</b><br>Gerado em '+_escHtml(new Date().toLocaleString('pt-BR'))+'</div>';
   html+='<div class="resumo">'+
@@ -2973,7 +3028,7 @@ function imprimirResumoRelatorio(){
   if(relUbsLista.length>0){
     html+='<div class="titulo" style="margin-top:18px">Saídas por UBS</div><table><thead><tr><th>UBS</th><th style="width:90px">Total de saídas</th></tr></thead><tbody>'+relUbsLista.map(function(n){return '<tr><td class="desc">'+_escHtml(n)+'</td><td class="num">'+relUbs[n]+'</td></tr>';}).join('')+'</tbody></table>';
   }
-  html+='<div class="rodape">Fundo Municipal de Saúde de Vicência - CNPJ: 10.566.414/0001-36<br>Rua José Candido de Oliveira, 79 - Centro - Vicência - PE; CEP: 558580-000<br>Relatório gerado automaticamente pelo FarmaControl</div>';
+  html+='<div class="rodape">'+tcfg(user).org.rodape+'<br>Relatório gerado automaticamente pelo FarmaControl</div>';
   html+='</div></body></html>';
   if(!_imprimirDoc(html)){window.alert('Não foi possível abrir a impressão do relatório.');}
 }
@@ -5334,7 +5389,7 @@ function TabPedidosJudiciais(props){
     var _tipoC=retirada.tipo?pjTipoDe(retirada):pjTipoDe(paciente);var _ehAjuda=_tipoC==='ajuda';
     var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Comprovante de Entrega — '+(_ehAjuda?'Ajuda':'Judicial')+'</title>'+css+'</head><body><div class="pagina">';
     var logoUrl=PJ_LOGO_B64;
-    html+='<div class="cab"><img src="'+logoUrl+'"/><div class="l1">Prefeitura Municipal de Itaquitinga</div><div class="l2">Secretaria Municipal de Saúde</div><div class="l2">Coordenação de Assistência Farmacêutica</div></div>';
+    html+='<div class="cab">'+_logoImg(tcfg(user))+_orgLinhasHtml(tcfg(user))+'</div>';
     html+='<div class="titulo">'+(_ehAjuda?'Comprovante de Entrega — Ajuda (Assistência Farmacêutica)':'Comprovante de Entrega — Fornecimento por Decisão Judicial')+'</div>';
     var fDataRet=(function(){try{return new Date(retirada.data+'T00:00:00').toLocaleDateString('pt-BR');}catch(e){return retirada.data;}})();
     html+='<div class="dados">'+(_ehAjuda?'':'<b>Processo judicial nº:</b> '+_escHtml(retirada.processoNumero||'—')+'<br>')+
@@ -5385,7 +5440,7 @@ function TabPedidosJudiciais(props){
       '</style>';
     function via(nomeVia){
       var h='<div class="via">';
-      h+='<div class="cab"><img src="'+PJ_LOGO_B64+'"/><div class="t"><div class="l1">Prefeitura Municipal de Itaquitinga</div><div class="l2">Secretaria Municipal de Saúde — Coordenação de Assistência Farmacêutica</div></div></div>';
+      h+='<div class="cab">'+_logoImg(tcfg(user))+'<div class="t"><div class="l1">'+_escHtml(tcfg(user).org.l1)+'</div><div class="l2">'+_escHtml(tcfg(user).org.l2)+'</div></div></div>';
       h+='<div class="tit"><span>Ficha de retirada — '+(ehAjuda?'Ajuda':'Fornecimento judicial')+'</span><span class="via-nome">'+nomeVia+'</span></div>';
       h+='<div class="lin"><span class="rot">Paciente:</span><b>'+_escHtml(pc.nome||'')+'</b>'+(ehAjuda||!pc.processoNumero?'':'<span style="margin-left:14px"><span class="rot">Processo nº:</span> '+_escHtml(pc.processoNumero)+'</span>')+'</div>';
       h+='<div class="lin"><span class="rot">Nome do responsável:</span><span class="tr"></span></div>';
@@ -5837,7 +5892,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
   function waNome(t){return(t.telefoneDono==='responsavel'&&t.responsavelNome)?t.responsavelNome:(t.pacienteNome||'');}
   function waFimData(t){if(!t||!t.dataInicio)return'';var N=parseInt(t.diasTratamento)||0;if(N<=1)return t.dataInicio;var d=new Date(t.dataInicio+'T12:00:00');d.setDate(d.getDate()+(N-1));return d.toISOString().split('T')[0];}
   function waMsg(t,tipo){var nome=waNome(t);var pac=t.pacienteNome||'';var atb=t.medicamentoNome||'antibiótico';var X=parseInt(t.diasTratamento)||0;
-    if(tipo==='inicio')return'Olá '+nome+'! Aqui é a Farmácia do Hospital de Vicência. O(a) paciente '+pac+' iniciou tratamento com '+atb+' hoje. É muito importante tomar todas as doses nos horários corretos, mesmo se sentir melhora. O tratamento dura '+X+' dias. Qualquer dúvida, entre em contato conosco.';
+    if(tipo==='inicio')return'Olá '+nome+'! Aqui é a '+((tcfg(user).nomeFarmacia)||'Farmácia')+'. O(a) paciente '+pac+' iniciou tratamento com '+atb+' hoje. É muito importante tomar todas as doses nos horários corretos, mesmo se sentir melhora. O tratamento dura '+X+' dias. Qualquer dúvida, entre em contato conosco.';
     if(tipo==='dose')return'Olá '+nome+'! Lembrete da Farmácia: o(a) paciente '+pac+' ainda não tomou a dose de '+atb+' hoje. Não pule doses! Se já tomou a dose hoje, desconsidere essa mensagem.';
     return'Olá '+nome+'! Hoje é o último dia do tratamento com '+atb+' do(a) paciente '+pac+'. Falta pouco! Tome a dose de hoje pra completar o tratamento com sucesso. A Farmácia do Hospital de Vicência agradece por seguir o tratamento até o fim!';}
   function waLink(t,tipo){var fone=telDigitos(t);if(fone.slice(0,2)!=='55')fone='55'+fone;return'https://wa.me/'+fone+'?text='+encodeURIComponent(waMsg(t,tipo));}
@@ -7590,31 +7645,18 @@ function TabPrevisao(props){
   // Itaquitinga ainda não foram informados — quando a usuária mandar, é só preencher o campo
   // `rodape` abaixo.
   function infoPedidoTenant(){
-    if(tenantDe(user)==='itaquitinga-pe'){
-      return {
-        logo:location.origin+'/assets/itaquitinga-bandeira.png',
-        cor:'#15803D',
-        orgLinha1:'PREFEITURA DE ITAQUITINGA',
-        orgLinha2:'Secretaria Municipal de Saúde — Coordenação de Assistência Farmacêutica',
-        cidadeUf:'Itaquitinga/PE',
-        rodape:'Secretaria Municipal de Saúde de Itaquitinga - PE',
-        assinatura:'COORDENADOR DA FARMÁCIA',
-        mostrarBoxEmpresa:false,
-        autoDescontarAta:true,
-        mostrarColunaMarca:true
-      };
-    }
+    var C=tcfg(user);var P=C.pedido;
     return {
-      logo:location.origin+'/assets/vicencia-brasao.png',
-      cor:'#1351B4',
-      orgLinha1:'SECRETARIA DE SAÚDE E DEPARTAMENTO DE COMPRAS',
-      orgLinha2:'Fundo Municipal de Saúde — CAF-Unidade Hospitalar',
-      cidadeUf:'Vicência/PE',
-      rodape:'Fundo Municipal de Saúde de Vicência - CNPJ: 10.566.414/0001-36<br>Rua José Candido de Oliveira, 79 - Centro - Vicência - PE; CEP: 558580-000',
-      assinatura:'COORDENADORA DA FARMÁCIA',
-      mostrarBoxEmpresa:true,
-      autoDescontarAta:true,
-      mostrarColunaMarca:false
+      logo:C.logoPrint||(C.logoPedidoPath?location.origin+C.logoPedidoPath:''),
+      cor:P.cor,
+      orgLinha1:P.orgLinha1,
+      orgLinha2:P.orgLinha2,
+      cidadeUf:P.cidadeUf,
+      rodape:P.rodape,
+      assinatura:P.assinatura,
+      mostrarBoxEmpresa:P.mostrarBoxEmpresa,
+      autoDescontarAta:P.autoDescontarAta,
+      mostrarColunaMarca:P.mostrarColunaMarca
     };
   }
   // Marca d'água (SÓ quando o tenant tem logo configurado): usa <img>, não background-image, porque
@@ -7762,7 +7804,7 @@ function TabPrevisao(props){
       '.assin .linha{display:inline-block;border-top:1px solid #000;padding-top:4px;font-size:12px;min-width:260px}'+
       '@media print{.pagina{padding:14px 18px}}</style>';
     var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Ordem de Fornecimento</title>'+css+'</head><body>';
-    var logoUrl=location.origin+'/assets/itaquitinga-bandeira.png';
+    var logoUrl='';
     var atasParaAtualizarContador=[];
     porAta.forEach(function(x){
       var ata=x.ata;
@@ -7773,7 +7815,7 @@ function TabPrevisao(props){
         if(!linhasSecao||linhasSecao.length===0)return;
         var totalVal=linhasSecao.reduce(function(s,l){return s+l.vTotal;},0);
         html+='<div class="pagina">';
-        html+='<div class="cab"><img src="'+logoUrl+'"/><div class="l1">Prefeitura Municipal de Itaquitinga</div><div class="l2">Secretaria Municipal de Saúde</div><div class="l2">Coordenação de Assistência Farmacêutica</div></div>';
+        html+='<div class="cab">'+_logoImg(tcfg(user))+_orgLinhasHtml(tcfg(user))+'</div>';
         var idInfo=[];
         if(ata.processoLicitatorio)idInfo.push('PROCESSO LICITATÓRIO Nº '+_escHtml(ata.processoLicitatorio));
         if(ata.pregaoEletronico)idInfo.push('PREGÃO ELETRÔNICO Nº '+_escHtml(ata.pregaoEletronico));
@@ -7790,11 +7832,7 @@ function TabPrevisao(props){
             '<td>'+_escHtml(l.marca||'')+'</td></tr>';
         });
         html+='</tbody><tfoot><tr class="total-row"><td colspan="6">TOTAL</td><td colspan="2">R$ '+_fmtNumBR(totalVal)+'</td></tr></tfoot></table>';
-        html+='<div class="dados"><b>DADOS PARA EMISSÃO DA NOTA FISCAL:</b><br>'+
-          'FUNDO MUNICIPAL DE SAÚDE DE ITAQUITINGA<br>CNPJ/MF: 12.848.758/0001-63<br>'+
-          '<b>DADOS PARA ENTREGA:</b><br>Entregar na Farmácia Municipal ao lado UNIDADE MISTA ADELINA AZEVEDO<br>'+
-          'Rua da União, nº 347, Centro - Itaquitinga -PE, CEP: 55.950-000<br>Horário para entrega: de segunda a sexta-feira das 08h00 às 14h00.<br>'+
-          '<b>DADOS PARA CONTATO:</b><br>E-mail: cafitaquitinga@hotmail.com<br>Fones: (81) 9.9168-8103</div>';
+        html+='<div class="dados"><b>DADOS PARA EMISSÃO DA NOTA FISCAL:</b><br>'+tcfg(user).ordemDados+'</div>';
         html+='<div style="margin-top:30px;font-size:12px">Atenciosamente,</div>';
         html+='<div class="assin"><div class="linha">'+_escHtml(farmInfo&&farmInfo.nome||'')+'<br>Farmacêutico(a) CRF: '+_escHtml(farmInfo&&farmInfo.crf||'')+'</div></div>';
         html+='</div>';
@@ -7841,7 +7879,7 @@ function TabPrevisao(props){
     // Itaquitinga usa as Ordens de Fornecimento oficiais (ver gerarOrdensFornecimento) no lugar
     // deste formato genérico — substituição completa, por pedido explícito da usuária. Antes de gerar,
     // abre o painel pra escolher o farmacêutico que assina (ver abrirFarmModal).
-    if(tenantDe(user)==='itaquitinga-pe')return abrirFarmModal(ata);
+    if(temModulo(user,'ordemFornecimento'))return abrirFarmModal(ata);
     var hoje=new Date().toLocaleDateString('pt-BR');
     var nomeAta=ata.nome||'ATA';
     var info=infoPedidoTenant();
@@ -7931,7 +7969,7 @@ function TabPrevisao(props){
     // Itaquitinga usa as Ordens de Fornecimento oficiais (ver gerarOrdensFornecimento) no lugar
     // deste formato genérico — substituição completa, por pedido explícito da usuária. Antes de gerar,
     // abre o painel pra escolher o farmacêutico que assina (ver abrirFarmModal).
-    if(tenantDe(user)==='itaquitinga-pe')return abrirFarmModal(listaAtas);
+    if(temModulo(user,'ordemFornecimento'))return abrirFarmModal(listaAtas);
     var hoje=new Date();
     var dataHoje=hoje.toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'}).replace(' de ',' DE ').toUpperCase();
     var numPedidoDoc=numPedido.trim()||('N/'+new Date().getFullYear());
@@ -8097,7 +8135,7 @@ function TabPrevisao(props){
         {/* Botões exportar */}
         <div style={{background:'#F8FAFC',borderRadius:10,border:'1px solid #E2E8F0',padding:'12px 14px',marginBottom:12}}>
           <div style={{fontSize:12,fontWeight:700,color:'#1E293B',marginBottom:8}}>Dados do Pedido Oficial</div>
-          {tenantDe(user)==='itaquitinga-pe'?
+          {temModulo(user,'ordemFornecimento')?
             <div><div style={{fontSize:11,color:'#64748B',marginBottom:3}}>Nº do Pedido</div><input value={numPedido} onChange={function(e){setNumPedido(e.target.value);}} placeholder="Ex: 171/2026" className="inp" style={{marginBottom:8,fontSize:13}}/></div>
           :<>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
@@ -8477,8 +8515,8 @@ function TabPrevisao(props){
               <div style={{fontSize:11,fontWeight:600,color:'#64748B',marginBottom:4}}>Nome da ata:</div>
               <input type="text" value={editNome} onChange={function(e){setEditNome(e.target.value);}} placeholder="Ex: MEDIAL 2025" className="inp" style={{marginBottom:8}}/>
               <div style={{fontSize:11,fontWeight:600,color:'#64748B',marginBottom:4}}>CNPJ da empresa (opcional — ajuda a diferenciar atas com o mesmo nome):</div>
-              <input type="text" value={editCnpj} onChange={function(e){setEditCnpj(e.target.value);}} placeholder="00.000.000/0000-00" className="inp" style={{marginBottom:tenantDe(user)==='itaquitinga-pe'?8:0,maxWidth:220}}/>
-              {tenantDe(user)==='itaquitinga-pe'&&<React.Fragment>
+              <input type="text" value={editCnpj} onChange={function(e){setEditCnpj(e.target.value);}} placeholder="00.000.000/0000-00" className="inp" style={{marginBottom:temModulo(user,'ordemFornecimento')?8:0,maxWidth:220}}/>
+              {temModulo(user,'ordemFornecimento')&&<React.Fragment>
                 <div style={{fontSize:11,fontWeight:600,color:'#64748B',marginBottom:4}}>Processo licitatório / Pregão eletrônico / ATA-SRP (opcional — aparece no cabeçalho das Ordens de Fornecimento):</div>
                 <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
                   <input type="text" value={editProcesso} onChange={function(e){setEditProcesso(e.target.value);}} placeholder="Processo licitatório Nº" className="inp" style={{marginBottom:0,flex:1,minWidth:140}}/>
@@ -8715,7 +8753,7 @@ function TabPrevisao(props){
                     <input value={it.unidade} onChange={function(e){editarCampoItemDraft(idx,'unidade',e.target.value);}} placeholder="Unidade" className="inp" style={{margin:0,flex:1,fontSize:12}}/>
                     <input value={it.vUnit} onChange={function(e){editarCampoItemDraft(idx,'vUnit',e.target.value);}} placeholder="Vl. unit." className="inp" style={{margin:0,flex:1,fontSize:12}}/>
                   </div>
-                  {tenantDe(user)==='itaquitinga-pe'&&<div style={{display:'flex',gap:6,marginBottom:6}}>
+                  {temModulo(user,'ordemFornecimento')&&<div style={{display:'flex',gap:6,marginBottom:6}}>
                     <select value={it.ordemFornecimento||''} onChange={function(e){editarCampoItemDraft(idx,'ordemFornecimento',e.target.value);}} className="inp" style={{margin:0,flex:2,fontSize:12,color:it.ordemFornecimento?'#1E293B':'#B45309',fontWeight:it.ordemFornecimento?400:700}}>
                       <option value="">⚠️ Ordem de Fornecimento (não definida)</option>
                       {ORDENS_FORNECIMENTO.map(function(o){return <option key={o.v} value={o.v}>{o.lbl}</option>;})}
@@ -8763,7 +8801,7 @@ function TabPrevisao(props){
                   var busca=buscaItemMed[ata.id+'.'+idxIt]||'';
                   return(<div key={idxIt} style={{background:'#fff',border:'1px solid '+(saldo<0?'#FCA5A5':saldo===0?'#FCD34D':'#E2E8F0'),borderRadius:10,padding:'10px 12px',marginBottom:8}}>
                     <div style={{fontWeight:700,fontSize:12,color:'#1E293B',marginBottom:5}}>#{it.num} {it.descricao}{it.marca?' · '+it.marca:''}</div>
-                    {tenantDe(user)==='itaquitinga-pe'&&(function(){
+                    {temModulo(user,'ordemFornecimento')&&(function(){
                       var of=ORDENS_FORNECIMENTO.find(function(o){return o.v===it.ordemFornecimento;});
                       return(<div style={{marginBottom:6}}>
                         {of?<span style={{display:'inline-block',fontSize:10,fontWeight:700,color:'#166534',background:'#DCFCE7',border:'1px solid #86EFAC',borderRadius:6,padding:'2px 8px'}}>📦 {of.lbl}</span>
@@ -11464,7 +11502,7 @@ function TabPacientes(props){
       '.rodape{margin-top:26px;font-size:9.5px;color:#64748B;text-align:center;line-height:1.6}'+
       '@media print{.pagina{padding:14px 18px}}</style>';
     var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Relatório — Pacientes Controlados</title>'+css+'</head><body><div class="pagina">';
-    html+='<div class="cab"><img src="'+VIC_LOGO_B64+'"/><div class="l1">Fundo Municipal de Saúde de Vicência</div><div class="l2">Secretaria de Saúde e Departamento de Compras — CAF-Unidade Hospitalar</div></div>';
+    html+='<div class="cab">'+_logoImg(tcfg(user))+'<div class="l1">'+_escHtml(tcfg(user).org.l1)+'</div><div class="l2">'+_escHtml(tcfg(user).org.l2)+'</div></div>';
     html+='<div class="titulo">Relatório de Saídas de Medicamentos Controlados</div>';
     html+='<div class="dados"><b>'+_escHtml(periodoTxt())+'</b><br>Gerado em '+_escHtml(new Date().toLocaleString('pt-BR'))+'</div>';
     html+='<div class="resumo">'+
@@ -11484,7 +11522,7 @@ function TabPacientes(props){
       html+='<tr><td class="desc">'+_escHtml(p.nome)+'</td><td class="desc">'+itensTxt+'</td><td class="num">'+p.total+'</td></tr>';
     });
     html+='</tbody></table>';
-    html+='<div class="rodape">Fundo Municipal de Saúde de Vicência - CNPJ: 10.566.414/0001-36<br>Rua José Candido de Oliveira, 79 - Centro - Vicência - PE; CEP: 558580-000<br>Relatório gerado automaticamente pelo FarmaControl</div>';
+    html+='<div class="rodape">'+tcfg(user).org.rodape+'<br>Relatório gerado automaticamente pelo FarmaControl</div>';
     html+='</div></body></html>';
     if(!_imprimirDoc(html)){alert2('Não foi possível abrir a impressão do relatório.');}
   }
@@ -11628,6 +11666,7 @@ TabSaida=React.memo(TabSaida);
 
 function App(){
 var {confirm2,alert2,ModalRender,modal}=useModal();
+var _tenantVer=useState(0);var tenantVer=_tenantVer[0];var setTenantVer=_tenantVer[1];
 var _destSaida=useState('sus');var destinoSaida=_destSaida[0];var setDestinoSaida=_destSaida[1];var _ubsSaida=useState('');var ubsSaida=_ubsSaida[0];var setUbsSaida=_ubsSaida[1];var _destCfgRaw=useState(null);var destCfgRaw=_destCfgRaw[0];var setDestCfgRaw=_destCfgRaw[1];
 var _histPronto=useState(false);var histPronto=_histPronto[0];var setHistPronto=_histPronto[1];
 var _ready=useState(false);var ready=_ready[0];var setReady=_ready[1];var _user=useState(null);var user=_user[0];var setUser=_user[1];var _histEntries=useState([]);var histEntries=_histEntries[0];var setHistEntries=_histEntries[1];var _recentEntries=useState([]);var recentEntries=_recentEntries[0];var setRecentEntries=_recentEntries[1];var _fcWinStart=useRef(null);if(!_fcWinStart.current){var _w0=new Date();_w0.setDate(_w0.getDate()-3);_fcWinStart.current=_w0.toISOString();}var _meds=useState([]);var meds=_meds[0];var setMeds=_meds[1];var _loading=useState(true);var loading=_loading[0];var setLoading=_loading[1];var _tab=useState('dashboard');var tab=_tab[0];var setTab=_tab[1];var _menuAberto=useState(false);var menuAberto=_menuAberto[0];var setMenuAberto=_menuAberto[1];var _showSairModal=useState(false);var showSairModal=_showSairModal[0];var setShowSairModal=_showSairModal[1];var _pending=useState(0);var pending=_pending[0];var setPending=_pending[1];var _alertCount=useState(0);var alertCount=_alertCount[0];var setAlertCount=_alertCount[1];
@@ -11797,7 +11836,9 @@ useEffect(function(){if(!ready||!user)return;
   // Versão do histórico: quando muda (edição/exclusão de lançamento ANTIGO em qualquer aparelho), recarrega tudo do servidor.
   // Ignora snapshots vindos só do cache local do SDK (podem estar defasados).
   unsubs.push(db.collection('_meta').doc('entries_version__'+tenantDe(user)).onSnapshot(function(s){if(s.metadata&&s.metadata.fromCache)return;var d=s.exists?s.data():null;_hist.onVersao({v:(d&&d.v)||0,log:(d&&Array.isArray(d.log))?d.log:[]});},function(){}));
-  if(tenantDe(user)==='vicencia-pe'){unsubs.push(db.collection('config').doc('destinos__'+tenantDe(user)).onSnapshot(function(s){var d=s.exists?s.data():{};setDestCfgRaw({destinos:Array.isArray(d.destinos)?d.destinos:null,ubs:Array.isArray(d.ubs)?d.ubs:null});},function(){}));}
+  // Ficha da prefeitura (tenants/<id>): cabeçalhos/rodapés, logo e módulos. Ver tcfg(). Sem doc = padrão embutido.
+  (function(){var tid=tenantDe(user);unsubs.push(db.collection('tenants').doc(tid).onSnapshot(function(s){_tenantDocs[tid]=s.exists?s.data():null;setTenantVer(function(v){return v+1;});},function(){}));})();
+  {unsubs.push(db.collection('config').doc('destinos__'+tenantDe(user)).onSnapshot(function(s){var d=s.exists?s.data():{};setDestCfgRaw({destinos:Array.isArray(d.destinos)?d.destinos:null,ubs:Array.isArray(d.ubs)?d.ubs:null});},function(){}));}
   unsubs.push(db.collection('medicamentos').where('tenant_id','==',tenantDe(user)).onSnapshot(function(s){var list=s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;});list.sort(function(a,b){return a.nome.localeCompare(b.nome);});setMeds(list);}));
   unsubs.push(db.collection('users').where('tenant_id','==',tenantDe(user)).where('status','==','approved').onSnapshot(function(s){setAllUsers(s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;}));}));
   // Convites de plantão do usuário atual (fora do callback de users p/ não recriar/vazar). user.uid: currentUser não existe no escopo do App.
@@ -11827,17 +11868,17 @@ useEffect(function(){if(!ready||!user)return;
 // criadoEm ficam no início, como antes). Comparação direta de strings ISO (mesma ordem do localeCompare).
 var destinosTodos=useMemo(function(){
   var fixos=[{id:'sus',nome:'SUS (usuário)',fixo:true,ativo:true},{id:'emergencia',nome:'Emergência',fixo:true,ativo:true}];
-  if(!user||tenantDe(user)!=='vicencia-pe')return fixos;
+  if(!user||!temModulo(user,'destinos'))return fixos;
   var base=(destCfgRaw&&destCfgRaw.destinos)?destCfgRaw.destinos:DESTINOS_PADRAO;
   var out=fixos.slice();
   base.forEach(function(d){if(!d||!d.id||d.id==='sus'||d.id==='emergencia')return;out.push({id:d.id,nome:d.nome||d.id,ativo:d.ativo!==false,pedeUbs:!!d.pedeUbs});});
   return out;
-},[user&&user.tenant_id,destCfgRaw]);
+},[user&&user.tenant_id,destCfgRaw,tenantVer]);
 var ubsTodas=useMemo(function(){
-  if(!user||tenantDe(user)!=='vicencia-pe')return [];
+  if(!user||!temModulo(user,'destinos'))return [];
   var base=(destCfgRaw&&destCfgRaw.ubs)?destCfgRaw.ubs:UBS_PADRAO.map(function(n,i){return {id:'u'+i,nome:n,ativo:true};});
   return base.filter(function(u){return u&&u.nome;}).map(function(u){return {id:u.id||u.nome,nome:u.nome,ativo:u.ativo!==false};});
-},[user&&user.tenant_id,destCfgRaw]);
+},[user&&user.tenant_id,destCfgRaw,tenantVer]);
 aplicarDestinosCfg(destinosTodos);
 var histAntigo=useMemo(function(){
   var ws=_fcWinStart.current;
@@ -11978,7 +12019,7 @@ function menuIconName(id){
 // Pedidos Judiciais — só aparecia no menu lateral, restrito a gestor/técnico), continuam vendo ATB
 // nesse slot exatamente como antes.
 var navPrincipal=[{id:'dashboard',icon:'🏠',label:'Início'},{id:'saida',icon:'💊',label:'Saída'},{id:'recebimento',icon:'🚚',label:'Recebimento'},
-  (tenantDe(user)==='itaquitinga-pe'&&isManagerRole?{id:'pedidosjudiciais',icon:'⚖️',label:'Judicial'}:{id:'antibiotico',icon:'🧬',label:'ATB'})];
+  (temModulo(user,'judicial')&&isManagerRole?{id:'pedidosjudiciais',icon:'⚖️',label:'Judicial'}:{id:'antibiotico',icon:'🧬',label:'ATB'})];
 return(
 <div style={{minHeight:'100vh',background:'#EEF2F7',position:'relative',overflow:'hidden'}}>
   {/* MARCA D'ÁGUA BACKGROUND */}
@@ -12048,8 +12089,8 @@ return(
       <div>
         {tab==='dashboard'&&<TabDashboard entries={entries} medications={meds} stock={stock} user={user} plantao={plantao} isGuest={isGuest} onSolicitar={abrirSolicitarStable} onEncerrar={encerrarPlantaoStable} onSair={sairDoPlantaoStable} onSolicitarEntrada={solicitarEntradaPlantaoStable} shiftId={shiftId} onIniciar={abrirIniciarTurnoStable} allUsers={allUsers}/>}
         {tab==='visaogeral'&&isManagerRole&&<TabVisaoGeral entries={entries} medications={meds} stock={stock} user={user}/>}
-        {tab==='comparapedido'&&isManagerRole&&tenantDe(user)!=='itaquitinga-pe'&&<ErrBoundary><TabComparacaoPedido/></ErrBoundary>}
-        {tab==='saida'&&<TabSaida destino={destinoSaida} onDestino={setDestinoSaida} destinos={destinosTodos.filter(function(d){return d.ativo;})} destinosTodos={destinosTodos} ubsLista={ubsTodas.filter(function(u){return u.ativo;})} ubsTodas={ubsTodas} ubs={ubsSaida} onUbs={setUbsSaida} podeEditarDest={tenantDe(user)==='vicencia-pe'&&(user.role==='gestor'||user.role==='tecnico')} user={user} medications={meds} stock={stock} entries={entries} onSave={addEntryStable} onSolicitar={addSolicitacaoStable} latest={latest} isGuest={isGuest} canMove={canMove} confirm2={confirm2} alert2={alert2}/>}
+        {tab==='comparapedido'&&isManagerRole&&temModulo(user,'comparaPedido')&&<ErrBoundary><TabComparacaoPedido/></ErrBoundary>}
+        {tab==='saida'&&<TabSaida destino={destinoSaida} onDestino={setDestinoSaida} destinos={destinosTodos.filter(function(d){return d.ativo;})} destinosTodos={destinosTodos} ubsLista={ubsTodas.filter(function(u){return u.ativo;})} ubsTodas={ubsTodas} ubs={ubsSaida} onUbs={setUbsSaida} podeEditarDest={temModulo(user,'destinos')&&(user.role==='gestor'||user.role==='tecnico')} user={user} medications={meds} stock={stock} entries={entries} onSave={addEntryStable} onSolicitar={addSolicitacaoStable} latest={latest} isGuest={isGuest} canMove={canMove} confirm2={confirm2} alert2={alert2}/>}
         {tab==='estoque'&&<TabEstoque user={user} medications={meds} entries={entries} stock={stock} estoqueBruto={estoqueBruto} onSave={addEntryStable} confirm2={confirm2} alert2={alert2}/>}
         {tab==='conferencia'&&<ErrBoundary><TabConferencia user={user} medications={meds} entries={entries} stock={stock} estoqueBruto={estoqueBruto}/></ErrBoundary>}
         {tab==='relatorio'&&<TabRelatorio destinos={destinosTodos} ubsTodas={ubsTodas} entries={entries} medications={meds} db={db} user={user}/>}
@@ -12059,9 +12100,9 @@ return(
         {tab==='previsao'&&(user.role==='gestor'||user.role==='tecnico')&&<ErrBoundary><TabPrevisao user={user} entries={entries} medications={meds} stock={stock} db={db} confirm2={confirm2}/></ErrBoundary>}
         {tab==='histcontas'&&can(user.role,'log')&&<TabHistContas user={user}/>}
         {tab==='antibiotico'&&<TabAntibiotico user={user} medications={meds} stock={stock} allUsers={allUsers}/>}
-        {tab==='pedidosjudiciais'&&tenantDe(user)==='itaquitinga-pe'&&isManagerRole&&<ErrBoundary><TabPedidosJudiciais user={user} medications={meds} stock={stock} entries={entries} onSave={addEntryStable} confirm2={confirm2} alert2={alert2} allUsers={allUsers}/></ErrBoundary>}
+        {tab==='pedidosjudiciais'&&temModulo(user,'judicial')&&isManagerRole&&<ErrBoundary><TabPedidosJudiciais user={user} medications={meds} stock={stock} entries={entries} onSave={addEntryStable} confirm2={confirm2} alert2={alert2} allUsers={allUsers}/></ErrBoundary>}
         {tab==='recebimento'&&<ErrBoundary><TabRecebimento user={user} medications={meds} onSave={addEntry} stock={stock}/></ErrBoundary>}
-        {tab==='pacientes'&&tenantDe(user)!=='itaquitinga-pe'&&<ErrBoundary><TabPacientes user={user} entries={entries} onSave={addEntryStable} confirm2={confirm2} alert2={alert2}/></ErrBoundary>}
+        {tab==='pacientes'&&temModulo(user,'controlados')&&<ErrBoundary><TabPacientes user={user} entries={entries} onSave={addEntryStable} confirm2={confirm2} alert2={alert2}/></ErrBoundary>}
         {tab==='leites'&&<ErrBoundary><TabLeites user={user} medications={meds} stock={stock} onSave={addEntry} confirm2={confirm2} alert2={alert2}/></ErrBoundary>}
         {tab==='admin'&&user.role==='tecnico'&&<TabAdmin user={user} entries={entries} medications={meds} db={db}/>}
         {tab==='perfil'&&<TabPerfil user={user} onUpdate={function(u){setUser(u);}} onLogout={logout} entries={entries} medications={meds} stock={stock}/>}
@@ -12117,10 +12158,10 @@ return(
           <div style={{flex:1,overflowY:'auto',padding:'8px 0'}}>
             {[
               {id:'visaogeral',icon:'📈',label:'Visão Geral',show:true},
-              {id:'comparapedido',icon:'🔍',label:'Comparação de Pedido',show:tenantDe(user)!=='itaquitinga-pe'},
+              {id:'comparapedido',icon:'🔍',label:'Comparação de Pedido',show:temModulo(user,'comparaPedido')},
               {id:'estoque',icon:'📦',label:'Estoque',show:true},
               {id:'recebimento',icon:'🚚',label:'Recebimento',show:true},
-              {id:'pacientes',icon:'🔒',label:'Pacientes (Controlados)',show:tenantDe(user)!=='itaquitinga-pe'},
+              {id:'pacientes',icon:'🔒',label:'Pacientes (Controlados)',show:temModulo(user,'controlados')},
               {id:'conferencia',icon:'🧾',label:'Conferência',show:true},
               {id:'leites',icon:'🍼',label:'Leites',show:true},
               {id:'relatorio',icon:'📊',label:'Relatório',show:true},
@@ -12168,7 +12209,7 @@ return(
             <div style={{fontSize:11,color:temaItaq?'var(--itq-faint)':'rgba(255,255,255,0.5)',marginTop:2}}>{ROLES[user.role]||user.role}</div>
           </div>
           <div style={{flex:1,overflowY:'auto',padding:'8px 0'}}>
-            {[{id:'estoque',icon:'📦',label:'Estoque'},{id:'recebimento',icon:'🚚',label:'Recebimento'},{id:'pacientes',icon:'🔒',label:'Pacientes (Controlados)'},{id:'conferencia',icon:'🧾',label:'Conferência'},{id:'leites',icon:'🍼',label:'Leites'},{id:'relatorio',icon:'📊',label:'Relatório'}].filter(function(t){return t.id!=='pacientes'||tenantDe(user)!=='itaquitinga-pe';}).map(function(t){return(
+            {[{id:'estoque',icon:'📦',label:'Estoque'},{id:'recebimento',icon:'🚚',label:'Recebimento'},{id:'pacientes',icon:'🔒',label:'Pacientes (Controlados)'},{id:'conferencia',icon:'🧾',label:'Conferência'},{id:'leites',icon:'🍼',label:'Leites'},{id:'relatorio',icon:'📊',label:'Relatório'}].filter(function(t){return t.id!=='pacientes'||temModulo(user,'controlados');}).map(function(t){return(
               <button key={t.id} data-tour={'nav-'+t.id} className={temaItaq?'menu-drawer-item'+(tab===t.id?' on':''):''} onClick={function(){setTab(t.id);setMenuAberto(false);}} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'13px 20px',border:'none',background:temaItaq?undefined:(tab===t.id?'#EFF6FF':'transparent'),cursor:'pointer',borderLeft:temaItaq?undefined:(tab===t.id?'3px solid #1351B4':'3px solid transparent')}}>
                 <span className={temaItaq?'menu-drawer-ic':''} style={{fontSize:20}}>{temaItaq?<Icon name={menuIconName(t.id)} size={18}/>:t.icon}</span>
                 <span className={temaItaq?'menu-drawer-lbl':''} style={{fontSize:14,fontWeight:tab===t.id?700:500,color:temaItaq?undefined:(tab===t.id?'#1351B4':'#1E293B')}}>{t.label}</span>
