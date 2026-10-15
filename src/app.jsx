@@ -5110,6 +5110,12 @@ var PJ_PARENTESCOS=['Mãe','Pai','Irmão(ã)','Avô(ó)','Tio(a)','Cônjuge','Pr
 // Ícones e cor únicos (azul do padrão) — TabPedidosJudiciais só é usado em Itaquitinga, então
 // não precisa de gate .theme-itaq: as cores diferentes por categoria (roxo/ciano/âmbar de TIPOS)
 // destoavam do resto do app; aqui fica tudo no mesmo azul, como as outras abas.
+// Tipo do paciente (16/10/2026): 'judicial' (decisão judicial, com nº de processo) ou 'ajuda' (ajuda da prefeitura, sem processo).
+// Cadastros antigos não têm o campo = judicial.
+function pjTipoDe(x){return x&&x.tipo==='ajuda'?'ajuda':'judicial';}
+function _addMesISO(iso){var q=String(iso||'').split('-');if(q.length<3)return '';var y=+q[0],m=+q[1]-1,d=+q[2];var ult=new Date(y,m+2,0).getDate();var t=new Date(y,m+1,1);t.setDate(Math.min(d,ult));return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');}
+// Próxima entrega (mensal): 1 mês depois da última retirada; antes da primeira retirada vale a data "disponível para retirada".
+function pjProximaEntrega(pc){if(!pc)return '';if(pc.ultimaRetirada)return _addMesISO(pc.ultimaRetirada);return pc.dataDisponivel||'';}
 var PJ_ABAS=[
   {key:'medicamento',label:'Medicamentos',icon:'pill',cor:B,cats:['medicamento','controlado']},
   {key:'injetavel',label:TIPOS.injetavel.label,icon:'droplet',cor:B,cats:['injetavel']},
@@ -5138,10 +5144,13 @@ function TabPedidosJudiciais(props){
   var _showBaixa=useState(null);var showBaixa=_showBaixa[0],setShowBaixa=_showBaixa[1];
   var _showHist=useState(null);var showHist=_showHist[0],setShowHist=_showHist[1];
   var _horizonte=useState(1);var horizonte=_horizonte[0],setHorizonte=_horizonte[1];
+  var _filtTipo=useState('todos');var filtTipo=_filtTipo[0],setFiltTipo=_filtTipo[1]; // 'todos'|'judicial'|'ajuda'
+  var _showFicha=useState(null);var showFicha=_showFicha[0],setShowFicha=_showFicha[1];
+  var _fichaData=useState('');var fichaData=_fichaData[0],setFichaData=_fichaData[1];
   var _saving=useState(false);var saving=_saving[0],setSaving=_saving[1];
   var _bSaving=useState(false);var bSaving=_bSaving[0],setBSaving=_bSaving[1];
   // form (cadastro/edição)
-  var formInicial={processoNumero:'',nome:'',responsavel:'',responsavelCpf:'',parentesco:'',dataDisponivel:todayStr(),itens:[],observacao:''};
+  var formInicial={tipo:'judicial',processoNumero:'',nome:'',responsavel:'',responsavelCpf:'',parentesco:'',dataDisponivel:todayStr(),itens:[],observacao:''};
   var _form=useState(formInicial);var form=_form[0],setForm=_form[1];
   var _fItemCat=useState('medicamento');var fItemCat=_fItemCat[0],setFItemCat=_fItemCat[1];
   var _fItemBusca=useState('');var fItemBusca=_fItemBusca[0],setFItemBusca=_fItemBusca[1];
@@ -5176,7 +5185,7 @@ function TabPedidosJudiciais(props){
   function resetForm(){setForm(formInicial);setFItemCat('medicamento');setFItemBusca('');setFItemSel(null);setFItemQtd('');setEditId(null);}
   function abrirNovo(){resetForm();setShowForm(true);}
   function abrirEditar(p){
-    setForm({processoNumero:p.processoNumero||'',nome:p.nome||'',responsavel:p.responsavel||'',responsavelCpf:p.responsavelCpf?mascaraCPF(p.responsavelCpf):'',parentesco:p.parentesco||'',dataDisponivel:p.dataDisponivel||todayStr(),itens:(p.itens||[]).slice(),observacao:p.observacao||''});
+    setForm({tipo:pjTipoDe(p),processoNumero:p.processoNumero||'',nome:p.nome||'',responsavel:p.responsavel||'',responsavelCpf:p.responsavelCpf?mascaraCPF(p.responsavelCpf):'',parentesco:p.parentesco||'',dataDisponivel:p.dataDisponivel||todayStr(),itens:(p.itens||[]).slice(),observacao:p.observacao||''});
     setFItemCat('medicamento');setFItemBusca('');setFItemSel(null);setFItemQtd('');
     setEditId(p.id);setShowForm(true);
   }
@@ -5196,12 +5205,13 @@ function TabPedidosJudiciais(props){
   function removerItemForm(idx){setForm(function(f){return Object.assign({},f,{itens:f.itens.filter(function(_,i){return i!==idx;})});});}
 
   function salvar(){
-    if(!form.processoNumero.trim()||!form.nome.trim()){alert2('Preencha o nº do processo e o nome do paciente.');return;}
+    if(!form.nome.trim()){alert2('Preencha o nome do paciente.');return;}
+    if(form.tipo!=='ajuda'&&!form.processoNumero.trim()){alert2('Preencha o nº do processo (paciente judicial).');return;}
     if(form.itens.length===0){alert2('Adicione pelo menos um item (medicamento, fórmula, fralda...).');return;}
     var cpfDigitosForm=String(form.responsavelCpf||'').replace(/\D/g,'');
     if(cpfDigitosForm&&!validaCPF(cpfDigitosForm)){alert2('O CPF do responsável não é válido (dígito verificador não confere). Corrija ou apague o campo.');return;}
     setSaving(true);
-    var dados={processoNumero:form.processoNumero.trim(),nome:form.nome.trim(),responsavel:form.responsavel.trim(),responsavelCpf:cpfDigitosForm,parentesco:form.parentesco,dataDisponivel:form.dataDisponivel,itens:form.itens,observacao:form.observacao.trim(),tenant_id:tenantDe(user),atualizadoEm:new Date().toISOString(),atualizadoPor:user.name||user.email};
+    var dados={tipo:form.tipo==='ajuda'?'ajuda':'judicial',processoNumero:form.processoNumero.trim(),nome:form.nome.trim(),responsavel:form.responsavel.trim(),responsavelCpf:cpfDigitosForm,parentesco:form.parentesco,dataDisponivel:form.dataDisponivel,itens:form.itens,observacao:form.observacao.trim(),tenant_id:tenantDe(user),atualizadoEm:new Date().toISOString(),atualizadoPor:user.name||user.email};
     var p2;
     if(editId){p2=db.collection('pacientes_judiciais').doc(editId).update(dados);}
     else{dados.status='pendente';dados.criadoEm=new Date().toISOString();dados.criadoPor=user.name||user.email;p2=db.collection('pacientes_judiciais').add(dados);}
@@ -5259,14 +5269,14 @@ function TabPedidosJudiciais(props){
     Promise.all(medIds.map(function(id){return _loteFEFOAsync(id,tenantId).then(function(r){return{id:id,fefo:r};});})).then(function(resultados){
       var fefoPorMed={};resultados.forEach(function(r){fefoPorMed[r.id]=r.fefo;});
       var retObj={
-        pacienteId:pacienteBaixa.id,pacienteNome:pacienteBaixa.nome,processoNumero:pacienteBaixa.processoNumero||'',
+        pacienteId:pacienteBaixa.id,pacienteNome:pacienteBaixa.nome,tipo:pjTipoDe(pacienteBaixa),processoNumero:pacienteBaixa.processoNumero||'',
         responsavelPaciente:pacienteBaixa.responsavel||'',
         responsavelRetirada:bRespNome.trim(),responsavelRetiradaCpf:respCpfDigitos,
         itens:entregas.map(function(it){return{medId:it.medId,medNome:it.medNome,categoria:it.categoria,qtdPrescrita:it.trocado?0:(parseInt(it.qtdPrescrita)||0),qtdEntregue:parseInt(it.qtdEntregue)||0,trocado:!!it.trocado,medIdOriginal:it.medIdOriginal,medNomeOriginal:it.medNomeOriginal};}),
         data:bData,liberadoPor:bLiberadoPor.trim(),liberadoPorUid:user.uid,criadoEm:new Date().toISOString(),tenant_id:tenantId
       };
       return db.collection('retiradas_judiciais').add(retObj).then(function(){
-        var obsBase='Pedido judicial nº '+(pacienteBaixa.processoNumero||'')+' — paciente: '+pacienteBaixa.nome;
+        var obsBase=(pjTipoDe(pacienteBaixa)==='ajuda'?'Ajuda':'Pedido judicial nº '+(pacienteBaixa.processoNumero||''))+' — paciente: '+pacienteBaixa.nome;
         return Promise.all(entregas.map(function(it){
           var fefo=fefoPorMed[it.medId];
           var extra=it.trocado?' — trocado por '+it.medNome+' (prescrito: '+it.medNomeOriginal+')':' ('+it.qtdEntregue+'/'+it.qtdPrescrita+')';
@@ -5287,7 +5297,7 @@ function TabPedidosJudiciais(props){
   // senão o estoque fica errado pra sempre — não é só apagar o documento.
   function apagarRetirada(r){
     confirm2('Apagar retirada','Apagar esta retirada de '+fD(r.data)+'? O estoque dos itens entregues será devolvido. Esta ação não pode ser desfeita.',function(){
-      var obsBase='Estorno — exclusão de saída judicial (processo nº '+(r.processoNumero||'')+', paciente: '+r.pacienteNome+')';
+      var obsBase='Estorno — exclusão de saída '+(pjTipoDe(r)==='ajuda'?'de ajuda':'judicial (processo nº '+(r.processoNumero||'')+')')+', paciente: '+r.pacienteNome;
       Promise.all((r.itens||[]).map(function(it){
         return onSave({tipo:'entrada',medicamentoId:it.medId,medicamentoNome:it.medNome,quantidade:it.qtdEntregue,observacao:obsBase,pedidoJudicialId:r.pacienteId,pacienteNome:r.pacienteNome});
       })).then(function(){
@@ -5321,12 +5331,13 @@ function TabPedidosJudiciais(props){
       '.assin .sub{font-size:10.5px;color:#444;margin-top:1px}'+
       '.assin .cargo{font-size:10.5px;color:#444;margin-top:4px;text-transform:uppercase;letter-spacing:.3px}'+
       '@media print{.pagina{padding:14px 18px}}</style>';
-    var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Comprovante de Entrega — Judicial</title>'+css+'</head><body><div class="pagina">';
+    var _tipoC=retirada.tipo?pjTipoDe(retirada):pjTipoDe(paciente);var _ehAjuda=_tipoC==='ajuda';
+    var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Comprovante de Entrega — '+(_ehAjuda?'Ajuda':'Judicial')+'</title>'+css+'</head><body><div class="pagina">';
     var logoUrl=PJ_LOGO_B64;
     html+='<div class="cab"><img src="'+logoUrl+'"/><div class="l1">Prefeitura Municipal de Itaquitinga</div><div class="l2">Secretaria Municipal de Saúde</div><div class="l2">Coordenação de Assistência Farmacêutica</div></div>';
-    html+='<div class="titulo">Comprovante de Entrega — Fornecimento por Decisão Judicial</div>';
+    html+='<div class="titulo">'+(_ehAjuda?'Comprovante de Entrega — Ajuda (Assistência Farmacêutica)':'Comprovante de Entrega — Fornecimento por Decisão Judicial')+'</div>';
     var fDataRet=(function(){try{return new Date(retirada.data+'T00:00:00').toLocaleDateString('pt-BR');}catch(e){return retirada.data;}})();
-    html+='<div class="dados"><b>Processo judicial nº:</b> '+_escHtml(retirada.processoNumero||'—')+'<br>'+
+    html+='<div class="dados">'+(_ehAjuda?'':'<b>Processo judicial nº:</b> '+_escHtml(retirada.processoNumero||'—')+'<br>')+
       '<b>Paciente:</b> '+_escHtml(retirada.pacienteNome||'')+'<br>'+
       '<b>Data da entrega:</b> '+_escHtml(fDataRet)+'</div>';
     var itensObs=(retirada.itens||[]).map(function(it){
@@ -5341,8 +5352,8 @@ function TabPedidosJudiciais(props){
     html+='</tbody></table>';
     var cpfFmt=retirada.responsavelRetiradaCpf?mascaraCPF(retirada.responsavelRetiradaCpf):'não informado';
     html+='<div class="declaracao">Declaro, para os devidos fins, ter recebido nesta data os itens relacionados acima, '+
-      'destinados ao(à) paciente <b>'+_escHtml(retirada.pacienteNome||'')+'</b>, em cumprimento à decisão judicial referente ao '+
-      'processo nº <b>'+_escHtml(retirada.processoNumero||'—')+'</b>, nas quantidades e condições descritas, '+
+      'destinados ao(à) paciente <b>'+_escHtml(retirada.pacienteNome||'')+'</b>, '+(_ehAjuda?'':'em cumprimento à decisão judicial referente ao '+
+      'processo nº <b>'+_escHtml(retirada.processoNumero||'—')+'</b>, ')+'nas quantidades e condições descritas, '+
       'nada tendo a reclamar quanto ao fornecimento aqui registrado.</div>';
     html+='<div class="linhas-assin">'+
       '<div class="assin"><div class="linha">&nbsp;</div><div class="nome">'+_escHtml(retirada.responsavelRetirada||'')+'</div><div class="sub">CPF: '+_escHtml(cpfFmt)+'</div><div class="cargo">Responsável pela retirada</div></div>'+
@@ -5352,11 +5363,50 @@ function TabPedidosJudiciais(props){
     if(!_imprimirDoc(html)){alert2('Não foi possível abrir a impressão do comprovante. Tente de novo pelo histórico.');}
   }
 
+  // ===== Ficha de retirada: 2 vias na MESMA folha A4 (uma fica na farmácia, outra vai com o paciente) — pedido da usuária (16/10/2026).
+  // Preenchido: só o nome do paciente (e o nº do processo, se judicial) e os NOMES dos medicamentos. Em branco, pra preencher à mão:
+  // responsável, documento (nº + marcar CPF ou RG na mesma linha), data (a menos que informada na hora de imprimir) e dispensação.
+  function imprimirFichaRetirada(pc,dataIso){
+    var ehAjuda=pjTipoDe(pc)==='ajuda';
+    var nomes=(pc.itens||[]).map(function(it){return it.medNome;}).filter(function(n){return n;});
+    var dataTxt='';if(dataIso){try{dataTxt=new Date(dataIso+'T00:00:00').toLocaleDateString('pt-BR');}catch(e){dataTxt='';}}
+    var css='<style>@page{size:A4;margin:8mm}*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;font-size:11.5px;color:#111}'+
+      '.via{height:136mm;padding:3mm 5mm 2mm;overflow:hidden;position:relative}'+
+      '.corte{height:3mm;border-top:1.5px dashed #777;text-align:center;font-size:8.5px;color:#777;line-height:3mm}'+
+      '.cab{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:5px}.cab img{height:40px}'+
+      '.cab .t{text-align:center}.cab .l1{font-family:Georgia,"Times New Roman",serif;font-weight:700;font-size:13px;color:#15803D}.cab .l2{font-family:Georgia,"Times New Roman",serif;font-size:10.5px}'+
+      '.tit{display:flex;justify-content:space-between;align-items:center;border-top:1.5px solid #111;border-bottom:1.5px solid #111;padding:3px 0;margin:4px 0 7px;font-weight:700;font-size:11.5px;text-transform:uppercase}'+
+      '.tit .via-nome{font-size:10px;border:1.5px solid #111;border-radius:4px;padding:1px 6px}'+
+      '.lin{display:flex;align-items:flex-end;gap:6px;margin-bottom:12px;font-size:11.5px;white-space:nowrap}.lin .rot{font-weight:700}'+
+      '.lin .tr{flex:1;border-bottom:1px solid #111;height:18px;min-width:30px}'+
+      '.box{display:inline-block;width:11px;height:11px;border:1.5px solid #111;vertical-align:-2px;margin:0 3px 0 8px}'+
+      '.meds{margin:2px 0 8px;font-size:'+(nomes.length>16?'9.5':'11')+'px;line-height:1.55}.meds .h{font-weight:700;margin-bottom:2px}.meds ul{list-style:none;columns:'+(nomes.length>16?3:(nomes.length>8?2:1))+';column-gap:18px}.meds li{padding-left:10px;position:relative;break-inside:avoid}.meds li:before{content:"\\2022";position:absolute;left:0}'+
+      '.assin{margin-top:26px;display:flex;gap:20px}.assin div{flex:1;text-align:center;border-top:1.2px solid #111;padding-top:2px;font-size:9.5px;color:#333}'+
+      '</style>';
+    function via(nomeVia){
+      var h='<div class="via">';
+      h+='<div class="cab"><img src="'+PJ_LOGO_B64+'"/><div class="t"><div class="l1">Prefeitura Municipal de Itaquitinga</div><div class="l2">Secretaria Municipal de Saúde — Coordenação de Assistência Farmacêutica</div></div></div>';
+      h+='<div class="tit"><span>Ficha de retirada — '+(ehAjuda?'Ajuda':'Fornecimento judicial')+'</span><span class="via-nome">'+nomeVia+'</span></div>';
+      h+='<div class="lin"><span class="rot">Paciente:</span><b>'+_escHtml(pc.nome||'')+'</b>'+(ehAjuda||!pc.processoNumero?'':'<span style="margin-left:14px"><span class="rot">Processo nº:</span> '+_escHtml(pc.processoNumero)+'</span>')+'</div>';
+      h+='<div class="lin"><span class="rot">Nome do responsável:</span><span class="tr"></span></div>';
+      h+='<div class="lin"><span class="rot">Documento nº:</span><span class="tr"></span><span><span class="box"></span>CPF<span class="box"></span>RG</span></div>';
+      h+='<div class="lin"><span class="rot">Data:</span>'+(dataTxt?'<b>'+_escHtml(dataTxt)+'</b>':'<span>____ / ____ / ________</span>')+'</div>';
+      h+='<div class="meds"><div class="h">Medicamentos:</div><ul>'+nomes.map(function(n){return '<li>'+_escHtml(n)+'</li>';}).join('')+'</ul></div>';
+      h+='<div class="lin"><span class="rot">Responsável pela dispensação:</span><span class="tr"></span></div>';
+      h+='<div class="assin"><div>Assinatura do responsável pela retirada</div><div>Assinatura do responsável pela dispensação</div></div>';
+      h+='</div>';
+      return h;
+    }
+    var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Ficha de retirada — '+_escHtml(pc.nome||'')+'</title>'+css+'</head><body>'+via('Via da farmácia')+'<div class="corte">✂ &nbsp;recorte aqui&nbsp; ✂</div>'+via('Via do paciente')+'</body></html>';
+    if(!_imprimirDoc(html)){alert2('Não foi possível abrir a impressão da ficha. Tente de novo.');}
+  }
+
   // ===== Listagem / filtros =====
   var q=busca.toLowerCase().trim();
   function filtrarPorCategoria(abaKey,status){
     var cats=(PJ_ABAS.filter(function(a){return a.key===abaKey;})[0]||PJ_ABAS[0]).cats;
     return pacientes.filter(function(p){
+      if(filtTipo!=='todos'&&pjTipoDe(p)!==filtTipo)return false;
       if(!(p.itens||[]).some(function(it){return cats.indexOf(it.categoria)>=0;}))return false;
       if((p.status||'pendente')!==status)return false;
       if(q&&(p.nome+' '+(p.responsavel||'')+' '+(p.processoNumero||'')).toLowerCase().indexOf(q)<0)return false;
@@ -5367,14 +5417,21 @@ function TabPedidosJudiciais(props){
   var necessidadePorMed=useMemo(function(){
     var m={};
     pacientes.forEach(function(p){
+      if(filtTipo!=='todos'&&pjTipoDe(p)!==filtTipo)return;
+      var tp=pjTipoDe(p);var prox=pjProximaEntrega(p);
       (p.itens||[]).forEach(function(it){
         if(!it.medId||!it.qtd)return;
-        if(!m[it.medId])m[it.medId]={medId:it.medId,medNome:it.medNome,categoria:it.categoria,mensal:0,pacientes:0};
-        m[it.medId].mensal+=it.qtd;m[it.medId].pacientes+=1;
+        if(!m[it.medId])m[it.medId]={medId:it.medId,medNome:it.medNome,categoria:it.categoria,mensal:0,pacientes:0,porTipo:{judicial:0,ajuda:0},pacs:[]};
+        m[it.medId].mensal+=it.qtd;m[it.medId].pacientes+=1;m[it.medId].porTipo[tp]+=it.qtd;
+        m[it.medId].pacs.push({nome:p.nome,qtd:it.qtd,prox:prox,tipo:tp});
       });
     });
-    return Object.keys(m).map(function(k){return m[k];}).sort(function(a,b){return a.medNome.localeCompare(b.medNome);});
-  },[pacientes]);
+    return Object.keys(m).map(function(k){m[k].pacs.sort(function(a,b){return (a.prox||'9999').localeCompare(b.prox||'9999')||(a.nome||'').localeCompare(b.nome||'');});return m[k];}).sort(function(a,b){return a.medNome.localeCompare(b.medNome);});
+  },[pacientes,filtTipo]);
+  function fDCurta(iso){if(!iso)return '';var q2=String(iso).split('-');return q2.length===3?q2[2]+'/'+q2[1]:iso;}
+  function tipoRet(r){return r.tipo?pjTipoDe(r):pjTipoDe(pacientes.filter(function(x){return x.id===r.pacienteId;})[0]);}
+  var retVisiveis=retiradasJud.filter(function(r){return filtTipo==='todos'||tipoRet(r)===filtTipo;});
+  var contTipo={judicial:pacientes.filter(function(x){return pjTipoDe(x)==='judicial';}).length,ajuda:pacientes.filter(function(x){return pjTipoDe(x)==='ajuda';}).length};
 
   function fD(d){if(!d)return'-';try{return new Date(d+'T00:00:00').toLocaleDateString('pt-BR');}catch(e){return d;}}
 
@@ -5386,7 +5443,7 @@ function TabPedidosJudiciais(props){
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:6,gap:8}}>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontWeight:800,fontSize:14,color:'#1E293B'}}>{p.nome}</div>
-          <div style={{fontSize:12,color:'#64748B'}}>Processo nº {p.processoNumero}</div>
+          <div style={{fontSize:12,color:'#64748B'}}>{pjTipoDe(p)==='ajuda'?<span style={{fontWeight:800,color:'#7C3AED'}}>Ajuda</span>:'Processo nº '+(p.processoNumero||'—')}</div>
           {p.responsavel&&<div style={{fontSize:11,color:'#94A3B8'}}>Retirado por: {p.responsavel}{p.parentesco?' ('+p.parentesco+')':''}</div>}
         </div>
         <span style={{fontSize:10,fontWeight:800,padding:'4px 9px',borderRadius:20,whiteSpace:'nowrap',background:atrasado?'#FEE2E2':p.status==='separado'?'#DCFCE7':'#FEF3C7',color:atrasado?'#B91C1C':p.status==='separado'?'#16A34A':'#92400E'}}>
@@ -5396,12 +5453,13 @@ function TabPedidosJudiciais(props){
       {itensCat.map(function(it,i){return(<div key={i} style={{fontSize:13,color:'#1E293B',marginBottom:2}}>{it.medNome} — {it.qtd} un./mês <span style={{color:'#94A3B8',fontSize:11}}>(estoque: {stock[it.medId]||0})</span></div>);})}
       {p.observacao&&<div style={{fontSize:12,color:'#B45309',marginTop:6,background:'#FFFBEB',borderRadius:6,padding:'4px 8px'}}>📝 {p.observacao}</div>}
       <div style={{fontSize:11,color:'#94A3B8',margin:'8px 0'}}>
-        {p.ultimaRetirada?'Última retirada: '+fD(p.ultimaRetirada):'Disponível para retirada em: '+fD(p.dataDisponivel)}
+        {p.ultimaRetirada?'Última retirada: '+fD(p.ultimaRetirada)+' · Próxima entrega: '+fD(pjProximaEntrega(p)):'Disponível para retirada em: '+fD(p.dataDisponivel)}
       </div>
       <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
         {p.status!=='pendente'&&<button onClick={function(){mudarStatus(p,'pendente');}} style={{padding:'8px 12px',background:'#FEF3C7',border:'none',borderRadius:8,color:'#92400E',fontSize:11,fontWeight:700,cursor:'pointer'}}>↩️ Pendente</button>}
         {p.status!=='separado'&&<button onClick={function(){mudarStatus(p,'separado');}} style={{padding:'8px 12px',background:'#DCFCE7',border:'none',borderRadius:8,color:'#0C6B3E',fontSize:11,fontWeight:700,cursor:'pointer'}}>✅ Separado</button>}
         {p.status==='separado'&&can(user.role,'saida')&&<button onClick={function(){abrirBaixa(p);}} style={{padding:'8px 14px',background:'#0C6B3E',border:'none',borderRadius:8,color:'#fff',fontSize:12,fontWeight:800,cursor:'pointer',marginLeft:'auto'}}>♻️ Dar Saída</button>}
+        <button onClick={function(){setFichaData('');setShowFicha(p);}} style={{padding:'8px 12px',background:'#F0FDF4',border:'none',borderRadius:8,color:'#15803D',fontSize:12,fontWeight:700,cursor:'pointer'}}>🖨️ Ficha</button>
         <button onClick={function(){setShowHist(p);}} style={{padding:'8px 12px',background:'#EFF6FF',border:'none',borderRadius:8,color:B,fontSize:12,fontWeight:700,cursor:'pointer'}}>📜 Histórico</button>
         <button onClick={function(){abrirEditar(p);}} style={{padding:'8px 12px',background:'#F1F5F9',border:'none',borderRadius:8,color:'#1E293B',fontSize:12,fontWeight:700,cursor:'pointer'}}>✏️ Editar</button>
         <button onClick={function(){excluir(p);}} style={{padding:'8px 12px',background:'#FEE2E2',border:'none',borderRadius:8,color:'#B91C1C',fontSize:12,fontWeight:700,cursor:'pointer'}}>🗑️ Excluir</button>
@@ -5416,6 +5474,10 @@ function TabPedidosJudiciais(props){
     <div style={{fontSize:18,fontWeight:800,color:'#1E293B',marginBottom:4,display:'flex',alignItems:'center',gap:8}}><Icon name="scale" size={20}/> Pacientes Judiciais</div>
     <div style={{fontSize:13,color:'#64748B',marginBottom:16}}>Fornecimento obrigatório por decisão judicial — prioridade máxima.</div>
 
+    <div style={{display:'flex',gap:6,marginBottom:12,flexWrap:'wrap',alignItems:'center'}}>
+      <span style={{fontSize:11,fontWeight:700,color:'#64748B'}}>Mostrar:</span>
+      {[['todos','Todos ('+(contTipo.judicial+contTipo.ajuda)+')'],['judicial','Judicial ('+contTipo.judicial+')'],['ajuda','Ajuda ('+contTipo.ajuda+')']].map(function(c){var on=filtTipo===c[0];return <button key={c[0]} onClick={function(){setFiltTipo(c[0]);}} style={{padding:'5px 12px',borderRadius:20,border:'1.5px solid '+(on?B:'#E2E8F0'),background:on?'#EFF6FF':'#fff',color:on?B:'#64748B',fontSize:12,fontWeight:on?800:600,cursor:'pointer',fontFamily:'inherit'}}>{c[1]}</button>;})}
+    </div>
     <div style={{display:'flex',gap:6,marginBottom:12,flexWrap:'wrap'}}>
       {PJ_ABAS.map(function(t){var c=t.key;return(
         <button key={c} onClick={function(){setSub(c);}} style={{padding:'9px 12px',borderRadius:10,border:'1.5px solid '+(sub===c?t.cor:'#E2E8F0'),background:sub===c?t.cor:'#fff',color:sub===c?'#fff':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:6}}><Icon name={t.icon} size={14}/> {t.label}</button>
@@ -5450,8 +5512,9 @@ function TabPedidosJudiciais(props){
         var faltam=Math.max(0,necessidade-atual);
         var t=TIPOS[m.categoria]||TIPOS.medicamento;
         return(<div key={m.medId} style={{background:'#fff',border:'1.5px solid #E2E8F0',borderRadius:14,padding:14,marginBottom:10}}>
-          <div style={{fontWeight:800,fontSize:14,color:'#1E293B',marginBottom:2}}>{t.icon} {m.medNome}</div>
-          <div style={{fontSize:11,color:'#94A3B8',marginBottom:10}}>{m.pacientes} paciente(s) • {m.mensal} un./mês no total</div>
+          <div style={{fontWeight:800,fontSize:14,color:'#1E293B',marginBottom:2}}>{t.icon} {m.medNome} <span style={{fontWeight:600,color:'#475569'}}>({m.pacs.map(function(x){return x.nome;}).filter(function(n,i,arr){return arr.indexOf(n)===i;}).join(', ')})</span></div>
+          <div style={{fontSize:11,color:'#94A3B8',marginBottom:6}}>{m.pacientes} paciente(s) • {m.mensal} un./mês no total{filtTipo==='todos'&&(m.porTipo.judicial>0&&m.porTipo.ajuda>0)?' (Judicial '+m.porTipo.judicial+' · Ajuda '+m.porTipo.ajuda+')':(filtTipo==='todos'&&m.porTipo.ajuda>0?' (Ajuda)':'')}</div>
+          <div style={{marginBottom:10}}>{m.pacs.map(function(x,i){var atr=x.prox&&x.prox<todayStr();return <div key={i} style={{fontSize:12,color:'#334155',lineHeight:1.6}}>• <b>{x.nome}</b> — {x.qtd} un./mês{x.tipo==='ajuda'?<span style={{color:'#7C3AED',fontSize:10,fontWeight:800}}> · AJUDA</span>:null}{x.prox?<span style={{color:atr?'#B91C1C':'#64748B'}}> · próxima entrega {fDCurta(x.prox)}{atr?' (atrasada)':''}</span>:null}</div>;})}</div>
           <div style={{display:'flex',gap:16,flexWrap:'wrap'}}>
             <div><div style={{fontSize:10,color:'#94A3B8',fontWeight:700,textTransform:'uppercase'}}>Necessário ({horizonte}m)</div><div style={{fontSize:18,fontWeight:800,color:'#1E293B'}}>{necessidade}</div></div>
             <div><div style={{fontSize:10,color:'#94A3B8',fontWeight:700,textTransform:'uppercase'}}>Em estoque</div><div style={{fontSize:18,fontWeight:800,color:'#1E293B'}}>{atual}</div></div>
@@ -5462,8 +5525,8 @@ function TabPedidosJudiciais(props){
     </div>)}
 
     {sub==='saidas'&&(<div>
-      {retiradasJud.length===0&&<div style={{textAlign:'center',padding:40,color:'#94A3B8'}}>Nenhuma saída judicial registrada ainda.</div>}
-      {retiradasJud.map(function(r){return(
+      {retVisiveis.length===0&&<div style={{textAlign:'center',padding:40,color:'#94A3B8'}}>Nenhuma saída registrada {filtTipo==='todos'?'ainda':'neste filtro'}.</div>}
+      {retVisiveis.map(function(r){return(
         <div key={r.id} style={{background:'#fff',border:'1.5px solid #E2E8F0',borderRadius:12,padding:12,marginBottom:8}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
             <div style={{fontWeight:800,fontSize:13,color:'#0C6B3E'}}>{r.pacienteNome}</div>
@@ -5475,8 +5538,22 @@ function TabPedidosJudiciais(props){
       );})}
     </div>)}
 
-    {showForm&&<Modal onClose={function(){setShowForm(false);resetForm();}} title={editId?'✏️ Editar Paciente':'➕ Novo Paciente Judicial'} wide>
-      <Lbl c="Nº do processo *"/><input value={form.processoNumero} onChange={function(e){setForm(Object.assign({},form,{processoNumero:e.target.value}));}} className="inp" placeholder="Ex: 0001234-56.2026.8.17.0000" autoFocus/>
+    {showFicha&&<Modal onClose={function(){setShowFicha(null);}} title="🖨️ Ficha de retirada (2 vias)">
+      <div style={{fontSize:13,color:'#475569',marginBottom:10}}>Paciente: <b>{showFicha.nome}</b> · {(showFicha.itens||[]).length} medicamento(s). Sai numa folha A4 com duas vias: uma para a farmácia e outra para o paciente.</div>
+      <Lbl c="Data (opcional — deixe em branco para preencher à mão)"/>
+      <input type="date" value={fichaData} onChange={function(e){setFichaData(e.target.value);}} className="inp"/>
+      <div style={{display:'flex',gap:8,marginTop:6}}>
+        <button onClick={function(){var pc=showFicha;setShowFicha(null);imprimirFichaRetirada(pc,fichaData);}} className="bp" style={{flex:1,margin:0}}>🖨️ Imprimir</button>
+        <button onClick={function(){setShowFicha(null);}} className="bs" style={{flex:1,margin:0}}>Cancelar</button>
+      </div>
+    </Modal>}
+
+    {showForm&&<Modal onClose={function(){setShowForm(false);resetForm();}} title={editId?'✏️ Editar Paciente':'➕ Novo Paciente'} wide>
+      <Lbl c="Tipo *"/>
+      <div style={{display:'flex',gap:8,marginBottom:12}}>
+        {[['judicial','Judicial (com processo)'],['ajuda','Ajuda (sem processo)']].map(function(c){var on=(form.tipo||'judicial')===c[0];return <button key={c[0]} type="button" onClick={function(){setForm(Object.assign({},form,{tipo:c[0]}));}} style={{flex:1,padding:'10px 8px',borderRadius:10,border:'2px solid '+(on?B:'#E2E8F0'),background:on?B:'#fff',color:on?'#fff':'#64748B',fontWeight:800,fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>{c[1]}</button>;})}
+      </div>
+      <Lbl c={form.tipo==='ajuda'?'Nº do processo (não precisa para Ajuda)':'Nº do processo *'}/><input value={form.processoNumero} onChange={function(e){setForm(Object.assign({},form,{processoNumero:e.target.value}));}} className="inp" placeholder={form.tipo==='ajuda'?'Deixe em branco':'Ex: 0001234-56.2026.8.17.0000'} autoFocus/>
       <Lbl c="Nome do paciente *"/><input value={form.nome} onChange={function(e){setForm(Object.assign({},form,{nome:e.target.value}));}} className="inp" placeholder="Nome completo"/>
       <Lbl c="Nome do responsável pela retirada (se não for o próprio paciente)"/><input value={form.responsavel} onChange={function(e){setForm(Object.assign({},form,{responsavel:e.target.value}));}} className="inp" placeholder="Opcional"/>
       {form.responsavel.trim()&&(<div>
