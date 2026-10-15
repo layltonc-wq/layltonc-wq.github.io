@@ -81,6 +81,15 @@ function _orgLinhasHtml(c){var partes=String(c.org.l2||'').split(' — ');return
 // mesmo dia), agora é tenant_id+'__'+data. O campo 'data'/'date' dentro do próprio doc continua sendo
 // a data pura, sem o prefixo — só o ID do documento muda.
 function plantaoDocId(user,dateStr){return tenantDe(user)+'__'+dateStr;}
+// Monta o objeto do usuário. Super admin que está "visitando" outra prefeitura tem a marca (claim) tenant_id do token diferente da
+// prefeitura de origem (users/<uid>.tenant_id): nesse caso o app trabalha na prefeitura do token e guarda a de origem em homeTenant.
+function fcMontarUser(fu,d){
+  return Promise.all([fu.getIdTokenResult().catch(function(){return null;}),db.collection('super_admins').doc(fu.uid).get().then(function(s){return !!s.exists;}).catch(function(){return false;})]).then(function(r){
+    var claim=r[0]&&r[0].claims&&r[0].claims.tenant_id;var sup=!!r[1];
+    var visita=(sup&&claim&&claim!==d.tenant_id)?claim:null;
+    return {uid:fu.uid,name:d.name,role:d.role,color:d.color,email:d.email,status:d.status,tenant_id:visita||d.tenant_id||'',homeTenant:d.tenant_id||'',isSuper:sup,sessionTimeout:d.sessionTimeout||12,photoURL:d.photoURL||'',crf:d.crf||''};
+  });
+}
 function tenantDaURL(){
   try{
     var p=new URLSearchParams(window.location.search).get('tenant');
@@ -764,7 +773,7 @@ function Auth(props){
   var _logoTaps=useState(0);var logoTaps=_logoTaps[0];var setLogoTaps=_logoTaps[1];// gesto secreto p/ reconfigurar Firebase (5 toques no logo)
   function tocarLogo(){var n=logoTaps+1;setLogoTaps(n);if(n>=5){if(window.confirm('Reconfigurar o Firebase? (área técnica)')){localStorage.removeItem(CFG_KEY);window.location.reload();}else{setLogoTaps(0);}}}
   var EM={'auth/user-not-found':'Usuario não encontrado.','auth/wrong-password':'Senha incorreta.','auth/invalid-credential':'Email ou senha incorretos.','auth/email-already-in-use':'Email ja cadastrado.','auth/weak-password':'Senha min. 6 caracteres.'};
-  function login(){if(!email||!pass){setErr('Preencha email e senha.');return;}setLoad(true);setErr('');auth.signInWithEmailAndPassword(email,pass).then(function(c){return db.collection('users').doc(c.user.uid).get().then(function(s){if(!s.exists){setErr('Usuario não encontrado.');auth.signOut();setLoad(false);return;}var d=s.data();if(d.status==='pending'){setErr('Aguardando aprovação.');auth.signOut();setLoad(false);return;}if(d.status==='rejected'||d.status==='inativo'){setErr('Conta não ativa.');auth.signOut();setLoad(false);return;}var u={uid:c.user.uid,name:d.name,role:d.role,color:d.color,email:d.email,status:d.status,tenant_id:d.tenant_id||'',sessionTimeout:d.sessionTimeout||12,photoURL:d.photoURL||'',crf:d.crf||''};localStorage.setItem('fc_user',JSON.stringify(u));db.collection('logs_acesso').add({uid:u.uid,nome:u.name,cargo:u.role,acao:'login',criadoEm:new Date().toISOString(),tenant_id:u.tenant_id}).catch(function(){});props.onLogin(u);});}).catch(function(e){setErr(EM[e.code]||e.message);setLoad(false);});}
+  function login(){if(!email||!pass){setErr('Preencha email e senha.');return;}setLoad(true);setErr('');auth.signInWithEmailAndPassword(email,pass).then(function(c){return db.collection('users').doc(c.user.uid).get().then(function(s){if(!s.exists){setErr('Usuario não encontrado.');auth.signOut();setLoad(false);return;}var d=s.data();if(d.status==='pending'){setErr('Aguardando aprovação.');auth.signOut();setLoad(false);return;}if(d.status==='rejected'||d.status==='inativo'){setErr('Conta não ativa.');auth.signOut();setLoad(false);return;}return fcMontarUser(c.user,d).then(function(u){localStorage.setItem('fc_user',JSON.stringify(u));db.collection('logs_acesso').add({uid:u.uid,nome:u.name,cargo:u.role,acao:'login',criadoEm:new Date().toISOString(),tenant_id:u.tenant_id}).catch(function(){});props.onLogin(u);});});}).catch(function(e){setErr(EM[e.code]||e.message);setLoad(false);});}
   function register(){if(!name||!email||!pass){setErr('Preencha todos os campos.');return;}if(pass.length<6){setErr('Senha min. 6 caracteres.');return;}var tid=tenantDaURL();if(!tid){setErr('Link de cadastro inválido. Peça um novo link de convite pra sua prefeitura.');return;}setLoad(true);setErr('');skipAuthCheck=true;auth.createUserWithEmailAndPassword(email,pass).then(function(c){var uid=c.user.uid;return c.user.getIdToken(true).then(function(){var ud={name:name,role:role,color:color,email:email,status:'pending',tenant_id:tid,criadoEm:new Date().toISOString(),sessionTimeout:12,photoURL:'',crf:role==='farmaceutico'?crf.trim():''};return db.collection('users').doc(uid).set(ud).then(function(){skipAuthCheck=false;auth.signOut().catch(function(){});setErr('Conta criada com sucesso! Aguarde aprovação.');setMode('login');setLoad(false);});});}).catch(function(e){skipAuthCheck=false;setErr(EM[e.code]||e.message||'Erro ao criar conta.');setLoad(false);})}
 
   return(
@@ -4357,6 +4366,7 @@ return(
         {user.role==='farmaceutico'&&crf&&<div style={{display:'inline-flex',alignItems:'center',gap:4,background:'rgba(255,255,255,.12)',borderRadius:20,padding:'5px 12px',fontSize:12,fontWeight:600,border:'1px solid rgba(255,255,255,.18)'}}>CRF {crf}</div>}
       </div>
       <div style={{fontSize:12,opacity:0.55,marginTop:4}}>{user.email}</div>
+      {user.role==='tecnico'&&<div style={{fontSize:10,opacity:0.45,marginTop:2,wordBreak:'break-all',userSelect:'all'}}>ID da conta (suporte): {user.uid}</div>}
       <div style={{display:'flex',justifyContent:'center',gap:8,marginTop:14}}>
         {temaItaq
           ?(melhorMedalha?<div style={{display:'inline-flex',alignItems:'center',gap:6,background:'linear-gradient(135deg,'+melhorMedalha.c1+','+melhorMedalha.c2+')',borderRadius:20,padding:'5px 14px',fontSize:12,fontWeight:700,color:'#fff',boxShadow:'0 2px 8px -2px rgba(0,0,0,.35)'}}><Icon name="trophy" size={13}/> {melhorMedalha.n}</div>:<div style={{display:'inline-flex',alignItems:'center',gap:6,background:'rgba(255,255,255,.12)',borderRadius:20,padding:'5px 14px',fontSize:12,fontWeight:600,color:'rgba(255,255,255,.75)',border:'1px solid rgba(255,255,255,.18)'}}>Sem medalha ainda</div>)
@@ -5147,6 +5157,158 @@ function TabNotas({user,medications}){
   );
 }
 
+
+// ===== Administração FarmaControl (só super admin — conta listada em super_admins/<uid>) =====
+// Cria/edita a ficha das prefeituras (tenants/<id>), gera o link de convite, aprova cadastros pendentes (inclusive o 1º gestor de uma
+// prefeitura nova) e entra em outra prefeitura (função trocarPrefeitura, ver functions/index.js). O link de convite é
+// https://www.farmacontrol.app.br/?tenant=<id>; o cadastro só é aceito se tenants/<id> existir e estiver ativo (firestore.rules).
+var FC_SITE='https://www.farmacontrol.app.br';
+var MODULOS_LISTA=[['atb','ATB (antibióticos)'],['judicial','Judicial / Ajuda'],['controlados','Pacientes controlados (Morfina/Tramal)'],['comparaPedido','Comparação de pedido'],['ordemFornecimento','Ordem de fornecimento (atas)'],['destinos','Destinos de saída e UBS']];
+function fcLinkConvite(id){return FC_SITE+'/?tenant='+encodeURIComponent(id);}
+function fcSlug(t){return String(t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40);}
+// Troca a "prefeitura" da conta (só super admin): a função do servidor muda a marca no token de login; depois é só recarregar.
+function fcTrocarPrefeitura(alvo){
+  return window.__garantirScript('lib-functions','https://www.gstatic.com/firebasejs/10.12.0/firebase-functions-compat.js').then(function(){
+    return firebase.app().functions('us-central1').httpsCallable('trocarPrefeitura')({tenantId:alvo});
+  }).then(function(){return auth.currentUser.getIdToken(true);}).then(function(){try{localStorage.removeItem('fc_user');}catch(e){}window.location.reload();});
+}
+function TabSuperAdmin(props){
+  var user=props.user;
+  var _t=useState([]);var tenants=_t[0],setTenants=_t[1];
+  var _p=useState([]);var pend=_p[0],setPend=_p[1];
+  var _f=useState(null);var ficha=_f[0],setFicha=_f[1];
+  var _lk=useState(null);var linkT=_lk[0],setLinkT=_lk[1];
+  var _pm=useState(null);var pendT=_pm[0],setPendT=_pm[1];
+  var _roles=useState({});var rolesSel=_roles[0],setRolesSel=_roles[1];
+  var _msg=useState('');var msg=_msg[0],setMsg=_msg[1];
+  var _busy=useState('');var busy=_busy[0],setBusy=_busy[1];
+  useEffect(function(){
+    var u1=db.collection('tenants').onSnapshot(function(s){var a=[];s.forEach(function(d){var x=Object.assign({id:d.id},d.data());_tenantDocs[d.id]=d.data();a.push(x);});a.sort(function(x,y){return (x.nome||x.id).localeCompare(y.nome||y.id);});setTenants(a);},function(){});
+    var u2=db.collection('users').where('status','==','pending').onSnapshot(function(s){var a=[];s.forEach(function(d){var x=Object.assign({id:d.id},d.data());if(x.status==='pending')a.push(x);});setPend(a);},function(){});
+    return function(){try{u1();}catch(e){}try{u2();}catch(e){}};
+  },[]);
+  function flash(t){setMsg(t);setTimeout(function(){setMsg('');},3500);}
+  function pendDe(id){return pend.filter(function(u){return u.tenant_id===id;});}
+  function nomeDe(t){return t.nome||tcfg(t.id).nome||t.id;}
+  function abrirNova(){setFicha({novo:true,id:'',idEditado:false,nome:'',subtitulo:'Secretaria Municipal de Saúde — Coordenação de Assistência Farmacêutica',cnpj:'',endereco:'',cidadeUf:'',cor:'#1351B4',assinatura:'COORDENADOR(A) DA FARMÁCIA',nomeFarmacia:'Farmácia Municipal',rodape:'',logoB64:'',ativo:true,modulos:Object.assign({},_MODULOS_NENHUM)});}
+  function abrirEditar(t){
+    var c=tcfg(t.id);
+    setFicha({novo:false,id:t.id,criadoEm:t.criadoEm||'',nome:t.nome||c.nome||'',subtitulo:t.subtitulo||c.org.l2||'',cnpj:t.cnpj||'',endereco:t.endereco||'',cidadeUf:t.cidadeUf||c.cidadeUf||'',cor:t.cor||c.cor||'#1351B4',assinatura:t.assinatura||c.assinatura||'',nomeFarmacia:t.nomeFarmacia||c.nomeFarmacia||'',
+      rodape:t.rodape||((t.cnpj||t.endereco)?'':String(c.org.rodape||'').replace(/<br\s*\/?>/gi,'\n')),logoB64:t.logoB64||'',ativo:t.ativo!==false,modulos:Object.assign({},c.modulos)});
+  }
+  function setF(k,v){setFicha(function(f){var n=Object.assign({},f);n[k]=v;if(f.novo&&!f.idEditado){if(k==='cidadeUf'&&v)n.id=fcSlug(v);else if(k==='nome'&&!f.cidadeUf)n.id=fcSlug(v);}return n;});}
+  function setMod(k,v){setFicha(function(f){var m=Object.assign({},f.modulos);m[k]=v;return Object.assign({},f,{modulos:m});});}
+  function escolherLogo(ev){
+    var f=ev.target.files&&ev.target.files[0];if(!f)return;
+    var rd=new FileReader();
+    rd.onload=function(){var img=new Image();img.onload=function(){var H=Math.min(220,img.height);var W=Math.round(img.width*(H/img.height));var cv=document.createElement('canvas');cv.width=W;cv.height=H;cv.getContext('2d').drawImage(img,0,0,W,H);setF('logoB64',cv.toDataURL('image/png'));};img.onerror=function(){flash('Não consegui ler essa imagem.');};img.src=rd.result;};
+    rd.readAsDataURL(f);
+  }
+  function salvarFicha(){
+    var f=ficha;if(!f)return;
+    var id=f.novo?fcSlug(f.id):f.id;
+    if(!f.nome.trim()){flash('Preencha o nome do órgão.');return;}
+    if(f.novo){
+      if(!/^[a-z0-9][a-z0-9-]{2,39}$/.test(id)){flash('O código da prefeitura precisa ter de 3 a 40 letras minúsculas, números ou hífen (ex.: sao-paulo-sp).');return;}
+      if(tenants.some(function(t){return t.id===id;})){flash('Já existe uma prefeitura com esse código.');return;}
+    }
+    var doc={nome:f.nome.trim(),subtitulo:f.subtitulo.trim(),cnpj:f.cnpj.trim(),endereco:f.endereco.trim(),cidadeUf:f.cidadeUf.trim(),cor:f.cor,assinatura:f.assinatura.trim(),nomeFarmacia:f.nomeFarmacia.trim(),
+      rodape:String(f.rodape||'').trim().split(/\n/).map(function(x){return x.trim();}).filter(function(x){return x;}).join('<br>'),logoB64:f.logoB64||'',modulos:f.modulos,ativo:f.ativo!==false,
+      atualizadoEm:new Date().toISOString(),atualizadoPor:user.name||user.email||''};
+    ['subtitulo','cnpj','endereco','cidadeUf','assinatura','nomeFarmacia','rodape','logoB64'].forEach(function(k){if(!doc[k])delete doc[k];});
+    doc.criadoEm=f.novo?new Date().toISOString():(f.criadoEm||new Date().toISOString());
+    setBusy('salvando');
+    db.collection('tenants').doc(id).set(doc).then(function(){setBusy('');setFicha(null);flash(f.novo?'Prefeitura criada! Agora gere o link em "Link de cadastro".':'Ficha salva.');if(f.novo)setLinkT({id:id,nome:doc.nome});}).catch(function(e){setBusy('');flash('Erro ao salvar: '+((e&&e.message)||e));});
+  }
+  function alternarAtivo(t){
+    var novo=t.ativo===false;
+    if(!window.confirm((novo?'Reativar ':'Desativar ')+nomeDe(t)+'?'+(novo?'':' Ninguém novo consegue se cadastrar pelo link, mas os dados continuam guardados.')))return;
+    db.collection('tenants').doc(t.id).set(Object.assign({},_tenantDocs[t.id]||{},{ativo:novo,atualizadoEm:new Date().toISOString()})).catch(function(e){flash('Erro: '+((e&&e.message)||e));});
+  }
+  function aprovar(u){var role=rolesSel[u.id]||u.role||'auxiliar';db.collection('users').doc(u.id).update({status:'approved',role:role}).then(function(){flash(u.name+' aprovado(a) como '+(ROLES[role]||role)+'.');}).catch(function(e){flash('Erro: '+((e&&e.message)||e));});}
+  function recusar(u){if(!window.confirm('Recusar o cadastro de '+u.name+'?'))return;db.collection('users').doc(u.id).update({status:'rejected'}).catch(function(e){flash('Erro: '+((e&&e.message)||e));});}
+  function copiar(txt){try{navigator.clipboard.writeText(txt).then(function(){flash('Link copiado!');},function(){window.prompt('Copie o link:',txt);});}catch(e){window.prompt('Copie o link:',txt);}}
+  function entrar(t){
+    if(!window.confirm('Entrar em '+nomeDe(t)+'? Você verá e poderá alterar os dados dessa prefeitura até voltar para a sua.'))return;
+    setBusy('entrando');
+    fcTrocarPrefeitura(t.id).catch(function(e){setBusy('');window.alert('Não foi possível entrar nessa prefeitura.\n'+((e&&e.message)||e)+'\n\nConfirme que a função "trocarPrefeitura" foi publicada no Firebase.');});
+  }
+  var stBtn={padding:'8px 12px',border:'none',borderRadius:8,fontSize:12,fontWeight:700,cursor:'pointer'};
+  return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
+    <div style={{fontSize:18,fontWeight:800,color:'#1E293B',marginBottom:4}}>Administração FarmaControl</div>
+    <div style={{fontSize:13,color:'#64748B',marginBottom:14}}>Só a sua conta enxerga esta tela. Aqui você cria prefeituras, gera o link de cadastro, aprova o primeiro gestor e entra em outra prefeitura para dar suporte.</div>
+    {msg&&<div style={{background:'#EFF6FF',color:'#1351B4',fontWeight:700,fontSize:13,padding:'8px 12px',borderRadius:10,marginBottom:10}}>{msg}</div>}
+    <button onClick={abrirNova} className="bp" style={{width:'auto',padding:'0 18px',marginBottom:14}}>+ Nova prefeitura</button>
+    {tenants.length===0&&<div style={{textAlign:'center',padding:30,color:'#94A3B8'}}>Nenhuma prefeitura cadastrada ainda.</div>}
+    {tenants.map(function(t){var pn=pendDe(t.id).length;var aqui=t.id===user.tenant_id;var ativa=t.ativo!==false;return(
+      <div key={t.id} style={{background:'#fff',border:'1.5px solid '+(aqui?'#1351B4':'#E2E8F0'),borderRadius:14,padding:14,marginBottom:10}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8,marginBottom:8}}>
+          <div style={{minWidth:0}}><div style={{fontWeight:800,fontSize:15,color:'#1E293B'}}>{nomeDe(t)}</div><div style={{fontSize:11,color:'#94A3B8'}}>código: {t.id}{aqui?' · você está aqui':''}</div></div>
+          <span style={{fontSize:10,fontWeight:800,padding:'4px 9px',borderRadius:20,whiteSpace:'nowrap',background:ativa?'#DCFCE7':'#FEE2E2',color:ativa?'#16A34A':'#B91C1C'}}>{ativa?'Ativa':'Desativada'}</span>
+        </div>
+        <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+          {!aqui&&ativa&&<button disabled={!!busy} onClick={function(){entrar(t);}} style={Object.assign({},stBtn,{background:'#1351B4',color:'#fff'})}>{busy==='entrando'?'Entrando...':'Entrar'}</button>}
+          <button onClick={function(){setLinkT({id:t.id,nome:nomeDe(t)});}} style={Object.assign({},stBtn,{background:'#EFF6FF',color:'#1351B4'})}>Link de cadastro</button>
+          <button onClick={function(){setPendT(t);}} style={Object.assign({},stBtn,{background:pn>0?'#FEF3C7':'#F1F5F9',color:pn>0?'#92400E':'#475569'})}>Pendentes ({pn})</button>
+          <button onClick={function(){abrirEditar(t);}} style={Object.assign({},stBtn,{background:'#F1F5F9',color:'#1E293B'})}>Editar ficha</button>
+          <button onClick={function(){alternarAtivo(t);}} style={Object.assign({},stBtn,{background:ativa?'#FEF2F2':'#F0FDF4',color:ativa?'#B91C1C':'#15803D'})}>{ativa?'Desativar':'Reativar'}</button>
+        </div>
+      </div>);})}
+
+    {linkT&&<Modal onClose={function(){setLinkT(null);}} title={'Link de cadastro — '+linkT.nome}>
+      <div style={{fontSize:13,color:'#475569',marginBottom:8}}>Mande este link para o gestor da prefeitura. Quem se cadastrar por ele fica <b>pendente</b> e preso a esta prefeitura. O primeiro cadastro você aprova em "Pendentes"; depois o gestor aprova a equipe.</div>
+      <input readOnly value={fcLinkConvite(linkT.id)} onFocus={function(e){e.target.select();}} className="inp"/>
+      <div style={{display:'flex',gap:8}}>
+        <button onClick={function(){copiar(fcLinkConvite(linkT.id));}} className="bp" style={{flex:1,margin:0}}>Copiar link</button>
+        <a href={'https://wa.me/?text='+encodeURIComponent('Olá! Este é o link de cadastro do FarmaControl para '+linkT.nome+': '+fcLinkConvite(linkT.id)+'\nO primeiro cadastro (gestor) será liberado pelo suporte; depois o gestor libera a equipe.')} target="_blank" rel="noopener noreferrer" className="bs" style={{flex:1,margin:0,textAlign:'center',textDecoration:'none',display:'flex',alignItems:'center',justifyContent:'center'}}>Enviar no WhatsApp</a>
+      </div>
+    </Modal>}
+
+    {pendT&&<Modal onClose={function(){setPendT(null);}} title={'Cadastros pendentes — '+nomeDe(pendT)}>
+      {pendDe(pendT.id).length===0&&<div style={{textAlign:'center',padding:24,color:'#94A3B8'}}>Nenhum cadastro aguardando aprovação.</div>}
+      {pendDe(pendT.id).map(function(u){return(
+        <div key={u.id} style={{border:'1.5px solid #E2E8F0',borderRadius:12,padding:12,marginBottom:8}}>
+          <div style={{fontWeight:800,fontSize:14,color:'#1E293B'}}>{u.name}</div>
+          <div style={{fontSize:12,color:'#64748B',marginBottom:8}}>{u.email} · pediu cargo: {ROLES[u.role]||u.role}</div>
+          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+            <select value={rolesSel[u.id]||u.role||'auxiliar'} onChange={function(e){var v=e.target.value;setRolesSel(function(r){var n=Object.assign({},r);n[u.id]=v;return n;});}} className="inp" style={{margin:0,flex:1,minWidth:140}}>{Object.keys(ROLES).map(function(k){return <option key={k} value={k}>{ROLES[k]}</option>;})}</select>
+            <button onClick={function(){aprovar(u);}} style={Object.assign({},stBtn,{background:'#16A34A',color:'#fff'})}>Aprovar</button>
+            <button onClick={function(){recusar(u);}} style={Object.assign({},stBtn,{background:'#FEE2E2',color:'#B91C1C'})}>Recusar</button>
+          </div>
+        </div>);})}
+    </Modal>}
+
+    {ficha&&<Modal onClose={function(){setFicha(null);}} title={ficha.novo?'Nova prefeitura':'Ficha — '+ficha.nome} wide>
+      <Lbl c="Nome do órgão (aparece no cabeçalho dos PDFs) *"/><input value={ficha.nome} onChange={function(e){setF('nome',e.target.value);}} className="inp" placeholder="Ex.: Prefeitura Municipal de São Paulo" autoFocus/>
+      {ficha.novo&&<div><Lbl c="Código da prefeitura (usado no link — não dá para mudar depois) *"/><input value={ficha.id} onChange={function(e){setFicha(function(f){return Object.assign({},f,{id:fcSlug(e.target.value),idEditado:true});});}} className="inp" placeholder="sao-paulo-sp"/></div>}
+      <Lbl c="Subtítulo (2ª linha do cabeçalho)"/><input value={ficha.subtitulo} onChange={function(e){setF('subtitulo',e.target.value);}} className="inp"/>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+        <div><Lbl c="CNPJ"/><input value={ficha.cnpj} onChange={function(e){setF('cnpj',e.target.value);}} className="inp" placeholder="00.000.000/0000-00"/></div>
+        <div><Lbl c="Cidade/UF"/><input value={ficha.cidadeUf} onChange={function(e){setF('cidadeUf',e.target.value);}} className="inp" placeholder="São Paulo/SP"/></div>
+      </div>
+      <Lbl c="Endereço (rodapé dos PDFs)"/><input value={ficha.endereco} onChange={function(e){setF('endereco',e.target.value);}} className="inp" placeholder="Rua, nº - Bairro - Cidade - UF; CEP"/>
+      <Lbl c="Rodapé personalizado (opcional — substitui CNPJ + endereço; uma linha por linha)"/><textarea value={ficha.rodape} onChange={function(e){setF('rodape',e.target.value);}} className="inp" rows={3}/>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+        <div><Lbl c="Assinatura do pedido"/><input value={ficha.assinatura} onChange={function(e){setF('assinatura',e.target.value);}} className="inp"/></div>
+        <div><Lbl c="Nome da farmácia (mensagens)"/><input value={ficha.nomeFarmacia} onChange={function(e){setF('nomeFarmacia',e.target.value);}} className="inp"/></div>
+      </div>
+      <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:12}}>
+        <div><Lbl c="Cor principal"/><input type="color" value={ficha.cor} onChange={function(e){setF('cor',e.target.value);}} style={{width:56,height:38,border:'1.5px solid #E2E8F0',borderRadius:8,padding:2,background:'#fff'}}/></div>
+        <div style={{flex:1}}><Lbl c="Logo / brasão (imagem)"/><input type="file" accept="image/*" onChange={escolherLogo} style={{fontSize:12}}/></div>
+        {ficha.logoB64&&<img src={ficha.logoB64} style={{height:44,borderRadius:6,border:'1px solid #E2E8F0'}}/>}
+      </div>
+      <Lbl c="Abas e recursos que esta prefeitura usa"/>
+      <div style={{display:'grid',gridTemplateColumns:'1fr',gap:6,marginBottom:12}}>
+        {MODULOS_LISTA.map(function(m){var on=!!ficha.modulos[m[0]];return <label key={m[0]} style={{display:'flex',alignItems:'center',gap:8,fontSize:13,color:'#1E293B',cursor:'pointer'}}><input type="checkbox" checked={on} onChange={function(e){setMod(m[0],e.target.checked);}} style={{width:18,height:18}}/>{m[1]}</label>;})}
+      </div>
+      {!ficha.novo&&<label style={{display:'flex',alignItems:'center',gap:8,fontSize:13,color:'#1E293B',marginBottom:12}}><input type="checkbox" checked={ficha.ativo!==false} onChange={function(e){setF('ativo',e.target.checked);}} style={{width:18,height:18}}/>Prefeitura ativa (aceita novos cadastros pelo link)</label>}
+      <div style={{display:'flex',gap:8}}>
+        <button onClick={salvarFicha} disabled={busy==='salvando'} className="bp" style={{flex:1,margin:0}}>{busy==='salvando'?'Salvando...':(ficha.novo?'Criar prefeitura':'Salvar ficha')}</button>
+        <button onClick={function(){setFicha(null);}} className="bs" style={{flex:1,margin:0}}>Cancelar</button>
+      </div>
+    </Modal>}
+  </div>);
+}
 
 // ===== PACIENTES JUDICIAIS (só Itaquitinga por enquanto — ver tenant_id==='itaquitinga-pe' no App) =====
 // Fornecimento obrigatório por decisão judicial — medicamentos, fórmulas, fraldas etc. Redesenhado
@@ -11686,7 +11848,7 @@ useEffect(function(){var cfg=loadCfg();if(cfg&&initFB(cfg)){setReady(true);
     // gravada só pegariam ela numa renovação natural do token (até 1h depois), continuando lentas
     // nesse meio tempo. getIdToken(true) é rápido (raramente passa de 1s) e roda 1x por sessão.
     firebaseUser.getIdToken(true).catch(function(){}).then(function(){
-    db.collection('users').doc(firebaseUser.uid).get().then(function(s){if(s.exists){var d=s.data();if(d.status==='inativo'||d.status==='rejected'||d.status==='pending'){auth.signOut();localStorage.removeItem('fc_user');setUser(null);return;}var u={uid:firebaseUser.uid,name:d.name,role:d.role,color:d.color,email:d.email,status:d.status,tenant_id:d.tenant_id||'',sessionTimeout:d.sessionTimeout||12,photoURL:d.photoURL||'',crf:d.crf||''};localStorage.setItem('fc_user',JSON.stringify(u));setUser(u);}}).catch(function(){var s2=localStorage.getItem('fc_user');if(s2){try{var su2=JSON.parse(s2);if(su2&&su2.tenant_id)setUser(su2);}catch(e){}}});
+    db.collection('users').doc(firebaseUser.uid).get().then(function(s){if(s.exists){var d=s.data();if(d.status==='inativo'||d.status==='rejected'||d.status==='pending'){auth.signOut();localStorage.removeItem('fc_user');setUser(null);return;}return fcMontarUser(firebaseUser,d).then(function(u){localStorage.setItem('fc_user',JSON.stringify(u));setUser(u);});}}).catch(function(){var s2=localStorage.getItem('fc_user');if(s2){try{var su2=JSON.parse(s2);if(su2&&su2.tenant_id)setUser(su2);}catch(e){}}});
     });}});}},[] );
 useEffect(function(){function on(){setOnline(true);}function off(){setOnline(false);}window.addEventListener('online',on);window.addEventListener('offline',off);return function(){window.removeEventListener('online',on);window.removeEventListener('offline',off);};},[]);
 // Identidade visual v2 (azul, não é tema escuro) — padrão pra todos os municípios, ver CSS .theme-itaq.
@@ -12009,7 +12171,7 @@ function menuIconName(id){
   var m={dashboard:'home',saida:'pill',recebimento:'truck',antibiotico:'vial',pedidosjudiciais:'scale',
     visaogeral:'trendUp',comparapedido:'search',estoque:'package',pacientes:'lock',conferencia:'clipboard',
     leites:'droplet',relatorio:'barChart',gestao:'users',log:'lock',histnotas:'folder',previsao:'clipboard',
-    histcontas:'clipboard',admin:'gear',perfil:'users'};
+    histcontas:'clipboard',admin:'gear',superadmin:'gear',perfil:'users'};
   return m[id]||'folder';
 }
 // Para gestor/técnico em Itaquitinga, o slot de maior destaque da navegação (sempre visível) troca
@@ -12073,6 +12235,7 @@ return(
     </div>
     <button onClick={function(){db.collection('plantao_convites').doc(convites[0].id).update({status:'confirmado'});}} style={{background:'rgba(255,255,255,0.2)',border:'1.5px solid rgba(255,255,255,0.4)',borderRadius:8,padding:'6px 12px',color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer',whiteSpace:'nowrap'}}>✅ Confirmar</button>
   </div>}
+  {user&&user.homeTenant&&user.tenant_id&&user.homeTenant!==user.tenant_id&&<div style={{background:'#B45309',color:'#fff',padding:'8px 12px',fontSize:13,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}><span>Você está visitando: {tcfg(user).nome||user.tenant_id}</span><button onClick={function(){fcTrocarPrefeitura('home').catch(function(e){alert('Não foi possível voltar: '+((e&&e.message)||e));});}} style={{background:'#fff',color:'#B45309',border:'none',borderRadius:8,padding:'5px 10px',fontSize:12,fontWeight:800,cursor:'pointer'}}>Voltar para a minha prefeitura</button></div>}
   {!loading&&!histPronto&&online&&<div style={{background:'#EFF6FF',color:'#1351B4',textAlign:'center',padding:'6px 10px',fontSize:12,fontWeight:600,borderBottom:'1px solid #BFDBFE'}}>Carregando histórico… totais podem estar incompletos</div>}
   {!online&&<div style={{background:'#475569',color:'#fff',textAlign:'center',padding:'7px',fontSize:12,fontWeight:600}}>Sem conexao com a internet</div>}
 
@@ -12104,6 +12267,7 @@ return(
         {tab==='recebimento'&&<ErrBoundary><TabRecebimento user={user} medications={meds} onSave={addEntry} stock={stock}/></ErrBoundary>}
         {tab==='pacientes'&&temModulo(user,'controlados')&&<ErrBoundary><TabPacientes user={user} entries={entries} onSave={addEntryStable} confirm2={confirm2} alert2={alert2}/></ErrBoundary>}
         {tab==='leites'&&<ErrBoundary><TabLeites user={user} medications={meds} stock={stock} onSave={addEntry} confirm2={confirm2} alert2={alert2}/></ErrBoundary>}
+        {tab==='superadmin'&&user.isSuper&&<ErrBoundary><TabSuperAdmin user={user}/></ErrBoundary>}
         {tab==='admin'&&user.role==='tecnico'&&<TabAdmin user={user} entries={entries} medications={meds} db={db}/>}
         {tab==='perfil'&&<TabPerfil user={user} onUpdate={function(u){setUser(u);}} onLogout={logout} entries={entries} medications={meds} stock={stock}/>}
       </div>
@@ -12171,6 +12335,7 @@ return(
               {id:'previsao',icon:'📋',label:'Previsão / Pedido',show:isManagerRole},
               {id:'histcontas',icon:'📋',label:'Hist. de Contas',show:can(user.role,'log')},
               {id:'admin',icon:'🔧',label:'Painel Admin',show:user.role==='tecnico'},
+              {id:'superadmin',icon:'🏛️',label:'Administração',show:!!user.isSuper},
             ].filter(function(t){return t.show;}).map(function(t){return(
               <button key={t.id} data-tour={'nav-'+t.id} className={temaItaq?'menu-drawer-item'+(tab===t.id?' on':''):''} onClick={function(){setTab(t.id);setMenuAberto(false);}} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'13px 20px',border:'none',background:temaItaq?undefined:(tab===t.id?'#EFF6FF':'transparent'),cursor:'pointer',position:'relative',borderLeft:temaItaq?undefined:(tab===t.id?'3px solid #1351B4':'3px solid transparent'),transition:'background .15s'}}>
                 <span className={temaItaq?'menu-drawer-ic':''} style={{fontSize:20,width:26,textAlign:'center'}}>{temaItaq?<Icon name={menuIconName(t.id)} size={18}/>:t.icon}</span>

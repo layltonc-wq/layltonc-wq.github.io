@@ -64,3 +64,61 @@ exports.atualizarEstoqueAtual = onDocumentWritten('entries/{entryId}', async (ev
     }
   }));
 });
+
+// ===========================================================================================
+// MULTI-PREFEITURA (16/10/2026)
+// ===========================================================================================
+// 1) trocarPrefeitura — callable. SÓ conta listada em super_admins/<uid> (você, criada à mão no Console) pode chamar. Troca a "marca"
+//    tenant_id (custom claim) do token de login para a prefeitura escolhida (ou volta para a de origem com tenantId='home'). As
+//    regras do Firestore leem essa marca (userTenant() em firestore.rules), então, depois de renovar o token, o app já enxerga os
+//    dados da outra prefeitura SEM novo login. Cada troca fica registrada em logs_visitas (só o servidor escreve/lê).
+// 2) sincronizarClaimUsuario — grava a marca tenant_id no login de cada usuário quando o cadastro é criado/alterado, para não
+//    precisar mais rodar scripts/set_tenant_claims.js à mão a cada prefeitura nova. Ignora super admins (a marca deles é controlada
+//    por trocarPrefeitura).
+const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { getAuth } = require('firebase-admin/auth');
+
+async function ehSuperAdmin(uid) {
+  const s = await db.collection('super_admins').doc(uid).get();
+  return s.exists;
+}
+
+exports.trocarPrefeitura = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Faça login primeiro.');
+  if (!(await ehSuperAdmin(uid))) throw new HttpsError('permission-denied', 'Só super administradores podem trocar de prefeitura.');
+  const meu = await db.collection('users').doc(uid).get();
+  const home = meu.exists ? (meu.data().tenant_id || null) : null;
+  let alvo = String((request.data && request.data.tenantId) || '').trim();
+  if (!alvo || alvo === 'home') alvo = home;
+  if (!alvo) throw new HttpsError('failed-precondition', 'Sua conta não tem prefeitura de origem.');
+  const t = await db.collection('tenants').doc(alvo).get();
+  if (!t.exists || t.data().ativo !== true) throw new HttpsError('not-found', 'Prefeitura inexistente ou desativada.');
+  const auth = getAuth();
+  const rec = await auth.getUser(uid);
+  const antes = (rec.customClaims || {}).tenant_id || home;
+  await auth.setCustomUserClaims(uid, Object.assign({}, rec.customClaims || {}, { tenant_id: alvo }));
+  await db.collection('logs_visitas').add({
+    uid, nome: meu.exists ? (meu.data().name || '') : '', de: antes || null, para: alvo, origem: home,
+    em: FieldValue.serverTimestamp(),
+  });
+  logger.info('trocarPrefeitura', { uid, de: antes, para: alvo });
+  return { tenantId: alvo, home };
+});
+
+exports.sincronizarClaimUsuario = onDocumentWritten('users/{uid}', async (event) => {
+  const depois = event.data.after && event.data.after.exists ? event.data.after.data() : null;
+  if (!depois || !depois.tenant_id) return;
+  const uid = event.params.uid;
+  try {
+    if (await ehSuperAdmin(uid)) return;
+    const auth = getAuth();
+    const rec = await auth.getUser(uid);
+    const claims = rec.customClaims || {};
+    if (claims.tenant_id === depois.tenant_id) return;
+    await auth.setCustomUserClaims(uid, Object.assign({}, claims, { tenant_id: depois.tenant_id }));
+    logger.info('claim tenant_id gravada', { uid, tenant_id: depois.tenant_id });
+  } catch (e) {
+    logger.error('Falha ao sincronizar claim de users/' + uid + ': ' + e.message);
+  }
+});
