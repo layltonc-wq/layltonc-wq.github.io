@@ -1,3 +1,4 @@
+// Runtime: Node.js 22 (migrado em 16/10/2026; o Node 20 é descontinuado em 30/10/2026).
 // Cloud Function que mantém medicamentos/{id}.estoqueAtual sempre em dia, automaticamente,
 // toda vez que um documento de entries é criado, editado ou apagado — não importa de qual tela
 // do app veio a escrita. Isso substitui o cálculo "somar todo o histórico toda vez que o app
