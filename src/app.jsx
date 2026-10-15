@@ -90,6 +90,7 @@ function fcMontarUser(fu,d){
     return {uid:fu.uid,name:d.name,role:d.role,color:d.color,email:d.email,status:d.status,tenant_id:visita||d.tenant_id||'',homeTenant:d.tenant_id||'',isSuper:sup,sessionTimeout:d.sessionTimeout||12,photoURL:d.photoURL||'',crf:d.crf||''};
   });
 }
+var _CONVITE_URL=(function(){try{return new URLSearchParams(window.location.search).get('tenant')||'';}catch(e){return '';}})();
 function tenantDaURL(){
   try{
     var p=new URLSearchParams(window.location.search).get('tenant');
@@ -760,7 +761,7 @@ function Setup(props){var _cfg=useState({apiKey:'',authDomain:'',projectId:'',st
 return(<div style={{minHeight:'100vh',background:'linear-gradient(160deg,#0A2D6E 0%,#1351B4 60%,#0C7B4A 100%)',display:'flex',alignItems:'center',justifyContent:'center',padding:16}}><div style={{background:'#fff',borderRadius:24,padding:'40px 28px',maxWidth:480,width:'100%',boxShadow:'0 24px 64px rgba(0,0,0,.2)'}}><div style={{textAlign:'center',marginBottom:28}}><div style={{width:64,height:64,borderRadius:16,background:'linear-gradient(135deg,#0D1B4B,#1351B4)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 14px',fontSize:28,color:'#fff',fontWeight:800,boxShadow:'0 4px 16px rgba(19,81,180,.4)'}}>Rx</div><div style={{fontSize:22,fontWeight:800,color:'#0A2D6E',letterSpacing:'-.02em'}}>FarmaControl</div><div style={{fontSize:13,color:'#64748B',marginTop:4}}>Configure a conexao com Firebase</div></div>{F.map(function(f){return(<div key={f.k}><Lbl c={f.l}/><input value={cfg[f.k]} onChange={function(e){var val=e.target.value;setCfg(function(p){var n={};for(var k in p)n[k]=p[k];n[f.k]=val;return n;});}} className="inp"/></div>);})}{err&&<div className="er">{err}</div>}<button onClick={go} disabled={load} className="bp" style={{opacity:load?0.7:1}}>{load?'Conectando...':'Conectar'}</button></div></div>);}
 
 function Auth(props){
-  var _mode=useState('login');var mode=_mode[0];var setMode=_mode[1];
+  var _mode=useState(tenantDaURL()?'register':'login');var mode=_mode[0];var setMode=_mode[1];
   var _name=useState('');var name=_name[0];var setName=_name[1];
   var _role=useState('auxiliar');var role=_role[0];var setRole=_role[1];
   var _color=useState(PALETTE[0]);var color=_color[0];var setColor=_color[1];
@@ -774,7 +775,7 @@ function Auth(props){
   function tocarLogo(){var n=logoTaps+1;setLogoTaps(n);if(n>=5){if(window.confirm('Reconfigurar o Firebase? (área técnica)')){localStorage.removeItem(CFG_KEY);window.location.reload();}else{setLogoTaps(0);}}}
   var EM={'auth/user-not-found':'Usuario não encontrado.','auth/wrong-password':'Senha incorreta.','auth/invalid-credential':'Email ou senha incorretos.','auth/email-already-in-use':'Email ja cadastrado.','auth/weak-password':'Senha min. 6 caracteres.'};
   function login(){if(!email||!pass){setErr('Preencha email e senha.');return;}setLoad(true);setErr('');auth.signInWithEmailAndPassword(email,pass).then(function(c){return db.collection('users').doc(c.user.uid).get().then(function(s){if(!s.exists){setErr('Usuario não encontrado.');auth.signOut();setLoad(false);return;}var d=s.data();if(d.status==='pending'){setErr('Aguardando aprovação.');auth.signOut();setLoad(false);return;}if(d.status==='rejected'||d.status==='inativo'){setErr('Conta não ativa.');auth.signOut();setLoad(false);return;}return fcMontarUser(c.user,d).then(function(u){localStorage.setItem('fc_user',JSON.stringify(u));db.collection('logs_acesso').add({uid:u.uid,nome:u.name,cargo:u.role,acao:'login',criadoEm:new Date().toISOString(),tenant_id:u.tenant_id}).catch(function(){});props.onLogin(u);});});}).catch(function(e){setErr(EM[e.code]||e.message);setLoad(false);});}
-  function register(){if(!name||!email||!pass){setErr('Preencha todos os campos.');return;}if(pass.length<6){setErr('Senha min. 6 caracteres.');return;}var tid=tenantDaURL();if(!tid){setErr('Link de cadastro inválido. Peça um novo link de convite pra sua prefeitura.');return;}setLoad(true);setErr('');skipAuthCheck=true;auth.createUserWithEmailAndPassword(email,pass).then(function(c){var uid=c.user.uid;return c.user.getIdToken(true).then(function(){var ud={name:name,role:role,color:color,email:email,status:'pending',tenant_id:tid,criadoEm:new Date().toISOString(),sessionTimeout:12,photoURL:'',crf:role==='farmaceutico'?crf.trim():''};return db.collection('users').doc(uid).set(ud).then(function(){skipAuthCheck=false;auth.signOut().catch(function(){});setErr('Conta criada com sucesso! Aguarde aprovação.');setMode('login');setLoad(false);});});}).catch(function(e){skipAuthCheck=false;setErr(EM[e.code]||e.message||'Erro ao criar conta.');setLoad(false);})}
+  function register(){if(!name||!email||!pass){setErr('Preencha todos os campos.');return;}if(pass.length<6){setErr('Senha min. 6 caracteres.');return;}var tid=tenantDaURL();if(!tid){setErr('Link de cadastro inválido. Peça um novo link de convite pra sua prefeitura.');return;}setLoad(true);setErr('');skipAuthCheck=true;auth.createUserWithEmailAndPassword(email,pass).then(function(c){var uid=c.user.uid;return c.user.getIdToken(true).then(function(){var ud={name:name,role:role,color:color,email:email,status:'pending',tenant_id:tid,criadoEm:new Date().toISOString(),sessionTimeout:12,photoURL:'',crf:role==='farmaceutico'?crf.trim():''};return db.collection('users').doc(uid).set(ud).then(function(){skipAuthCheck=false;auth.signOut().catch(function(){});setErr('Conta criada com sucesso! Aguarde aprovação.');setMode('login');setLoad(false);}).catch(function(e2){return c.user.delete().catch(function(){}).then(function(){var er=new Error('Link de cadastro inválido ou prefeitura desativada. Peça um novo link ao seu gestor.');er.code='fc/convite-invalido';throw er;});});});}).catch(function(e){skipAuthCheck=false;setErr(EM[e.code]||e.message||'Erro ao criar conta.');setLoad(false);})}
 
   return(
     <div style={{minHeight:'100vh',background:'linear-gradient(160deg,#0D1B4B 0%,#1351B4 55%,#1A6FD4 100%)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:16,position:'relative',overflow:'hidden'}}>
@@ -791,6 +792,7 @@ function Auth(props){
       <div style={{background:'#fff',borderRadius:24,padding:'28px 24px',maxWidth:380,width:'100%',boxShadow:'0 24px 64px rgba(0,0,0,.25)'}}>
         <div style={{display:'flex',background:'#F1F5F9',borderRadius:10,padding:3,marginBottom:24,gap:3}}>
           {[['login','Entrar'],['register','Criar conta']].map(function(item){return <button key={item[0]} onClick={function(){setMode(item[0]);setErr('');}} style={{flex:1,padding:'9px',borderRadius:8,border:'none',background:mode===item[0]?'#fff':'transparent',color:mode===item[0]?B:'#64748B',cursor:'pointer',fontSize:13,fontWeight:mode===item[0]?700:500,boxShadow:mode===item[0]?'0 1px 4px rgba(0,0,0,.08)':'none',transition:'all .15s'}}>{item[1]}</button>;})}</div>
+        {mode==='register'&&tenantDaURL()&&<div style={{background:'#EFF6FF',border:'1.5px solid #BFDBFE',color:'#1351B4',borderRadius:10,padding:'8px 12px',fontSize:12,fontWeight:700,marginBottom:10}}>Cadastro para a prefeitura: {tenantDaURL()}<div style={{fontWeight:500,color:'#475569',marginTop:2}}>Depois de criar a conta, aguarde a aprovação do gestor.</div></div>}
         {mode==='register'&&(<div>
           <Lbl c="Nome completo"/><input value={name} onChange={function(e){setName(e.target.value);}} placeholder="Ex: Ana Silva" className="inp"/>
           <Lbl c="Cargo"/><select value={role} onChange={function(e){setRole(e.target.value);}} className="inp">{Object.keys(ROLES).map(function(k){return <option key={k} value={k}>{ROLE_ICON[k]} {ROLES[k]}</option>;})}</select>
@@ -11828,6 +11830,7 @@ TabSaida=React.memo(TabSaida);
 
 function App(){
 var {confirm2,alert2,ModalRender,modal}=useModal();
+var _avisoConv=useState(_CONVITE_URL);var avisoConv=_avisoConv[0];var setAvisoConv=_avisoConv[1];
 var _tenantVer=useState(0);var tenantVer=_tenantVer[0];var setTenantVer=_tenantVer[1];
 var _destSaida=useState('sus');var destinoSaida=_destSaida[0];var setDestinoSaida=_destSaida[1];var _ubsSaida=useState('');var ubsSaida=_ubsSaida[0];var setUbsSaida=_ubsSaida[1];var _destCfgRaw=useState(null);var destCfgRaw=_destCfgRaw[0];var setDestCfgRaw=_destCfgRaw[1];
 var _histPronto=useState(false);var histPronto=_histPronto[0];var setHistPronto=_histPronto[1];
@@ -12235,6 +12238,14 @@ return(
     </div>
     <button onClick={function(){db.collection('plantao_convites').doc(convites[0].id).update({status:'confirmado'});}} style={{background:'rgba(255,255,255,0.2)',border:'1.5px solid rgba(255,255,255,0.4)',borderRadius:8,padding:'6px 12px',color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer',whiteSpace:'nowrap'}}>✅ Confirmar</button>
   </div>}
+  {user&&avisoConv&&<Modal onClose={function(){setAvisoConv('');}} title="Link de cadastro">
+    <div style={{fontSize:14,color:'#334155',lineHeight:1.6,marginBottom:12}}>Você já está conectado como <b>{user.name}</b>. Este link serve para <b>criar uma conta nova</b> para a prefeitura <b>{avisoConv}</b>, por isso abrir o link aqui não mostra a tela de cadastro.</div>
+    <div style={{fontSize:12,color:'#64748B',marginBottom:14}}>Para testar o cadastro, abra o link numa <b>janela anônima</b> (Ctrl+Shift+N) ou em outro navegador. Quem ainda não tem conta verá o cadastro normalmente.</div>
+    <div style={{display:'flex',gap:8}}>
+      <button onClick={function(){var id=avisoConv;auth.signOut().catch(function(){}).then(function(){try{localStorage.removeItem('fc_user');sessionStorage.setItem('fc_tenant',id);}catch(e){}window.location.href=window.location.pathname+'?tenant='+encodeURIComponent(id);});}} className="bs" style={{flex:1,margin:0}}>Sair e abrir o cadastro</button>
+      <button onClick={function(){setAvisoConv('');}} className="bp" style={{flex:1,margin:0}}>Continuar logado</button>
+    </div>
+  </Modal>}
   {user&&user.homeTenant&&user.tenant_id&&user.homeTenant!==user.tenant_id&&<div style={{background:'#B45309',color:'#fff',padding:'8px 12px',fontSize:13,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}><span>Você está visitando: {tcfg(user).nome||user.tenant_id}</span><button onClick={function(){fcTrocarPrefeitura('home').catch(function(e){alert('Não foi possível voltar: '+((e&&e.message)||e));});}} style={{background:'#fff',color:'#B45309',border:'none',borderRadius:8,padding:'5px 10px',fontSize:12,fontWeight:800,cursor:'pointer'}}>Voltar para a minha prefeitura</button></div>}
   {!loading&&!histPronto&&online&&<div style={{background:'#EFF6FF',color:'#1351B4',textAlign:'center',padding:'6px 10px',fontSize:12,fontWeight:600,borderBottom:'1px solid #BFDBFE'}}>Carregando histórico… totais podem estar incompletos</div>}
   {!online&&<div style={{background:'#475569',color:'#fff',textAlign:'center',padding:'7px',fontSize:12,fontWeight:600}}>Sem conexao com a internet</div>}
