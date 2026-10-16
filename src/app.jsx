@@ -579,6 +579,22 @@ function _loteFEFOAsync(medicamentoId,tenantId){
     return {lote:lotes[0].lote,validade:lotes[0].validade};
   }).catch(function(){return null;});
 }
+// Grava uma saída já com o(s) lote(s) certo(s): o que vence primeiro (FEFO), dividindo entre lotes se um só não bastar.
+// Usado onde não há a lista de entries à mão (ex.: ATB). Se a consulta falhar, grava sem lote (como antes) em vez de travar.
+function _addSaidaFEFO(base,medId,qtd,tenantId){
+  return db.collection('entries').where('medicamentoId','==',medId).get().then(function(snap){
+    var mine=[];snap.forEach(function(d){var e=d.data();if(e.tenant_id===tenantId)mine.push(e);});
+    mine.sort(function(a,b){return (a.criadoEm||'').localeCompare(b.criadoEm||'');});
+    var partes=[],falta=qtd;
+    lotesDisponiveis(mine).forEach(function(l){if(falta<=0)return;var t=Math.min(falta,l.qty);partes.push({lote:l.lote,validade:l.validade,qty:t});falta-=t;});
+    if(falta>0)partes.push({lote:'',validade:'',qty:falta});
+    return partes;
+  }).catch(function(){return [{lote:'',validade:'',qty:qtd}];}).then(function(partes){
+    var p=Promise.resolve();
+    partes.forEach(function(pt){p=p.then(function(){return db.collection('entries').add(Object.assign({},base,{quantidade:pt.qty,lote:pt.lote,validade:pt.validade}));});});
+    return p;
+  });
+}
 // Perf (14/10/2026): agrupa as entries por medicamento UMA vez (O(entries)) em vez de filtrar a lista
 // inteira (~19 mil) pra cada medicamento (O(medicamentos × entries) — ~1,3s travado no desktop, vários
 // segundos no celular). O resultado é guardado por identidade do array (WeakMap): todas as telas que usam
@@ -6116,7 +6132,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
     // ficam PENDENTES na agenda, para dar baixa manual uma a uma na tela de acompanhamento.
     if(statusIni==='espera'){
       doses=[{data:hj,hora:hr,responsavel:user.name,responsavelCor:user.color||B,qtd:qtdEsp,doseEspera:true}];
-      await db.collection('entries').add({tipo:'saida',destino:'emergencia',medicamentoId:medSel,medicamentoNome:mO.nome||'',quantidade:qtdEsp,autorNome:user.name,autorCor:user.color||B,autorId:user.uid,lote:'',validade:'',obs:'Espera ATB - '+nomePac.trim(),criadoEm:new Date().toISOString(),date:hj,tenant_id:tenantDe(user)});
+      await _addSaidaFEFO({tipo:'saida',destino:'emergencia',medicamentoId:medSel,medicamentoNome:mO.nome||'',autorNome:user.name,autorCor:user.color||B,autorId:user.uid,obs:'Espera ATB - '+nomePac.trim(),criadoEm:new Date().toISOString(),date:hj,tenant_id:tenantDe(user)},medSel,qtdEsp,tenantDe(user));
     }
     await db.collection('tratamentos_atb').add({pacienteNome:nomePac.trim(),diasTratamento:parseInt(diasTrat)||0,dataInicio:dataInicioCalc,dosesPorDia:dPorDia,qtdPorDose:qDose,medicamentoId:medSel,medicamentoNome:mO.nome||'',nomeMedico:nomeMed.trim(),crmMedico:crmMed.trim(),obs:obsForm.trim(),telefone:telefone.trim(),telefoneDono:telDono,responsavelNome:telDono==='responsavel'?respNome.trim():'',doses:doses,status:statusIni,criadoPor:user.name,criadoEm:new Date().toISOString(),tenant_id:tenantDe(user)});
     setSaving(false);setShowForm(false);rForm();
@@ -6141,7 +6157,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
     if((stock[t.medicamentoId]||0)<totalAmp)return alert('Estoque insuficiente! Disponivel: '+(stock[t.medicamentoId]||0)+' · necessário para o dia: '+totalAmp);
     var obs='ATB - '+t.pacienteNome+(retro?' — '+fD(dData):'')+(nDoses>1?' ('+nDoses+' doses)':'');
     // Uma saída única no estoque com o total do dia (não altera a lógica de estoque: soma igual).
-    await db.collection('entries').add({tipo:'saida',destino:'emergencia',medicamentoId:t.medicamentoId,medicamentoNome:t.medicamentoNome||'',quantidade:totalAmp,autorNome:user.name,autorCor:user.color||B,autorId:user.uid,lote:'',validade:'',obs:obs,criadoEm:new Date().toISOString(),date:dData,tenant_id:tenantDe(user)});
+    await _addSaidaFEFO({tipo:'saida',destino:'emergencia',medicamentoId:t.medicamentoId,medicamentoNome:t.medicamentoNome||'',autorNome:user.name,autorCor:user.color||B,autorId:user.uid,obs:obs,criadoEm:new Date().toISOString(),date:dData,tenant_id:tenantDe(user)},t.medicamentoId,totalAmp,tenantDe(user));
     // Um registro por dose no histórico do tratamento.
     var novas=[];for(var i=0;i<nDoses;i++){novas.push({data:dData,hora:hr,responsavel:user.name,responsavelCor:user.color||B,qtd:qAmp,registradaEm:hoje});}
     var nd=(t.doses||[]).concat(novas);
