@@ -7629,6 +7629,14 @@ function TabPrevisao(props){
     });
     db.collection('atas').doc(ata.id).update({itens:novos}).then(function(){if(copiados>0)alert('CNPJ também aplicado a mais '+copiados+' item(ns) da mesma marca nesta ata.');}).catch(function(){});
   }
+  // Marca/fornecedor clicável: ao tocar mostra o CNPJ (ou avisa que não foi cadastrado).
+  function _chipMarca(key,it){
+    var aberto=pastasAbertas['marca_'+key]===true;
+    return(<div style={{marginBottom:3}}>
+      <button onClick={function(e){e.stopPropagation();setPastasAbertas(function(p){var n=Object.assign({},p);n['marca_'+key]=!aberto;return n;});}} style={{background:'#F5F3FF',border:'1px solid #DDD6FE',borderRadius:14,padding:'3px 10px',fontSize:11,fontWeight:700,color:'#7C3AED',cursor:'pointer'}}>🏷️ {it.marca||'(sem marca)'} {aberto?'▴':'▾'}</button>
+      {aberto&&<div style={{marginTop:4,fontSize:12,color:it.cnpj?'#1E293B':'#94A3B8',background:'#FAF5FF',border:'1px solid #E9D5FF',borderRadius:8,padding:'5px 10px',display:'inline-block'}}>{it.cnpj?<span>CNPJ: <strong style={{userSelect:'all'}}>{it.cnpj}</strong></span>:'CNPJ não cadastrado (cadastre em "Itens" da ata)'}</div>}
+    </div>);
+  }
   function atualizarItemAta(ataId,itens,novoItem,idxIt){
     var novos=itens.map(function(x,j){return j===idxIt?Object.assign({},x,novoItem):x;});
     var p=[db.collection('atas').doc(ataId).update({itens:novos})];
@@ -8891,7 +8899,7 @@ function TabPrevisao(props){
                   var excedeTeto=saldoDisp!==null&&val>saldoDisp;
                   return(<div key={m.id} style={{padding:'8px 0',borderTop:'1px solid #EEF2F8'}}>
                     <div style={{fontSize:12,fontWeight:600,color:'#1E293B',wordBreak:'break-word',marginBottom:2}}>{m.nome}</div>
-                    {it&&(it.marca||it.cnpj)&&<div style={{fontSize:11,fontWeight:700,color:'#7C3AED',marginBottom:2}}>🏷️ {it.marca||'—'}{it.cnpj?' · CNPJ '+it.cnpj:''}</div>}
+                    {it&&(it.marca||it.cnpj)&&_chipMarca('m_'+ata.id+'_'+m.id,it)}
                     {it&&it.qtdTeto>0&&<div style={{fontSize:10,color:'#64748B',marginBottom:2}}>Teto do contrato: {it.qtdTeto} {it.unidade||''}{it.vUnit>0?' · R$ '+_fmtNumBR((it.qtdTeto*it.vUnit))+' no total':''}</div>}
                     {saldoDisp!==null&&<div style={{fontSize:11,fontWeight:700,marginBottom:4,color:excedeTeto?'#DC2626':'#0C6B3E'}}>Saldo disponível: {saldoDisp} {it.unidade||''}{it.vUnit>0?' (R$ '+_fmtNumBR((saldoDisp*it.vUnit))+')':''}{val>0?' · após este pedido: '+saldoApos+' '+(it.unidade||'')+(it.vUnit>0?' (R$ '+_fmtNumBR((saldoApos*it.vUnit))+')':''):''}{excedeTeto?' ⚠️ excede o saldo!':''}</div>}
                     <div style={{display:'flex',alignItems:'center',gap:8}}>
@@ -8922,7 +8930,7 @@ function TabPrevisao(props){
                   var excedeTetoNV=valNum>saldoDispNV;
                   return(<div key={uKey} style={{padding:'8px 0',borderTop:'1px solid #EEF2F8'}}>
                     <div style={{fontSize:12,fontWeight:600,color:'#1E293B',wordBreak:'break-word',marginBottom:2}}>{it.descricao||'(sem descrição)'}</div>
-                    {(it.marca||it.cnpj)&&<div style={{fontSize:11,fontWeight:700,color:'#7C3AED',marginBottom:2}}>🏷️ {it.marca||'—'}{it.cnpj?' · CNPJ '+it.cnpj:''}</div>}
+                    {(it.marca||it.cnpj)&&_chipMarca('n_'+ata.id+'_'+o.idx,it)}
                     {it.qtdTeto>0&&<div style={{fontSize:10,color:'#64748B',marginBottom:4}}>Teto do contrato: {it.qtdTeto} {it.unidade||''}{it.vUnit>0?' · R$ '+_fmtNumBR((it.qtdTeto*it.vUnit))+' no total':''}</div>}
                     {it.qtdTeto>0&&<div style={{fontSize:11,fontWeight:700,marginBottom:4,color:excedeTetoNV?'#DC2626':'#0C6B3E'}}>Saldo disponível: {saldoDispNV} {it.unidade||''}{it.vUnit>0?' (R$ '+_fmtNumBR((saldoDispNV*it.vUnit))+')':''}{valNum>0?' · após este pedido: '+saldoAposNV+' '+(it.unidade||'')+(it.vUnit>0?' (R$ '+_fmtNumBR((saldoAposNV*it.vUnit))+')':''):''}{excedeTetoNV?' ⚠️ excede o saldo!':''}</div>}
                     <div style={{marginBottom:6}}><span style={{display:'inline-block',fontSize:9,fontWeight:800,color:'#B45309',background:'#FEF3C7',border:'1px solid #FCD34D',borderRadius:6,padding:'1px 6px'}}>⚠️ NÃO VINCULADO</span></div>
