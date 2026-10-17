@@ -437,6 +437,9 @@ function validaCNS(v){
   }
   return false;
 }
+// CNPJ: máscara 00.000.000/0000-00 enquanto digita e conferência dos dígitos verificadores.
+function _maskCNPJ(v){var d=String(v||'').replace(/\D/g,'').slice(0,14);var o=d;if(d.length>12)o=d.slice(0,2)+'.'+d.slice(2,5)+'.'+d.slice(5,8)+'/'+d.slice(8,12)+'-'+d.slice(12);else if(d.length>8)o=d.slice(0,2)+'.'+d.slice(2,5)+'.'+d.slice(5,8)+'/'+d.slice(8);else if(d.length>5)o=d.slice(0,2)+'.'+d.slice(2,5)+'.'+d.slice(5);else if(d.length>2)o=d.slice(0,2)+'.'+d.slice(2);return o;}
+function validaCNPJ(v){var d=String(v||'').replace(/\D/g,'');if(d.length!==14||/^(\d)\1+$/.test(d))return false;function dv(n){var pesos=n===12?[5,4,3,2,9,8,7,6,5,4,3,2]:[6,5,4,3,2,9,8,7,6,5,4,3,2];var s=0;for(var i=0;i<n;i++)s+=parseInt(d[i],10)*pesos[i];var r=s%11;return r<2?0:11-r;}return dv(12)===parseInt(d[12],10)&&dv(13)===parseInt(d[13],10);}
 // Procura um CPF no texto extraído por OCR (tolera pontuação/ruído). Prioriza um candidato com dígito
 // verificador válido; se nenhum validar, devolve o primeiro candidato de 11 dígitos mesmo assim (o usuário
 // corrige na tela de confirmação — nunca é aceito automaticamente sem essa etapa).
@@ -7612,6 +7615,20 @@ function TabPrevisao(props){
       setTimeout(function(){setMsg('');},4000);
     }).catch(function(e){setMsg('e:'+e.message);});
   }
+  // Grava o CNPJ de um item e copia pros outros itens da MESMA ata com a mesma marca que ainda estão sem CNPJ
+  // (o fornecedor costuma ser o mesmo — poupa digitar de novo).
+  function salvarCnpjItem(ata,idx,valor){
+    var v=_maskCNPJ(valor);var atual=(ata.itens[idx]&&ata.itens[idx].cnpj)||'';
+    if(v===atual)return;
+    var marca=_norm((ata.itens[idx]&&ata.itens[idx].marca)||'').trim();
+    var copiados=0;
+    var novos=ata.itens.map(function(x,j){
+      if(j===idx)return Object.assign({},x,{cnpj:v});
+      if(v&&marca&&!x.cnpj&&_norm(x.marca||'').trim()===marca){copiados++;return Object.assign({},x,{cnpj:v});}
+      return x;
+    });
+    db.collection('atas').doc(ata.id).update({itens:novos}).then(function(){if(copiados>0)alert('CNPJ também aplicado a mais '+copiados+' item(ns) da mesma marca nesta ata.');}).catch(function(){});
+  }
   function atualizarItemAta(ataId,itens,novoItem,idxIt){
     var novos=itens.map(function(x,j){return j===idxIt?Object.assign({},x,novoItem):x;});
     var p=[db.collection('atas').doc(ataId).update({itens:novos})];
@@ -8874,7 +8891,7 @@ function TabPrevisao(props){
                   var excedeTeto=saldoDisp!==null&&val>saldoDisp;
                   return(<div key={m.id} style={{padding:'8px 0',borderTop:'1px solid #EEF2F8'}}>
                     <div style={{fontSize:12,fontWeight:600,color:'#1E293B',wordBreak:'break-word',marginBottom:2}}>{m.nome}</div>
-                    {it&&it.marca&&<div style={{fontSize:11,fontWeight:700,color:'#7C3AED',marginBottom:2}}>🏷️ {it.marca}</div>}
+                    {it&&(it.marca||it.cnpj)&&<div style={{fontSize:11,fontWeight:700,color:'#7C3AED',marginBottom:2}}>🏷️ {it.marca||'—'}{it.cnpj?' · CNPJ '+it.cnpj:''}</div>}
                     {it&&it.qtdTeto>0&&<div style={{fontSize:10,color:'#64748B',marginBottom:2}}>Teto do contrato: {it.qtdTeto} {it.unidade||''}{it.vUnit>0?' · R$ '+_fmtNumBR((it.qtdTeto*it.vUnit))+' no total':''}</div>}
                     {saldoDisp!==null&&<div style={{fontSize:11,fontWeight:700,marginBottom:4,color:excedeTeto?'#DC2626':'#0C6B3E'}}>Saldo disponível: {saldoDisp} {it.unidade||''}{it.vUnit>0?' (R$ '+_fmtNumBR((saldoDisp*it.vUnit))+')':''}{val>0?' · após este pedido: '+saldoApos+' '+(it.unidade||'')+(it.vUnit>0?' (R$ '+_fmtNumBR((saldoApos*it.vUnit))+')':''):''}{excedeTeto?' ⚠️ excede o saldo!':''}</div>}
                     <div style={{display:'flex',alignItems:'center',gap:8}}>
@@ -8905,7 +8922,7 @@ function TabPrevisao(props){
                   var excedeTetoNV=valNum>saldoDispNV;
                   return(<div key={uKey} style={{padding:'8px 0',borderTop:'1px solid #EEF2F8'}}>
                     <div style={{fontSize:12,fontWeight:600,color:'#1E293B',wordBreak:'break-word',marginBottom:2}}>{it.descricao||'(sem descrição)'}</div>
-                    {it.marca&&<div style={{fontSize:11,fontWeight:700,color:'#7C3AED',marginBottom:2}}>🏷️ {it.marca}</div>}
+                    {(it.marca||it.cnpj)&&<div style={{fontSize:11,fontWeight:700,color:'#7C3AED',marginBottom:2}}>🏷️ {it.marca||'—'}{it.cnpj?' · CNPJ '+it.cnpj:''}</div>}
                     {it.qtdTeto>0&&<div style={{fontSize:10,color:'#64748B',marginBottom:4}}>Teto do contrato: {it.qtdTeto} {it.unidade||''}{it.vUnit>0?' · R$ '+_fmtNumBR((it.qtdTeto*it.vUnit))+' no total':''}</div>}
                     {it.qtdTeto>0&&<div style={{fontSize:11,fontWeight:700,marginBottom:4,color:excedeTetoNV?'#DC2626':'#0C6B3E'}}>Saldo disponível: {saldoDispNV} {it.unidade||''}{it.vUnit>0?' (R$ '+_fmtNumBR((saldoDispNV*it.vUnit))+')':''}{valNum>0?' · após este pedido: '+saldoAposNV+' '+(it.unidade||'')+(it.vUnit>0?' (R$ '+_fmtNumBR((saldoAposNV*it.vUnit))+')':''):''}{excedeTetoNV?' ⚠️ excede o saldo!':''}</div>}
                     <div style={{marginBottom:6}}><span style={{display:'inline-block',fontSize:9,fontWeight:800,color:'#B45309',background:'#FEF3C7',border:'1px solid #FCD34D',borderRadius:6,padding:'1px 6px'}}>⚠️ NÃO VINCULADO</span></div>
@@ -9043,6 +9060,11 @@ function TabPrevisao(props){
                     <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8,flexWrap:'wrap'}}>
                       <span style={{fontSize:11,color:'#64748B'}}>🏷️ Marca / Fornecedor:</span>
                       <input key={'marca_'+ata.id+'_'+idxIt+'_'+(it.marca||'')} type="text" defaultValue={it.marca||''} placeholder="ex.: EMS, Eurofarma…" onBlur={function(e){var v=e.target.value.trim();if(v===(it.marca||''))return;atualizarItemAta(ata.id,ata.itens,{marca:v},idxIt).catch(function(){});}} style={{flex:1,minWidth:130,maxWidth:260,padding:'5px 8px',border:'1.5px solid #CBD5E1',borderRadius:8,fontSize:13}}/>
+                    </div>
+                    <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8,flexWrap:'wrap'}}>
+                      <span style={{fontSize:11,color:'#64748B'}}>CNPJ:</span>
+                      <input key={'cnpj_'+ata.id+'_'+idxIt+'_'+(it.cnpj||'')} type="text" inputMode="numeric" defaultValue={it.cnpj||''} placeholder="00.000.000/0000-00" onChange={function(e){e.target.value=_maskCNPJ(e.target.value);}} onBlur={function(e){salvarCnpjItem(ata,idxIt,e.target.value);}} style={{width:190,padding:'5px 8px',border:'1.5px solid #CBD5E1',borderRadius:8,fontSize:13}}/>
+                      {it.cnpj&&!validaCNPJ(it.cnpj)&&<span style={{fontSize:10,fontWeight:700,color:'#B45309'}}>⚠️ confira os números</span>}
                     </div>
                     <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8,flexWrap:'wrap'}}>
                       <span style={{fontSize:11,color:'#64748B'}}>Pedido acumulado:</span>
