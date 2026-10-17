@@ -2528,7 +2528,13 @@ function exportAlertasXL(){var rows=[['Tipo','Medicamento','Estoque','Min','Vali
   // ===== PDF do estoque (pedido da usuária, 07/10/2026) — mesmo padrão visual dos outros
   // relatórios impressos (brasão embutido, sem depender de rede). Usa a lista JÁ FILTRADA na tela
   // (categoria + busca), igual o Excel. Cabeçalho muda por tenant (Vicência/Itaquitinga).
+  // O valor unitário vem da ATA (item vinculado ao medicamento). Busca as atas na hora de gerar.
   function imprimirEstoquePDF(){
+    db.collection('atas').where('tenant_id','==',tenantDe(user)).get().then(function(sn){
+      var vm={};sn.forEach(function(d){((d.data().itens)||[]).forEach(function(it){if(it.medicamentoId&&Number(it.vUnit)>0&&!vm[it.medicamentoId])vm[it.medicamentoId]=Number(it.vUnit);});});return vm;
+    }).catch(function(){return {};}).then(function(vm){gerarEstoquePDF(vm);});
+  }
+  function gerarEstoquePDF(vm){
     var _C=tcfg(user);
     var logo=_C.logoPrint;
     var orgL1=_C.org.l1;
@@ -2565,15 +2571,22 @@ function exportAlertasXL(){var rows=[['Tipo','Medicamento','Estoque','Min','Vali
       '<div><div class="n" style="color:#B45309">'+qtdBaixos+'</div><div class="l">Estoque baixo</div></div>'+
       '<div><div class="n" style="color:#DC2626">'+qtdZerados+'</div><div class="l">Zerados</div></div>'+
       '</div>';
-    html+='<table><thead><tr><th>Medicamento</th><th style="width:110px">Categoria</th><th style="width:70px">Estoque</th><th style="width:80px">Status</th></tr></thead><tbody>';
+    html+='<table><thead><tr><th>Medicamento</th><th style="width:80px">Categoria</th><th style="width:95px">Lote</th><th style="width:62px">Validade</th><th style="width:50px">Qtd</th><th style="width:78px">Valor unit. (ata)</th></tr></thead><tbody>';
     medList.forEach(function(m){
       var t=TIPOS[m.cat]||TIPOS.medicamento;
-      var zero=m.est<=0;var low=!zero&&m.minEstoque>0&&m.est<=m.minEstoque;
-      var statusTxt=zero?'Zerado':low?'Baixo':'OK';
-      var statusCor=zero?'#DC2626':low?'#B45309':'#16A34A';
-      html+='<tr><td class="desc">'+_escHtml(m.nome)+'</td><td class="desc">'+_escHtml(t.label)+'</td><td class="num">'+m.est+'</td><td class="num" style="color:'+statusCor+';font-weight:700">'+statusTxt+'</td></tr>';
+      // uma linha por lote com saldo (+ "sem lote" se sobrar); sem estoque = uma linha zerada
+      var linhas=(m.lotes||[]).map(function(l){return {lote:l.lote,val:l.validade,qtd:l.qty};});
+      var somaLotes=linhas.reduce(function(a,x){return a+x.qtd;},0);
+      if(m.est-somaLotes>0)linhas.push({lote:'sem lote',val:'',qtd:m.est-somaLotes});
+      if(linhas.length===0)linhas.push({lote:'—',val:'',qtd:m.est||0});
+      var vu=vm&&vm[m.id]>0?'R$ '+_fmtNumBR(vm[m.id]):'—';
+      linhas.forEach(function(x,i){
+        html+='<tr>'+(i===0?'<td class="desc" rowspan="'+linhas.length+'">'+_escHtml(m.nome)+'</td><td class="desc" rowspan="'+linhas.length+'">'+_escHtml(t.label)+'</td>':'')+
+          '<td class="desc">'+_escHtml(x.lote||'—')+'</td><td class="num">'+_escHtml(x.val||'—')+'</td><td class="num">'+x.qtd+'</td>'+
+          (i===0?'<td class="num" rowspan="'+linhas.length+'">'+vu+'</td>':'')+'</tr>';
+      });
     });
-    html+='</tbody><tfoot><tr><td colspan="2">TOTAL</td><td class="num">'+totalUnidades+'</td><td></td></tr></tfoot></table>';
+    html+='</tbody><tfoot><tr><td colspan="4">TOTAL</td><td class="num">'+totalUnidades+'</td><td></td></tr></tfoot></table>';
     html+='<div class="rodape">'+rodapeOrg+'<br>Relatório gerado automaticamente pelo FarmaControl</div>';
     html+='</div></body></html>';
     if(!_imprimirDoc(html)){alert2('Não foi possível abrir a impressão do estoque.');}
@@ -9257,7 +9270,7 @@ function TabConferencia(props){
   var _catAtiva=useState(null);var catAtiva=_catAtiva[0];var setCatAtiva=_catAtiva[1];// categoria escolhida nesta sessão (null = tela de seleção)
   var _finalizadas=useState({});var finalizadas=_finalizadas[0];var setFinalizadas=_finalizadas[1];// {cat:{em,por,ajustes}} — categorias já finalizadas hoje
   // Parte 2: renomear medicamento / definir lote-validade no cadastro / aviso de tempo real
-  var _renId=useState(null);var renId=_renId[0];var setRenId=_renId[1];var _renNome=useState('');var renNome=_renNome[0];var setRenNome=_renNome[1];var _renSaving=useState(false);var renSaving=_renSaving[0];var setRenSaving=_renSaving[1];
+  var _renCat=useState('medicamento');var renCat=_renCat[0];var setRenCat=_renCat[1];var _renId=useState(null);var renId=_renId[0];var setRenId=_renId[1];var _renNome=useState('');var renNome=_renNome[0];var setRenNome=_renNome[1];var _renSaving=useState(false);var renSaving=_renSaving[0];var setRenSaving=_renSaving[1];
   var _lcId=useState(null);var lcId=_lcId[0];var setLcId=_lcId[1];var _lcLote=useState('');var lcLote=_lcLote[0];var setLcLote=_lcLote[1];var _lcVal=useState('');var lcVal=_lcVal[0];var setLcVal=_lcVal[1];var _lcSaving=useState(false);var lcSaving=_lcSaving[0];var setLcSaving=_lcSaving[1];
   var _movAviso=useState(false);var movAviso=_movAviso[0];var setMovAviso=_movAviso[1];var movBaseRef=useRef(null);
   var _confMedId=useState(null);var confMedId=_confMedId[0];var setConfMedId=_confMedId[1];// medicamento aplicando "Confirmar contagem"
@@ -9436,12 +9449,15 @@ function TabConferencia(props){
       .catch(function(e){setDelMedId(null);erroEscrita(e);});
   }
   // Parte 2 (#8): renomear medicamento — salva de vez no cadastro
-  function abrirRename(m){setRenId(m.id);setRenNome(m.nome||'');setDelMedId(null);}
+  function abrirRename(m){setRenId(m.id);setRenNome(m.nome||'');setRenCat(m.cat||'medicamento');setDelMedId(null);}
   function salvarRename(m){
     var nome=(renNome||'').trim();if(!nome){alert('Informe o novo nome.');return;}
     setRenSaving(true);
-    db.collection('medicamentos').doc(m.id).update({nome:nome.toUpperCase()})
-      .then(function(){setRenSaving(false);setRenId(null);setRenNome('');setErro('');})
+    var mudouCat=renCat&&renCat!==m.cat;
+    var upd={nome:nome.toUpperCase()};if(mudouCat){upd.categoria=renCat;upd.tipo=renCat;}
+    db.collection('medicamentos').doc(m.id).update(upd)
+      .then(function(){setRenSaving(false);setRenId(null);setRenNome('');setErro('');
+        if(mudouCat){setCatAberta(function(p){var n=Object.assign({},p);n[renCat]=true;return n;});mostrarToast('✅ '+nome.toUpperCase()+' movido para '+((TIPOS[renCat]&&TIPOS[renCat].label)||renCat)+' — ele aparece lá na conferência');}})
       .catch(function(e){setRenSaving(false);erroEscrita(e);});
   }
   // Parte 2 (#6): definir lote/validade no medicamento. Além do rótulo no cadastro (loteAtual/validadeAtual),
@@ -9544,8 +9560,8 @@ function TabConferencia(props){
         return docRef().update(upd);
       }).then(function(){
         // se o medicamento zerou, apaga lote/validade do cadastro (best-effort)
-        var rawm=medById[m.id]||{};
-        if(resultante===0&&(rawm.loteAtual||rawm.validadeAtual))db.collection('medicamentos').doc(m.id).update({loteAtual:'',validadeAtual:''}).catch(function(){});
+        var alvoC=alvoCadastro(m);
+        if(cadastroDiferente(m,alvoC))db.collection('medicamentos').doc(m.id).update(alvoC).catch(function(){});
         setContagens(function(p){var n=Object.assign({},p);medKeys(m).forEach(function(k){delete n[k];});return n;});
         setContadoPor(function(p){var n=Object.assign({},p);medKeys(m).forEach(function(k){delete n[k];});return n;});
         setNovosLotes(function(p){return p.filter(function(nl){return nl.medId!==m.id;});});
@@ -9556,6 +9572,16 @@ function TabConferencia(props){
       }).catch(falhou);
     }catch(e){falhou(e);}
   }
+  // Lote/validade que o cadastro deve mostrar depois da contagem: o que vence primeiro entre os lotes que ficaram com saldo
+  // (vazio se zerou). Evita ficar um lote antigo que nem existe mais.
+  function alvoCadastro(m){
+    var fin=[];
+    m.lotes.forEach(function(l){var raw=contagens[confKey(m.id,l.lote,l.validade)];var q=(raw!==undefined&&raw!=='')?(parseInt(raw)||0):l.qty;if(q>0)fin.push({lote:l.lote,validade:l.validade});});
+    novosLotes.forEach(function(nl){if(nl.medId===m.id&&nl.lote&&(parseInt(nl.qty)||0)>0)fin.push({lote:nl.lote,validade:nl.validade||''});});
+    fin.sort(_fefoCmp);
+    return fin.length?{loteAtual:fin[0].lote,validadeAtual:_normValidade(fin[0].validade||'')}:{loteAtual:'',validadeAtual:''};
+  }
+  function cadastroDiferente(m,alvo){var rawm=medById[m.id]||{};return (rawm.loteAtual||'')!==alvo.loteAtual||(rawm.validadeAtual||'')!==alvo.validadeAtual;}
   // Preenche 0 em todas as linhas ainda não contadas do medicamento ("não tem nada na prateleira").
   function zerarMed(m){medKeys(m).forEach(function(k){if(contagens[k]===undefined||contagens[k]==='')onCount(k,'0');});}
 
@@ -9676,8 +9702,8 @@ function TabConferencia(props){
         m.lotes.forEach(function(l){var k=confKey(m.id,l.lote,l.validade);var raw=contagens[k];resultante+=(raw!==undefined&&raw!=='')?(parseInt(raw)||0):l.qty;});
         if(m.semLote!==0){var ks=confKey(m.id,'__SEMLOTE__','');var rawS=contagens[ks];resultante+=(rawS!==undefined&&rawS!=='')?(parseInt(rawS)||0):m.semLote;}
         novosLotes.forEach(function(nl){if(nl.medId===m.id)resultante+=(parseInt(nl.qty)||0);});
-        var rawm=medById[m.id]||{};
-        if(resultante===0&&(rawm.loteAtual||rawm.validadeAtual))zerar.push(m.id);
+        var alvoC=alvoCadastro(m);
+        if(cadastroDiferente(m,alvoC))zerar.push({id:m.id,alvo:alvoC,zerou:resultante===0});
       });
       // 1) Ajustes de estoque (entries novos) + marca "conferido" e correção do contador em cada medicamento contado.
       var ops=[];
@@ -9702,7 +9728,7 @@ function TabConferencia(props){
         if(Object.keys(upd).length){upd['atualizadoEm']=now;upd['atualizadoPor']=user.name;return docRef().update(upd);}
       }).then(function(){
         // 4) Best-effort: apaga lote/validade do cadastro dos medicamentos zerados (não trava a finalização se falhar).
-        zerar.forEach(function(mid){db.collection('medicamentos').doc(mid).update({loteAtual:'',validadeAtual:''}).catch(function(){});});
+        zerar.forEach(function(z){db.collection('medicamentos').doc(z.id).update(z.alvo).catch(function(){});});
         setContagens(function(p){var n=Object.assign({},p);Object.keys(n).forEach(function(k){if(catMedIds[k.split('--')[0]])delete n[k];});return n;});
         setContadoPor(function(p){var n=Object.assign({},p);Object.keys(n).forEach(function(k){if(catMedIds[k.split('--')[0]])delete n[k];});return n;});
         setNovosLotes(function(p){return p.filter(function(nl){return !catMedIds[nl.medId];});});
@@ -9710,7 +9736,7 @@ function TabConferencia(props){
         setFinalizadas(function(p){var n=Object.assign({},p);n[cat]={em:now,por:user.name,ajustes:lista.length};return n;});
         setConfirmados(function(p){var n=Object.assign({},p);conferidosCat.forEach(function(m){n[m.id]={em:now,por:user.name};});return n;});
         setAplicando(false);setShowResumo(false);setErro('');setCatAtiva(null);
-        alert('✅ Categoria "'+catLabel+'" finalizada. '+lista.length+' ajuste(s) de estoque aplicado(s).'+(zerar.length>0?'\n🏷️ '+zerar.length+' medicamento(s) zerado(s): lote e validade apagados do cadastro.':''));
+        alert('✅ Categoria "'+catLabel+'" finalizada. '+lista.length+' ajuste(s) de estoque aplicado(s).'+(zerar.filter(function(z){return z.zerou;}).length>0?'\n🏷️ '+zerar.filter(function(z){return z.zerou;}).length+' medicamento(s) zerado(s): lote e validade apagados do cadastro.':''));
       }).catch(falhou);
     }catch(e){falhou(e);}
   }
@@ -9979,11 +10005,15 @@ function TabConferencia(props){
                 {podeGerir&&<button onClick={function(){excluirMed(m);}} title="Excluir do cadastro" style={{flexShrink:0,alignSelf:'center',marginLeft:6,marginRight:8,background:delMedId===m.id?'#DC2626':'#FEE2E2',color:delMedId===m.id?'#fff':'#DC2626',border:'none',borderRadius:8,padding:'6px 10px',fontSize:11,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap',display:'flex',alignItems:'center'}}>{delMedId===m.id?'Confirmar?':(temaItaq?<Icon name="trash" size={13}/>:'🗑')}</button>}
               </div>
               {podeGerir&&renId===m.id&&<div style={{background:'#EFF6FF',borderTop:'1px solid #BFDBFE',padding:'10px 12px'}}>
-                <div style={{fontSize:11,fontWeight:700,color:'#1351B4',marginBottom:6}}>✏️ Renomear no cadastro</div>
+                <div style={{fontSize:11,fontWeight:700,color:'#1351B4',marginBottom:6}}>✏️ Editar no cadastro (nome e categoria)</div>
                 <div style={{display:'flex',gap:8,alignItems:'center'}}>
                   <input value={renNome} onChange={function(e){setRenNome(e.target.value);}} placeholder="Novo nome" style={{flex:1,minWidth:0,padding:'8px 10px',borderRadius:8,border:'1.5px solid #BFDBFE',fontSize:13,boxSizing:'border-box'}}/>
                   <button onClick={function(){setRenId(null);}} style={{flexShrink:0,background:'#F1F5F9',border:'none',borderRadius:7,padding:'8px 10px',fontSize:12,fontWeight:600,cursor:'pointer',color:'#64748B'}}>✕</button>
                   <button onClick={function(){salvarRename(m);}} disabled={renSaving||!renNome.trim()} style={{flexShrink:0,background:(renSaving||!renNome.trim())?'#94A3B8':'#1351B4',border:'none',borderRadius:7,padding:'8px 12px',color:'#fff',fontSize:12,fontWeight:700,cursor:'pointer'}}>{renSaving?'...':'Salvar'}</button>
+                </div>
+                <div style={{fontSize:10,fontWeight:700,color:'#475569',margin:'10px 0 5px'}}>CATEGORIA</div>
+                <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+                  {Object.keys(TIPOS).map(function(k){var t=TIPOS[k];var on=renCat===k;return(<button key={k} onClick={function(){setRenCat(k);}} style={{padding:'6px 11px',borderRadius:20,border:'1.5px solid '+(on?B:'#CBD5E1'),background:on?B:'#fff',color:on?'#fff':'#64748B',cursor:'pointer',fontWeight:on?700:500,fontSize:11}}>{t.label}</button>);})}
                 </div>
               </div>}
               {podeGerir&&delMedId===m.id&&<div style={{display:'flex',alignItems:'center',gap:8,background:'#FEF2F2',borderTop:'1px solid #FECACA',padding:'8px 12px'}}>
@@ -9999,6 +10029,9 @@ function TabConferencia(props){
                 {(function(){
                   // Parte 2 (#6): lote/validade no cadastro do medicamento
                   var raw=medById[m.id]||{};var temCad=raw.loteAtual||raw.validadeAtual;
+                  // Só aparece quando há unidades SEM lote pra atribuir. Antes mostrava sempre o lote gravado no cadastro, que pode ser
+                  // um lote antigo que nem existe mais na prateleira — só confundia a contagem.
+                  if(lcId!==m.id&&!(m.semLote>0))return null;
                   if(lcId===m.id)return(<div style={{marginTop:8,background:'#FFFBEB',borderRadius:10,padding:'10px 12px',border:'1.5px solid #FDE68A'}}>
                     <div style={{fontSize:12,fontWeight:700,color:'#92400E',marginBottom:8}}>🏷️ Lote/validade no cadastro (salva de vez)</div>
                     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
