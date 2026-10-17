@@ -8874,6 +8874,7 @@ function TabPrevisao(props){
                   var excedeTeto=saldoDisp!==null&&val>saldoDisp;
                   return(<div key={m.id} style={{padding:'8px 0',borderTop:'1px solid #EEF2F8'}}>
                     <div style={{fontSize:12,fontWeight:600,color:'#1E293B',wordBreak:'break-word',marginBottom:2}}>{m.nome}</div>
+                    {it&&it.marca&&<div style={{fontSize:11,fontWeight:700,color:'#7C3AED',marginBottom:2}}>🏷️ {it.marca}</div>}
                     {it&&it.qtdTeto>0&&<div style={{fontSize:10,color:'#64748B',marginBottom:2}}>Teto do contrato: {it.qtdTeto} {it.unidade||''}{it.vUnit>0?' · R$ '+_fmtNumBR((it.qtdTeto*it.vUnit))+' no total':''}</div>}
                     {saldoDisp!==null&&<div style={{fontSize:11,fontWeight:700,marginBottom:4,color:excedeTeto?'#DC2626':'#0C6B3E'}}>Saldo disponível: {saldoDisp} {it.unidade||''}{it.vUnit>0?' (R$ '+_fmtNumBR((saldoDisp*it.vUnit))+')':''}{val>0?' · após este pedido: '+saldoApos+' '+(it.unidade||'')+(it.vUnit>0?' (R$ '+_fmtNumBR((saldoApos*it.vUnit))+')':''):''}{excedeTeto?' ⚠️ excede o saldo!':''}</div>}
                     <div style={{display:'flex',alignItems:'center',gap:8}}>
@@ -8904,6 +8905,7 @@ function TabPrevisao(props){
                   var excedeTetoNV=valNum>saldoDispNV;
                   return(<div key={uKey} style={{padding:'8px 0',borderTop:'1px solid #EEF2F8'}}>
                     <div style={{fontSize:12,fontWeight:600,color:'#1E293B',wordBreak:'break-word',marginBottom:2}}>{it.descricao||'(sem descrição)'}</div>
+                    {it.marca&&<div style={{fontSize:11,fontWeight:700,color:'#7C3AED',marginBottom:2}}>🏷️ {it.marca}</div>}
                     {it.qtdTeto>0&&<div style={{fontSize:10,color:'#64748B',marginBottom:4}}>Teto do contrato: {it.qtdTeto} {it.unidade||''}{it.vUnit>0?' · R$ '+_fmtNumBR((it.qtdTeto*it.vUnit))+' no total':''}</div>}
                     {it.qtdTeto>0&&<div style={{fontSize:11,fontWeight:700,marginBottom:4,color:excedeTetoNV?'#DC2626':'#0C6B3E'}}>Saldo disponível: {saldoDispNV} {it.unidade||''}{it.vUnit>0?' (R$ '+_fmtNumBR((saldoDispNV*it.vUnit))+')':''}{valNum>0?' · após este pedido: '+saldoAposNV+' '+(it.unidade||'')+(it.vUnit>0?' (R$ '+_fmtNumBR((saldoAposNV*it.vUnit))+')':''):''}{excedeTetoNV?' ⚠️ excede o saldo!':''}</div>}
                     <div style={{marginBottom:6}}><span style={{display:'inline-block',fontSize:9,fontWeight:800,color:'#B45309',background:'#FEF3C7',border:'1px solid #FCD34D',borderRadius:6,padding:'1px 6px'}}>⚠️ NÃO VINCULADO</span></div>
@@ -9037,6 +9039,10 @@ function TabPrevisao(props){
                       <span style={{color:'#64748B'}}>Já pedido: <strong>{it.pedidoAcumulado||0}</strong></span>
                       <span style={{color:saldo<0?'#DC2626':saldo===0?'#B45309':'#0C6B3E',fontWeight:700}}>Saldo: {saldo}</span>
                       {it.vUnit>0&&<span style={{color:'#94A3B8'}}>R$ {it.vUnit.toFixed(2)}/un</span>}
+                    </div>
+                    <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8,flexWrap:'wrap'}}>
+                      <span style={{fontSize:11,color:'#64748B'}}>🏷️ Marca / Fornecedor:</span>
+                      <input key={'marca_'+ata.id+'_'+idxIt+'_'+(it.marca||'')} type="text" defaultValue={it.marca||''} placeholder="ex.: EMS, Eurofarma…" onBlur={function(e){var v=e.target.value.trim();if(v===(it.marca||''))return;atualizarItemAta(ata.id,ata.itens,{marca:v},idxIt).catch(function(){});}} style={{flex:1,minWidth:130,maxWidth:260,padding:'5px 8px',border:'1.5px solid #CBD5E1',borderRadius:8,fontSize:13}}/>
                     </div>
                     <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8,flexWrap:'wrap'}}>
                       <span style={{fontSize:11,color:'#64748B'}}>Pedido acumulado:</span>
