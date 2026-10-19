@@ -4083,14 +4083,15 @@ function TabLeites(props){
       };
     });
     var entregas=linhas.filter(function(l){return l.leiteId&&l.qtdEntregue>0;});
-    if(entregas.length===0){alert2('Informe ao menos um leite com quantidade entregue (maior que zero).');return;}
+    var matsBaixa=bMats.filter(function(m){return !m.avulso||(m.medId&&(parseInt(m.qtdEntregue)||0)>0);}).map(function(m){return{medId:m.medId,nome:m.nome,qtdPrescrita:m.qtdPrescrita,qtdEntregue:parseInt(m.qtdEntregue)||0,avulso:!!m.avulso};});
+    if(bMats.some(function(m){return m.avulso&&!m.medId&&(parseInt(m.qtdEntregue)||0)>0;})){alert2('Escolha o material em cada linha de material avulso (ou remova a linha).');return;}
+    if(entregas.length===0&&!matsBaixa.some(function(m){return m.qtdEntregue>0;})){alert2('Informe ao menos um leite ou material com quantidade entregue (maior que zero).');return;}
     var bloqueios=[];
     entregas.forEach(function(l){
       var disp=stock[l.leiteId]||0;
       if(disp<=0)bloqueios.push(l.nome+': estoque zerado (0 disponível)');
       else if(l.qtdEntregue>disp)bloqueios.push(l.nome+': quantidade ('+l.qtdEntregue+') maior que disponível ('+disp+')');
     });
-    var matsBaixa=bMats.map(function(m){return{medId:m.medId,nome:m.nome,qtdPrescrita:m.qtdPrescrita,qtdEntregue:parseInt(m.qtdEntregue)||0};});
     matsBaixa.forEach(function(m){
       if(m.qtdEntregue>0){
         var disp=stock[m.medId]||0;
@@ -4101,7 +4102,7 @@ function TabLeites(props){
     if(bloqueios.length>0){alert2('Estoque insuficiente:\n'+bloqueios.join('\n')+'\n\nAjuste as quantidades para no máximo o disponível.');return;}
     setBSaving(true);
     // Compat: primeiro leite (para telas antigas que leem leiteNome/qtdLeiteEntregue).
-    var principal=entregas[0];
+    var principal=entregas[0]||{leiteId:'',nome:'',substituto:false,qtdPrescrita:0,qtdEntregue:0};
     // 1. cria registro de retirada
     var retObj={
       pacienteId:showBaixa.id,
@@ -4143,7 +4144,7 @@ function TabLeites(props){
         matsBaixa.forEach(function(m){
           if(m.qtdEntregue>0){
             var fefoM=fefoPorMed[m.medId];
-            promises.push(onSave({medicamentoId:m.medId,medicamentoNome:m.nome,tipo:'saida',destino:'sus',quantidade:m.qtdEntregue,lote:fefoM?fefoM.lote:'',validade:fefoM?fefoM.validade:'',observacao:obsBase+' — material ('+m.qtdEntregue+'/'+m.qtdPrescrita+')',viaLeitePac:true,pacienteLeiteId:showBaixa.id}));
+            promises.push(onSave({medicamentoId:m.medId,medicamentoNome:m.nome,tipo:'saida',destino:'sus',quantidade:m.qtdEntregue,lote:fefoM?fefoM.lote:'',validade:fefoM?fefoM.validade:'',observacao:obsBase+(m.avulso?' — material AVULSO ('+m.qtdEntregue+')':' — material ('+m.qtdEntregue+'/'+m.qtdPrescrita+')'),viaLeitePac:true,pacienteLeiteId:showBaixa.id}));
           }
         });
         return Promise.all(promises);
@@ -4166,6 +4167,10 @@ function TabLeites(props){
   function delLeiteForm(i){setFLeites(fLeites.length<=1?[{leiteId:'',qtd:''}]:fLeites.filter(function(_,j){return j!==i;}));}
 
   function updMatBaixa(i,valor){var novo=bMats.slice();novo[i]=Object.assign({},novo[i],{qtdEntregue:valor});setBMats(novo);}
+  // Material AVULSO na entrega (fora do que está prescrito pro paciente): escolhe o material e a quantidade na hora.
+  function addMatAvulsoBaixa(){setBMats(bMats.concat([{medId:'',nome:'',qtdPrescrita:0,qtdEntregue:'',avulso:true}]));}
+  function updMatBaixaMed(i,id){var m=materiaisCadastrados.find(function(x){return x.id===id;});var novo=bMats.slice();novo[i]=Object.assign({},novo[i],{medId:id,nome:m?m.nome:''});setBMats(novo);}
+  function delMatBaixa(i){setBMats(bMats.filter(function(_,j){return j!==i;}));}
 
   // Linhas de leite na baixa (principais + avulsas):
   function updLeiteBaixa(i,campo,valor){var novo=bLeites.slice();novo[i]=Object.assign({},novo[i]);if(campo==='leiteId'){var m=leitesCadastrados.find(function(x){return x.id===valor;});novo[i].leiteId=valor;novo[i].nome=m?m.nome:'';}else{novo[i][campo]=valor;}setBLeites(novo);}
@@ -4338,16 +4343,25 @@ function TabLeites(props){
           })}
           {bLeites.length===0&&<div style={{fontSize:12,color:'#94A3B8',padding:'8px 0'}}>Nenhum leite. Use "+ Retirada avulsa" para adicionar.</div>}
         </div>
-        {bMats.length>0&&<div style={{marginBottom:12}}>
-          <div style={{fontWeight:700,fontSize:12,color:'#1E293B',marginBottom:6}}>📦 Materiais:</div>
-          {bMats.map(function(m,i){return(<div key={i} style={{background:'#F8FAFC',borderRadius:10,padding:'8px 12px',marginBottom:6,display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
-            <div style={{flex:1,minWidth:120}}>
-              <div style={{fontSize:12,fontWeight:600,color:'#1E293B'}}>{m.nome}</div>
-              <div style={{fontSize:10,color:'#94A3B8'}}>Prescrito: {m.qtdPrescrita}</div>
+        <div style={{marginBottom:12}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+            <div style={{fontWeight:700,fontSize:12,color:'#1E293B'}}>📦 Materiais:</div>
+            <button onClick={addMatAvulsoBaixa} style={{background:'#E0F2FE',border:'none',borderRadius:8,padding:'6px 12px',fontSize:11,fontWeight:700,color:'#0369A1',cursor:'pointer'}}>+ Material</button>
+          </div>
+          {bMats.map(function(m,i){return(<div key={i} style={{background:m.avulso?'#F0F9FF':'#F8FAFC',border:m.avulso?'1px solid #BAE6FD':'none',borderRadius:10,padding:'8px 12px',marginBottom:6,display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+            <div style={{flex:1,minWidth:140}}>
+              {m.avulso
+                ?<select value={m.medId} onChange={function(e){updMatBaixaMed(i,e.target.value);}} className="inp" style={{marginBottom:0}}>
+                    <option value="">Selecione o material...</option>
+                    {materiaisCadastrados.map(function(mm){return(<option key={mm.id} value={mm.id}>{mm.nome}{(stock[mm.id]||0)>0?' ('+stock[mm.id]+' em estoque)':' (sem estoque)'}</option>);})}
+                  </select>
+                :<div><div style={{fontSize:12,fontWeight:600,color:'#1E293B'}}>{m.nome}</div><div style={{fontSize:10,color:'#94A3B8'}}>Prescrito: {m.qtdPrescrita}</div></div>}
             </div>
-            <input value={m.qtdEntregue} onChange={function(e){updMatBaixa(i,e.target.value.replace(/[^0-9]/g,''));}} className="inp" style={{marginBottom:0,width:80,fontSize:14,fontWeight:700,textAlign:'center'}} inputMode="numeric"/>
+            <input value={m.qtdEntregue} onChange={function(e){updMatBaixa(i,e.target.value.replace(/[^0-9]/g,''));}} placeholder={m.avulso?'Qtd':''} className="inp" style={{marginBottom:0,width:80,fontSize:14,fontWeight:700,textAlign:'center'}} inputMode="numeric"/>
+            {m.avulso&&<button onClick={function(){delMatBaixa(i);}} title="Remover" style={{background:'#FEE2E2',border:'none',borderRadius:8,width:34,height:34,cursor:'pointer',fontSize:13}}>🗑</button>}
           </div>);})}
-        </div>}
+          {bMats.length===0&&<div style={{fontSize:12,color:'#94A3B8',padding:'4px 0'}}>Nenhum material. Use "+ Material" para adicionar.</div>}
+        </div>
         <div style={{marginBottom:14}}>
           <div style={{fontWeight:700,fontSize:12,color:'#1E293B',marginBottom:4}}>Data da retirada:</div>
           <input type="date" value={bData} onChange={function(e){setBData(e.target.value);}} className="inp"/>
@@ -4376,11 +4390,11 @@ function TabLeites(props){
               <div style={{fontWeight:800,fontSize:13,color:'#0C6B3E'}}>📅 {r.data}</div>
               <div style={{fontSize:11,color:'#64748B'}}>por {r.liberadoPor}</div>
             </div>
-            {(r.leites&&r.leites.length?r.leites:[{leiteId:r.leiteId,nome:r.leiteNome,qtdPrescrita:r.qtdLeitePrescrita,qtdEntregue:r.qtdLeiteEntregue,substituto:r.leiteAlternativo,avulsa:false}]).map(function(l,i){return(
+            {(r.leites&&r.leites.length?r.leites:(r.leiteId?[{leiteId:r.leiteId,nome:r.leiteNome,qtdPrescrita:r.qtdLeitePrescrita,qtdEntregue:r.qtdLeiteEntregue,substituto:r.leiteAlternativo,avulsa:false}]:[])).map(function(l,i){return(
               <div key={i} style={{fontSize:12,color:'#1E293B'}}>🍼 <strong>{l.nome}</strong>{l.avulsa&&<span style={{color:'#7C3AED',fontSize:11,marginLeft:6}}>(avulso)</span>}{!l.avulsa&&l.substituto&&<span style={{color:'#7C3AED',fontSize:11,marginLeft:6}}>(opcional)</span>}: {l.qtdEntregue}{!l.avulsa&&l.qtdPrescrita?'/'+l.qtdPrescrita:''} un.{!l.avulsa&&l.qtdPrescrita&&l.qtdEntregue<l.qtdPrescrita&&<span style={{color:'#B45309'}}> ⚠️ parcial</span>}</div>
             );})}
             {r.materiais&&r.materiais.length>0&&<div style={{marginTop:6,paddingTop:6,borderTop:'1px dashed #E2E8F0'}}>
-              {r.materiais.map(function(m,i){return(<div key={i} style={{fontSize:11,color:'#64748B'}}>📦 {m.nome}: {m.qtdEntregue}/{m.qtdPrescrita}</div>);})}
+              {r.materiais.filter(function(m){return m.qtdEntregue>0||!m.avulso;}).map(function(m,i){return(<div key={i} style={{fontSize:11,color:'#64748B'}}>📦 {m.nome}: {m.qtdEntregue}{m.avulso?' (avulso)':'/'+m.qtdPrescrita}</div>);})}
             </div>}
           </div>);})
         }
