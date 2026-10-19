@@ -3180,10 +3180,13 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
       <button key={c[0]} onClick={function(){setDiaCats(sel?diaCats.filter(function(x){return x!==c[0];}):diaCats.concat([c[0]]));}} style={{padding:'5px 10px',borderRadius:20,border:'1.5px solid '+(sel?'#1351B4':'#E2E8F0'),background:sel?'#EFF6FF':'#fff',fontSize:11,fontWeight:sel?700:500,color:sel?'#1351B4':'#64748B',cursor:'pointer'}}>{_semEmoji(c[1])}</button>
     );})}
   </div>
+  {DestinoChips()}
+  <div style={{height:10}}/>
   {(function(){
     var saidasDia=entries.filter(function(e){
       if(e.tipo!=='saida'||e.ficticioDiv)return false;
       if(_ehSaidaNaoReal(e))return false;/* ajustes de conferência/balanço não são saídas reais do dia */
+      if(!passaDestino(e))return false;/* filtro de destino/tipo de saída (SUS, Emergência, CAPS, UBS…) */
       if((e.date||'')!==(dF||todayStr()))return false;
       if(diaHora){var d=new Date(e.criadoEm);var hhmm=('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);if(hhmm<diaHora)return false;} // hora local >= horário escolhido
       if(diaCats.length>0){var med=medications.find(function(m){return m.id===e.medicamentoId;});var cat=(med&&med.categoria)||'medicamento';if(diaCats.indexOf(cat)===-1)return false;}
@@ -3249,7 +3252,7 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
       <button onClick={function(){
         var hoje=new Date(dF+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'});
         var html='<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;padding:24px;font-size:12px}h2{font-size:16px;margin-bottom:4px}table{width:100%;border-collapse:collapse;margin-top:16px}th{background:#f0f0f0;padding:8px;text-align:left;border:1px solid #ccc;font-size:11px}td{padding:8px;border:1px solid #ddd}.total{font-weight:700;background:#f8f8f8}@media print{button{display:none}}</style></head><body>';
-        html+='<h2>📋 Relatório de Saídas</h2><div style="color:#555;margin-bottom:8px">Data: <b>'+hoje+'</b> · Total: <b>'+totalGeral+' unidades</b>'+(ultimaSaida?' · Última saída: <b>'+ultimaSaida+'</b>':'')+'</div>';
+        html+='<h2>📋 Relatório de Saídas</h2>'+(filtDest.length?'<div style="color:#555;margin-bottom:4px">Destino: <b>'+_escHtml(_nomeDestFiltro)+'</b></div>':'')+(diaCats.length?'<div style="color:#555;margin-bottom:4px">Categoria: <b>'+diaCats.map(function(c){return _escHtml((TIPOS[c]&&TIPOS[c].label)||c);}).join(' + ')+'</b></div>':'')+'<div style="color:#555;margin-bottom:8px">Data: <b>'+hoje+'</b> · Total: <b>'+totalGeral+' unidades</b>'+(ultimaSaida?' · Última saída: <b>'+ultimaSaida+'</b>':'')+'</div>';
         html+='<table><tr><th>Medicamento</th><th>Categoria</th><th>Horários</th><th style="text-align:center">Quantidade</th></tr>';
         lista.forEach(function(it){html+='<tr><td>'+it.nome+'</td><td>'+it.cat+'</td><td>'+it.horarios.join(', ')+'</td><td style="text-align:center;font-weight:700">'+it.total+'</td></tr>';});
         html+='<tr class="total"><td colspan="3">TOTAL</td><td style="text-align:center">'+totalGeral+'</td></tr>';
