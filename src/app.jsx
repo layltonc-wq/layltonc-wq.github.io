@@ -2961,10 +2961,16 @@ function darBaixaVencido(){
   </div>
 </div>}
 </div>);}
+// Grupos rápidos da aba "Saídas do Dia" (Relatório): reúnem saídas por assunto, não por categoria do cadastro.
+var DIA_GRUPOS=[
+  {id:'leites',nome:'🍼 Leites + Materiais',dica:'Leites e penso/material',passa:function(e,meds){var m=meds.find(function(x){return x.id===e.medicamentoId;});var c=(m&&m.categoria)||'medicamento';return c==='leite'||c==='penso';}},
+  {id:'atb',nome:'🧬 ATB (Cefalosporinas)',dica:'Saídas feitas pela tela de ATB + qualquer cefalosporina (CEF…)',passa:function(e,meds){var n=_norm(e.medicamentoNome||'');var o=(e.obs||'')+' '+(e.observacao||'');return /(^|[^a-z])atb([^a-z]|$)/i.test(o)||n.indexOf('cef')>=0;}},
+  {id:'controlados',nome:'🔒 Controlados (Tramal/Morfina)',dica:'Morfina, Tramal/Tramadol e os cadastrados como Controlado',passa:function(e,meds){var m=meds.find(function(x){return x.id===e.medicamentoId;});return _ehMedControlado(e.medicamentoNome||'')||(m&&m.categoria==='controlado');}}
+];
 function TabRelatorio(props){
   var db=props.db;var user=props.user||{};
   function nomeC(n){if(!n)return '?';var p=n.trim().split(' ');return p.length>=2?p[0]+' '+p[1]:p[0];}var entries=props.entries;var medications=props.medications;var _dF=useState(todayStr());var dF=_dF[0];var setDF=_dF[1];var _dT=useState(todayStr());var dT=_dT[0];var setDT=_dT[1];var _tipo=useState('todos');var tipo=_tipo[0];var setTipo=_tipo[1];var _sub=useState('mov');var sub=_sub[0];var setSub=_sub[1];var _filtCatRel=useState('todos');var filtCatRel=_filtCatRel[0];var setFiltCatRel=_filtCatRel[1];var _filtMeds=useState([]);var filtMeds=_filtMeds[0];var setFiltMeds=_filtMeds[1];var _filtBusca=useState('');var filtBusca=_filtBusca[0];var setFiltBusca=_filtBusca[1];var _filtBuscaCat=useState('todos');var filtBuscaCat=_filtBuscaCat[0];var setFiltBuscaCat=_filtBuscaCat[1];var _rankDF=useState((function(){var d=new Date();d.setDate(d.getDate()-30);return d.toISOString().slice(0,10);})());var rankDF=_rankDF[0];var setRankDF=_rankDF[1];var _rankDT=useState(todayStr());var rankDT=_rankDT[0];var setRankDT=_rankDT[1];var _rankDiag=useState(null);var rankDiag=_rankDiag[0];var setRankDiag=_rankDiag[1];var _rankCat=useState('todos');var rankCat=_rankCat[0];var setRankCat=_rankCat[1];
-var _diaHora=useState('');var diaHora=_diaHora[0];var setDiaHora=_diaHora[1];var _diaCats=useState([]);var diaCats=_diaCats[0];var setDiaCats=_diaCats[1];var _filtResp=useState('');var filtResp=_filtResp[0];var setFiltResp=_filtResp[1];
+var _diaHora=useState('');var diaHora=_diaHora[0];var setDiaHora=_diaHora[1];var _diaGrupo=useState('');var diaGrupo=_diaGrupo[0];var setDiaGrupo=_diaGrupo[1];var _diaCats=useState([]);var diaCats=_diaCats[0];var setDiaCats=_diaCats[1];var _filtResp=useState('');var filtResp=_filtResp[0];var setFiltResp=_filtResp[1];
 var _relPeriodo=useState('mensal');var relPeriodo=_relPeriodo[0];var setRelPeriodo=_relPeriodo[1];
 var _relMes=useState(todayStr().slice(0,7));var relMes=_relMes[0];var setRelMes=_relMes[1];
 // Filtro de destino das saídas: pode marcar VÁRIOS ao mesmo tempo (nenhum marcado = todos). Com filtro ativo, só entram SAÍDAS
@@ -3174,10 +3180,15 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
     <input type="time" value={diaHora} onChange={function(e){setDiaHora(e.target.value);}} className="inp" style={{marginBottom:0,width:'auto'}}/>
     {diaHora&&<button onClick={function(){setDiaHora('');}} style={{background:'none',border:'none',color:'#DC2626',fontSize:12,fontWeight:700,cursor:'pointer'}}>limpar</button>}
   </div>
+  <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:8}}>
+    {DIA_GRUPOS.map(function(g){var sel=diaGrupo===g.id;return(
+      <button key={g.id} onClick={function(){setDiaGrupo(sel?'':g.id);setDiaCats([]);}} title={g.dica} style={{padding:'6px 12px',borderRadius:20,border:'1.5px solid '+(sel?'#7C3AED':'#DDD6FE'),background:sel?'#7C3AED':'#F5F3FF',fontSize:11,fontWeight:700,color:sel?'#fff':'#7C3AED',cursor:'pointer'}}>{g.nome}</button>
+    );})}
+  </div>
   <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:12}}>
-    <button onClick={function(){setDiaCats([]);}} style={{padding:'5px 10px',borderRadius:20,border:'1.5px solid '+(diaCats.length===0?'#1351B4':'#E2E8F0'),background:diaCats.length===0?'#EFF6FF':'#fff',fontSize:11,fontWeight:diaCats.length===0?700:500,color:diaCats.length===0?'#1351B4':'#64748B',cursor:'pointer'}}>Todos</button>
+    <button onClick={function(){setDiaCats([]);setDiaGrupo('');}} style={{padding:'5px 10px',borderRadius:20,border:'1.5px solid '+(diaCats.length===0?'#1351B4':'#E2E8F0'),background:diaCats.length===0?'#EFF6FF':'#fff',fontSize:11,fontWeight:diaCats.length===0?700:500,color:diaCats.length===0?'#1351B4':'#64748B',cursor:'pointer'}}>Todos</button>
     {[['medicamento','💊 Farm. Básica'],['controlado','🔒 Controlado'],['injetavel','💉 Injetável'],['leite','🍼 Leite'],['penso','🩹 Penso/Material']].map(function(c){var sel=diaCats.indexOf(c[0])>=0;return(
-      <button key={c[0]} onClick={function(){setDiaCats(sel?diaCats.filter(function(x){return x!==c[0];}):diaCats.concat([c[0]]));}} style={{padding:'5px 10px',borderRadius:20,border:'1.5px solid '+(sel?'#1351B4':'#E2E8F0'),background:sel?'#EFF6FF':'#fff',fontSize:11,fontWeight:sel?700:500,color:sel?'#1351B4':'#64748B',cursor:'pointer'}}>{_semEmoji(c[1])}</button>
+      <button key={c[0]} onClick={function(){setDiaGrupo('');setDiaCats(sel?diaCats.filter(function(x){return x!==c[0];}):diaCats.concat([c[0]]));}} style={{padding:'5px 10px',borderRadius:20,border:'1.5px solid '+(sel?'#1351B4':'#E2E8F0'),background:sel?'#EFF6FF':'#fff',fontSize:11,fontWeight:sel?700:500,color:sel?'#1351B4':'#64748B',cursor:'pointer'}}>{_semEmoji(c[1])}</button>
     );})}
   </div>
   {DestinoChips()}
@@ -3190,6 +3201,7 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
       if((e.date||'')!==(dF||todayStr()))return false;
       if(diaHora){var d=new Date(e.criadoEm);var hhmm=('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);if(hhmm<diaHora)return false;} // hora local >= horário escolhido
       if(diaCats.length>0){var med=medications.find(function(m){return m.id===e.medicamentoId;});var cat=(med&&med.categoria)||'medicamento';if(diaCats.indexOf(cat)===-1)return false;}
+      if(diaGrupo){var g=DIA_GRUPOS.find(function(x){return x.id===diaGrupo;});if(g&&!g.passa(e,medications))return false;}
       return true;
     });
     var agrupado={};
@@ -3252,7 +3264,7 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
       <button onClick={function(){
         var hoje=new Date(dF+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'});
         var html='<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;padding:24px;font-size:12px}h2{font-size:16px;margin-bottom:4px}table{width:100%;border-collapse:collapse;margin-top:16px}th{background:#f0f0f0;padding:8px;text-align:left;border:1px solid #ccc;font-size:11px}td{padding:8px;border:1px solid #ddd}.total{font-weight:700;background:#f8f8f8}@media print{button{display:none}}</style></head><body>';
-        html+='<h2>📋 Relatório de Saídas</h2>'+(filtDest.length?'<div style="color:#555;margin-bottom:4px">Destino: <b>'+_escHtml(_nomeDestFiltro)+'</b></div>':'')+(diaCats.length?'<div style="color:#555;margin-bottom:4px">Categoria: <b>'+diaCats.map(function(c){return _escHtml((TIPOS[c]&&TIPOS[c].label)||c);}).join(' + ')+'</b></div>':'')+'<div style="color:#555;margin-bottom:8px">Data: <b>'+hoje+'</b> · Total: <b>'+totalGeral+' unidades</b>'+(ultimaSaida?' · Última saída: <b>'+ultimaSaida+'</b>':'')+'</div>';
+        html+='<h2>📋 Relatório de Saídas</h2>'+(filtDest.length?'<div style="color:#555;margin-bottom:4px">Destino: <b>'+_escHtml(_nomeDestFiltro)+'</b></div>':'')+(diaGrupo?'<div style="color:#555;margin-bottom:4px">Grupo: <b>'+_escHtml((DIA_GRUPOS.find(function(x){return x.id===diaGrupo;})||{}).nome||'')+'</b></div>':'')+(diaCats.length?'<div style="color:#555;margin-bottom:4px">Categoria: <b>'+diaCats.map(function(c){return _escHtml((TIPOS[c]&&TIPOS[c].label)||c);}).join(' + ')+'</b></div>':'')+'<div style="color:#555;margin-bottom:8px">Data: <b>'+hoje+'</b> · Total: <b>'+totalGeral+' unidades</b>'+(ultimaSaida?' · Última saída: <b>'+ultimaSaida+'</b>':'')+'</div>';
         html+='<table><tr><th>Medicamento</th><th>Categoria</th><th>Horários</th><th style="text-align:center">Quantidade</th></tr>';
         lista.forEach(function(it){html+='<tr><td>'+it.nome+'</td><td>'+it.cat+'</td><td>'+it.horarios.join(', ')+'</td><td style="text-align:center;font-weight:700">'+it.total+'</td></tr>';});
         html+='<tr class="total"><td colspan="3">TOTAL</td><td style="text-align:center">'+totalGeral+'</td></tr>';
