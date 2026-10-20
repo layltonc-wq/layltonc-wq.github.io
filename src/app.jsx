@@ -2970,13 +2970,19 @@ var DIA_GRUPOS=[
 function TabRelatorio(props){
   var db=props.db;var user=props.user||{};
   function nomeC(n){if(!n)return '?';var p=n.trim().split(' ');return p.length>=2?p[0]+' '+p[1]:p[0];}var entries=props.entries;var medications=props.medications;var _dF=useState(todayStr());var dF=_dF[0];var setDF=_dF[1];var _dT=useState(todayStr());var dT=_dT[0];var setDT=_dT[1];var _tipo=useState('todos');var tipo=_tipo[0];var setTipo=_tipo[1];var _sub=useState('mov');var sub=_sub[0];var setSub=_sub[1];var _filtCatRel=useState('todos');var filtCatRel=_filtCatRel[0];var setFiltCatRel=_filtCatRel[1];var _filtMeds=useState([]);var filtMeds=_filtMeds[0];var setFiltMeds=_filtMeds[1];var _filtBusca=useState('');var filtBusca=_filtBusca[0];var setFiltBusca=_filtBusca[1];var _filtBuscaCat=useState('todos');var filtBuscaCat=_filtBuscaCat[0];var setFiltBuscaCat=_filtBuscaCat[1];var _rankDF=useState((function(){var d=new Date();d.setDate(d.getDate()-30);return d.toISOString().slice(0,10);})());var rankDF=_rankDF[0];var setRankDF=_rankDF[1];var _rankDT=useState(todayStr());var rankDT=_rankDT[0];var setRankDT=_rankDT[1];var _rankDiag=useState(null);var rankDiag=_rankDiag[0];var setRankDiag=_rankDiag[1];var _rankCat=useState('todos');var rankCat=_rankCat[0];var setRankCat=_rankCat[1];
-var _diaHora=useState('');var diaHora=_diaHora[0];var setDiaHora=_diaHora[1];var _diaGrupo=useState('');var diaGrupo=_diaGrupo[0];var setDiaGrupo=_diaGrupo[1];var _diaCats=useState([]);var diaCats=_diaCats[0];var setDiaCats=_diaCats[1];var _filtResp=useState('');var filtResp=_filtResp[0];var setFiltResp=_filtResp[1];
+var _diaHora=useState('');var diaHora=_diaHora[0];var setDiaHora=_diaHora[1];var _relDiaLog=useState(null);var relDiaLog=_relDiaLog[0];var setRelDiaLog=_relDiaLog[1];var _diaGrupo=useState('');var diaGrupo=_diaGrupo[0];var setDiaGrupo=_diaGrupo[1];var _diaCats=useState([]);var diaCats=_diaCats[0];var setDiaCats=_diaCats[1];var _filtResp=useState('');var filtResp=_filtResp[0];var setFiltResp=_filtResp[1];
 var _relPeriodo=useState('mensal');var relPeriodo=_relPeriodo[0];var setRelPeriodo=_relPeriodo[1];
 var _relMes=useState(todayStr().slice(0,7));var relMes=_relMes[0];var setRelMes=_relMes[1];
 // Filtro de destino das saídas: pode marcar VÁRIOS ao mesmo tempo (nenhum marcado = todos). Com filtro ativo, só entram SAÍDAS
 // dos destinos marcados. Destinos = lista da prefeitura (props.destinos, inclui os "tirados" p/ ver histórico) + 'nc'.
 var _filtDest=useState([]);var filtDest=_filtDest[0];var setFiltDest=_filtDest[1];
 var _filtUbs=useState([]);var filtUbs=_filtUbs[0];var setFiltUbs=_filtUbs[1];
+// Registro do ÚLTIMO relatório do dia puxado (hora, quem, o que foi filtrado) — compartilhado entre aparelhos e só daquela data.
+useEffect(function(){
+  setRelDiaLog(null);
+  var unsub=db.collection('config').doc('reldia__'+tenantDe(user)+'__'+(dF||todayStr())).onSnapshot(function(sn){setRelDiaLog(sn.exists?sn.data():null);},function(){});
+  return unsub;
+},[dF]);
 var destLista=(props.destinos&&props.destinos.length)?props.destinos:[{id:'sus',nome:'SUS (usuário)'},{id:'emergencia',nome:'Emergência'}];
 function passaDestino(e){
   if(!filtDest.length)return true;
@@ -3193,6 +3199,11 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
   </div>
   {DestinoChips()}
   <div style={{height:10}}/>
+  {relDiaLog&&relDiaLog.em&&<div style={{background:'#F5F3FF',border:'1px solid #DDD6FE',borderRadius:12,padding:'10px 14px',marginBottom:12,fontSize:12,color:'#4C1D95',lineHeight:1.5}}>
+    <div style={{fontWeight:800}}>📄 Último relatório deste dia: às {fmtT(relDiaLog.em)}{relDiaLog.por?' · por '+relDiaLog.por:''}</div>
+    <div><strong>Categorias:</strong> {relDiaLog.categorias||'—'} · <strong>Destino:</strong> {relDiaLog.destino||'—'}{relDiaLog.aPartirDe?' · a partir de '+relDiaLog.aPartirDe:''}</div>
+    <div style={{color:'#6D28D9'}}>{relDiaLog.itens} medicamento(s) · {relDiaLog.unidades} unidade(s)</div>
+  </div>}
   {(function(){
     var saidasDia=entries.filter(function(e){
       if(e.tipo!=='saida'||e.ficticioDiv)return false;
@@ -3269,6 +3280,9 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
         lista.forEach(function(it){html+='<tr><td>'+it.nome+'</td><td>'+it.cat+'</td><td>'+it.horarios.join(', ')+'</td><td style="text-align:center;font-weight:700">'+it.total+'</td></tr>';});
         html+='<tr class="total"><td colspan="3">TOTAL</td><td style="text-align:center">'+totalGeral+'</td></tr>';
         html+='</table></body></html>';
+        // guarda "o que foi puxado" pra aparecer na tela (última vez, hora e filtros daquela data)
+        var _cats=diaGrupo?((DIA_GRUPOS.find(function(x){return x.id===diaGrupo;})||{}).nome||''):(diaCats.length?diaCats.map(function(c){return (TIPOS[c]&&TIPOS[c].label)||c;}).join(' + '):'Todas as categorias');
+        try{db.collection('config').doc('reldia__'+tenantDe(user)+'__'+(dF||todayStr())).set({em:new Date().toISOString(),por:user.name||'',categorias:_cats,destino:filtDest.length?_nomeDestFiltro:'Todos os destinos',aPartirDe:diaHora||'',itens:lista.length,unidades:totalGeral,data:(dF||todayStr()),tenant_id:tenantDe(user)}).catch(function(){});}catch(_){}
         _imprimirDoc(html);
       }} className="bp">🖨️ Imprimir / Salvar PDF</button>
     </div>);
