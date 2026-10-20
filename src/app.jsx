@@ -890,7 +890,7 @@ var _showCarrinho=useState(false);var showCarrinho=_showCarrinho[0];var setShowC
   }
   return prev.concat([{id:u.id,nome:u.name,cargo:u.role,color:u.color}]);
 });}function startShift(){setSaving(true);var today=todayStr();var leader={id:user.uid,nome:user.name,cargo:user.role,color:user.color,status:'confirmado'};var members=team.map(function(m){return {id:m.id,nome:m.nome||m.name,cargo:m.cargo||m.role,color:m.color,status:'confirmado'};});var equipe=[leader].concat(members);db.collection('plantoes').doc(plantaoDocId(user,today)).set({iniciadoPor:user.uid,iniciadoPorNome:user.name,inicio:new Date().toISOString(),equipe:equipe,ativo:true,data:today,tenant_id:tenantDe(user)}).then(function(){return Promise.resolve();}).then(function(){onDone({plantao:{equipe:equipe,iniciadoPor:user.uid,iniciadoPorNome:user.name,inicio:new Date().toISOString(),ativo:true},isGuest:false,shiftId:today});setSaving(false);}).catch(function(e){alert('Erro: '+e.message);setSaving(false);});}
-return(<div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'linear-gradient(160deg,#0A2D6E,#1351B4)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:500,padding:16,overflowY:'auto'}}><div style={{background:'#fff',borderRadius:24,padding:'28px 22px',maxWidth:440,width:'100%',maxHeight:'90vh',overflowY:'auto',boxShadow:'0 24px 64px rgba(0,0,0,.25)'}}><div style={{textAlign:'center',marginBottom:20}}><div style={{fontSize:18,fontWeight:800,color:B,marginBottom:4}}>Abrir Plantão</div><div style={{fontSize:12,color:'#64748B'}}>Selecione sua equipe para hoje</div></div>{eligible.length>0&&(<div style={{display:'flex',flexDirection:'column',gap:8,marginBottom:16}}>{eligible.map(function(u){var sel=team.some(function(t){return t.id===u.id;});return(<div key={u.id} onClick={function(){toggle(u);}} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 14px',borderRadius:12,border:'1.5px solid '+(sel?B:'#E2E8F0'),background:sel?'#EFF6FF':'#fff',cursor:'pointer',transition:'all .15s'}}><UserAvatar user={u} size={40}/><div style={{flex:1}}><div style={{fontWeight:600,fontSize:14,color:sel?B:'#1E293B'}}>{u.name}</div><div style={{fontSize:12,color:'#64748B'}}>{_roleIcon(u.role)} {ROLES[u.role]||u.role}</div></div>{sel&&<div style={{width:22,height:22,borderRadius:'50%',background:B,display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:12,fontWeight:700}}>✓</div>}</div>);})}</div>)}<button onClick={startShift} disabled={saving} className="bp" style={{marginBottom:10,opacity:saving?0.7:1}}>{saving?'Abrindo...':'Abrir Plantão'}</button><button onClick={function(){onDone({plantao:null,isGuest:true,shiftId:null});}} className="bs">Entrar como Convidado</button></div></div>);}
+return(<div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'linear-gradient(160deg,#0A2D6E,#1351B4)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:500,padding:16,overflowY:'auto'}}><div style={{background:'#fff',borderRadius:24,padding:'28px 22px',maxWidth:440,width:'100%',maxHeight:'90vh',overflowY:'auto',boxShadow:'0 24px 64px rgba(0,0,0,.25)'}}><div style={{textAlign:'center',marginBottom:20}}><div style={{fontSize:18,fontWeight:800,color:B,marginBottom:4}}>Abrir Plantão</div><div style={{fontSize:12,color:'#64748B'}}>Selecione sua equipe para hoje</div></div>{eligible.length===0&&<div style={{fontSize:12,color:'#92400E',background:'#FFFBEB',border:'1px solid #FCD34D',borderRadius:10,padding:'10px 12px',marginBottom:14,lineHeight:1.4}}>Nenhum auxiliar ou diarista aprovado para escolher agora. Você pode abrir o plantão assim mesmo e adicionar a equipe depois, no botão <strong>Equipe</strong> do plantão.</div>}{eligible.length>0&&(<div style={{display:'flex',flexDirection:'column',gap:8,marginBottom:16}}>{eligible.map(function(u){var sel=team.some(function(t){return t.id===u.id;});return(<div key={u.id} onClick={function(){toggle(u);}} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 14px',borderRadius:12,border:'1.5px solid '+(sel?B:'#E2E8F0'),background:sel?'#EFF6FF':'#fff',cursor:'pointer',transition:'all .15s'}}><UserAvatar user={u} size={40}/><div style={{flex:1}}><div style={{fontWeight:600,fontSize:14,color:sel?B:'#1E293B'}}>{u.name}</div><div style={{fontSize:12,color:'#64748B'}}>{_roleIcon(u.role)} {ROLES[u.role]||u.role}</div></div>{sel&&<div style={{width:22,height:22,borderRadius:'50%',background:B,display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:12,fontWeight:700}}>✓</div>}</div>);})}</div>)}<button onClick={startShift} disabled={saving} className="bp" style={{marginBottom:10,opacity:saving?0.7:1}}>{saving?'Abrindo...':'Abrir Plantão'}</button><button onClick={function(){onDone({plantao:null,isGuest:true,shiftId:null});}} className="bs">Entrar como Convidado</button></div></div>);}
 
 function InviteScreen(props){return(<div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(15,23,42,.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:500,padding:16,backdropFilter:'blur(4px)'}}><div style={{background:'#fff',borderRadius:24,padding:'32px 24px',maxWidth:380,width:'100%',textAlign:'center',boxShadow:'0 24px 64px rgba(0,0,0,.25)'}}><div style={{width:56,height:56,borderRadius:16,background:'#EFF6FF',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px',fontSize:24}}>🏥</div><div style={{fontSize:18,fontWeight:800,color:B,marginBottom:8}}>Convite de Plantão</div><div style={{fontSize:14,color:'#64748B',marginBottom:24,lineHeight:1.7}}><strong style={{color:B}}>{props.invite.deNome}</strong><br/>te adicionou ao plantao de hoje.</div><div style={{display:'flex',gap:10}}><button onClick={function(){props.onDeny(props.invite);}} className="bs" style={{flex:1}}>Recusar</button><button onClick={function(){props.onConfirm(props.invite);}} className="bg" style={{flex:2}}>Aceitar Plantão</button></div></div></div>);}
 
@@ -1033,29 +1033,7 @@ var temaItaq=true;// identidade visual v2 agora é o padrão pra todos os munic�
 // por um ranking de competição entre a equipe (quem mais registra saída+entrada), pra incentivar
 // todo mundo a se dedicar mais vendo a própria proporção em tempo real.
 var vencendoDestaque=temaItaq?vencData.vencidos.concat(vencData.venc30).sort(function(a,b){return a.dias-b.dias;}).slice(0,5):[];
-// Ranking do Mês + Destaque do Mês (visível pra todo mundo na home): quem mais registrou
-// saída+entrada no mês atual, com a % que isso representa do total da equipe.
-var rankingMesHome=temaItaq?(function(){
-  var mesAtual=todayStr().slice(0,7);
-  var porAutor={};var totalGeral=0;
-  entries.forEach(function(e){if((e.criadoEm||'').slice(0,7)!==mesAtual)return;if(e.tipo==='saida'&&_ehSaidaNaoReal(e))return;var k=e.autorNome||'?';if(!porAutor[k])porAutor[k]=0;porAutor[k]++;totalGeral++;});
-  return Object.keys(porAutor).map(function(k){return {nome:k,total:porAutor[k],pct:totalGeral>0?Math.round((porAutor[k]/totalGeral)*100):0};}).sort(function(a,b){return b.total-a.total;});
-})():[];
-// Destaque do Mês = vencedor do MÊS ANTERIOR (fechado), não do mês atual em andamento — senão o
-// destaque ficaria trocando toda hora conforme a disputa do mês corrente muda de líder. O "Ranking
-// do Mês" acima continua ao vivo no mês atual; quando ele fechar, vira o destaque do mês seguinte.
-var mesDestaque=mesAnteriorStr();
-var rankingMesAnteriorHome=temaItaq?(function(){
-  var porAutor={};var totalGeral=0;
-  entries.forEach(function(e){if((e.criadoEm||'').slice(0,7)!==mesDestaque)return;if(e.tipo==='saida'&&_ehSaidaNaoReal(e))return;var k=e.autorNome||'?';if(!porAutor[k])porAutor[k]=0;porAutor[k]++;totalGeral++;});
-  return Object.keys(porAutor).map(function(k){return {nome:k,total:porAutor[k],pct:totalGeral>0?Math.round((porAutor[k]/totalGeral)*100):0};}).sort(function(a,b){return b.total-a.total;});
-})():[];
-var destaqueMes=(function(){
-  if(!temaItaq||rankingMesAnteriorHome.length<2)return null;
-  var top=rankingMesAnteriorHome[0];
-  var u=allUsers.find(function(x){return x.name===top.nome;});
-  return {nome:top.nome,total:top.total,pct:top.pct,foto:u?u.photoURL:'',cor:u?u.color:B,mes:nomeMes(mesDestaque)};
-})();
+// (Destaque do Mês e Ranking do Mês foram removidos da home a pedido — 20/10/2026.)
 var stats=[
   {icon:'💊',iconName:'pill',label:'Saídas hoje',val:ts,sub:te.filter(function(e){return e.tipo==='saida';}).length+' registros',color:'#DC2626',bg:'#FEE2E2'},
   {icon:'📥',iconName:'inbox',label:'Entradas hoje',val:tin,sub:te.filter(function(e){return e.tipo==='entrada';}).length+' registros',color:'#0C6B3E',bg:'#DCFCE7'},
@@ -1064,20 +1042,6 @@ var stats=[
 ];
 return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
   <ShiftCard plantao={plantao} isGuest={isGuest} user={user} onEncerrar={onEncerrar} shiftId={shiftId} onIniciar={onIniciar} onSolicitarEntrada={onSolicitarEntrada} onSair={onSair} db={db}/>
-  {destaqueMes&&<div style={{background:'linear-gradient(135deg,var(--blue-900),var(--blue-700))',borderRadius:18,padding:'16px 18px',marginBottom:14,display:'flex',alignItems:'center',gap:14,boxShadow:'0 8px 24px -8px rgba(16,42,90,.4)',position:'relative',overflow:'hidden'}}>
-    <div style={{position:'absolute',top:-40,right:-40,width:140,height:140,borderRadius:'50%',background:'rgba(255,255,255,.07)',pointerEvents:'none'}}/>
-    <div style={{position:'relative',flexShrink:0}}>
-      <div style={{width:58,height:58,borderRadius:'50%',padding:3,background:'linear-gradient(135deg,#FCD34D,#F59E0B)',display:'flex',alignItems:'center',justifyContent:'center'}}>
-        {destaqueMes.foto?<img src={destaqueMes.foto} style={{width:'100%',height:'100%',borderRadius:'50%',objectFit:'cover',border:'2px solid #fff'}}/>:<div style={{width:'100%',height:'100%',borderRadius:'50%',background:destaqueMes.cor||B,border:'2px solid #fff',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontWeight:800,fontSize:20}}>{destaqueMes.nome.charAt(0)}</div>}
-      </div>
-      <div style={{position:'absolute',bottom:-3,right:-3,width:22,height:22,borderRadius:'50%',background:'linear-gradient(135deg,#FCD34D,#F59E0B)',border:'2px solid #0A2D6E',display:'flex',alignItems:'center',justifyContent:'center',color:'#78350F'}}><Icon name="trophy" size={11} strokeWidth={2.4}/></div>
-    </div>
-    <div style={{flex:1,minWidth:0}}>
-      <div style={{fontSize:10,fontWeight:800,color:'#FCD34D',textTransform:'uppercase',letterSpacing:'.06em'}}>Destaque de {destaqueMes.mes}</div>
-      <div style={{fontSize:15,fontWeight:800,color:'#fff',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{destaqueMes.nome}</div>
-      <div style={{fontSize:11,color:'rgba(255,255,255,.75)',marginTop:1}}>{destaqueMes.total} registros · {destaqueMes.pct}% da equipe</div>
-    </div>
-  </div>}
   {isGuest&&(user.role==='farmaceutico'||user.role==='auxiliar'||user.role==='diarista')&&onSolicitar&&(<button onClick={onSolicitar} style={{width:'100%',marginBottom:14,padding:'13px',background:B,border:'none',borderRadius:14,color:'#fff',fontSize:14,fontWeight:700,cursor:'pointer',boxShadow:'0 4px 14px rgba(19,81,180,.3)'}}>📋 Solicitar Movimentacao</button>)}
   <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:10,marginBottom:14}}>
     {stats.map(function(s){return(
@@ -1108,28 +1072,6 @@ return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
             <span className={'badge '+(vencido?'badge-red':v.dias<=15?'badge-red':'badge-amber')} style={{whiteSpace:'nowrap'}}>{vencido?'Venceu há '+Math.abs(v.dias)+'d':'Vence em '+v.dias+'d'}</span>
           </div>
         );})}
-    </div>
-    <div className="card">
-      <div className="ch"><div className="ch-title"><div className="ch-accent"/><span style={{display:'flex',alignItems:'center',gap:6}}><Icon name="trophy" size={13}/> Ranking do Mês</span></div><span style={{fontSize:11,color:'#94A3B8'}}>quem será o melhor?</span></div>
-      {rankingMesHome.length===0
-        ?<div style={{padding:'24px',textAlign:'center',color:'#94A3B8',fontSize:13}}>Nenhuma movimentação registrada esse mês.</div>
-        :<div style={{padding:'12px 16px'}}>
-          {rankingMesHome.map(function(m,i){var medalha=i===0?['#FCD34D','#F59E0B']:i===1?['#E2E8F0','#94A3B8']:i===2?['#D6A571','#B45309']:null;var souEu=m.nome===user.name;return(
-            <div key={i} style={{display:'flex',alignItems:'center',gap:8,marginBottom:i<rankingMesHome.length-1?10:0,background:souEu?'var(--itq-tint)':'transparent',borderRadius:10,padding:souEu?'6px 8px':'0',marginLeft:souEu?-8:0,marginRight:souEu?-8:0}}>
-              {medalha
-                ?<div style={{width:20,height:20,borderRadius:'50%',background:'linear-gradient(135deg,'+medalha[0]+','+medalha[1]+')',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:800,color:'#fff'}}>{i+1}</div>
-                :<span style={{fontSize:11,fontWeight:700,color:'#94A3B8',width:20,textAlign:'center',flexShrink:0}}>{i+1}</span>}
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:12,fontWeight:souEu?800:600,color:'var(--itq-ink)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',marginBottom:3}}>{m.nome}{souEu?' (você)':''}</div>
-                <div style={{height:6,background:'var(--itq-tint)',borderRadius:3,overflow:'hidden'}}><div style={{width:m.pct+'%',height:'100%',background:medalha?'linear-gradient(90deg,'+medalha[0]+','+medalha[1]+')':B,borderRadius:3}}/></div>
-              </div>
-              <div style={{textAlign:'right',flexShrink:0,minWidth:36}}>
-                <div style={{fontSize:13,fontWeight:800,color:B}}>{m.total}</div>
-                <div style={{fontSize:9,color:'#94A3B8'}}>{m.pct}%</div>
-              </div>
-            </div>
-          );})}
-        </div>}
     </div>
   </React.Fragment>):(
   <div className="card">
@@ -2185,7 +2127,7 @@ return(
       {ok&&<div className="ok">{ok}</div>}
       {isGuest&&!canMove&&<div className="wn">Modo convidado — sera enviado para aprovação.</div>}
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginTop:4}}>
-        <button onClick={save} disabled={saving} className={temaItaq?'bp':'br'} style={{opacity:saving?0.5:1,margin:0}}>{isGuest&&!canMove?'Solicitar':'Registrar Saída'+(destino==='emergencia'?' · EMERGÊNCIA':'')}</button>
+        <button onClick={save} disabled={saving} className={temaItaq?'bp':'br'} style={Object.assign({opacity:saving?0.5:1,margin:0,lineHeight:1.25},(isGuest&&!canMove)||destino==='sus'?{}:{background:infoD.cor,boxShadow:'none'})}>{isGuest&&!canMove?'Solicitar':<span><span style={{display:'block',fontSize:12,fontWeight:600,opacity:.9}}>Registrar saída para</span><span style={{display:'block',fontSize:15,fontWeight:800}}>{(infoD.label||'').toUpperCase()}{pedeUbs&&ubsSel?' — '+ubsSel:''}</span></span>}</button>
         <button onClick={adicionarCarrinho} disabled={saving} style={temaItaq?{padding:'14px',background:'var(--itq-tint)',border:'1.5px solid var(--blue-700)',borderRadius:12,color:'var(--blue-700)',fontWeight:800,fontSize:14,cursor:'pointer',opacity:saving?0.5:1}:{padding:'14px',background:'#F59E0B',border:'none',borderRadius:12,color:'#fff',fontWeight:800,fontSize:14,cursor:'pointer',opacity:saving?0.5:1}}>+ Carrinho{temaItaq?'':' 🛒'}</button>
       </div>
       {carrinho.length>0&&<div style={temaItaq?{marginTop:12,background:'var(--itq-tint)',border:'1.5px solid var(--itq-tint-line)',borderRadius:12,padding:14}:{marginTop:12,background:'#FFFBEB',border:'2px solid #F59E0B',borderRadius:12,padding:14}}>
@@ -3348,6 +3290,7 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
           <div style={{flex:1,minWidth:0}}>
             <div style={{fontWeight:700,fontSize:12,color:'#1E293B',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{e.medicamentoNome}</div>
             <div style={{fontSize:10,color:'#64748B',marginTop:1}}>{fmtD(e.criadoEm)} {fmtT(e.criadoEm)}{e.lote?' · Lote: '+e.lote:''}</div>
+            {e.tipo==='saida'&&(function(){var did=destinoDe(e);var dc=DESTINOS[did]||DESTINOS.nc;return <div style={{marginTop:3}}><span style={{display:'inline-block',fontSize:10,fontWeight:800,color:dc.cor,background:dc.bg,border:'1px solid '+dc.borda,borderRadius:10,padding:'1px 8px'}}>→ {rotuloDestino(e)}</span></div>;})()}
           </div>
           <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:2,flexShrink:0}}>
             <span style={{fontSize:11,fontWeight:700,color:e.autorColor||B,background:(e.autorColor||B)+'18',padding:'2px 8px',borderRadius:20,whiteSpace:'nowrap'}}>{nomeC(e.autorNome||'?')}</span>
@@ -4548,14 +4491,6 @@ return(
       {key:'entradas',label:'Entradas',icon:'inbox',count:minhasEntradasTotal,tiers:tiersAlto},
       {key:'conferencias',label:'Conferências',icon:'clipboard',count:confItens,tiers:tiersBaixo}
     ];
-    // Minha posição no ranking do mês ATUAL (ainda em andamento) — é só pra motivar, não é o
-    // "Destaque do Mês" (esse é sempre do mês anterior já fechado, pra não ficar trocando de
-    // nome toda hora que a disputa muda de líder; ver TabDashboard).
-    var mesAtual=todayStr().slice(0,7);
-    var porAutorMes={};(entries||[]).forEach(function(e){if((e.criadoEm||'').slice(0,7)!==mesAtual)return;if(e.tipo==='saida'&&_ehSaidaNaoReal(e))return;var k=e.autorNome||'?';if(!porAutorMes[k])porAutorMes[k]=0;porAutorMes[k]++;});
-    var rankingMes=Object.keys(porAutorMes).map(function(k){return {nome:k,total:porAutorMes[k]};}).sort(function(a,b){return b.total-a.total;});
-    var minhaPosicao=rankingMes.findIndex(function(r){return r.nome===user.name;})+1;
-    var meuTotalMes=porAutorMes[user.name]||0;
     return(<React.Fragment>
       <div className="card" style={{marginBottom:14,padding:'16px 18px'}}>
         <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:14}}>
@@ -4580,22 +4515,6 @@ return(
           </div>
           );})}
       </div>
-      {rankingMes.length>1&&<div className="card" style={{marginBottom:14,padding:'16px 18px'}}>
-        <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:4}}>
-          <div style={{width:36,height:36,borderRadius:10,background:minhaPosicao===1?'linear-gradient(135deg,#B45309,#D97706)':'linear-gradient(135deg,var(--blue-900),var(--blue-700))',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',flexShrink:0}}><Icon name="star" size={17}/></div>
-          <div>
-            <div style={{fontWeight:700,fontSize:15,color:'#1E293B'}}>Ranking do Mês</div>
-            <div style={{fontSize:12,color:'#94A3B8'}}>Sua posição entre {rankingMes.length} pessoa{rankingMes.length>1?'s':''} da equipe — disputa deste mês, ainda em andamento</div>
-          </div>
-        </div>
-        <div style={{marginTop:10,background:minhaPosicao===1?'#FFFBEB':'var(--itq-tint)',border:'1.5px solid '+(minhaPosicao===1?'#FDE68A':'var(--itq-tint-line)'),borderRadius:12,padding:'12px 14px',display:'flex',alignItems:'center',gap:12}}>
-          <div style={{fontSize:24,fontWeight:900,color:minhaPosicao===1?'#B45309':B}}>#{minhaPosicao||'—'}</div>
-          <div style={{flex:1}}>
-            <div style={{fontSize:13,fontWeight:700,color:'var(--itq-ink)'}}>{minhaPosicao===1?'Você está liderando a disputa deste mês!':'Você registrou '+meuTotalMes+' movimentaç'+(meuTotalMes===1?'ão':'ões')+' esse mês'}</div>
-            <div style={{fontSize:11,color:'var(--itq-soft)',marginTop:1}}>{minhaPosicao===1?'Continue assim 🎉':'Mais que '+rankingMes.filter(function(r){return r.total<meuTotalMes;}).length+' colega(s) da equipe'}</div>
-          </div>
-        </div>
-      </div>}
     </React.Fragment>);
   })()}
 
