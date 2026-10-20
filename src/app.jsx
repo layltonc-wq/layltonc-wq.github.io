@@ -2970,13 +2970,19 @@ var DIA_GRUPOS=[
 function TabRelatorio(props){
   var db=props.db;var user=props.user||{};
   function nomeC(n){if(!n)return '?';var p=n.trim().split(' ');return p.length>=2?p[0]+' '+p[1]:p[0];}var entries=props.entries;var medications=props.medications;var _dF=useState(todayStr());var dF=_dF[0];var setDF=_dF[1];var _dT=useState(todayStr());var dT=_dT[0];var setDT=_dT[1];var _tipo=useState('todos');var tipo=_tipo[0];var setTipo=_tipo[1];var _sub=useState('mov');var sub=_sub[0];var setSub=_sub[1];var _filtCatRel=useState('todos');var filtCatRel=_filtCatRel[0];var setFiltCatRel=_filtCatRel[1];var _filtMeds=useState([]);var filtMeds=_filtMeds[0];var setFiltMeds=_filtMeds[1];var _filtBusca=useState('');var filtBusca=_filtBusca[0];var setFiltBusca=_filtBusca[1];var _filtBuscaCat=useState('todos');var filtBuscaCat=_filtBuscaCat[0];var setFiltBuscaCat=_filtBuscaCat[1];var _rankDF=useState((function(){var d=new Date();d.setDate(d.getDate()-30);return d.toISOString().slice(0,10);})());var rankDF=_rankDF[0];var setRankDF=_rankDF[1];var _rankDT=useState(todayStr());var rankDT=_rankDT[0];var setRankDT=_rankDT[1];var _rankDiag=useState(null);var rankDiag=_rankDiag[0];var setRankDiag=_rankDiag[1];var _rankCat=useState('todos');var rankCat=_rankCat[0];var setRankCat=_rankCat[1];
-var _diaHora=useState('');var diaHora=_diaHora[0];var setDiaHora=_diaHora[1];var _diaGrupo=useState('');var diaGrupo=_diaGrupo[0];var setDiaGrupo=_diaGrupo[1];var _diaCats=useState([]);var diaCats=_diaCats[0];var setDiaCats=_diaCats[1];var _filtResp=useState('');var filtResp=_filtResp[0];var setFiltResp=_filtResp[1];
+var _diaHora=useState('');var diaHora=_diaHora[0];var setDiaHora=_diaHora[1];var _relDiaLog=useState(null);var relDiaLog=_relDiaLog[0];var setRelDiaLog=_relDiaLog[1];var _diaGrupo=useState('');var diaGrupo=_diaGrupo[0];var setDiaGrupo=_diaGrupo[1];var _diaCats=useState([]);var diaCats=_diaCats[0];var setDiaCats=_diaCats[1];var _filtResp=useState('');var filtResp=_filtResp[0];var setFiltResp=_filtResp[1];
 var _relPeriodo=useState('mensal');var relPeriodo=_relPeriodo[0];var setRelPeriodo=_relPeriodo[1];
 var _relMes=useState(todayStr().slice(0,7));var relMes=_relMes[0];var setRelMes=_relMes[1];
 // Filtro de destino das saídas: pode marcar VÁRIOS ao mesmo tempo (nenhum marcado = todos). Com filtro ativo, só entram SAÍDAS
 // dos destinos marcados. Destinos = lista da prefeitura (props.destinos, inclui os "tirados" p/ ver histórico) + 'nc'.
 var _filtDest=useState([]);var filtDest=_filtDest[0];var setFiltDest=_filtDest[1];
 var _filtUbs=useState([]);var filtUbs=_filtUbs[0];var setFiltUbs=_filtUbs[1];
+// Registro do ÚLTIMO relatório do dia puxado (hora, quem, o que foi filtrado) — compartilhado entre aparelhos e só daquela data.
+useEffect(function(){
+  setRelDiaLog(null);
+  var unsub=db.collection('config').doc('reldia__'+tenantDe(user)+'__'+(dF||todayStr())).onSnapshot(function(sn){setRelDiaLog(sn.exists?sn.data():null);},function(){});
+  return unsub;
+},[dF]);
 var destLista=(props.destinos&&props.destinos.length)?props.destinos:[{id:'sus',nome:'SUS (usuário)'},{id:'emergencia',nome:'Emergência'}];
 function passaDestino(e){
   if(!filtDest.length)return true;
@@ -3193,6 +3199,11 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
   </div>
   {DestinoChips()}
   <div style={{height:10}}/>
+  {relDiaLog&&relDiaLog.em&&<div style={{background:'#F5F3FF',border:'1px solid #DDD6FE',borderRadius:12,padding:'10px 14px',marginBottom:12,fontSize:12,color:'#4C1D95',lineHeight:1.5}}>
+    <div style={{fontWeight:800}}>📄 Último relatório deste dia: às {fmtT(relDiaLog.em)}{relDiaLog.por?' · por '+relDiaLog.por:''}</div>
+    <div><strong>Categorias:</strong> {relDiaLog.categorias||'—'} · <strong>Destino:</strong> {relDiaLog.destino||'—'}{relDiaLog.aPartirDe?' · a partir de '+relDiaLog.aPartirDe:''}</div>
+    <div style={{color:'#6D28D9'}}>{relDiaLog.itens} medicamento(s) · {relDiaLog.unidades} unidade(s)</div>
+  </div>}
   {(function(){
     var saidasDia=entries.filter(function(e){
       if(e.tipo!=='saida'||e.ficticioDiv)return false;
@@ -3269,6 +3280,9 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
         lista.forEach(function(it){html+='<tr><td>'+it.nome+'</td><td>'+it.cat+'</td><td>'+it.horarios.join(', ')+'</td><td style="text-align:center;font-weight:700">'+it.total+'</td></tr>';});
         html+='<tr class="total"><td colspan="3">TOTAL</td><td style="text-align:center">'+totalGeral+'</td></tr>';
         html+='</table></body></html>';
+        // guarda "o que foi puxado" pra aparecer na tela (última vez, hora e filtros daquela data)
+        var _cats=diaGrupo?((DIA_GRUPOS.find(function(x){return x.id===diaGrupo;})||{}).nome||''):(diaCats.length?diaCats.map(function(c){return (TIPOS[c]&&TIPOS[c].label)||c;}).join(' + '):'Todas as categorias');
+        try{db.collection('config').doc('reldia__'+tenantDe(user)+'__'+(dF||todayStr())).set({em:new Date().toISOString(),por:user.name||'',categorias:_cats,destino:filtDest.length?_nomeDestFiltro:'Todos os destinos',aPartirDe:diaHora||'',itens:lista.length,unidades:totalGeral,data:(dF||todayStr()),tenant_id:tenantDe(user)}).catch(function(){});}catch(_){}
         _imprimirDoc(html);
       }} className="bp">🖨️ Imprimir / Salvar PDF</button>
     </div>);
@@ -4083,14 +4097,15 @@ function TabLeites(props){
       };
     });
     var entregas=linhas.filter(function(l){return l.leiteId&&l.qtdEntregue>0;});
-    if(entregas.length===0){alert2('Informe ao menos um leite com quantidade entregue (maior que zero).');return;}
+    var matsBaixa=bMats.filter(function(m){return !m.avulso||(m.medId&&(parseInt(m.qtdEntregue)||0)>0);}).map(function(m){return{medId:m.medId,nome:m.nome,qtdPrescrita:m.qtdPrescrita,qtdEntregue:parseInt(m.qtdEntregue)||0,avulso:!!m.avulso};});
+    if(bMats.some(function(m){return m.avulso&&!m.medId&&(parseInt(m.qtdEntregue)||0)>0;})){alert2('Escolha o material em cada linha de material avulso (ou remova a linha).');return;}
+    if(entregas.length===0&&!matsBaixa.some(function(m){return m.qtdEntregue>0;})){alert2('Informe ao menos um leite ou material com quantidade entregue (maior que zero).');return;}
     var bloqueios=[];
     entregas.forEach(function(l){
       var disp=stock[l.leiteId]||0;
       if(disp<=0)bloqueios.push(l.nome+': estoque zerado (0 disponível)');
       else if(l.qtdEntregue>disp)bloqueios.push(l.nome+': quantidade ('+l.qtdEntregue+') maior que disponível ('+disp+')');
     });
-    var matsBaixa=bMats.map(function(m){return{medId:m.medId,nome:m.nome,qtdPrescrita:m.qtdPrescrita,qtdEntregue:parseInt(m.qtdEntregue)||0};});
     matsBaixa.forEach(function(m){
       if(m.qtdEntregue>0){
         var disp=stock[m.medId]||0;
@@ -4101,7 +4116,7 @@ function TabLeites(props){
     if(bloqueios.length>0){alert2('Estoque insuficiente:\n'+bloqueios.join('\n')+'\n\nAjuste as quantidades para no máximo o disponível.');return;}
     setBSaving(true);
     // Compat: primeiro leite (para telas antigas que leem leiteNome/qtdLeiteEntregue).
-    var principal=entregas[0];
+    var principal=entregas[0]||{leiteId:'',nome:'',substituto:false,qtdPrescrita:0,qtdEntregue:0};
     // 1. cria registro de retirada
     var retObj={
       pacienteId:showBaixa.id,
@@ -4143,7 +4158,7 @@ function TabLeites(props){
         matsBaixa.forEach(function(m){
           if(m.qtdEntregue>0){
             var fefoM=fefoPorMed[m.medId];
-            promises.push(onSave({medicamentoId:m.medId,medicamentoNome:m.nome,tipo:'saida',destino:'sus',quantidade:m.qtdEntregue,lote:fefoM?fefoM.lote:'',validade:fefoM?fefoM.validade:'',observacao:obsBase+' — material ('+m.qtdEntregue+'/'+m.qtdPrescrita+')',viaLeitePac:true,pacienteLeiteId:showBaixa.id}));
+            promises.push(onSave({medicamentoId:m.medId,medicamentoNome:m.nome,tipo:'saida',destino:'sus',quantidade:m.qtdEntregue,lote:fefoM?fefoM.lote:'',validade:fefoM?fefoM.validade:'',observacao:obsBase+(m.avulso?' — material AVULSO ('+m.qtdEntregue+')':' — material ('+m.qtdEntregue+'/'+m.qtdPrescrita+')'),viaLeitePac:true,pacienteLeiteId:showBaixa.id}));
           }
         });
         return Promise.all(promises);
@@ -4166,6 +4181,10 @@ function TabLeites(props){
   function delLeiteForm(i){setFLeites(fLeites.length<=1?[{leiteId:'',qtd:''}]:fLeites.filter(function(_,j){return j!==i;}));}
 
   function updMatBaixa(i,valor){var novo=bMats.slice();novo[i]=Object.assign({},novo[i],{qtdEntregue:valor});setBMats(novo);}
+  // Material AVULSO na entrega (fora do que está prescrito pro paciente): escolhe o material e a quantidade na hora.
+  function addMatAvulsoBaixa(){setBMats(bMats.concat([{medId:'',nome:'',qtdPrescrita:0,qtdEntregue:'',avulso:true}]));}
+  function updMatBaixaMed(i,id){var m=materiaisCadastrados.find(function(x){return x.id===id;});var novo=bMats.slice();novo[i]=Object.assign({},novo[i],{medId:id,nome:m?m.nome:''});setBMats(novo);}
+  function delMatBaixa(i){setBMats(bMats.filter(function(_,j){return j!==i;}));}
 
   // Linhas de leite na baixa (principais + avulsas):
   function updLeiteBaixa(i,campo,valor){var novo=bLeites.slice();novo[i]=Object.assign({},novo[i]);if(campo==='leiteId'){var m=leitesCadastrados.find(function(x){return x.id===valor;});novo[i].leiteId=valor;novo[i].nome=m?m.nome:'';}else{novo[i][campo]=valor;}setBLeites(novo);}
@@ -4338,16 +4357,25 @@ function TabLeites(props){
           })}
           {bLeites.length===0&&<div style={{fontSize:12,color:'#94A3B8',padding:'8px 0'}}>Nenhum leite. Use "+ Retirada avulsa" para adicionar.</div>}
         </div>
-        {bMats.length>0&&<div style={{marginBottom:12}}>
-          <div style={{fontWeight:700,fontSize:12,color:'#1E293B',marginBottom:6}}>📦 Materiais:</div>
-          {bMats.map(function(m,i){return(<div key={i} style={{background:'#F8FAFC',borderRadius:10,padding:'8px 12px',marginBottom:6,display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
-            <div style={{flex:1,minWidth:120}}>
-              <div style={{fontSize:12,fontWeight:600,color:'#1E293B'}}>{m.nome}</div>
-              <div style={{fontSize:10,color:'#94A3B8'}}>Prescrito: {m.qtdPrescrita}</div>
+        <div style={{marginBottom:12}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+            <div style={{fontWeight:700,fontSize:12,color:'#1E293B'}}>📦 Materiais:</div>
+            <button onClick={addMatAvulsoBaixa} style={{background:'#E0F2FE',border:'none',borderRadius:8,padding:'6px 12px',fontSize:11,fontWeight:700,color:'#0369A1',cursor:'pointer'}}>+ Material</button>
+          </div>
+          {bMats.map(function(m,i){return(<div key={i} style={{background:m.avulso?'#F0F9FF':'#F8FAFC',border:m.avulso?'1px solid #BAE6FD':'none',borderRadius:10,padding:'8px 12px',marginBottom:6,display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+            <div style={{flex:1,minWidth:140}}>
+              {m.avulso
+                ?<select value={m.medId} onChange={function(e){updMatBaixaMed(i,e.target.value);}} className="inp" style={{marginBottom:0}}>
+                    <option value="">Selecione o material...</option>
+                    {materiaisCadastrados.map(function(mm){return(<option key={mm.id} value={mm.id}>{mm.nome}{(stock[mm.id]||0)>0?' ('+stock[mm.id]+' em estoque)':' (sem estoque)'}</option>);})}
+                  </select>
+                :<div><div style={{fontSize:12,fontWeight:600,color:'#1E293B'}}>{m.nome}</div><div style={{fontSize:10,color:'#94A3B8'}}>Prescrito: {m.qtdPrescrita}</div></div>}
             </div>
-            <input value={m.qtdEntregue} onChange={function(e){updMatBaixa(i,e.target.value.replace(/[^0-9]/g,''));}} className="inp" style={{marginBottom:0,width:80,fontSize:14,fontWeight:700,textAlign:'center'}} inputMode="numeric"/>
+            <input value={m.qtdEntregue} onChange={function(e){updMatBaixa(i,e.target.value.replace(/[^0-9]/g,''));}} placeholder={m.avulso?'Qtd':''} className="inp" style={{marginBottom:0,width:80,fontSize:14,fontWeight:700,textAlign:'center'}} inputMode="numeric"/>
+            {m.avulso&&<button onClick={function(){delMatBaixa(i);}} title="Remover" style={{background:'#FEE2E2',border:'none',borderRadius:8,width:34,height:34,cursor:'pointer',fontSize:13}}>🗑</button>}
           </div>);})}
-        </div>}
+          {bMats.length===0&&<div style={{fontSize:12,color:'#94A3B8',padding:'4px 0'}}>Nenhum material. Use "+ Material" para adicionar.</div>}
+        </div>
         <div style={{marginBottom:14}}>
           <div style={{fontWeight:700,fontSize:12,color:'#1E293B',marginBottom:4}}>Data da retirada:</div>
           <input type="date" value={bData} onChange={function(e){setBData(e.target.value);}} className="inp"/>
@@ -4376,11 +4404,11 @@ function TabLeites(props){
               <div style={{fontWeight:800,fontSize:13,color:'#0C6B3E'}}>📅 {r.data}</div>
               <div style={{fontSize:11,color:'#64748B'}}>por {r.liberadoPor}</div>
             </div>
-            {(r.leites&&r.leites.length?r.leites:[{leiteId:r.leiteId,nome:r.leiteNome,qtdPrescrita:r.qtdLeitePrescrita,qtdEntregue:r.qtdLeiteEntregue,substituto:r.leiteAlternativo,avulsa:false}]).map(function(l,i){return(
+            {(r.leites&&r.leites.length?r.leites:(r.leiteId?[{leiteId:r.leiteId,nome:r.leiteNome,qtdPrescrita:r.qtdLeitePrescrita,qtdEntregue:r.qtdLeiteEntregue,substituto:r.leiteAlternativo,avulsa:false}]:[])).map(function(l,i){return(
               <div key={i} style={{fontSize:12,color:'#1E293B'}}>🍼 <strong>{l.nome}</strong>{l.avulsa&&<span style={{color:'#7C3AED',fontSize:11,marginLeft:6}}>(avulso)</span>}{!l.avulsa&&l.substituto&&<span style={{color:'#7C3AED',fontSize:11,marginLeft:6}}>(opcional)</span>}: {l.qtdEntregue}{!l.avulsa&&l.qtdPrescrita?'/'+l.qtdPrescrita:''} un.{!l.avulsa&&l.qtdPrescrita&&l.qtdEntregue<l.qtdPrescrita&&<span style={{color:'#B45309'}}> ⚠️ parcial</span>}</div>
             );})}
             {r.materiais&&r.materiais.length>0&&<div style={{marginTop:6,paddingTop:6,borderTop:'1px dashed #E2E8F0'}}>
-              {r.materiais.map(function(m,i){return(<div key={i} style={{fontSize:11,color:'#64748B'}}>📦 {m.nome}: {m.qtdEntregue}/{m.qtdPrescrita}</div>);})}
+              {r.materiais.filter(function(m){return m.qtdEntregue>0||!m.avulso;}).map(function(m,i){return(<div key={i} style={{fontSize:11,color:'#64748B'}}>📦 {m.nome}: {m.qtdEntregue}{m.avulso?' (avulso)':'/'+m.qtdPrescrita}</div>);})}
             </div>}
           </div>);})
         }
