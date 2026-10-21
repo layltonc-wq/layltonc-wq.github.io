@@ -851,6 +851,7 @@ function Auth(props){
       <div style={{background:'#fff',borderRadius:24,padding:'28px 24px',maxWidth:380,width:'100%',boxShadow:'0 24px 64px rgba(0,0,0,.25)'}}>
         <div style={{display:'flex',background:'#F1F5F9',borderRadius:10,padding:3,marginBottom:24,gap:3}}>
           {[['login','Entrar'],['register','Criar conta']].map(function(item){return <button key={item[0]} onClick={function(){setMode(item[0]);setErr('');}} style={{flex:1,padding:'9px',borderRadius:8,border:'none',background:mode===item[0]?'#fff':'transparent',color:mode===item[0]?B:'#64748B',cursor:'pointer',fontSize:13,fontWeight:mode===item[0]?700:500,boxShadow:mode===item[0]?'0 1px 4px rgba(0,0,0,.08)':'none',transition:'all .15s'}}>{item[1]}</button>;})}</div>
+        {mode==='login'&&(function(){try{return localStorage.getItem('fc_sessao_expirou')==='1';}catch(e){return false;}})()&&<div style={{background:'#FFFBEB',border:'1.5px solid #FCD34D',color:'#92400E',borderRadius:10,padding:'10px 12px',marginBottom:14,fontSize:12,lineHeight:1.4}}>Sua sessão terminou por inatividade. Entre novamente — o que estava salvo não foi perdido.</div>}
         {mode==='register'&&tenantDaURL()&&<div style={{background:'#EFF6FF',border:'1.5px solid #BFDBFE',color:'#1351B4',borderRadius:10,padding:'8px 12px',fontSize:12,fontWeight:700,marginBottom:10}}>Cadastro para a prefeitura: {tenantDaURL()}<div style={{fontWeight:500,color:'#475569',marginTop:2}}>Depois de criar a conta, aguarde a aprovação do gestor.</div></div>}
         {mode==='register'&&(<div>
           <Lbl c="Nome completo"/><input value={name} onChange={function(e){setName(e.target.value);}} placeholder="Ex: Ana Silva" className="inp"/>
@@ -7093,8 +7094,19 @@ function TabPrevisao(props){
   var _atas=useState([]);var atas=_atas[0];var setAtas=_atas[1];
   var _sub=useState('previsao');var sub=_sub[0];var setSub=_sub[1];
   var _diasPrev=useState(30);var diasPrev=_diasPrev[0];var setDiasPrev=_diasPrev[1];
-  var _ajustes=useState({});var ajustes=_ajustes[0];var setAjustes=_ajustes[1];
-  var _precos=useState({});var precos=_precos[0];var setPrecos=_precos[1];// valor unitário manual por medicamento (string)
+  // Rascunho do pedido (quantidades e valores digitados) guardado no aparelho: antes ficava só na memória da tela, então qualquer
+  // recarga (atualização do app, trocar de aba e voltar, celular fechando o navegador) apagava tudo e a pessoa "voltava pro começo".
+  var _rascKey='fc_pedido_rasc_'+tenantDe(user);
+  var _rascIni=useState(function(){try{var r=JSON.parse(localStorage.getItem(_rascKey)||'null');if(r&&r.em&&(Date.now()-r.em)<2*86400000&&(Object.keys(r.ajustes||{}).length||Object.keys(r.precos||{}).length))return r;}catch(e){}return null;})[0];
+  var _rascAviso=useState(!!_rascIni);var rascAviso=_rascAviso[0];var setRascAviso=_rascAviso[1];
+  var _ajustes=useState(_rascIni&&_rascIni.ajustes||{});var ajustes=_ajustes[0];var setAjustes=_ajustes[1];
+  var _precos=useState(_rascIni&&_rascIni.precos||{});var precos=_precos[0];var setPrecos=_precos[1];// valor unitário manual por medicamento (string)
+  useEffect(function(){
+    var tem=Object.keys(ajustes).length>0||Object.keys(precos).length>0;
+    try{if(tem)localStorage.setItem(_rascKey,JSON.stringify({em:Date.now(),ajustes:ajustes,precos:precos}));else localStorage.removeItem(_rascKey);}catch(e){}
+    window.__fcRascunho=tem;// o auto-update do app não recarrega a página enquanto houver pedido em andamento
+  },[ajustes,precos]);
+  useEffect(function(){return function(){window.__fcRascunho=false;};},[]);
   var _vincItemLoading=useState(null);var vincItemLoading=_vincItemLoading[0];var setVincItemLoading=_vincItemLoading[1];// item de ATA sendo vinculado automaticamente (Mudança 4)
   var _ataAberta=useState(null);var ataAberta=_ataAberta[0];var setAtaAberta=_ataAberta[1];
   var _msg=useState('');var msg=_msg[0];var setMsg=_msg[1];
@@ -8454,6 +8466,11 @@ function TabPrevisao(props){
     <div style={{maxWidth:760,margin:'0 auto',padding:'16px 12px 90px'}}>
       <div style={{fontWeight:800,fontSize:22,color:'#1E293B',marginBottom:2}}>📋 Previsão / Pedido Mensal</div>
       <div style={{fontSize:13,color:'#64748B',marginBottom:14}}>Sugestão de quanto pedir de cada medicamento</div>
+      {rascAviso&&(Object.keys(ajustes).length>0||Object.keys(precos).length>0)&&<div style={{background:'#FFFBEB',border:'1.5px solid #FCD34D',borderRadius:12,padding:'10px 14px',marginBottom:12,display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
+        <div style={{flex:1,minWidth:200,fontSize:12,color:'#92400E',lineHeight:1.4}}>📝 <strong>Recuperei o pedido que você estava montando</strong> ({Object.keys(ajustes).length} quantidade(s) e {Object.keys(precos).length} valor(es) digitados). Pode continuar de onde parou.</div>
+        <button onClick={function(){if(!window.confirm('Descartar o pedido em andamento e começar do zero?'))return;setAjustes({});setPrecos({});setRascAviso(false);}} style={{background:'#fff',border:'1.5px solid #FCD34D',borderRadius:8,padding:'6px 12px',fontSize:11,fontWeight:700,color:'#92400E',cursor:'pointer'}}>Descartar</button>
+        <button onClick={function(){setRascAviso(false);}} style={{background:'none',border:'none',fontSize:16,color:'#92400E',cursor:'pointer'}}>✕</button>
+      </div>}
 
       {msg.indexOf('ok:')===0&&<div className="ok" style={{marginBottom:10}}>✅ {msg.slice(3)}</div>}
       {msg.indexOf('e:')===0&&<div className="er" style={{marginBottom:10}}>❌ {msg.slice(2)}</div>}
@@ -12257,7 +12274,8 @@ useEffect(function(){
     }catch(e){}
   }
 },[user&&user.tenant_id]);
-useEffect(function(){if(!user)return;var stored=localStorage.getItem('fc_last_act');if(stored)lastAct.current=parseInt(stored);var timeout=(user.sessionTimeout||12)*3600000;function reset(){lastAct.current=Date.now();localStorage.setItem('fc_last_act',String(Date.now()));}function check(){if(Date.now()-lastAct.current>timeout){localStorage.removeItem('fc_last_act');logout();}}document.addEventListener('touchstart',reset);document.addEventListener('click',reset);var t=setInterval(check,60000);return function(){document.removeEventListener('touchstart',reset);document.removeEventListener('click',reset);clearInterval(t);};},[user]);
+useEffect(function(){if(user){try{localStorage.removeItem('fc_sessao_expirou');}catch(e){}}},[user]);
+useEffect(function(){if(!user)return;var stored=localStorage.getItem('fc_last_act');if(stored)lastAct.current=parseInt(stored);var timeout=(user.sessionTimeout||12)*3600000;function reset(){lastAct.current=Date.now();localStorage.setItem('fc_last_act',String(Date.now()));}function check(){if(Date.now()-lastAct.current>timeout){localStorage.removeItem('fc_last_act');try{localStorage.setItem('fc_sessao_expirou','1');}catch(e){}logout(true);}}var _ev=['touchstart','click','keydown','input','scroll','wheel'];var _ult=0;function resetT(){var n=Date.now();if(n-_ult<5000)return;_ult=n;reset();}_ev.forEach(function(ev){document.addEventListener(ev,resetT,true);});var t=setInterval(check,60000);return function(){_ev.forEach(function(ev){document.removeEventListener(ev,resetT,true);});clearInterval(t);};},[user]);
 // Popup automático "MEDICAMENTOS VENCENDO!" REMOVIDO por pedido explícito da usuária (28/09/2026):
 // mesmo depois de 3 correções seguidas (reabrindo toda hora, não reconhecendo descarte já feito,
 // virando só informativo), ainda apareceu pelo menos uma vez em Itaquitinga mostrando um item que
@@ -12535,7 +12553,7 @@ function addEntry(data){try{var obj={criadoEm:new Date().toISOString(),date:toda
   }
   return promise;
 }catch(e){console.error('addEntry erro:',e);return Promise.reject(e);}}
-function logout(){if(!confirm('Sair do sistema?'))return;db.collection('logs_acesso').add({uid:user.uid,nome:user.name,cargo:user.role,acao:'logout',criadoEm:new Date().toISOString(),tenant_id:tenantDe(user)}).catch(function(){});auth.signOut().catch(function(){});localStorage.removeItem('fc_user');localStorage.removeItem('fc_last_act');setUser(null);setShiftChecked(false);setShowShift(false);setPlantao(null);setIsGuest(false);}
+function logout(auto){if(!auto&&!confirm('Sair do sistema?'))return;db.collection('logs_acesso').add({uid:user.uid,nome:user.name,cargo:user.role,acao:'logout',criadoEm:new Date().toISOString(),tenant_id:tenantDe(user)}).catch(function(){});auth.signOut().catch(function(){});localStorage.removeItem('fc_user');localStorage.removeItem('fc_last_act');setUser(null);setShiftChecked(false);setShowShift(false);setPlantao(null);setIsGuest(false);}
 // Referências estáveis (useStableFn) pros handlers passados a components memoizados (React.memo) —
 // sem isso, TabDashboard/TabEstoque re-renderizariam a cada render do App mesmo memoizados, já que
 // receberiam uma função NOVA em toda passada (quebrando a comparação rasa do React.memo).

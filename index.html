@@ -19,14 +19,28 @@
 // caso a página NUNCA recarrega sozinha, então sem isso ela ficava presa na versão antiga até
 // fechar e abrir o app de verdade), e (3) a cada 5 minutos enquanto ficar aberta, pro caso raro
 // de o próprio celular manter a aba viva em segundo plano por muito tempo sem trocar de app.
-window.__FC_VERSION=1792521382;
+window.__FC_VERSION=1792585581;
 (function(){
   function checarVersaoNova(){
     try{
       fetch(location.pathname+'?_vcheck='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(html){
         var m=html.match(/window\.__FC_VERSION=(\d+)/);
         if(m&&parseInt(m[1],10)!==window.__FC_VERSION){
-          location.href=location.pathname+'?_v='+Date.now();
+          // Se a pessoa está DIGITANDO ou com um pedido em andamento, não recarrega na cara dela: mostra um aviso e deixa ela
+          // atualizar quando quiser (a próxima checagem recarrega sozinho assim que ela parar).
+          var a=document.activeElement;
+          var ocupada=window.__fcRascunho===true||(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
+          if(ocupada){
+            if(!document.getElementById('fc-nova-versao')){
+              var b=document.createElement('div');b.id='fc-nova-versao';
+              b.style.cssText='position:fixed;left:12px;right:12px;bottom:84px;z-index:99999;background:#1351B4;color:#fff;border-radius:12px;padding:12px 14px;font:600 13px system-ui,sans-serif;display:flex;align-items:center;gap:10px;box-shadow:0 8px 24px rgba(0,0,0,.3)';
+              b.innerHTML='<span style="flex:1">🔄 Há uma versão nova do FarmaControl. Termine o que está fazendo e toque em Atualizar.</span><button style="background:#fff;color:#1351B4;border:none;border-radius:8px;padding:8px 12px;font-weight:800;cursor:pointer">Atualizar</button>';
+              b.querySelector('button').onclick=function(){location.href=location.pathname+'?_v='+Date.now();};
+              document.body.appendChild(b);
+            }
+          } else {
+            location.href=location.pathname+'?_v='+Date.now();
+          }
         }
       }).catch(function(){});
     }catch(e){}
@@ -398,6 +412,6 @@ select.inp{cursor:pointer}
   };
 </script>
 <div id="root"></div>
-<script src="app.js?v=142fccab92"></script>
+<script src="app.js?v=91a52a7cfc"></script>
 </body>
 </html>
