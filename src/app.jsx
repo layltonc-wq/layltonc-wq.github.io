@@ -359,7 +359,11 @@ function _parseMoedaBR(s){if(s==null)return NaN;var str=String(s).trim();if(!str
 // Pra campos que guardam ora um número puro (ex.: vUnit de item nunca editado nesta sessão, onde
 // "." já É o separador decimal normal do JS), ora uma string digitada no padrão BR (com vírgula) —
 // só trata "." como separador de milhar quando há vírgula na string, senão lê o número cru.
-function _parseValorInput(v){if(typeof v==='number')return v;var s=String(v==null?'':v).trim();if(!s)return NaN;if(s.indexOf(',')>=0)s=s.replace(/\./g,'').replace(',','.');return parseFloat(s);}
+// Valor digitado em formato brasileiro. Com vírgula: ponto = milhar ("1.234,56" -> 1234.56). Sem vírgula: "15.000" / "1.250.000" é
+// MILHAR (15000) — antes virava 15 —, e "12.5" / "0.075" continua sendo decimal.
+function _parseValorInput(v){if(typeof v==='number')return v;var s=String(v==null?'':v).trim().replace(/[^0-9,.\-]/g,'');if(!s)return NaN;if(s.indexOf(',')>=0)s=s.replace(/\./g,'').replace(',','.');else if(/^-?[1-9]\d{0,2}(\.\d{3})+$/.test(s))s=s.replace(/\./g,'');return parseFloat(s);}
+// Quantidade inteira digitada (aceita "15.000" como 15000; ignora decimais).
+function _parseQtdInput(v){if(typeof v==='number')return Math.round(v)||0;var s=String(v==null?'':v).trim();if(!s)return 0;if(/^[1-9]\d{0,2}(\.\d{3})+$/.test(s))s=s.replace(/\./g,'');return parseInt(s,10)||0;}
 // Remove qualquer campo `undefined` (inclusive dentro de objetos/arrays aninhados) antes de escrever
 // no Firestore — o SDK lança uma exceção SÍNCRONA (não uma promise rejeitada) quando encontra
 // `undefined` em qualquer profundidade, o que escapava do try/catch/then de quem chamava e resultava
@@ -7346,13 +7350,13 @@ function TabPrevisao(props){
   function valorPedido(med){
     var p=calcularPrevisao(med);
     var aj=ajustes[med.id];
-    return aj!==undefined?(parseInt(aj)||0):p.pedir;
+    return aj!==undefined?_parseQtdInput(aj):p.pedir;
   }
   // Valor unitário EFETIVO de um medicamento no pedido: preferência para o valor digitado manualmente
   // (estado precos), depois o vUnit do item da ata (se houver), senão 0 (exibido como "—").
   function valorUnit(medId,item){
     var pm=precos[medId];
-    if(pm!==undefined&&pm!==''){var n=parseFloat(String(pm).replace(',','.'));if(!isNaN(n))return n;}
+    if(pm!==undefined&&pm!==''){var n=_parseValorInput(pm);if(!isNaN(n))return n;}
     return item&&item.vUnit?(Number(item.vUnit)||0):0;
   }
   // FONTE ÚNICA das linhas de pedido de uma ATA — usada por PDF consolidado, PDF por ATA e Excel.
@@ -7377,9 +7381,9 @@ function TabPrevisao(props){
       if(med)return; // já contabilizado acima
       var uKey=itemAtaKey(ata.id,idx);
       var aj=ajustes[uKey];
-      var qtd=aj!==undefined?(parseInt(aj)||0):0;
+      var qtd=aj!==undefined?_parseQtdInput(aj):0;
       if(qtd<=0)return;
-      var pm=precos[uKey];var vU=(pm!==undefined&&pm!=='')?(parseFloat(String(pm).replace(',','.'))||0):(Number(it.vUnit)||0);
+      var pm=precos[uKey];var vU=(pm!==undefined&&pm!=='')?(_parseValorInput(pm)||0):(Number(it.vUnit)||0);
       linhas.push({med:null,item:it,qtd:qtd,vUnit:vU,vTotal:qtd*vU,
         desc:it.descricao||'(sem descrição)',unidade:it.unidade||'UN',num:it.num||'',marca:it.marca||'',naoVinculado:true});
     });
@@ -7594,7 +7598,7 @@ function TabPrevisao(props){
             // _parseValorInput entende vírgula como decimal e ponto como separador de milhar, igual o vUnit.
             var qN=Math.round(_parseValorInput(qtd))||0;
             if(!desc||qN===0)return;
-            var vUN=parseFloat((vU||'').replace(/[^0-9,]/g,'').replace(',','.'))||0;
+            var vUN=_parseValorInput(vU||'')||0;
             itens.push({num:n,descricao:desc,marca:marca,qtdTeto:qN,unidade:unid,vUnit:vUN,pedidoAcumulado:0,medicamentoId:''});
           });
         });
@@ -7630,7 +7634,7 @@ function TabPrevisao(props){
     if(editItemIdx<0||!editItemDraft)return;
     var qN=parseInt((editItemDraft.qtdTeto||'').replace(/[^0-9]/g,''))||0;
     if(!editItemDraft.descricao.trim()||qN<=0){setMsg('e:Descrição e quantidade são obrigatórias');return;}
-    var vUN=parseFloat((editItemDraft.vUnit||'').replace(/[^0-9,]/g,'').replace(',','.'))||0;
+    var vUN=_parseValorInput(editItemDraft.vUnit||'')||0;
     setImportPreview(function(arr){
       var novo=arr.slice();
       novo[editItemIdx]=Object.assign({},novo[editItemIdx],{descricao:editItemDraft.descricao.trim(),qtdTeto:qN,unidade:editItemDraft.unidade,vUnit:vUN});
@@ -8591,13 +8595,13 @@ function TabPrevisao(props){
                 </div>
                 <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:3}}>
                   <div style={{fontSize:10,color:'#94A3B8',fontWeight:600}}>PEDIR</div>
-                  <input type="number" min="0" value={val} onChange={function(e){var v=e.target.value;setAjustes(function(pr){var n=Object.assign({},pr);n[m.id]=v;return n;});}} style={{width:72,padding:'8px 6px',border:'2px solid '+(editado?'#F59E0B':cor2+'60'),borderRadius:10,fontSize:16,fontWeight:800,textAlign:'center',color:'#1E293B',outline:'none',background:editado?'#FFFBEB':'#fff'}}/>
+                  <input type="text" inputMode="numeric" value={val} onChange={function(e){var v=e.target.value.replace(/[^0-9]/g,'');setAjustes(function(pr){var n=Object.assign({},pr);n[m.id]=v;return n;});}} style={{width:96,padding:'8px 6px',border:'2px solid '+(editado?'#F59E0B':cor2+'60'),borderRadius:10,fontSize:16,fontWeight:800,textAlign:'center',color:'#1E293B',outline:'none',background:editado?'#FFFBEB':'#fff'}}/>
                   <div style={{fontSize:9,color:'#94A3B8',whiteSpace:'nowrap'}}>sugestão: {p.pedir}</div>
                   {editado&&<button onClick={function(){setAjustes(function(pr){var n=Object.assign({},pr);delete n[m.id];return n;});}} style={{fontSize:10,color:'#94A3B8',background:'none',border:'none',cursor:'pointer',padding:0}}>↺ auto</button>}
                 </div>
                 <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:3}}>
                   <div style={{fontSize:10,color:'#94A3B8',fontWeight:600}}>V. UNIT.</div>
-                  <input type="text" inputMode="decimal" value={precos[m.id]!==undefined?precos[m.id]:(item&&item.vUnit?String(item.vUnit).replace('.',','):'')} onChange={function(e){var v=e.target.value;setPrecos(function(pr){var n=Object.assign({},pr);n[m.id]=v;return n;});}} placeholder={item&&item.vUnit?'':'R$'} style={{width:72,padding:'8px 6px',border:'1.5px solid #CBD5E1',borderRadius:10,fontSize:13,fontWeight:700,textAlign:'center',color:'#1E293B',outline:'none',background:'#fff'}}/>
+                  <input type="text" inputMode="decimal" value={precos[m.id]!==undefined?precos[m.id]:(item&&item.vUnit?String(item.vUnit).replace('.',','):'')} onChange={function(e){var v=e.target.value;setPrecos(function(pr){var n=Object.assign({},pr);n[m.id]=v;return n;});}} placeholder={item&&item.vUnit?'':'R$'} style={{width:112,padding:'8px 6px',border:'1.5px solid #CBD5E1',borderRadius:10,fontSize:13,fontWeight:700,textAlign:'center',color:'#1E293B',outline:'none',background:'#fff'}}/>
                   <div style={{fontSize:9,color:'#94A3B8',whiteSpace:'nowrap'}}>tot: {(function(){var vt=val*valorUnit(m.id,item);return vt>0?'R$ '+_fmtNumBR(vt):'—';})()}</div>
                 </div>
               </div>);
@@ -9021,11 +9025,11 @@ function TabPrevisao(props){
                       <div style={{fontSize:10,color:'#94A3B8',flex:1,minWidth:0}}>sugestão: {pAuto}{vt>0?' · total: R$ '+_fmtNumBR(vt):''}</div>
                       <div style={{display:'flex',flexDirection:'column',alignItems:'center',flexShrink:0}}>
                         <span style={{fontSize:9,color:'#94A3B8',fontWeight:600}}>PEDIR</span>
-                        <input type="number" min="0" value={val} onChange={function(e){var v=e.target.value;setAjustes(function(pr){var n=Object.assign({},pr);n[m.id]=v;return n;});}} style={{width:64,padding:'6px 4px',border:'2px solid '+(edu?'#F59E0B':'#CBD5E1'),borderRadius:8,fontSize:14,fontWeight:800,textAlign:'center',outline:'none',background:edu?'#FFFBEB':'#fff'}}/>
+                        <input type="text" inputMode="numeric" value={val} onChange={function(e){var v=e.target.value.replace(/[^0-9]/g,'');setAjustes(function(pr){var n=Object.assign({},pr);n[m.id]=v;return n;});}} style={{width:88,padding:'6px 4px',border:'2px solid '+(edu?'#F59E0B':'#CBD5E1'),borderRadius:8,fontSize:14,fontWeight:800,textAlign:'center',outline:'none',background:edu?'#FFFBEB':'#fff'}}/>
                       </div>
                       <div style={{display:'flex',flexDirection:'column',alignItems:'center',flexShrink:0}}>
                         <span style={{fontSize:9,color:'#94A3B8',fontWeight:600}}>V.UNIT</span>
-                        <input type="text" inputMode="decimal" value={vUnitStr} onChange={function(e){var v=e.target.value;setPrecos(function(pr){var n=Object.assign({},pr);n[m.id]=v;return n;});}} placeholder="R$" style={{width:64,padding:'6px 4px',border:'1.5px solid #CBD5E1',borderRadius:8,fontSize:12,fontWeight:700,textAlign:'center',outline:'none'}}/>
+                        <input type="text" inputMode="decimal" value={vUnitStr} onChange={function(e){var v=e.target.value;setPrecos(function(pr){var n=Object.assign({},pr);n[m.id]=v;return n;});}} placeholder="R$" style={{width:112,padding:'6px 4px',border:'1.5px solid #CBD5E1',borderRadius:8,fontSize:13,fontWeight:700,textAlign:'center',outline:'none'}}/>
                       </div>
                     </div>
                   </div>);
@@ -9053,11 +9057,11 @@ function TabPrevisao(props){
                       <div style={{fontSize:10,color:'#94A3B8',flex:1,minWidth:0}}>{vtNV>0?'total deste pedido: R$ '+_fmtNumBR(vtNV):''}</div>
                       <div style={{display:'flex',flexDirection:'column',alignItems:'center',flexShrink:0}}>
                         <span style={{fontSize:9,color:'#94A3B8',fontWeight:600}}>PEDIR</span>
-                        <input type="number" min="0" value={val} onChange={function(e){var v=e.target.value;setAjustes(function(pr){var n=Object.assign({},pr);n[uKey]=v;return n;});}} placeholder="0" style={{width:64,padding:'6px 4px',border:'2px solid '+(edu?'#F59E0B':'#CBD5E1'),borderRadius:8,fontSize:14,fontWeight:800,textAlign:'center',outline:'none',background:edu?'#FFFBEB':'#fff'}}/>
+                        <input type="text" inputMode="numeric" value={val} onChange={function(e){var v=e.target.value.replace(/[^0-9]/g,'');setAjustes(function(pr){var n=Object.assign({},pr);n[uKey]=v;return n;});}} placeholder="0" style={{width:88,padding:'6px 4px',border:'2px solid '+(edu?'#F59E0B':'#CBD5E1'),borderRadius:8,fontSize:14,fontWeight:800,textAlign:'center',outline:'none',background:edu?'#FFFBEB':'#fff'}}/>
                       </div>
                       <div style={{display:'flex',flexDirection:'column',alignItems:'center',flexShrink:0}}>
                         <span style={{fontSize:9,color:'#94A3B8',fontWeight:600}}>V.UNIT</span>
-                        <input type="text" inputMode="decimal" value={vUnitStr} onChange={function(e){var v=e.target.value;setPrecos(function(pr){var n=Object.assign({},pr);n[uKey]=v;return n;});}} placeholder="R$" style={{width:64,padding:'6px 4px',border:'1.5px solid #CBD5E1',borderRadius:8,fontSize:12,fontWeight:700,textAlign:'center',outline:'none'}}/>
+                        <input type="text" inputMode="decimal" value={vUnitStr} onChange={function(e){var v=e.target.value;setPrecos(function(pr){var n=Object.assign({},pr);n[uKey]=v;return n;});}} placeholder="R$" style={{width:112,padding:'6px 4px',border:'1.5px solid #CBD5E1',borderRadius:8,fontSize:13,fontWeight:700,textAlign:'center',outline:'none'}}/>
                       </div>
                     </div>
                     <button onClick={function(){vincularItemAutomatico(ata,o.idx);}} disabled={carregando} style={{marginTop:6,width:'100%',padding:'7px',background:carregando?'#CBD5E1':'#0C6B3E',border:'none',borderRadius:8,color:'#fff',fontWeight:700,fontSize:11,cursor:carregando?'default':'pointer'}}>{carregando?'Cadastrando...':'🔗 Vincular automaticamente (cadastra com o nome da ATA)'}</button>
@@ -11388,7 +11392,7 @@ function TabRecebimento(props){
     if(validos.length===0){alert('Adicione ao menos um medicamento com quantidade.');return;}
     if(modoRec==='nota'){
       if(!nfNumero.trim()){alert('Modo Nota Fiscal: informe o número da nota.');return;}
-      if(!parseFloat(String(nfValorTotal).replace(',','.'))){alert('Modo Nota Fiscal: informe o valor total da nota.');return;}
+      if(!_parseValorInput(nfValorTotal)){alert('Modo Nota Fiscal: informe o valor total da nota.');return;}
     }
     setConfirmFin(true);
   }
@@ -11396,7 +11400,7 @@ function TabRecebimento(props){
   async function finalizar(){
     var validos=itens.filter(function(it){return it.medId&&(parseInt(it.qtd)||0)>0;});
     if(validos.length===0){alert('Adicione ao menos um medicamento com quantidade.');return;}
-    if(modoRec==='nota'&&(!nfNumero.trim()||!parseFloat(String(nfValorTotal).replace(',','.')))){
+    if(modoRec==='nota'&&(!nfNumero.trim()||!_parseValorInput(nfValorTotal))){
       alert('Modo Nota Fiscal: número da nota e valor total são obrigatórios.');return;
     }
     setSaving(true);
@@ -11447,12 +11451,12 @@ function TabRecebimento(props){
       // histórico sem precisar de nenhum passo de conferência depois.
       var itensRec=ehNota?itensComEntry.map(function(it){return Object.assign({},it,{conciliado:true,resultadoMatching:'conciliado'});}):itensComEntry;
       var recObj={data:data,fornecedor:fornecedor.trim(),responsavel:(responsavel||user.name||'').trim(),responsavelId:user.uid||'',status:ehNota?'conciliado':'pendente',statusLabel:ehNota?'Conciliado':'Pendente de Conciliação Fiscal',totalItens:validos.length,itens:itensRec,criadoEm:now,criadoPor:user.name||'',criadoPorId:user.uid||'',tenant_id:tenantDe(user)};
-      if(ehNota){recObj.nfNumero=nfNumero.trim();recObj.valorTotal=parseFloat(String(nfValorTotal).replace(',','.'))||0;}
+      if(ehNota){recObj.nfNumero=nfNumero.trim();recObj.valorTotal=_parseValorInput(nfValorTotal)||0;}
       // Doc do recebimento JÁ COM os entryIds preenchidos (não precisa de update depois).
       batch.set(recRef,recObj);
       if(ehNota){
         var itensNota=validos.map(function(it){return{descricao:it.medNome,qtd:parseInt(it.qtd)||0,unidade:'',cean:'',vUnit:0,lote:(it.lote||'').trim(),validade:_normValidade((it.validade||'').trim()),medId:it.medId,medNome:it.medNome,status:'conciliado'};});
-        batch.set(db.collection('notas_fiscais').doc(),{nfNumero:nfNumero.trim(),fornecedor:fornecedor.trim(),dataEmissao:data,valorTotal:parseFloat(String(nfValorTotal).replace(',','.'))||0,itens:itensNota,nomeArquivo:'(via Recebimento — Nota Fiscal)',status:'processada',origemRecebimento:true,recebimentoId:recId,criadoEm:now,criadoPor:user.name||'',criadoPorId:user.uid||'',tenant_id:tenantDe(user)});
+        batch.set(db.collection('notas_fiscais').doc(),{nfNumero:nfNumero.trim(),fornecedor:fornecedor.trim(),dataEmissao:data,valorTotal:_parseValorInput(nfValorTotal)||0,itens:itensNota,nomeArquivo:'(via Recebimento — Nota Fiscal)',status:'processada',origemRecebimento:true,recebimentoId:recId,criadoEm:now,criadoPor:user.name||'',criadoPorId:user.uid||'',tenant_id:tenantDe(user)});
       }
       console.log('Committing batch: '+validos.length+' entries + 1 recebimento'+(ehNota?' + 1 nota fiscal':'')+' (updates de cadastro ficam FORA do batch)...');
       await batch.commit();
@@ -11657,7 +11661,7 @@ function TabRecebimento(props){
         </div>
         {modoRec==='nota'&&<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:12}}>
           <div><label style={lbl}>Nº da nota *</label><input value={nfNumero} onChange={function(e){setNfNumero(e.target.value);}} placeholder="Ex: 12345" style={Object.assign({},inp,{borderColor:!nfNumero.trim()?'#FCA5A5':'#E2E8F0'})}/></div>
-          <div><label style={lbl}>Valor total *</label><input value={nfValorTotal} onChange={function(e){setNfValorTotal(e.target.value.replace(/[^0-9.,]/g,''));}} placeholder="Ex: 1250,00" style={Object.assign({},inp,{borderColor:!parseFloat(String(nfValorTotal).replace(',','.'))?'#FCA5A5':'#E2E8F0'})}/></div>
+          <div><label style={lbl}>Valor total *</label><input value={nfValorTotal} onChange={function(e){setNfValorTotal(e.target.value.replace(/[^0-9.,]/g,''));}} placeholder="Ex: 1250,00" style={Object.assign({},inp,{borderColor:!_parseValorInput(nfValorTotal)?'#FCA5A5':'#E2E8F0'})}/></div>
         </div>}
         <div style={{marginBottom:14}}><label style={lbl}>Responsável pelo recebimento</label><input value={responsavel} onChange={function(e){setResponsavel(e.target.value);}} placeholder="Quem recebeu" style={inp}/></div>
 
