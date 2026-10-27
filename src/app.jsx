@@ -11672,7 +11672,7 @@ function TabRecebimento(props){
     return true;
   });
   // Painel de pendências (Etapa 1): quanto está em aberto e há quanto tempo — o que passou de 7 dias fica em destaque.
-  function idadeDias(r){var d=r.data||(r.criadoEm||'').slice(0,10);if(!d)return 0;var t=new Date(d+'T12:00:00');if(isNaN(t))return 0;return Math.max(0,Math.floor((Date.now()-t.getTime())/86400000));}
+  function idadeDias(r){var d=r.data||(r.criadoEm||'').slice(0,10);if(!d)return 0;var t=new Date(d+'T00:00:00');if(isNaN(t))return 0;var h=new Date();h.setHours(0,0,0,0);return Math.max(0,Math.round((h.getTime()-t.getTime())/86400000));}// dias de calendário (não depende da hora do dia)
   function emAberto(r){var st=r.status||'pendente';return st==='pendente'||st==='divergencia';}
   var pend=recs.filter(emAberto);
   var pendVelhos=pend.filter(function(r){return idadeDias(r)>7;});
