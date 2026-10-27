@@ -6096,6 +6096,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
   var _ld=sl(true);var loading=_ld[0];var setLoading=_ld[1];
   var _sf=sl(false);var showForm=_sf[0];var setShowForm=_sf[1];
   var _sd=sl(null);var showDose=_sd[0];var setShowDose=_sd[1];
+  var _dsv=sl(false);var doseSalvando=_dsv[0];var setDoseSalvando=_dsv[1];var doseLockRef=useRef(false); // trava anti clique repetido na baixa da dose
   var _sdt=sl(null);var showDet=_sdt[0];var setShowDet=_sdt[1];
   var _se=sl(null);var showEdit=_se[0];var setShowEdit=_se[1];
   var _fi=sl('ativos');var filtro=_fi[0];var setFiltro=_fi[1];
@@ -6250,6 +6251,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
   async function salvarTelEdit(t){setTelEditSaving(true);try{await db.collection('tratamentos_atb').doc(t.id).update({telefone:telEditFone.trim(),telefoneDono:telEditDono,responsavelNome:telEditDono==='responsavel'?telEditResp.trim():''});cancelarTelEdit();}catch(e){alert('Não foi possível salvar o telefone: '+((e&&e.message)?e.message:e));}setTelEditSaving(false);}
 
   async function salvar(){
+    if(saving)return;
     if(!nomePac.trim()||!medSel)return alert('Preencha nome do paciente e medicamento!');
     if(statusIni==='ativo'&&(!diasTrat||!dataIni))return alert('Informe duracao e data de inicio!');
     if(statusIni==='espera'&&(stock[medSel]||0)<qtdEsp)return alert('Estoque insuficiente! Disponivel: '+(stock[medSel]||0));
@@ -6290,6 +6292,9 @@ function TabAntibiotico({user,medications,stock,allUsers}){
     var qAmp=Math.max(1,parseInt(qtdDose)||1);      // ampolas por dose
     var totalAmp=qAmp*nDoses;                        // total baixado do dia
     if((stock[t.medicamentoId]||0)<totalAmp)return alert('Estoque insuficiente! Disponivel: '+(stock[t.medicamentoId]||0)+' · necessário para o dia: '+totalAmp);
+    if(doseLockRef.current)return; // já está gravando: cliques repetidos não geram outra saída
+    doseLockRef.current=true;setDoseSalvando(true);
+    try{
     var obs='ATB - '+t.pacienteNome+(retro?' — '+fD(dData):'')+(nDoses>1?' ('+nDoses+' doses)':'');
     // Uma saída única no estoque com o total do dia (não altera a lógica de estoque: soma igual).
     await _addSaidaFEFO({tipo:'saida',destino:'emergencia',medicamentoId:t.medicamentoId,medicamentoNome:t.medicamentoNome||'',autorNome:user.name,autorCor:user.color||B,autorId:user.uid,obs:obs,criadoEm:new Date().toISOString(),date:dData,tenant_id:tenantDe(user)},t.medicamentoId,totalAmp,tenantDe(user));
@@ -6299,6 +6304,8 @@ function TabAntibiotico({user,medications,stock,allUsers}){
     var ns=nd.filter(function(d){return!d.retroativo;}).length>=totalDosesT(t)&&totalDosesT(t)>0?'concluido':'ativo';
     await db.collection('tratamentos_atb').doc(t.id).update({doses:nd,status:ns});
     setShowDose(null);setQtdDose(2);setDataDose('');setDoseQtdDia(1);setDosePend(1);
+    }catch(err){alert('Não foi possível registrar a dose. Confira a internet e CONFIRA no estoque se a saída já foi lançada antes de tentar de novo.\n\n'+(err&&err.message||''));}
+    finally{doseLockRef.current=false;setDoseSalvando(false);}
   }
   async function finalizar(t){if(!window.confirm('Concluir tratamento de '+t.pacienteNome+'?'))return;await db.collection('tratamentos_atb').doc(t.id).update({status:'finalizado',finalizadoEm:new Date().toISOString(),finalizadoPor:user.name});setShowDet(null);}
   async function reabrir(t){if(!window.confirm('Reabrir tratamento de '+t.pacienteNome+'?'))return;await db.collection('tratamentos_atb').doc(t.id).update({status:'ativo',reabertoPor:user.name,reabertoEm:new Date().toISOString()});setShowDet(null);}
@@ -6607,7 +6614,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
           <div style={{background:'#F0FDF4',borderRadius:10,padding:10,marginBottom:14,fontSize:13,color:'#059669',fontWeight:600,display:'flex',alignItems:'center',justifyContent:'center',gap:5}}><Icon name="users" size={12}/> {user.name} · {dataDose?fD(dataDose):new Date().toLocaleDateString('pt-BR')}</div>
           <div style={{display:'flex',gap:10}}>
             <button onClick={function(){setShowDose(null);setQtdDose(2);setDataDose('');setDoseQtdDia(1);setDosePend(1);}} style={{flex:1,padding:'12px',background:'#F1F5F9',border:'none',borderRadius:12,fontWeight:700,cursor:'pointer',color:'#64748B'}}>Cancelar</button>
-            <button onClick={function(){regDose(showDose);}} style={{flex:2,padding:'12px',background:'#10B981',border:'none',borderRadius:12,color:'#fff',fontWeight:700,fontSize:14,cursor:'pointer'}}>Confirmar e Baixar</button>
+            <button onClick={function(){regDose(showDose);}} disabled={doseSalvando} style={{flex:2,padding:'12px',opacity:doseSalvando?.6:1,background:'#10B981',border:'none',borderRadius:12,color:'#fff',fontWeight:700,fontSize:14,cursor:'pointer'}}>{doseSalvando?'Registrando…':'Confirmar e Baixar'}</button>
           </div>
         </div>
       </div>);})()}
