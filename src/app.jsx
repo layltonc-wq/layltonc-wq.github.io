@@ -11313,7 +11313,7 @@ function TabRecebimento(props){
   var _editandoReceb=useState(null);var editandoReceb=_editandoReceb[0];var setEditandoReceb=_editandoReceb[1];// id do recebimento em edição, ou null
   var _editRecebForm=useState({});var editRecebForm=_editRecebForm[0];var setEditRecebForm=_editRecebForm[1];
   var _salvandoEditReceb=useState(false);var salvandoEditReceb=_salvandoEditReceb[0];var setSalvandoEditReceb=_salvandoEditReceb[1];
-  function blankItem(){_recSeq++;return{key:'it'+_recSeq,medId:'',medNome:'',busca:'',qtd:'',lote:'',validade:'',obs:'',semLote:false};}
+  function blankItem(){_recSeq++;return{key:'it'+_recSeq,medId:'',medNome:'',busca:'',qtd:'',lote:'',validade:'',obs:'',semLote:false,real:null};}
   var _data=useState(todayStr());var data=_data[0];var setData=_data[1];
   var _forn=useState('');var fornecedor=_forn[0];var setFornecedor=_forn[1];
   // Modo "Nota Fiscal" (pedido da usuária, 06/10/2026): quando ela já tem a nota em mãos no momento do
@@ -11333,6 +11333,8 @@ function TabRecebimento(props){
   var _det=useState(null);var detalhe=_det[0];var setDetalhe=_det[1];
   var _cancelRec=useState(null);var cancelRec=_cancelRec[0];var setCancelRec=_cancelRec[1];
   var _cancelJust=useState('');var cancelJust=_cancelJust[0];var setCancelJust=_cancelJust[1];
+  // Painel "O que realmente chegou?" (modo Nota Fiscal): {key do item, linhas}
+  var _realEdit=useState(null);var realEdit=_realEdit[0];var setRealEdit=_realEdit[1];
   var _avisoCancel=useState(null);var avisoCancel=_avisoCancel[0];var setAvisoCancel=_avisoCancel[1];// null=calculando; []=nada a avisar; [texto,...]
   var _cancelSaving=useState(false);var cancelSaving=_cancelSaving[0];var setCancelSaving=_cancelSaving[1];
   var _verif=useState(null);var verif=_verif[0];var setVerif=_verif[1];// diagnóstico/recuperação de estoque
@@ -11380,6 +11382,27 @@ function TabRecebimento(props){
   function setItem(key,patch){setItens(function(arr){return arr.map(function(it){return it.key===key?Object.assign({},it,patch):it;});});}
   function addItem(){setItens(function(arr){return arr.concat([blankItem()]);});}
   function delItem(key){setItens(function(arr){return arr.length<=1?arr:arr.filter(function(it){return it.key!==key;});});}
+  function linhaVazia(){_recSeq++;return{k:'l'+_recSeq,medId:'',medNome:'',busca:'',qtd:'',lote:'',validade:'',obs:'',semLote:false};}
+  function abrirReal(it){
+    if(Array.isArray(it.real)){setRealEdit({key:it.key,nota:it.medNome,notaQtd:it.qtd,linhas:it.real.map(function(l){return Object.assign({},l);})});return;}
+    var l=linhaVazia();l.medId=it.medId;l.medNome=it.medNome;l.qtd=it.qtd;l.lote=it.lote;l.validade=it.validade;l.semLote=it.semLote;l.obs=it.obs;
+    setRealEdit({key:it.key,nota:it.medNome,notaQtd:it.qtd,linhas:[l]});
+  }
+  function setLinhaReal(k,patch){setRealEdit(function(r){return Object.assign({},r,{linhas:r.linhas.map(function(l){return l.k===k?Object.assign({},l,patch):l;})});});}
+  function salvarReal(){
+    var r=realEdit;if(!r)return;
+    var prob='';
+    r.linhas.forEach(function(it){if(prob)return;
+      if(!it.medId)prob='Escolha o medicamento que realmente chegou.';
+      else if((parseInt(it.qtd)||0)<=0)prob=it.medNome+': informe a quantidade.';
+      else if(it.semLote){if((it.obs||'').trim().length<3)prob=it.medNome+': "sem lote" — explique em Observações.';}
+      else if(!(it.lote||'').trim())prob=it.medNome+': informe o lote.';
+      else if(!_normValidade((it.validade||'').trim()))prob=it.medNome+': informe a validade (MM/AAAA).';
+    });
+    if(prob){alert(prob);return;}
+    setItem(r.key,{real:r.linhas});setRealEdit(null);
+  }
+  function desfazerReal(){if(!realEdit)return;setItem(realEdit.key,{real:null});setRealEdit(null);}
   function escolherMed(key,m){setItem(key,{medId:m.id,medNome:m.nome,busca:''});setFocoItem(null);}
   // Cadastro rápido (Mudança 2): abre o formulário já com o nome digitado na busca do item.
   function abrirNovoMed(key){var it=itens.find(function(x){return x.key===key;});setNovoMedKey(key);setNmNome(it&&it.busca?it.busca.trim():'');setNmTipo('medicamento');setNmMin('');setNmEan('');}
@@ -11398,14 +11421,23 @@ function TabRecebimento(props){
   // Etapa 1 (controle do recebimento): fornecedor obrigatório; cada item precisa de lote E validade — a menos
   // que a pessoa marque "Sem lote" (exceção explícita; aí a Observação do item precisa dizer o motivo).
   // Devolve a mensagem do 1º problema, ou ''.
+  // Modo Nota: o item da nota pode ter "o que realmente chegou" (it.real = lista de linhas). O estoque recebe
+  // SÓ essas linhas; a nota fiscal registrada continua com o item como veio escrito. Sem it.real, o item entra como está.
+  function linhasDoItem(it){return Array.isArray(it.real)?it.real:[it];}
   function problemaRecebimento(validos){
     if(!fornecedor.trim())return 'Informe o fornecedor do recebimento.';
+    var total=0;
     for(var i=0;i<validos.length;i++){
-      var it=validos[i];
+      var ls=linhasDoItem(validos[i]);
+      for(var j=0;j<ls.length;j++){var it=ls[j];total++;
+        if(!it.medId)return 'Informe o medicamento que realmente chegou.';
+        if((parseInt(it.qtd)||0)<=0)return it.medNome+': informe a quantidade que chegou.';
       if(it.semLote){if((it.obs||'').trim().length<3)return it.medNome+': item marcado "Sem lote" — explique o motivo em Observações.';continue;}
       if(!(it.lote||'').trim())return it.medNome+': informe o lote (ou marque "Sem lote" se o produto realmente não tem).';
       if(!_normValidade((it.validade||'').trim()))return it.medNome+': informe a validade (MM/AAAA).';
+      }
     }
+    if(total===0)return 'Nenhum item vai entrar no estoque.';
     return '';
   }
   // Confirmação antes de finalizar (Mudança 3): valida e abre o modal; só finaliza no "Confirmar".
@@ -11447,8 +11479,14 @@ function TabRecebimento(props){
       var recId=recRef.id;
       var itensComEntry=[];
       var lotesParaAtualizar=[];
+      var naoChegou=[];
       for(var i=0;i<validos.length;i++){
-        var it=validos[i];
+        var itNota=validos[i];
+        var linhasReais=linhasDoItem(itNota);
+        var ajustado=Array.isArray(itNota.real);
+        if(ajustado&&linhasReais.length===0)naoChegou.push({descricao:itNota.medNome,quantidade:parseInt(itNota.qtd)||0});
+        for(var li=0;li<linhasReais.length;li++){
+        var it=linhasReais[li];
         var medCad=medications.find(function(m){return m.id===it.medId;});
         var catMed=(medCad&&medCad.categoria)||'medicamento';
         var qtdNum=parseInt(it.qtd)||0;
@@ -11466,8 +11504,12 @@ function TabRecebimento(props){
         for(var _k in entryObj)if(entryObj[_k]===undefined)delete entryObj[_k];
         batch.set(entryRef,entryObj);
         console.log('  →',it.medNome,'| qtd',qtdNum,'| lote',loteTrim||'—','| val',valNorm||'—','| entryId',entryRef.id);
-        itensComEntry.push({medicamentoId:it.medId,medicamentoNome:it.medNome,quantidade:qtdNum,lote:loteTrim,validade:valNorm,observacao:(it.obs||'').trim(),entryId:entryRef.id});
+        var linhaRec={medicamentoId:it.medId,medicamentoNome:it.medNome,quantidade:qtdNum,lote:loteTrim,validade:valNorm,observacao:(it.obs||'').trim(),entryId:entryRef.id};
+        // O que a nota dizia para esse item (só quando o que chegou foi ajustado): aparece discreto no detalhe.
+        if(ajustado){linhaRec.naNota=itNota.medNome+' × '+(parseInt(itNota.qtd)||0);}
+        itensComEntry.push(linhaRec);
         if(loteTrim&&valNorm)lotesParaAtualizar.push({medId:it.medId,lote:loteTrim,validade:valNorm});
+        }
       }
       var ehNota=modoRec==='nota';
       // Modo Nota Fiscal: a usuária já confirmou que tudo que chegou bate com a nota em mãos — então o
@@ -11475,7 +11517,8 @@ function TabRecebimento(props){
       // registro da nota fiscal em si (notas_fiscais) já nasce junto, também conciliado — pra existir no
       // histórico sem precisar de nenhum passo de conferência depois.
       var itensRec=ehNota?itensComEntry.map(function(it){return Object.assign({},it,{conciliado:true,resultadoMatching:'conciliado'});}):itensComEntry;
-      var recObj={data:data,fornecedor:fornecedor.trim(),responsavel:(responsavel||user.name||'').trim(),responsavelId:user.uid||'',status:ehNota?'conciliado':'pendente',statusLabel:ehNota?'Conciliado':'Pendente de Conciliação Fiscal',totalItens:validos.length,itens:itensRec,criadoEm:now,criadoPor:user.name||'',criadoPorId:user.uid||'',tenant_id:tenantDe(user)};
+      var recObj={data:data,fornecedor:fornecedor.trim(),responsavel:(responsavel||user.name||'').trim(),responsavelId:user.uid||'',status:ehNota?'conciliado':'pendente',statusLabel:ehNota?'Conciliado':'Pendente de Conciliação Fiscal',totalItens:itensComEntry.length,itens:itensRec,criadoEm:now,criadoPor:user.name||'',criadoPorId:user.uid||'',tenant_id:tenantDe(user)};
+      if(naoChegou.length)recObj.itensNaoRecebidos=naoChegou;
       if(ehNota){recObj.nfNumero=nfNumero.trim();recObj.valorTotal=_parseValorInput(nfValorTotal)||0;}
       // Doc do recebimento JÁ COM os entryIds preenchidos (não precisa de update depois).
       batch.set(recRef,recObj);
@@ -11730,7 +11773,7 @@ function TabRecebimento(props){
               </div>
               {it.medId?
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,background:'#EFF6FF',border:'1.5px solid #BFDBFE',borderRadius:10,padding:'9px 12px',marginBottom:8}}>
-                  <div style={{display:'flex',alignItems:'center',gap:6}}><span style={{fontWeight:700,fontSize:13,color:B}}>💊 {it.medNome}</span>{(function(){var mc=medications.find(function(m){return m.id===it.medId;});var cat=mc?mc.categoria:'medicamento';var ti=TIPOS[cat]||TIPOS.medicamento;return<span style={{fontSize:10,fontWeight:700,padding:'2px 6px',borderRadius:6,background:ti.cor+'18',color:ti.cor}}>{ti.icon} {ti.label}</span>;})()}</div>
+                  <div style={{display:'flex',alignItems:'center',gap:6}}>{modoRec==='nota'?<button type="button" onClick={function(){abrirReal(it);}} title="Toque para informar o que realmente chegou" style={{background:'none',border:'none',padding:0,cursor:'pointer',fontWeight:700,fontSize:13,color:B,textAlign:'left',fontFamily:'inherit'}}>💊 {it.medNome}<span style={{fontSize:11,color:'#94A3B8',fontWeight:600}}> ✎</span></button>:<span style={{fontWeight:700,fontSize:13,color:B}}>💊 {it.medNome}</span>}{(function(){var mc=medications.find(function(m){return m.id===it.medId;});var cat=mc?mc.categoria:'medicamento';var ti=TIPOS[cat]||TIPOS.medicamento;return<span style={{fontSize:10,fontWeight:700,padding:'2px 6px',borderRadius:6,background:ti.cor+'18',color:ti.cor}}>{ti.icon} {ti.label}</span>;})()}</div>
                   <button onClick={function(){setItem(it.key,{medId:'',medNome:'',busca:''});setFocoItem(it.key);}} style={{background:'#fff',border:'1px solid #BFDBFE',borderRadius:8,padding:'4px 10px',fontSize:11,color:B,cursor:'pointer',fontWeight:600}}>Trocar</button>
                 </div>
                 :<div style={{position:'relative',marginBottom:8}}>
@@ -11741,6 +11784,7 @@ function TabRecebimento(props){
                   {focoItem===it.key&&it.busca.trim()&&sug.length===0&&<div style={{fontSize:11,color:'#94A3B8',marginTop:4}}>Nenhum medicamento encontrado no cadastro.</div>}
                   <button type="button" onClick={function(){abrirNovoMed(it.key);}} style={document.body.classList.contains('theme-itaq')?{marginTop:6,width:'100%',padding:'9px',background:'var(--itq-tint)',border:'1.5px dashed var(--blue-700)',borderRadius:9,color:'var(--blue-700)',fontWeight:700,fontSize:12,cursor:'pointer'}:{marginTop:6,width:'100%',padding:'9px',background:'#F0FDF4',border:'1.5px dashed #86EFAC',borderRadius:9,color:'#059669',fontWeight:700,fontSize:12,cursor:'pointer'}}>+ Cadastrar novo medicamento</button>
                 </div>}
+              {Array.isArray(it.real)&&<button type="button" onClick={function(){abrirReal(it);}} style={{display:'block',width:'100%',textAlign:'left',background:'#F1F5F9',border:'none',borderRadius:8,padding:'6px 10px',marginBottom:8,fontSize:11,color:'#64748B',cursor:'pointer',fontFamily:'inherit'}}>↳ Entra no estoque: {it.real.length===0?'nada deste item':it.real.map(function(l){return l.medNome+' × '+l.qtd;}).join(' · ')}</button>}
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:8}}>
                 <div><label style={lbl}>Qtd *</label><input type="number" min="1" inputMode="numeric" value={it.qtd} onChange={function(e){setItem(it.key,{qtd:e.target.value.replace(/[^0-9]/g,'')});}} placeholder="0" style={inp}/></div>
                 <div><label style={lbl}>Lote{it.semLote?'':' *'}</label><input value={it.semLote?'':it.lote} disabled={it.semLote} onChange={function(e){setItem(it.key,{lote:e.target.value});}} placeholder={it.semLote?'sem lote':'Lote'} style={Object.assign({},inp,it.semLote?{background:'#F1F5F9'}:{})}/></div>
@@ -11872,6 +11916,7 @@ function TabRecebimento(props){
               {(r.itens||[]).map(function(it,i){return(<div key={i} style={{background:'#F8FAFC',borderRadius:10,padding:'10px 12px',border:'1px solid #E2E8F0'}}>
                 <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>{it.medicamentoNome}</div>
                 <div style={{fontSize:12,color:'#64748B',marginTop:2}}>Qtd: <strong>{it.quantidade}</strong>{it.lote?' · Lote: '+it.lote:''}{it.validade?' · Val: '+it.validade:''}</div>
+                {it.naNota&&<div style={{fontSize:11,color:'#94A3B8',marginTop:2}}>Na nota: {it.naNota}</div>}
                 {it.observacao&&<div style={{fontSize:11,color:'#94A3B8',marginTop:2}}>{it.observacao}</div>}
               </div>);})}
             </div>
@@ -11915,6 +11960,42 @@ function TabRecebimento(props){
       {confirmDesfazerConferido&&<ModalConfirm titulo="Desfazer confirmação" msg={'Desfazer a confirmação manual do recebimento de '+(confirmDesfazerConferido.fornecedor||'(sem fornecedor)')+' de '+fD(confirmDesfazerConferido.data)+'? Ele volta a aparecer como pendente de conciliação.'} tipo="warning" confirmTxt="Desfazer" onConfirm={executarDesfazerConferido} onCancel={function(){setConfirmDesfazerConferido(null);}}/>}
       {confirmExcluirPerm&&<ModalConfirm titulo="Excluir permanentemente" msg={'Excluir permanentemente o recebimento de '+(confirmExcluirPerm.fornecedor||'(sem fornecedor)')+' de '+fD(confirmExcluirPerm.data)+'? Isso não pode ser desfeito.'} tipo="danger" confirmTxt="Excluir" onConfirm={executarExcluirPermanente} onCancel={function(){setConfirmExcluirPerm(null);}}/>}
       {erroAcao&&<ModalAlert titulo="Erro" msg={erroAcao} tipo="danger" onClose={function(){setErroAcao('');}}/>}
+
+      {/* O QUE REALMENTE CHEGOU (modo Nota Fiscal) */}
+      {realEdit&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.55)',zIndex:1100,display:'flex',alignItems:'flex-end',justifyContent:'center'}} onClick={function(){setRealEdit(null);}}>
+        <div style={{background:'#fff',borderRadius:'22px 22px 0 0',padding:'20px 16px 28px',width:'100%',maxWidth:560,maxHeight:'92vh',overflowY:'auto'}} onClick={function(e){e.stopPropagation();}}>
+          <div style={{fontWeight:800,fontSize:17,color:'#1E293B'}}>O que realmente chegou?</div>
+          <div style={{fontSize:12,color:'#64748B',margin:'2px 0 12px'}}>Na nota: <strong>{realEdit.nota}</strong> × {realEdit.notaQtd}. Só o que você colocar aqui entra no estoque; a nota fica como está.</div>
+          {realEdit.linhas.map(function(l,li){
+            var sg=(!l.medId&&l.busca.trim())?_fuzzyMeds(l.busca,medications,6):[];
+            return(<div key={l.k} style={{background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:12,padding:12,marginBottom:10}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+                <div style={{fontSize:11,fontWeight:700,color:'#94A3B8'}}>Chegou {li+1}</div>
+                <button onClick={function(){setRealEdit(function(r){return Object.assign({},r,{linhas:r.linhas.filter(function(x){return x.k!==l.k;})});});}} style={{background:'#FEE2E2',border:'none',borderRadius:8,width:26,height:26,cursor:'pointer',fontSize:12,color:'#DC2626'}}>✕</button>
+              </div>
+              {l.medId?<div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,background:'#EFF6FF',border:'1.5px solid #BFDBFE',borderRadius:10,padding:'8px 12px',marginBottom:8}}>
+                <span style={{fontWeight:700,fontSize:13,color:B}}>💊 {l.medNome}</span>
+                <button onClick={function(){setLinhaReal(l.k,{medId:'',medNome:'',busca:''});}} style={{background:'#fff',border:'1px solid #BFDBFE',borderRadius:8,padding:'4px 10px',fontSize:11,color:B,cursor:'pointer',fontWeight:600}}>Trocar</button>
+              </div>:<div style={{marginBottom:8}}>
+                <input value={l.busca} onChange={function(e){setLinhaReal(l.k,{busca:e.target.value});}} placeholder="Buscar o medicamento que chegou..." style={inp}/>
+                {sg.map(function(x){return <button key={x.m.id} onClick={function(){setLinhaReal(l.k,{medId:x.m.id,medNome:x.m.nome,busca:''});}} style={{display:'block',width:'100%',textAlign:'left',padding:'9px 12px',border:'none',borderBottom:'1px solid #F1F5F9',background:'#fff',cursor:'pointer',fontSize:13,color:'#1E293B'}}>{x.m.nome}</button>;})}
+              </div>}
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:8}}>
+                <div><label style={lbl}>Qtd *</label><input inputMode="numeric" value={l.qtd} onChange={function(e){setLinhaReal(l.k,{qtd:e.target.value.replace(/[^0-9]/g,'')});}} placeholder="0" style={inp}/></div>
+                <div><label style={lbl}>Lote{l.semLote?'':' *'}</label><input value={l.semLote?'':l.lote} disabled={l.semLote} onChange={function(e){setLinhaReal(l.k,{lote:e.target.value});}} placeholder="Lote" style={Object.assign({},inp,l.semLote?{background:'#F1F5F9'}:{})}/></div>
+                <div><label style={lbl}>Validade{l.semLote?'':' *'}</label><input value={l.semLote?'':l.validade} disabled={l.semLote} onChange={function(e){setLinhaReal(l.k,{validade:_maskValidade(e.target.value)});}} placeholder="MM/AAAA" inputMode="numeric" maxLength={7} style={Object.assign({},inp,l.semLote?{background:'#F1F5F9'}:{})}/></div>
+              </div>
+              <label style={{display:'flex',alignItems:'center',gap:8,fontSize:12,color:'#64748B',cursor:'pointer'}}><input type="checkbox" checked={!!l.semLote} onChange={function(e){setLinhaReal(l.k,{semLote:e.target.checked});}}/> Veio sem lote</label>
+              {l.semLote&&<input value={l.obs} onChange={function(e){setLinhaReal(l.k,{obs:e.target.value});}} placeholder="Observações (motivo)" style={Object.assign({},inp,{marginTop:8})}/>}
+            </div>);
+          })}
+          <button onClick={function(){setRealEdit(function(r){return Object.assign({},r,{linhas:r.linhas.concat([linhaVazia()])});});}} style={{width:'100%',padding:'10px',background:'#EFF6FF',border:'1.5px dashed #93C5FD',borderRadius:10,color:B,fontWeight:700,fontSize:13,cursor:'pointer',marginBottom:12}}>+ Mais uma linha para este item</button>
+          <div style={{display:'flex',gap:8}}>
+            <button onClick={desfazerReal} style={{flex:1,padding:'12px',background:'#F1F5F9',border:'none',borderRadius:10,color:'#64748B',fontWeight:700,fontSize:13,cursor:'pointer'}}>Voltar ao da nota</button>
+            <button onClick={salvarReal} style={{flex:1,padding:'12px',background:B,border:'none',borderRadius:10,color:'#fff',fontWeight:700,fontSize:14,cursor:'pointer'}}>Salvar</button>
+          </div>
+        </div>
+      </div>}
 
       {/* CANCELAR (justificativa obrigatória) */}
       {cancelRec&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.6)',zIndex:1100,display:'flex',alignItems:'center',justifyContent:'center',padding:18}} onClick={function(){if(!cancelSaving){setCancelRec(null);setCancelJust('');}}}>
