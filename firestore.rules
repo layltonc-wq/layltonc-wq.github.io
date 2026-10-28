@@ -268,6 +268,24 @@ service cloud.firestore {
       allow read, write: if membro() && docId.matches('.*__' + userTenant() + '(__.*)?');
     }
 
+    // ===== SUPORTE (chamados da aba Ajuda e erros automáticos) =====
+    // Chamado: o próprio usuário cria (já como 'aberto') e lê só os seus; só o administrador do FarmaControl
+    // responde, resolve e apaga. Erro automático: qualquer membro aprovado grava; só o administrador lê.
+    match /chamados_suporte/{id} {
+      allow create: if membro() && tenantOk(request.resource.data)
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.status == 'aberto'
+                    && request.resource.data.texto is string && request.resource.data.texto.size() <= 2000;
+      allow read: if logado() && (ehSuperAdmin() || (aprovado() && resource.data.uid == request.auth.uid));
+      allow update, delete: if ehSuperAdmin();
+    }
+    match /erros_app/{id} {
+      allow create: if membro() && tenantOk(request.resource.data)
+                    && request.resource.data.mensagem is string && request.resource.data.mensagem.size() <= 400;
+      allow read, delete: if ehSuperAdmin();
+      allow update: if false;
+    }
+
     // ===== RECEBIMENTOS =====
     match /recebimentos/{id} {
       allow read: if membro() && resource.data.tenant_id == userTenant();
