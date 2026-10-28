@@ -48,7 +48,8 @@ service cloud.firestore {
 
     // ===== TENANTS (cadastro das prefeituras — só leitura pra usuários logados, escrita só super admin) =====
     match /tenants/{id} {
-      allow read: if logado();
+      // Cada município lê só a própria ficha (nome, logo, módulos); o administrador lê todas.
+      allow read: if logado() && (ehSuperAdmin() || id == userTenant());
       allow write: if ehSuperAdmin();
     }
 
@@ -97,7 +98,8 @@ service cloud.firestore {
       allow read: if membro() && resource.data.tenant_id == userTenant();
       allow create: if membro() && tenantOk(request.resource.data);
       allow update: if membro() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
-      allow delete: if membro() && resource.data.tenant_id == userTenant();
+      // Apagar movimentação (histórico do estoque) só gestor ou técnico; no app essas ações já são só deles.
+      allow delete: if ehAdmin() && resource.data.tenant_id == userTenant();
     }
 
     // ===== CONFERÊNCIA =====
