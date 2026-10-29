@@ -116,9 +116,12 @@ exports.sincronizarClaimUsuario = onDocumentWritten('users/{uid}', async (event)
     const auth = getAuth();
     const rec = await auth.getUser(uid);
     const claims = rec.customClaims || {};
-    if (claims.tenant_id === depois.tenant_id) return;
-    await auth.setCustomUserClaims(uid, Object.assign({}, claims, { tenant_id: depois.tenant_id }));
-    logger.info('claim tenant_id gravada', { uid, tenant_id: depois.tenant_id });
+    // 'ativo' = conta aprovada. As regras do Firestore (membro()) só liberam os dados do município para quem
+    // tem ativo=true; conta pendente, recusada ou inativa fica de fora (ativo=false).
+    const ativo = depois.status === undefined || depois.status === 'approved' || depois.status === 'ativo';
+    if (claims.tenant_id === depois.tenant_id && claims.ativo === ativo) return;
+    await auth.setCustomUserClaims(uid, Object.assign({}, claims, { tenant_id: depois.tenant_id, ativo: ativo }));
+    logger.info('claims gravadas', { uid, tenant_id: depois.tenant_id, ativo });
   } catch (e) {
     logger.error('Falha ao sincronizar claim de users/' + uid + ': ' + e.message);
   }
