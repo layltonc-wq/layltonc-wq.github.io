@@ -3809,11 +3809,16 @@ function TabAdmin({user,entries,medications,db}){
   var _logs=sl([]);var logs=_logs[0];var setLogs=_logs[1];
   var _histcontas=sl([]);var histcontas=_histcontas[0];var setHistcontas=_histcontas[1];
   var _logAcesso=sl([]);var logAcesso=_logAcesso[0];var setLogAcesso=_logAcesso[1];
+  // Entradas/Saídas: antes só apareciam as 100 movimentações mais recentes (entradas e saídas juntas), então um dia
+  // movimentado empurrava os registros mais antigos pra fora da lista. Agora a lista tem TODAS, com filtro por dia
+  // e "Mostrar mais" de 50 em 50.
+  var _lim=sl(50);var lim=_lim[0];var setLim=_lim[1];
+  var _dia=sl('');var dia=_dia[0];var setDia=_dia[1];
 
   ef(function(){
     function comData(sn){var list=sn.docs.map(function(d){return Object.assign({id:d.id},d.data());});list.sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});return list;}
     var u1=db.collection('tratamentos_atb').where('tenant_id','==',tenantDe(user)).onSnapshot(function(sn){setTratamentos(comData(sn).slice(0,50));});
-    var u2=db.collection('entries').where('tenant_id','==',tenantDe(user)).onSnapshot(function(sn){setLogs(comData(sn).slice(0,100));});
+    var u2=db.collection('entries').where('tenant_id','==',tenantDe(user)).onSnapshot(function(sn){setLogs(comData(sn));});
     var u3=db.collection('logs_contas').where('tenant_id','==',tenantDe(user)).onSnapshot(function(sn){setHistcontas(comData(sn).slice(0,100));});
     var u4=db.collection('logs_acesso').where('tenant_id','==',tenantDe(user)).onSnapshot(function(sn){setLogAcesso(comData(sn).slice(0,100));},function(){});
     return function(){u1();u2();u3();u4();};
@@ -3839,8 +3844,9 @@ function TabAdmin({user,entries,medications,db}){
 
   var subItems=[['entradas','📥 Entradas'],['saidas','💊 Saídas'],['medicamentos','💉 Medicamentos'],['atb','🧬 ATB'],['histcontas','📋 Hist. Contas'],['log','🔐 Log Acesso']];
 
-  var entradasFilt=logs.filter(function(e){return e.tipo==='entrada'&&(!busca||(e.medicamentoNome||'').toLowerCase().includes(busca.toLowerCase()));});
-  var saidasFilt=logs.filter(function(e){return e.tipo==='saida'&&(!busca||(e.medicamentoNome||'').toLowerCase().includes(busca.toLowerCase()));});
+  function diaOk(e){if(!dia)return true;var d=e.date||(e.criadoEm||'').slice(0,10);return d===dia;}
+  var entradasFilt=logs.filter(function(e){return e.tipo==='entrada'&&diaOk(e)&&(!busca||(e.medicamentoNome||'').toLowerCase().includes(busca.toLowerCase()));});
+  var saidasFilt=logs.filter(function(e){return e.tipo==='saida'&&diaOk(e)&&(!busca||(e.medicamentoNome||'').toLowerCase().includes(busca.toLowerCase()));});
   var medsFilt=medications.filter(function(m){return !busca||(m.nome||'').toLowerCase().includes(busca.toLowerCase());});
   var atbFilt=tratamentos.filter(function(t){return !busca||(t.pacienteNome||'').toLowerCase().includes(busca.toLowerCase());});
 
@@ -3858,15 +3864,20 @@ function TabAdmin({user,entries,medications,db}){
       {ok&&<div style={{background:'#DCFCE7',color:'#065F46',padding:'10px 14px',borderRadius:10,marginBottom:12,fontWeight:700,fontSize:13}}>{ok}</div>}
       <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:14}}>
         {subItems.map(function(s){return(
-          <button key={s[0]} onClick={function(){setSub(s[0]);setBusca('');}} style={{padding:'8px 14px',borderRadius:10,border:'none',background:sub===s[0]?'#1351B4':'#F1F5F9',color:sub===s[0]?'#fff':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>{_semEmoji(s[1])}</button>
+          <button key={s[0]} onClick={function(){setSub(s[0]);setBusca('');setLim(50);}} style={{padding:'8px 14px',borderRadius:10,border:'none',background:sub===s[0]?'#1351B4':'#F1F5F9',color:sub===s[0]?'#fff':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>{_semEmoji(s[1])}</button>
         );})}
       </div>
-      <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="Buscar..." style={{width:'100%',padding:'10px 14px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:13,marginBottom:12,boxSizing:'border-box'}}/>
+      <input value={busca} onChange={function(e){setBusca(e.target.value);setLim(50);}} placeholder="Buscar..." style={{width:'100%',padding:'10px 14px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:13,marginBottom:12,boxSizing:'border-box'}}/>
+      {(sub==='entradas'||sub==='saidas')&&<div style={{display:'flex',gap:8,alignItems:'center',marginBottom:12}}>
+        <label style={{fontSize:12,fontWeight:700,color:'#475569'}}>Dia</label>
+        <input id="adm-dia" type="date" value={dia} onChange={function(e){setDia(e.target.value);setLim(50);}} style={{flex:1,padding:'9px 12px',borderRadius:10,border:'1.5px solid #E2E8F0',fontSize:13,boxSizing:'border-box'}}/>
+        {dia&&<button onClick={function(){setDia('');setLim(50);}} style={{padding:'9px 12px',background:'#F1F5F9',border:'none',borderRadius:10,fontSize:12,fontWeight:700,color:'#64748B',cursor:'pointer'}}>Limpar</button>}
+      </div>}
       {confirmId&&<div style={{background:'#FEF3C7',border:'1px solid #FCD34D',borderRadius:10,padding:'10px 14px',marginBottom:12,fontSize:12,fontWeight:700,color:'#92400E'}}>⚠️ Clique em "Confirmar!" novamente para apagar permanentemente</div>}
 
       {sub==='entradas'&&<div style={{display:'flex',flexDirection:'column',gap:8}}>
         {entradasFilt.length===0&&<div style={{textAlign:'center',color:'#94A3B8',padding:20}}>Nenhuma entrada encontrada</div>}
-        {entradasFilt.map(function(e){return(
+        {entradasFilt.slice(0,lim).map(function(e){return(
           <div key={e.id} style={{background:'#fff',borderRadius:12,padding:'12px 14px',boxShadow:'0 1px 6px rgba(0,0,0,0.06)',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontWeight:700,fontSize:13,color:'#1E293B',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{e.medicamentoNome}</div>
@@ -3875,11 +3886,13 @@ function TabAdmin({user,entries,medications,db}){
             <BtnDel col="entries" id={e.id} nome={e.medicamentoNome}/>
           </div>
         );})}
+        {entradasFilt.length>lim&&<button onClick={function(){setLim(lim+50);}} style={{padding:'11px',background:'#EFF6FF',border:'1.5px solid #BFDBFE',borderRadius:10,color:'#1351B4',fontWeight:700,fontSize:13,cursor:'pointer'}}>Mostrar mais ({entradasFilt.length-lim} restantes)</button>}
+        {entradasFilt.length>0&&<div style={{textAlign:'center',fontSize:11,color:'#94A3B8'}}>Mostrando {Math.min(lim,entradasFilt.length)} de {entradasFilt.length}</div>}
       </div>}
 
       {sub==='saidas'&&<div style={{display:'flex',flexDirection:'column',gap:8}}>
         {saidasFilt.length===0&&<div style={{textAlign:'center',color:'#94A3B8',padding:20}}>Nenhuma saída encontrada</div>}
-        {saidasFilt.map(function(e){return(
+        {saidasFilt.slice(0,lim).map(function(e){return(
           <div key={e.id} style={{background:'#fff',borderRadius:12,padding:'12px 14px',boxShadow:'0 1px 6px rgba(0,0,0,0.06)',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontWeight:700,fontSize:13,color:'#DC2626',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{e.medicamentoNome}</div>
@@ -3888,6 +3901,8 @@ function TabAdmin({user,entries,medications,db}){
             <BtnDel col="entries" id={e.id} nome={e.medicamentoNome}/>
           </div>
         );})}
+        {saidasFilt.length>lim&&<button onClick={function(){setLim(lim+50);}} style={{padding:'11px',background:'#EFF6FF',border:'1.5px solid #BFDBFE',borderRadius:10,color:'#1351B4',fontWeight:700,fontSize:13,cursor:'pointer'}}>Mostrar mais ({saidasFilt.length-lim} restantes)</button>}
+        {saidasFilt.length>0&&<div style={{textAlign:'center',fontSize:11,color:'#94A3B8'}}>Mostrando {Math.min(lim,saidasFilt.length)} de {saidasFilt.length}</div>}
       </div>}
 
       {sub==='medicamentos'&&<div style={{display:'flex',flexDirection:'column',gap:8}}>
