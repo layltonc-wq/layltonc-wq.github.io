@@ -7471,7 +7471,8 @@ function TabPrevisao(props){
     {v:'atencao_basica',lbl:'Atenção Básica',titulo:'MEDICAMENTOS - ATENÇÃO BÁSICA'},
     {v:'farmacia_basica_controlado',lbl:'Farmácia Básica — Controlados',titulo:'MEDICAMENTOS CONTROLADOS - FARMÁCIA BÁSICA'},
     {v:'farmacia_basica',lbl:'Farmácia Básica',titulo:'MEDICAMENTOS - FARMÁCIA BÁSICA'},
-    {v:'recurso_proprio',lbl:'Recurso Próprio',titulo:'MEDICAMENTOS - RECURSO PRÓPRIO'}
+    {v:'recurso_proprio',lbl:'Recurso Próprio',titulo:'MEDICAMENTOS - RECURSO PRÓPRIO'},
+    {v:'emenda_97',lbl:'Emenda 97',titulo:'MEDICAMENTOS - EMENDA 97'}
   ];
 
   // Carregar atas do Firebase
