@@ -4,8 +4,18 @@ service cloud.firestore {
 
     function logado() { return request.auth != null; }
     function meuPerfil() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
-    function ehGestor() { return logado() && meuPerfil().role == 'gestor'; }
-    function ehTecnico() { return logado() && meuPerfil().role == 'tecnico'; }
+    // SEGURANÇA (28/10/2026): cargo e acesso só valem para conta APROVADA. Antes, uma conta recém-cadastrada
+    // ("pending") que se cadastrasse já com cargo 'gestor' passava por gestor e podia até se aprovar sozinha.
+    // aprovado(): usa a claim 'ativo' (grátis, gravada pela Cloud Function só quando status == 'approved') e,
+    // se a claim ainda não existir (conta aprovada antes desta mudança), cai pro status do próprio perfil.
+    // Atenção: a claim 'ativo' = true só vale enquanto o token não for renovado; conta desativada perde o acesso em até 1 hora.
+    // statusOk(): 'approved' (ou 'ativo', nome antigo). Perfil antigo sem o campo status também vale (contas
+    // criadas antes de existir aprovação); todo cadastro novo nasce 'pending' (regra de create abaixo).
+    function statusOk() { return meuPerfil().get('status', 'approved') in ['approved', 'ativo']; }
+    function aprovado() { return request.auth.token.get('ativo', false) == true || statusOk(); }
+    function membro() { return logado() && aprovado(); }
+    function ehGestor() { return logado() && statusOk() && meuPerfil().role == 'gestor'; }
+    function ehTecnico() { return logado() && statusOk() && meuPerfil().role == 'tecnico'; }
     function ehAdmin() { return ehGestor() || ehTecnico(); }
     // NOVO: tenant do usuário logado — todas as regras abaixo comparam com isso.
     // Performance (18/09/2026): antes fazia get(users/{uid}) TODA vez que era chamada — em
@@ -38,7 +48,8 @@ service cloud.firestore {
 
     // ===== TENANTS (cadastro das prefeituras — só leitura pra usuários logados, escrita só super admin) =====
     match /tenants/{id} {
-      allow read: if logado();
+      // Cada município lê só a própria ficha (nome, logo, módulos); o administrador lê todas.
+      allow read: if logado() && (ehSuperAdmin() || id == userTenant());
       allow write: if ehSuperAdmin();
     }
 
@@ -56,7 +67,7 @@ service cloud.firestore {
     // aprovação manual do primeiro usuário de uma prefeitura nova — ver runbook na seção 6, por
     // enquanto direto no Console); gestor OU técnico só da própria prefeitura (tenantOk).
     match /users/{userId} {
-      allow read: if logado() && (ehSuperAdmin() || resource.data.tenant_id == userTenant());
+      allow read: if logado() && (ehSuperAdmin() || request.auth.uid == userId || (aprovado() && resource.data.tenant_id == userTenant()));
       allow create: if request.auth != null
                     && request.auth.uid == userId
                     && request.resource.data.status == 'pending'
@@ -76,18 +87,19 @@ service cloud.firestore {
 
     // ===== MEDICAMENTOS =====
     match /medicamentos/{id} {
-      allow read: if logado() && resource.data.tenant_id == userTenant();
-      allow create: if logado() && tenantOk(request.resource.data);
-      allow update: if logado() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
+      allow read: if membro() && resource.data.tenant_id == userTenant();
+      allow create: if membro() && tenantOk(request.resource.data);
+      allow update: if membro() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
       allow delete: if ehAdmin() && resource.data.tenant_id == userTenant();
     }
 
     // ===== ENTRADAS E SAÍDAS =====
     match /entries/{id} {
-      allow read: if logado() && resource.data.tenant_id == userTenant();
-      allow create: if logado() && tenantOk(request.resource.data);
-      allow update: if logado() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
-      allow delete: if logado() && resource.data.tenant_id == userTenant();
+      allow read: if membro() && resource.data.tenant_id == userTenant();
+      allow create: if membro() && tenantOk(request.resource.data);
+      allow update: if membro() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
+      // Apagar movimentação (histórico do estoque) só gestor ou técnico; no app essas ações já são só deles.
+      allow delete: if ehAdmin() && resource.data.tenant_id == userTenant();
     }
 
     // ===== CONFERÊNCIA =====
@@ -98,43 +110,43 @@ service cloud.firestore {
     // travava a Conferência de Estoque pro primeiro acesso do dia. resource==null também é seguro:
     // não existe dado nenhum de nenhum tenant pra vazar quando o doc ainda não existe.
     match /conferencias/{id} {
-      allow read: if logado() && (resource == null || resource.data.tenant_id == userTenant());
-      allow create: if logado() && tenantOk(request.resource.data);
-      allow update: if logado() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
+      allow read: if membro() && (resource == null || resource.data.tenant_id == userTenant());
+      allow create: if membro() && tenantOk(request.resource.data);
+      allow update: if membro() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
     }
 
     // ===== ATB =====
     match /tratamentos_atb/{id} {
-      allow read: if logado() && resource.data.tenant_id == userTenant();
-      allow create: if logado() && tenantOk(request.resource.data);
-      allow update: if logado() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
+      allow read: if membro() && resource.data.tenant_id == userTenant();
+      allow create: if membro() && tenantOk(request.resource.data);
+      allow update: if membro() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
       allow delete: if ehAdmin() && resource.data.tenant_id == userTenant();
     }
 
     // ===== LEITES =====
     match /pacientes_leite/{id} {
-      allow read: if logado() && resource.data.tenant_id == userTenant();
-      allow create: if logado() && tenantOk(request.resource.data);
-      allow update: if logado() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
+      allow read: if membro() && resource.data.tenant_id == userTenant();
+      allow create: if membro() && tenantOk(request.resource.data);
+      allow update: if membro() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
       allow delete: if ehAdmin() && resource.data.tenant_id == userTenant();
     }
     match /retiradas_leite/{id} {
-      allow read: if logado() && resource.data.tenant_id == userTenant();
-      allow create: if logado() && tenantOk(request.resource.data);
+      allow read: if membro() && resource.data.tenant_id == userTenant();
+      allow create: if membro() && tenantOk(request.resource.data);
       allow update: if false;
       allow delete: if ehTecnico() && resource.data.tenant_id == userTenant();
     }
 
     // ===== CONTROLADOS (Morfina/Tramal) =====
     match /pacientes_controlados/{id} {
-      allow read: if logado() && resource.data.tenant_id == userTenant();
-      allow create: if logado() && tenantOk(request.resource.data);
-      allow update: if logado() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
+      allow read: if membro() && resource.data.tenant_id == userTenant();
+      allow create: if membro() && tenantOk(request.resource.data);
+      allow update: if membro() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
       allow delete: if ehAdmin() && resource.data.tenant_id == userTenant();
     }
     match /saidas_controladas/{id} {
-      allow read: if logado() && resource.data.tenant_id == userTenant();
-      allow create: if logado() && tenantOk(request.resource.data);
+      allow read: if membro() && resource.data.tenant_id == userTenant();
+      allow create: if membro() && tenantOk(request.resource.data);
       allow update: if false;
       // Gestor e técnico podem apagar uma saída lançada errada (06/10/2026) — a UI sempre devolve
       // a quantidade ao estoque (entrada de estorno) antes de apagar o registro de auditoria.
@@ -147,71 +159,71 @@ service cloud.firestore {
     // (esse onSnapshot não tem callback de erro, então ninguém via o aviso, mas o listener em tempo
     // real morria sem avisar). resource==null é seguro de liberar: não há dado nenhum pra vazar.
     match /plantoes/{id} {
-      allow read: if logado() && (resource == null || resource.data.tenant_id == userTenant());
-      allow create: if logado() && tenantOk(request.resource.data);
-      allow update: if logado() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
+      allow read: if membro() && (resource == null || resource.data.tenant_id == userTenant());
+      allow create: if membro() && tenantOk(request.resource.data);
+      allow update: if membro() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
     }
     match /plantao_solicitacoes/{id} {
-      allow read: if logado() && resource.data.tenant_id == userTenant();
-      allow create: if logado() && tenantOk(request.resource.data);
-      allow update: if logado() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
+      allow read: if membro() && resource.data.tenant_id == userTenant();
+      allow create: if membro() && tenantOk(request.resource.data);
+      allow update: if membro() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
     }
     // plantao_convites: sem .add() no código hoje (achado #10), mas a leitura/UI segue ativa —
     // mantida no padrão normal em vez de removida, pra não mudar comportamento observável à toa.
     match /plantao_convites/{id} {
-      allow read: if logado() && resource.data.tenant_id == userTenant();
-      allow create: if logado() && tenantOk(request.resource.data);
-      allow update: if logado() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
+      allow read: if membro() && resource.data.tenant_id == userTenant();
+      allow create: if membro() && tenantOk(request.resource.data);
+      allow update: if membro() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
     }
 
     // ===== MURAL E ALERTAS =====
     match /avisos/{id} {
-      allow read: if logado() && resource.data.tenant_id == userTenant();
-      allow create: if logado() && tenantOk(request.resource.data);
-      allow update: if logado() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
-      allow delete: if logado() && resource.data.tenant_id == userTenant();
+      allow read: if membro() && resource.data.tenant_id == userTenant();
+      allow create: if membro() && tenantOk(request.resource.data);
+      allow update: if membro() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
+      allow delete: if membro() && resource.data.tenant_id == userTenant();
     }
     match /alertas/{id} {
-      allow read: if logado() && resource.data.tenant_id == userTenant();
-      allow create: if logado() && tenantOk(request.resource.data);
-      allow update: if logado() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
+      allow read: if membro() && resource.data.tenant_id == userTenant();
+      allow create: if membro() && tenantOk(request.resource.data);
+      allow update: if membro() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
       allow delete: if ehAdmin() && resource.data.tenant_id == userTenant();
     }
 
     // ===== SOLICITAÇÕES =====
     match /solicitacoes/{id} {
-      allow read: if logado() && resource.data.tenant_id == userTenant();
-      allow create: if logado() && tenantOk(request.resource.data);
-      allow update: if logado() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
+      allow read: if membro() && resource.data.tenant_id == userTenant();
+      allow create: if membro() && tenantOk(request.resource.data);
+      allow update: if membro() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
     }
 
     // ===== NOTAS FISCAIS =====
     match /notas_fiscais/{id} {
-      allow read: if logado() && resource.data.tenant_id == userTenant();
-      allow create: if logado() && tenantOk(request.resource.data);
-      allow update: if logado() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
+      allow read: if membro() && resource.data.tenant_id == userTenant();
+      allow create: if membro() && tenantOk(request.resource.data);
+      allow update: if membro() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
       allow delete: if ehAdmin() && resource.data.tenant_id == userTenant();
     }
     match /vinculos_nfe/{id} {
-      allow read: if logado() && resource.data.tenant_id == userTenant();
-      allow create: if logado() && tenantOk(request.resource.data);
-      allow update: if logado() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
+      allow read: if membro() && resource.data.tenant_id == userTenant();
+      allow create: if membro() && tenantOk(request.resource.data);
+      allow update: if membro() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
       allow delete: if ehAdmin() && resource.data.tenant_id == userTenant();
     }
 
     // ===== ATAS =====
     match /atas/{id} {
-      allow read: if logado() && resource.data.tenant_id == userTenant();
-      allow create: if logado() && tenantOk(request.resource.data);
-      allow update: if logado() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
+      allow read: if membro() && resource.data.tenant_id == userTenant();
+      allow create: if membro() && tenantOk(request.resource.data);
+      allow update: if membro() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
       allow delete: if ehAdmin() && resource.data.tenant_id == userTenant();
     }
 
     // ===== DIVERGÊNCIAS =====
     match /divergencias/{id} {
-      allow read: if logado() && resource.data.tenant_id == userTenant();
-      allow create: if logado() && tenantOk(request.resource.data);
-      allow update: if logado() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
+      allow read: if membro() && resource.data.tenant_id == userTenant();
+      allow create: if membro() && tenantOk(request.resource.data);
+      allow update: if membro() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
       allow delete: if ehAdmin() && resource.data.tenant_id == userTenant();
     }
     // vales: REMOVIDO (Fase 1, achado #8 — sem coleção correspondente no código).
@@ -222,14 +234,14 @@ service cloud.firestore {
     // pacientes_leite) + "retiradas_judiciais" (histórico, igual retiradas_leite) — mesmo padrão
     // de regra das duas coleções de Leite.
     match /pacientes_judiciais/{id} {
-      allow read: if logado() && resource.data.tenant_id == userTenant();
-      allow create: if logado() && tenantOk(request.resource.data);
-      allow update: if logado() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
+      allow read: if membro() && resource.data.tenant_id == userTenant();
+      allow create: if membro() && tenantOk(request.resource.data);
+      allow update: if membro() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
       allow delete: if ehAdmin() && resource.data.tenant_id == userTenant();
     }
     match /retiradas_judiciais/{id} {
-      allow read: if logado() && resource.data.tenant_id == userTenant();
-      allow create: if logado() && tenantOk(request.resource.data);
+      allow read: if membro() && resource.data.tenant_id == userTenant();
+      allow create: if membro() && tenantOk(request.resource.data);
       allow update: if false;
       // Gestor e técnico podem apagar (06/10/2026 — ex: saída de teste registrada por engano).
       allow delete: if ehAdmin() && resource.data.tenant_id == userTenant();
@@ -238,32 +250,49 @@ service cloud.firestore {
     // ===== LOGS (auditoria — nunca apagáveis) =====
     match /logs_acesso/{id} {
       allow read: if ehAdmin() && resource.data.tenant_id == userTenant();
-      allow create: if logado() && tenantOk(request.resource.data);
+      allow create: if membro() && tenantOk(request.resource.data);
       allow update, delete: if false;
     }
     match /logs_contas/{id} {
       allow read: if ehAdmin() && resource.data.tenant_id == userTenant();
-      allow create: if logado() && tenantOk(request.resource.data);
+      allow create: if membro() && tenantOk(request.resource.data);
       allow update, delete: if false;
     }
 
     // ===== _META (doc de versão por tenant — ex.: entries_version__vicencia-pe) =====
     match /_meta/{doc} {
-      allow read: if logado();
-      allow write: if logado();
+      // Só o documento do próprio município (o id termina com __<tenant>) e só para membro aprovado.
+      allow read, write: if membro() && doc.matches('.*__' + userTenant() + '(__.*)?');
     }
 
-    // ===== CONFIG (global — não é dado de tenant, Fase 1 achado #9) =====
+    // ===== CONFIG (por município: destinos__<tenant>, tours__<tenant>, inventario__<tenant>, reldia__<tenant>__<data>) =====
     match /config/{docId} {
-      allow read: if logado();
-      allow write: if logado();
+      allow read, write: if membro() && docId.matches('.*__' + userTenant() + '(__.*)?');
+    }
+
+    // ===== SUPORTE (chamados da aba Ajuda e erros automáticos) =====
+    // Chamado: o próprio usuário cria (já como 'aberto') e lê só os seus; só o administrador do FarmaControl
+    // responde, resolve e apaga. Erro automático: qualquer membro aprovado grava; só o administrador lê.
+    match /chamados_suporte/{id} {
+      allow create: if membro() && tenantOk(request.resource.data)
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.status == 'aberto'
+                    && request.resource.data.texto is string && request.resource.data.texto.size() <= 2000;
+      allow read: if logado() && (ehSuperAdmin() || (aprovado() && resource.data.uid == request.auth.uid));
+      allow update, delete: if ehSuperAdmin();
+    }
+    match /erros_app/{id} {
+      allow create: if membro() && tenantOk(request.resource.data)
+                    && request.resource.data.mensagem is string && request.resource.data.mensagem.size() <= 400;
+      allow read, delete: if ehSuperAdmin();
+      allow update: if false;
     }
 
     // ===== RECEBIMENTOS =====
     match /recebimentos/{id} {
-      allow read: if logado() && resource.data.tenant_id == userTenant();
-      allow create: if logado() && tenantOk(request.resource.data);
-      allow update: if logado() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
+      allow read: if membro() && resource.data.tenant_id == userTenant();
+      allow create: if membro() && tenantOk(request.resource.data);
+      allow update: if membro() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
       allow delete: if ehAdmin() && resource.data.tenant_id == userTenant() && resource.data.status == 'cancelado';
     }
     // conciliacoes: REMOVIDO (Fase 1, achado #8 — sem coleção correspondente no código).

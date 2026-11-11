@@ -34,10 +34,11 @@ async function main() {
     try {
       const userRecord = await auth.getUser(uid);
       const claims = userRecord.customClaims || {};
-      if (claims.tenant_id === tenantId) { jaCertos++; continue; }
-      await auth.setCustomUserClaims(uid, Object.assign({}, claims, { tenant_id: tenantId }));
+      const st = doc.data().status; const ativo = st === undefined || st === 'approved' || st === 'ativo';
+      if (claims.tenant_id === tenantId && claims.ativo === ativo) { jaCertos++; continue; }
+      await auth.setCustomUserClaims(uid, Object.assign({}, claims, { tenant_id: tenantId, ativo: ativo }));
       atualizados++;
-      console.log(`users/${uid}: claim tenant_id="${tenantId}" gravada.`);
+      console.log(`users/${uid}: claims tenant_id="${tenantId}" ativo=${ativo} gravadas.`);
     } catch (e) {
       erros++;
       console.error(`users/${uid}: ERRO — ${e.message} (provavelmente a conta de login não existe mais no Authentication; o doc do Firestore ficou órfão)`);

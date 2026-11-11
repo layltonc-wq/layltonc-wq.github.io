@@ -797,6 +797,7 @@ function Icon(props){
     calendar:<g><rect x="4" y="5.5" width="16" height="15" rx="2"/><line x1="4" y1="10" x2="20" y2="10"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/></g>,
     trophy:<g><path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 5H5a2.5 2.5 0 0 0 2.5 4.5M16 5h3a2.5 2.5 0 0 1-2.5 4.5"/><line x1="12" y1="13" x2="12" y2="17"/><path d="M8.5 20.5h7l-1-3.5h-5z"/></g>,
     star:<path d="M12 3.3 14.6 9l6.2.6-4.7 4.1 1.4 6.1L12 16.8 6.5 19.8l1.4-6.1-4.7-4.1L9.4 9z"/>,
+    help:<g><circle cx="12" cy="12" r="9"/><path d="M9.4 9.6a2.7 2.7 0 0 1 5.2.9c0 1.8-2.6 2.2-2.6 3.8"/><circle cx="12" cy="17.3" r=".7"/></g>,
     dna:<g><path d="M6 3c0 6 12 6 12 12M18 21c0-6-12-6-12-12"/><line x1="8" y1="6.5" x2="12.5" y2="6.5"/><line x1="11.5" y1="12" x2="16" y2="12"/><line x1="8" y1="17.5" x2="12.5" y2="17.5"/></g>,
     menu:<g><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></g>,
     search:<g><circle cx="10.8" cy="10.8" r="6.3"/><line x1="19.5" y1="19.5" x2="15.4" y2="15.4"/></g>,
@@ -5433,6 +5434,7 @@ function TabSuperAdmin(props){
   var stBtn={padding:'8px 12px',border:'none',borderRadius:8,fontSize:12,fontWeight:700,cursor:'pointer'};
   return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
     <div style={{fontSize:18,fontWeight:800,color:'#1E293B',marginBottom:4}}>Administração FarmaControl</div>
+    <SuporteAdmin/>
     <div style={{fontSize:13,color:'#64748B',marginBottom:14}}>Só a sua conta enxerga esta tela. Aqui você cria prefeituras, gera o link de cadastro, aprova o primeiro gestor e entra em outra prefeitura para dar suporte.</div>
     {msg&&<div style={{background:'#EFF6FF',color:'#1351B4',fontWeight:700,fontSize:13,padding:'8px 12px',borderRadius:10,marginBottom:10}}>{msg}</div>}
     <button onClick={abrirNova} className="bp" style={{width:'auto',padding:'0 18px',marginBottom:14}}>+ Nova prefeitura</button>
@@ -6892,10 +6894,274 @@ function useModal(){
   return {confirm2:confirm2,alert2:alert2,ModalRender:ModalRender,modal:modal};
 }
 
+// ===== Ajuda, chamados de suporte e relato automático de erros =====
+// Contato do suporte (aparece na aba Ajuda e no texto pré-preenchido do WhatsApp quando o envio falha).
+var FC_SUPORTE={whats:'5581999673075',fone:'(81) 99967-3075',email:'farmacontrol.app.br@gmail.com'};
+// Contexto atual (quem está logado e em qual aba) para os relatos. Atualizado pelo App.
+var _fcCtx={user:null,tab:''};
+var _errSessao={n:0,vistos:{},recentes:[]};
+function _fcVersao(){return String(window.__FC_VERSION||'');}
+function _fcInfoTecnica(){
+  var u=_fcCtx.user||{};
+  return {tab:_fcCtx.tab||'',versao:_fcVersao(),ua:String(navigator.userAgent||'').slice(0,200),pagina:String((location.pathname||'')+(location.hash||'')).slice(0,120),
+    uid:u.uid||'',nome:String(u.name||'').slice(0,80),cargo:u.role||'',tenant_id:tenantDe(u)||''};
+}
+// Relato automático de erro: vai para a coleção erros_app (só o administrador do FarmaControl lê).
+// Não envia dados de paciente nem de estoque, só a mensagem do erro, a tela e a versão. Limites: 5 por sessão,
+// sem repetir o mesmo erro, e ignora oscilação de internet.
+function reportarErro(err,origem){
+  try{
+    var inf=_fcInfoTecnica();if(!inf.uid||!inf.tenant_id)return;
+    var msg=String((err&&err.message)||err||'').slice(0,300);
+    if(!msg)return;
+    if(/ResizeObserver|^Script error|Load failed|Failed to fetch|NetworkError|network|offline|unavailable|client is offline/i.test(msg))return;
+    var stack=String((err&&err.stack)||'').split('\n').slice(0,4).join(' | ').slice(0,600);
+    var sig=msg.slice(0,80)+'|'+stack.slice(0,120);
+    if(_errSessao.vistos[sig]||_errSessao.n>=5)return;
+    _errSessao.vistos[sig]=1;_errSessao.n++;_errSessao.recentes.push(msg.slice(0,120));if(_errSessao.recentes.length>3)_errSessao.recentes.shift();
+    db.collection('erros_app').add(Object.assign({mensagem:msg,stack:stack,origem:origem||'',criadoEm:new Date().toISOString()},inf)).catch(function(){});
+  }catch(e){}
+}
+try{
+  window.addEventListener('error',function(ev){reportarErro(ev&&(ev.error||ev.message),'janela');});
+  window.addEventListener('unhandledrejection',function(ev){reportarErro(ev&&ev.reason,'promessa');});
+}catch(e){}
+
+var HELP_TOPICS=[
+  {id:'inicio',tab:'dashboard',titulo:'Início',resumo:'Visão do dia: plantão, saídas, entradas, vencimentos e estoque baixo.',
+    passos:['Ao começar o turno, toque em "Abrir Plantão" e confirme quem está na equipe.','Acompanhe os quadros do dia: saídas, entradas, produtos vencendo e estoque baixo.','Veja o gráfico das saídas dos últimos 7 dias e a lista "Vencendo em breve".','Ao terminar o turno, toque em "Encerrar Plantão".'],
+    dicas:['Abra o plantão antes de registrar as movimentações do dia.']},
+  {id:'saida',tab:'saida',titulo:'Saída (dispensação)',resumo:'Registra o medicamento que saiu do estoque, para quem e de qual lote.',
+    passos:['Busque o medicamento pelo nome e confira o saldo.','Escolha o destino da saída (SUS, Emergência, CAPS, UBS e outros).','Informe a quantidade. O sistema sugere o lote que vence primeiro e divide entre lotes se um só não bastar.','Para vários itens de uma vez, adicione ao carrinho e confirme no final.','Toque em confirmar. A saída aparece no histórico logo abaixo.'],
+    dicas:['O botão de saída mostra o destino escolhido, confira antes de tocar.','Errou o destino? Corrija em "Saídas registradas".','Se a internet estiver ruim, não repita o registro: espere voltar e confira o histórico.']},
+  {id:'recebimento',tab:'recebimento',titulo:'Recebimento e notas fiscais',resumo:'Entrada de mercadoria no estoque, com ou sem nota fiscal em mãos.',
+    passos:['Escolha "Recebimento simples" (sem a nota) ou "Já tenho a Nota Fiscal".','Informe a data e o fornecedor (obrigatório). Com a nota, informe também o número e o valor total.','Busque o medicamento e preencha quantidade, lote e validade. Os três são obrigatórios.','Se o produto realmente veio sem lote, marque "Este produto veio sem lote" e explique em Observações.','Com a nota, se um item chegou diferente do escrito (outra quantidade ou outro produto), toque no nome do medicamento e informe o que chegou.','Toque em "Finalizar Recebimento". O estoque atualiza na hora.'],
+    dicas:['Sem a nota, o recebimento fica pendente até ser conciliado. O painel no topo mostra quantos estão pendentes e há quantos dias.','"Marcar como conferido" pede o motivo, e fica registrado.','Ao cancelar um recebimento, o app avisa se parte já foi usada e pede a justificativa.']},
+  {id:'estoque',tab:'estoque',titulo:'Estoque',resumo:'Saldo atual de cada medicamento, com lote, validade e alertas.',
+    passos:['Use as abas para ver o Estoque, as Faltas, os Vencimentos e os Descartes.','Busque pelo nome ou filtre por categoria (Farm. Básica, Controlado, Injetável, Leite, Penso/Material).','Toque nos ícones de cada linha para editar, ajustar o lote e a validade ou descartar.','Use PDF ou Excel para exportar a lista.'],
+    dicas:['Estoque baixo e vencimento próximo aparecem sozinhos no Início.','O PDF do estoque mostra lote, validade e o valor da ata.']},
+  {id:'conferencia',tab:'conferencia',titulo:'Conferência e inventário',resumo:'Compara a contagem física com o saldo do sistema e corrige a diferença.',
+    passos:['Escolha a categoria que vai conferir.','Para cada medicamento, digite a quantidade contada. Cadastre lote e validade se preciso.','Confirme a contagem para aplicar no estoque.','Finalize cada categoria quando terminar.'],
+    dicas:['Cada categoria é uma conferência independente.','O "Inventário geral" acompanha quais medicamentos já foram conferidos e quais faltam.','O quadro "Problemas do estoque" mostra saldo negativo e lote com problema antes de contar.']},
+  {id:'atb',tab:'antibiotico',titulo:'Tratamento com antibiótico (ATB)',resumo:'Controle das doses de cada paciente, com baixa do estoque pelo lote que vence primeiro.',
+    passos:['Toque em "+ Novo" e preencha paciente, medicamento, dias, doses por dia e dados do médico.','Para dar a dose, toque em "Registrar Dose de Hoje" e confirme.','Cada confirmação baixa uma dose. Para dias atrasados, use a baixa de todas as doses pendentes, com cuidado.','Conclua o tratamento quando terminar.'],
+    dicas:['Depois de tocar em "Confirmar e Baixar", aguarde "Registrando…". Não toque de novo.','Confira o histórico do paciente para ter certeza de que a dose foi registrada.']},
+  {id:'leites',tab:'leites',titulo:'Leites e fórmulas',resumo:'Pacientes de leite, retiradas e materiais avulsos.',
+    passos:['Cadastre o paciente e a fórmula.','Registre cada retirada na hora da entrega.','Para entregar material junto, use "+ Material" na dispensação.'],dicas:[]},
+  {id:'pacientes',tab:'pacientes',titulo:'Controlados',resumo:'Cadastro de pacientes e registro de saídas de medicamentos controlados.',
+    passos:['Busque o paciente ou cadastre um novo.','Registre a saída com o prescritor, o CRM e a quantidade.','Consulte o histórico por paciente e por médico.'],dicas:['Só aparece para quem tem este módulo ativo.']},
+  {id:'previsao',tab:'previsao',titulo:'Previsão e pedido por ata',resumo:'Calcula quanto pedir de cada medicamento pelo consumo real e monta o pedido.',
+    passos:['Escolha o período e veja a sugestão de pedido por medicamento.','Ajuste a quantidade onde precisar. O valor total é calculado pela ata.','Preencha os dados do pedido oficial e gere o PDF ou o Excel.','Ao "Fechar Pedido", o saldo das atas é descontado.','Em "Gerenciar Atas", importe a ata (Word ou Excel) e confira marca, fornecedor e CNPJ.'],
+    dicas:['Pedido e atas são para gestor e técnico.']},
+  {id:'relatorio',tab:'relatorio',titulo:'Relatórios',resumo:'Movimentações, resumos e saídas do dia, em PDF e Excel.',
+    passos:['Escolha o período e o tipo (entradas, saídas ou todos).','Filtre por destino, categoria, responsável ou medicamento.','Veja o Resumo e as "Saídas do Dia". Exporte em PDF ou Excel.'],dicas:['Em "Saídas do Dia", o app mostra a última vez que o relatório foi puxado.']},
+  {id:'saidasreg',tab:'saidasreg',titulo:'Saídas registradas',resumo:'Corrige o destino de várias saídas de uma vez.',
+    passos:['Escolha a data e filtre por destino e categoria.','Marque as saídas que estão com destino errado.','Escolha o destino certo e confirme.'],dicas:['Serve para destino. Para corrigir quantidade, fale com o gestor ou o técnico.']},
+  {id:'gestao',tab:'gestao',titulo:'Gestão (gestor e técnico)',resumo:'Aprovação de contas, cargos e acompanhamento da equipe.',
+    passos:['Aprove os novos cadastros e escolha o cargo de cada pessoa.','Desative contas de quem saiu da equipe.','Consulte o Log de Acesso para ver quem fez o quê.'],dicas:['Aprove só quem você conhece: a conta aprovada vê os dados da farmácia.']}
+];
+var HELP_FAQ=[
+  {q:'Esqueci minha senha.',a:'Na tela de entrada, digite seu e-mail e toque em "Esqueci minha senha". Você recebe um e-mail para criar outra.'},
+  {q:'Meu cadastro ainda não entrou.',a:'O gestor da sua farmácia precisa aprovar a conta. Peça a ele para abrir Gestão e aprovar o seu nome.'},
+  {q:'O estoque não bate com o que tem na prateleira.',a:'Peça uma Conferência da categoria: a contagem física corrige o saldo e o lote.'},
+  {q:'Registrei uma saída com o destino errado.',a:'Abra "Saídas registradas", marque a saída e troque o destino.'},
+  {q:'A tela travou ou apareceu uma mensagem de erro.',a:'Feche e abra o app. Se continuar, use "Reportar um problema" aqui na Ajuda. O app também avisa o suporte dos erros automaticamente.'}
+];
+function _semAcento(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');}
+
+function ReportarProblemaModal(props){
+  var user=props.user;var onClose=props.onClose;
+  var _t=useState('erro');var tipo=_t[0],setTipo=_t[1];
+  var _x=useState('');var texto=_x[0],setTexto=_x[1];
+  var _b=useState(false);var busy=_b[0],setBusy=_b[1];
+  var _ok=useState('');var ok=_ok[0],setOk=_ok[1];
+  var _er=useState(false);var falhou=_er[0],setFalhou=_er[1];
+  var TIPOS_REL={erro:'Algo não funciona',duvida:'Tenho uma dúvida',sugestao:'Sugestão de melhoria'};
+  function zap(){return 'https://wa.me/'+FC_SUPORTE.whats+'?text='+encodeURIComponent('Olá! Preciso de ajuda no FarmaControl ('+(TIPOS_REL[tipo]||'')+'). '+texto.trim());}
+  function enviar(){
+    var t=texto.trim();
+    if(t.length<10){alert('Conte um pouco mais (pelo menos 10 letras) para o suporte conseguir ajudar.');return;}
+    if(busy)return;setBusy(true);setFalhou(false);
+    var inf=_fcInfoTecnica();
+    db.collection('chamados_suporte').add(Object.assign({tipo:tipo,texto:t.slice(0,2000),status:'aberto',criadoEm:new Date().toISOString(),ultimosErros:_errSessao.recentes.slice()},inf))
+      .then(function(ref){setOk(ref.id.slice(0,6).toUpperCase());setBusy(false);if(props.onEnviado)props.onEnviado();})
+      .catch(function(){setBusy(false);setFalhou(true);});
+  }
+  var inp={width:'100%',padding:'11px',borderRadius:12,border:'1.5px solid #E2E8F0',fontSize:14,boxSizing:'border-box',fontFamily:'inherit'};
+  return(<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.55)',zIndex:1100,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={function(){if(!busy)onClose();}}>
+    <div style={{background:'#fff',borderRadius:20,padding:22,width:'100%',maxWidth:440,maxHeight:'92vh',overflowY:'auto'}} onClick={function(e){e.stopPropagation();}}>
+      {ok?<div style={{textAlign:'center'}}>
+        <div style={{fontWeight:800,fontSize:18,color:'#166534',marginBottom:6}}>Enviado!</div>
+        <div style={{fontSize:13,color:'#475569',marginBottom:6}}>O suporte recebeu o seu relato.</div>
+        <div style={{fontSize:13,color:'#475569',marginBottom:14}}>Protocolo: <b>{ok}</b>. A resposta aparece em "Meus chamados" aqui na Ajuda.</div>
+        <button onClick={onClose} className="bp" style={{width:'100%'}}>Fechar</button>
+      </div>:<div>
+        <div style={{fontWeight:800,fontSize:18,color:'#1E293B',marginBottom:4}}>Reportar um problema</div>
+        <div style={{fontSize:12,color:'#64748B',marginBottom:12}}>Conte o que aconteceu. O app envia junto a tela em que você estava e a versão, para ajudar o suporte.</div>
+        <label style={{fontSize:12,fontWeight:700,color:'#475569',display:'block',marginBottom:4}}>Tipo</label>
+        <select id="rep-tipo" value={tipo} onChange={function(e){setTipo(e.target.value);}} style={Object.assign({},inp,{background:'#fff',marginBottom:10})}>
+          {Object.keys(TIPOS_REL).map(function(k){return <option key={k} value={k}>{TIPOS_REL[k]}</option>;})}
+        </select>
+        <label style={{fontSize:12,fontWeight:700,color:'#475569',display:'block',marginBottom:4}}>O que aconteceu?</label>
+        <textarea id="rep-texto" value={texto} onChange={function(e){setTexto(e.target.value);}} rows={5} maxLength={2000} placeholder="Ex.: Ao tocar em Finalizar Recebimento, a tela ficou parada." style={Object.assign({},inp,{resize:'vertical',marginBottom:6})}/>
+        <div style={{fontSize:11,color:'#94A3B8',marginBottom:12}}>Não escreva dados de pacientes aqui (nome, CPF).</div>
+        {falhou&&<div style={{background:'#FEF2F2',border:'1px solid #FCA5A5',borderRadius:10,padding:'10px 12px',fontSize:12,color:'#991B1B',marginBottom:12}}>Não consegui enviar agora (internet ou permissão). Você pode mandar pelo WhatsApp:<br/><a href={zap()} target="_blank" rel="noopener" style={{color:'#1351B4',fontWeight:700}}>Abrir WhatsApp do suporte</a></div>}
+        <div style={{display:'flex',gap:8}}>
+          <button onClick={onClose} disabled={busy} style={{flex:1,padding:'12px',background:'#F1F5F9',border:'none',borderRadius:10,color:'#64748B',fontWeight:700,fontSize:14,cursor:'pointer'}}>Cancelar</button>
+          <button onClick={enviar} disabled={busy} className="bp" style={{flex:2,opacity:busy?.7:1}}>{busy?'Enviando…':'Enviar relato'}</button>
+        </div>
+      </div>}
+    </div>
+  </div>);
+}
+
+function TabAjuda(props){
+  var user=props.user;var onIr=props.onIr;
+  var _q=useState('');var q=_q[0],setQ=_q[1];
+  var _a=useState('');var aberto=_a[0],setAberto=_a[1];
+  var _r=useState(false);var showRep=_r[0],setShowRep=_r[1];
+  var _m=useState([]);var meus=_m[0],setMeus=_m[1];
+  useEffect(function(){
+    if(!user||!user.uid)return;
+    var u=db.collection('chamados_suporte').where('uid','==',user.uid).limit(30).onSnapshot(function(sn){
+      var a=sn.docs.map(function(d){return Object.assign({id:d.id},d.data());});
+      a.sort(function(x,y){return String(y.criadoEm||'').localeCompare(String(x.criadoEm||''));});
+      setMeus(a);
+    },function(){setMeus([]);});
+    return u;
+  },[user&&user.uid]);
+  var nq=_semAcento(q.trim());
+  var topicos=HELP_TOPICS.filter(function(t){
+    if(!nq)return true;
+    return _semAcento([t.titulo,t.resumo].concat(t.passos,t.dicas).join(' ')).indexOf(nq)>=0;
+  });
+  var faq=HELP_FAQ.filter(function(f){return !nq||_semAcento(f.q+' '+f.a).indexOf(nq)>=0;});
+  var zapUrl='https://wa.me/'+FC_SUPORTE.whats+'?text='+encodeURIComponent('Olá! Preciso de ajuda no FarmaControl.');
+  function quando(iso){if(!iso)return '';var d=new Date(iso);if(isNaN(d))return '';return d.toLocaleDateString('pt-BR')+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}
+  var card={background:'#fff',borderRadius:14,border:'1px solid #E2E8F0',padding:'14px 16px'};
+  return(<div style={{maxWidth:720,margin:'0 auto',padding:'16px 14px 90px'}}>
+    <div style={{fontSize:20,fontWeight:800,color:'#1E293B'}}>Ajuda</div>
+    <div style={{fontSize:13,color:'#64748B',margin:'2px 0 14px'}}>Como usar cada tela, respostas rápidas e contato com o suporte.</div>
+    <input id="ajuda-busca" value={q} onChange={function(e){setQ(e.target.value);}} placeholder="Buscar na ajuda (ex.: lote, saída, senha)" style={{width:'100%',padding:'12px',borderRadius:12,border:'1.5px solid #E2E8F0',fontSize:14,boxSizing:'border-box',marginBottom:14,fontFamily:'inherit'}}/>
+
+    <div style={Object.assign({},card,{background:'#EFF6FF',border:'1px solid #BFDBFE',marginBottom:16})}>
+      <div style={{fontWeight:800,fontSize:14,color:'#1E3A8A',marginBottom:8}}>Precisa de ajuda de uma pessoa?</div>
+      <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+        <button id="ajuda-reportar" onClick={function(){setShowRep(true);}} className="bp" style={{width:'auto',padding:'0 16px',height:42}}>Reportar um problema</button>
+        <a href={zapUrl} target="_blank" rel="noopener" style={{display:'inline-flex',alignItems:'center',padding:'0 16px',height:42,borderRadius:12,background:'#16A34A',color:'#fff',fontWeight:700,fontSize:14,textDecoration:'none'}}>WhatsApp do suporte</a>
+      </div>
+      <div style={{fontSize:12,color:'#475569',marginTop:8}}>Ou escreva para <b>{FC_SUPORTE.email}</b> · {FC_SUPORTE.fone}</div>
+    </div>
+
+    {meus.length>0&&!nq&&<div style={{marginBottom:16}}>
+      <div style={{fontWeight:800,fontSize:14,color:'#1E293B',marginBottom:8}}>Meus chamados</div>
+      <div style={{display:'flex',flexDirection:'column',gap:8}}>
+        {meus.slice(0,5).map(function(c){var fechado=c.status==='resolvido';return(<div key={c.id} style={card}>
+          <div style={{display:'flex',justifyContent:'space-between',gap:8,alignItems:'center'}}>
+            <span style={{fontSize:12,color:'#64748B'}}>{quando(c.criadoEm)} · protocolo {c.id.slice(0,6).toUpperCase()}</span>
+            <span style={{fontSize:11,fontWeight:800,padding:'3px 9px',borderRadius:99,background:fechado?'#DCFCE7':'#FEF3C7',color:fechado?'#166534':'#92400E'}}>{fechado?'Resolvido':'Em análise'}</span>
+          </div>
+          <div style={{fontSize:13,color:'#1E293B',marginTop:6,whiteSpace:'pre-wrap'}}>{c.texto}</div>
+          {c.resposta&&<div style={{fontSize:13,color:'#1E3A8A',background:'#EFF6FF',borderRadius:8,padding:'8px 10px',marginTop:8,whiteSpace:'pre-wrap'}}><b>Resposta do suporte:</b> {c.resposta}</div>}
+        </div>);})}
+      </div>
+    </div>}
+
+    <div style={{fontWeight:800,fontSize:14,color:'#1E293B',marginBottom:8}}>Como usar cada tela</div>
+    <div style={{display:'flex',flexDirection:'column',gap:8,marginBottom:18}}>
+      {topicos.length===0&&<div style={{color:'#94A3B8',fontSize:13,padding:'10px 0'}}>Nada encontrado. Tente outra palavra ou use "Reportar um problema".</div>}
+      {topicos.map(function(t){var ab=aberto===t.id||!!nq;return(<div key={t.id} data-help={t.id} style={Object.assign({},card,{padding:0,overflow:'hidden'})}>
+        <button onClick={function(){setAberto(aberto===t.id?'':t.id);}} style={{width:'100%',textAlign:'left',background:'none',border:'none',padding:'14px 16px',cursor:'pointer',fontFamily:'inherit'}}>
+          <div style={{display:'flex',justifyContent:'space-between',gap:10,alignItems:'center'}}>
+            <span style={{fontWeight:700,fontSize:15,color:'#1E293B'}}>{t.titulo}</span>
+            <span style={{color:'#94A3B8',fontSize:18,lineHeight:1}}>{ab?'−':'+'}</span>
+          </div>
+          <div style={{fontSize:12.5,color:'#64748B',marginTop:3}}>{t.resumo}</div>
+        </button>
+        {ab&&<div style={{padding:'0 16px 14px'}}>
+          <ol style={{margin:'4px 0 0',paddingLeft:20,display:'flex',flexDirection:'column',gap:5,fontSize:13.5,color:'#334155'}}>{t.passos.map(function(p,i){return <li key={i}>{p}</li>;})}</ol>
+          {t.dicas.length>0&&<div style={{marginTop:10,background:'#FFFBEB',border:'1px solid #FDE68A',borderRadius:10,padding:'8px 12px'}}>
+            <div style={{fontSize:11,fontWeight:800,color:'#92400E',textTransform:'uppercase',letterSpacing:'.04em',marginBottom:3}}>Dicas</div>
+            {t.dicas.map(function(d,i){return <div key={i} style={{fontSize:12.5,color:'#78350F',marginTop:2}}>• {d}</div>;})}
+          </div>}
+          <button onClick={function(){if(onIr)onIr(t.tab);}} style={{marginTop:12,padding:'9px 14px',background:'#EFF6FF',border:'1px solid #BFDBFE',borderRadius:10,color:'#1351B4',fontWeight:700,fontSize:13,cursor:'pointer'}}>Abrir esta tela</button>
+        </div>}
+      </div>);})}
+    </div>
+
+    {faq.length>0&&<div>
+      <div style={{fontWeight:800,fontSize:14,color:'#1E293B',marginBottom:8}}>Perguntas rápidas</div>
+      <div style={{display:'flex',flexDirection:'column',gap:8,marginBottom:18}}>
+        {faq.map(function(f,i){return(<div key={i} style={card}><div style={{fontWeight:700,fontSize:14,color:'#1E293B'}}>{f.q}</div><div style={{fontSize:13,color:'#475569',marginTop:3}}>{f.a}</div></div>);})}
+      </div>
+    </div>}
+
+    <div style={{fontSize:12,color:'#94A3B8',display:'flex',gap:14,flexWrap:'wrap',justifyContent:'center'}}>
+      <a href="/termos/" target="_blank" rel="noopener" style={{color:'#1351B4'}}>Termos de uso</a>
+      <a href="/privacidade/" target="_blank" rel="noopener" style={{color:'#1351B4'}}>Política de privacidade</a>
+      <span>Versão {_fcVersao()||'—'}</span>
+    </div>
+    {showRep&&<ReportarProblemaModal user={user} onClose={function(){setShowRep(false);}}/>}
+  </div>);
+}
+
+// Painel do administrador do FarmaControl: chamados recebidos e erros automáticos de todas as prefeituras.
+function SuporteAdmin(props){
+  var _c=useState([]);var chamados=_c[0],setChamados=_c[1];
+  var _e=useState([]);var erros=_e[0],setErros=_e[1];
+  var _o=useState(false);var aberto=_o[0],setAberto=_o[1];
+  var _rs=useState({});var resp=_rs[0],setResp=_rs[1];
+  useEffect(function(){
+    var u1=db.collection('chamados_suporte').orderBy('criadoEm','desc').limit(50).onSnapshot(function(sn){setChamados(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));},function(){});
+    var u2=db.collection('erros_app').orderBy('criadoEm','desc').limit(50).onSnapshot(function(sn){setErros(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));},function(){});
+    return function(){try{u1();}catch(e){}try{u2();}catch(e){}};
+  },[]);
+  function quando(iso){if(!iso)return '';var d=new Date(iso);if(isNaN(d))return '';return d.toLocaleDateString('pt-BR')+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}
+  function resolver(c){var r=(resp[c.id]||'').trim();db.collection('chamados_suporte').doc(c.id).update({status:'resolvido',resposta:r,resolvidoEm:new Date().toISOString()}).catch(function(e){alert('Erro: '+((e&&e.message)||e));});}
+  function reabrir(c){db.collection('chamados_suporte').doc(c.id).update({status:'aberto'}).catch(function(){});}
+  function apagarErro(e){db.collection('erros_app').doc(e.id).delete().catch(function(){});}
+  var abertos=chamados.filter(function(c){return c.status!=='resolvido';});
+  var card={background:'#fff',borderRadius:12,border:'1px solid #E2E8F0',padding:'10px 12px'};
+  return(<div style={{marginBottom:18}}>
+    <button onClick={function(){setAberto(!aberto);}} style={{width:'100%',textAlign:'left',background:'#fff',border:'1.5px solid #BFDBFE',borderRadius:12,padding:'12px 14px',cursor:'pointer',display:'flex',justifyContent:'space-between',alignItems:'center',fontFamily:'inherit'}}>
+      <span style={{fontWeight:800,fontSize:14,color:'#1E293B'}}>Suporte: chamados e erros</span>
+      <span style={{fontSize:12,fontWeight:700,color:abertos.length||erros.length?'#B91C1C':'#166534'}}>{abertos.length} chamado(s) aberto(s) · {erros.length} erro(s)</span>
+    </button>
+    {aberto&&<div style={{marginTop:10}}>
+      <div style={{fontWeight:800,fontSize:13,color:'#334155',margin:'6px 0'}}>Chamados</div>
+      {chamados.length===0&&<div style={{fontSize:12,color:'#94A3B8'}}>Nenhum chamado.</div>}
+      <div style={{display:'flex',flexDirection:'column',gap:8}}>
+        {chamados.map(function(c){var fechado=c.status==='resolvido';return(<div key={c.id} style={card}>
+          <div style={{fontSize:12,color:'#64748B'}}>{quando(c.criadoEm)} · {c.tenant_id} · {c.nome} ({c.cargo}) · tela: {c.tab||'—'} · v{c.versao}</div>
+          <div style={{fontSize:13,color:'#1E293B',margin:'4px 0',whiteSpace:'pre-wrap'}}><b>[{c.tipo}]</b> {c.texto}</div>
+          {c.ultimosErros&&c.ultimosErros.length>0&&<div style={{fontSize:11,color:'#B91C1C'}}>Erros recentes: {c.ultimosErros.join(' | ')}</div>}
+          {fechado?<div style={{fontSize:12,color:'#166534',marginTop:4}}>Resolvido{c.resposta?': '+c.resposta:''} <button onClick={function(){reabrir(c);}} style={{marginLeft:8,fontSize:11,background:'none',border:'none',color:'#1351B4',cursor:'pointer'}}>reabrir</button></div>
+          :<div style={{display:'flex',gap:6,marginTop:6}}>
+            <input value={resp[c.id]||''} onChange={function(e){var v=e.target.value;setResp(function(o){var n=Object.assign({},o);n[c.id]=v;return n;});}} placeholder="Resposta para o usuário (opcional)" style={{flex:1,padding:'8px',borderRadius:8,border:'1px solid #E2E8F0',fontSize:12}}/>
+            <button onClick={function(){resolver(c);}} style={{padding:'8px 12px',background:'#16A34A',border:'none',borderRadius:8,color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>Resolver</button>
+          </div>}
+        </div>);})}
+      </div>
+      <div style={{fontWeight:800,fontSize:13,color:'#334155',margin:'14px 0 6px'}}>Erros automáticos</div>
+      {erros.length===0&&<div style={{fontSize:12,color:'#94A3B8'}}>Nenhum erro registrado.</div>}
+      <div style={{display:'flex',flexDirection:'column',gap:6}}>
+        {erros.map(function(e){return(<div key={e.id} style={Object.assign({},card,{display:'flex',justifyContent:'space-between',gap:8})}>
+          <div style={{minWidth:0}}>
+            <div style={{fontSize:12,color:'#64748B'}}>{quando(e.criadoEm)} · {e.tenant_id} · {e.nome} · tela: {e.tab||'—'} · v{e.versao}</div>
+            <div style={{fontSize:12.5,color:'#B91C1C',fontWeight:600,wordBreak:'break-word'}}>{e.mensagem}</div>
+            {e.stack&&<div style={{fontSize:11,color:'#94A3B8',wordBreak:'break-word'}}>{e.stack}</div>}
+          </div>
+          <button onClick={function(){apagarErro(e);}} title="Apagar" style={{background:'#FEE2E2',border:'none',borderRadius:8,width:28,height:28,cursor:'pointer',color:'#DC2626',flexShrink:0}}>✕</button>
+        </div>);})}
+      </div>
+    </div>}
+  </div>);
+}
+
 class ErrBoundary extends React.Component{
   constructor(p){super(p);this.state={err:null};}
   static getDerivedStateFromError(e){return {err:e};}
-  componentDidCatch(e,info){console.error('ErrBoundary caught:',e,info);}
+  componentDidCatch(e,info){console.error('ErrBoundary caught:',e,info);reportarErro(e,'tela');}
   render(){
     if(this.state.err){
       return(<div style={{padding:24,textAlign:'center',color:'#DC2626'}}>
@@ -6903,6 +7169,7 @@ class ErrBoundary extends React.Component{
         <div style={{fontWeight:700,marginBottom:4}}>Erro ao carregar</div>
         <div style={{fontSize:12,color:'#64748B'}}>{String(this.state.err.message||this.state.err)}</div>
         <button onClick={function(){window.location.reload();}} style={{marginTop:12,padding:'8px 16px',background:'#1351B4',color:'#fff',border:'none',borderRadius:8,cursor:'pointer',fontWeight:600}}>Recarregar</button>
+        <div style={{fontSize:11,color:'#94A3B8',marginTop:10}}>Se continuar, abra Menu &gt; Ajuda &gt; Reportar um problema.</div>
       </div>);
     }
     return this.props.children;
@@ -12404,7 +12671,7 @@ var _avisoConv=useState(_CONVITE_URL);var avisoConv=_avisoConv[0];var setAvisoCo
 var _tenantVer=useState(0);var tenantVer=_tenantVer[0];var setTenantVer=_tenantVer[1];
 var _destSaida=useState('sus');var destinoSaida=_destSaida[0];var setDestinoSaida=_destSaida[1];var _ubsSaida=useState('');var ubsSaida=_ubsSaida[0];var setUbsSaida=_ubsSaida[1];var _destCfgRaw=useState(null);var destCfgRaw=_destCfgRaw[0];var setDestCfgRaw=_destCfgRaw[1];
 var _histPronto=useState(false);var histPronto=_histPronto[0];var setHistPronto=_histPronto[1];
-var _ready=useState(false);var ready=_ready[0];var setReady=_ready[1];var _user=useState(null);var user=_user[0];var setUser=_user[1];var _histEntries=useState([]);var histEntries=_histEntries[0];var setHistEntries=_histEntries[1];var _recentEntries=useState([]);var recentEntries=_recentEntries[0];var setRecentEntries=_recentEntries[1];var _fcWinStart=useRef(null);if(!_fcWinStart.current){var _w0=new Date();_w0.setDate(_w0.getDate()-3);_fcWinStart.current=_w0.toISOString();}var _meds=useState([]);var meds=_meds[0];var setMeds=_meds[1];var _loading=useState(true);var loading=_loading[0];var setLoading=_loading[1];var _tab=useState('dashboard');var tab=_tab[0];var setTab=_tab[1];var _menuAberto=useState(false);var menuAberto=_menuAberto[0];var setMenuAberto=_menuAberto[1];var _showSairModal=useState(false);var showSairModal=_showSairModal[0];var setShowSairModal=_showSairModal[1];var _pending=useState(0);var pending=_pending[0];var setPending=_pending[1];var _alertCount=useState(0);var alertCount=_alertCount[0];var setAlertCount=_alertCount[1];
+var _ready=useState(false);var ready=_ready[0];var setReady=_ready[1];var _user=useState(null);var user=_user[0];var setUser=_user[1];var _histEntries=useState([]);var histEntries=_histEntries[0];var setHistEntries=_histEntries[1];var _recentEntries=useState([]);var recentEntries=_recentEntries[0];var setRecentEntries=_recentEntries[1];var _fcWinStart=useRef(null);if(!_fcWinStart.current){var _w0=new Date();_w0.setDate(_w0.getDate()-3);_fcWinStart.current=_w0.toISOString();}var _meds=useState([]);var meds=_meds[0];var setMeds=_meds[1];var _loading=useState(true);var loading=_loading[0];var setLoading=_loading[1];var _tab=useState('dashboard');var tab=_tab[0];var setTab=_tab[1];useEffect(function(){_fcCtx.user=user;_fcCtx.tab=tab;},[user,tab]);var _menuAberto=useState(false);var menuAberto=_menuAberto[0];var setMenuAberto=_menuAberto[1];var _showSairModal=useState(false);var showSairModal=_showSairModal[0];var setShowSairModal=_showSairModal[1];var _pending=useState(0);var pending=_pending[0];var setPending=_pending[1];var _alertCount=useState(0);var alertCount=_alertCount[0];var setAlertCount=_alertCount[1];
 var _convites=useState([]);var convites=_convites[0];var setConvites=_convites[1];
 var _lowStock=useState([]);var lowStock=_lowStock[0];var setLowStock=_lowStock[1];var _solicitCount=useState(0);var solicitCount=_solicitCount[0];var setSolicitCount=_solicitCount[1];var _online=useState(navigator.onLine);var online=_online[0];var setOnline=_online[1];var _busca=useState(false);var busca=_busca[0];var setBusca=_busca[1];var _showSolicit=useState(false);var showSolicit=_showSolicit[0];var setShowSolicit=_showSolicit[1];var _showShift=useState(false);var showShift=_showShift[0];var setShowShift=_showShift[1];var _showShiftModal=useState(false);var showShiftModal=_showShiftModal[0];var setShowShiftModal=_showShiftModal[1];
 var _pendingInvite=useState(null);var pendingInvite=_pendingInvite[0];var setPendingInvite=_pendingInvite[1];var _plantao=useState(null);var plantao=_plantao[0];var setPlantao=_plantao[1];var _isGuest=useState(false);var isGuest=_isGuest[0];var setIsGuest=_isGuest[1];var _allUsers=useState([]);var allUsers=_allUsers[0];var setAllUsers=_allUsers[1];var _shiftChecked=useState(false);var shiftChecked=_shiftChecked[0];var setShiftChecked=_shiftChecked[1];var _shiftId=useState(null);var shiftId=_shiftId[0];var setShiftId=_shiftId[1];var _solicitacoesPlantao=useState([]);var solicitacoesPlantao=_solicitacoesPlantao[0];var setSolicitacoesPlantao=_solicitacoesPlantao[1];var lastAct=useRef(Date.now());
@@ -12744,7 +13011,7 @@ function menuIconName(id){
   var m={dashboard:'home',saida:'pill',recebimento:'truck',antibiotico:'vial',pedidosjudiciais:'scale',
     visaogeral:'trendUp',comparapedido:'search',estoque:'package',pacientes:'lock',conferencia:'clipboard',
     leites:'droplet',saidasreg:'edit',relatorio:'barChart',gestao:'users',log:'lock',histnotas:'folder',previsao:'clipboard',
-    histcontas:'clipboard',admin:'gear',superadmin:'gear',perfil:'users'};
+    histcontas:'clipboard',admin:'gear',superadmin:'gear',perfil:'users',ajuda:'help'};
   return m[id]||'folder';
 }
 // Para gestor/técnico em Itaquitinga, o slot de maior destaque da navegação (sempre visível) troca
@@ -12849,6 +13116,7 @@ return(
         {tab==='recebimento'&&<ErrBoundary><TabRecebimento user={user} medications={meds} onSave={addEntry} stock={stock}/></ErrBoundary>}
         {tab==='pacientes'&&temModulo(user,'controlados')&&<ErrBoundary><TabPacientes user={user} entries={entries} onSave={addEntryStable} confirm2={confirm2} alert2={alert2}/></ErrBoundary>}
         {tab==='leites'&&<ErrBoundary><TabLeites user={user} medications={meds} stock={stock} onSave={addEntry} confirm2={confirm2} alert2={alert2}/></ErrBoundary>}
+        {tab==='ajuda'&&<ErrBoundary><TabAjuda user={user} onIr={function(t){setTab(t);}}/></ErrBoundary>}
         {tab==='superadmin'&&user.isSuper&&<ErrBoundary><TabSuperAdmin user={user}/></ErrBoundary>}
         {tab==='admin'&&user.role==='tecnico'&&<TabAdmin user={user} entries={entries} medications={meds} db={db}/>}
         {tab==='perfil'&&<TabPerfil user={user} onUpdate={function(u){setUser(u);}} onLogout={logout} entries={entries} medications={meds} stock={stock}/>}
@@ -12918,6 +13186,7 @@ return(
               {id:'previsao',icon:'📋',label:'Previsão / Pedido',show:isManagerRole},
               {id:'histcontas',icon:'📋',label:'Hist. de Contas',show:can(user.role,'log')},
               {id:'admin',icon:'🔧',label:'Painel Admin',show:user.role==='tecnico'},
+              {id:'ajuda',icon:'❓',label:'Ajuda',show:true},
               {id:'superadmin',icon:'🏛️',label:'Administração',show:!!user.isSuper},
             ].filter(function(t){return t.show;}).map(function(t){return(
               <button key={t.id} data-tour={'nav-'+t.id} className={temaItaq?'menu-drawer-item'+(tab===t.id?' on':''):''} onClick={function(){setTab(t.id);setMenuAberto(false);}} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'13px 20px',border:'none',background:temaItaq?undefined:(tab===t.id?'#EFF6FF':'transparent'),cursor:'pointer',position:'relative',borderLeft:temaItaq?undefined:(tab===t.id?'3px solid #1351B4':'3px solid transparent'),transition:'background .15s'}}>
@@ -12957,7 +13226,7 @@ return(
             <div style={{fontSize:11,color:temaItaq?'var(--itq-faint)':'rgba(255,255,255,0.5)',marginTop:2}}>{ROLES[user.role]||user.role}</div>
           </div>
           <div style={{flex:1,overflowY:'auto',padding:'8px 0'}}>
-            {[{id:'estoque',icon:'📦',label:'Estoque'},{id:'recebimento',icon:'🚚',label:'Recebimento'},{id:'pacientes',icon:'🔒',label:'Pacientes (Controlados)'},{id:'conferencia',icon:'🧾',label:'Conferência'},{id:'leites',icon:'🍼',label:'Leites'},{id:'saidasreg',icon:'🧾',label:'Saídas registradas'},{id:'relatorio',icon:'📊',label:'Relatório'}].filter(function(t){return t.id!=='pacientes'||temModulo(user,'controlados');}).map(function(t){return(
+            {[{id:'estoque',icon:'📦',label:'Estoque'},{id:'recebimento',icon:'🚚',label:'Recebimento'},{id:'pacientes',icon:'🔒',label:'Pacientes (Controlados)'},{id:'conferencia',icon:'🧾',label:'Conferência'},{id:'leites',icon:'🍼',label:'Leites'},{id:'saidasreg',icon:'🧾',label:'Saídas registradas'},{id:'relatorio',icon:'📊',label:'Relatório'},{id:'ajuda',icon:'❓',label:'Ajuda'}].filter(function(t){return t.id!=='pacientes'||temModulo(user,'controlados');}).map(function(t){return(
               <button key={t.id} data-tour={'nav-'+t.id} className={temaItaq?'menu-drawer-item'+(tab===t.id?' on':''):''} onClick={function(){setTab(t.id);setMenuAberto(false);}} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'13px 20px',border:'none',background:temaItaq?undefined:(tab===t.id?'#EFF6FF':'transparent'),cursor:'pointer',borderLeft:temaItaq?undefined:(tab===t.id?'3px solid #1351B4':'3px solid transparent')}}>
                 <span className={temaItaq?'menu-drawer-ic':''} style={{fontSize:20}}>{temaItaq?<Icon name={menuIconName(t.id)} size={18}/>:t.icon}</span>
                 <span className={temaItaq?'menu-drawer-lbl':''} style={{fontSize:14,fontWeight:tab===t.id?700:500,color:temaItaq?undefined:(tab===t.id?'#1351B4':'#1E293B')}}>{t.label}</span>
