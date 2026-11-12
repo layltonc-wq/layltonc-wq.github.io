@@ -26,11 +26,11 @@ function efeito(doc) {
   if (!doc || !doc.medicamentoId) return null;
   if (doc.tipo === 'entrada') {
     if (doc.divergenciaTipo === 'nota') return null;
-    return { medicamentoId: doc.medicamentoId, delta: Number(doc.quantidade) || 0 };
+    return { medicamentoId: doc.medicamentoId, delta: Number(doc.quantidade) || 0, sat: doc.local === 'satelite' };
   }
   if (doc.tipo === 'saida') {
     if (doc.ficticioDiv) return null;
-    return { medicamentoId: doc.medicamentoId, delta: -(Number(doc.quantidade) || 0) };
+    return { medicamentoId: doc.medicamentoId, delta: -(Number(doc.quantidade) || 0), sat: doc.local === 'satelite' };
   }
   return null;
 }
@@ -42,18 +42,27 @@ exports.atualizarEstoqueAtual = onDocumentWritten('entries/{entryId}', async (ev
   const efeitoAntes = efeito(antes); // documento como estava — precisa ser REVERTIDO
   const efeitoDepois = efeito(depois); // documento como ficou — precisa ser APLICADO
 
-  const ajustes = {}; // medicamentoId -> delta líquido
-  if (efeitoAntes) ajustes[efeitoAntes.medicamentoId] = (ajustes[efeitoAntes.medicamentoId] || 0) - efeitoAntes.delta;
-  if (efeitoDepois) ajustes[efeitoDepois.medicamentoId] = (ajustes[efeitoDepois.medicamentoId] || 0) + efeitoDepois.delta;
+  // ESTOQUES SEPARADOS (CAF / Satélite): estoqueAtual continua sendo o TOTAL da prefeitura (como sempre foi); estoqueLocal.satelite
+  // guarda só a parte do Satélite. O estoque do CAF é "total − satélite" (lançamento sem campo local conta como CAF).
+  const ajustes = {}; // medicamentoId -> delta líquido (total)
+  const ajustesSat = {}; // medicamentoId -> delta líquido só do Satélite
+  if (efeitoAntes) {
+    ajustes[efeitoAntes.medicamentoId] = (ajustes[efeitoAntes.medicamentoId] || 0) - efeitoAntes.delta;
+    if (efeitoAntes.sat) ajustesSat[efeitoAntes.medicamentoId] = (ajustesSat[efeitoAntes.medicamentoId] || 0) - efeitoAntes.delta;
+  }
+  if (efeitoDepois) {
+    ajustes[efeitoDepois.medicamentoId] = (ajustes[efeitoDepois.medicamentoId] || 0) + efeitoDepois.delta;
+    if (efeitoDepois.sat) ajustesSat[efeitoDepois.medicamentoId] = (ajustesSat[efeitoDepois.medicamentoId] || 0) + efeitoDepois.delta;
+  }
 
-  const medicamentoIds = Object.keys(ajustes).filter(function (id) { return ajustes[id] !== 0; });
+  const medicamentoIds = Object.keys(ajustes).filter(function (id) { return ajustes[id] !== 0 || (ajustesSat[id] || 0) !== 0; });
   if (medicamentoIds.length === 0) return;
 
   await Promise.all(medicamentoIds.map(async function (medicamentoId) {
     try {
-      await db.collection('medicamentos').doc(medicamentoId).update({
-        estoqueAtual: FieldValue.increment(ajustes[medicamentoId]),
-      });
+      const upd = { estoqueAtual: FieldValue.increment(ajustes[medicamentoId]) };
+      if ((ajustesSat[medicamentoId] || 0) !== 0) upd['estoqueLocal.satelite'] = FieldValue.increment(ajustesSat[medicamentoId]);
+      await db.collection('medicamentos').doc(medicamentoId).update(upd);
     } catch (e) {
       // Medicamento pode ter sido apagado com entradas/saídas órfãs ainda existindo — não deve
       // derrubar a função inteira nem as outras atualizações do mesmo evento.
