@@ -7049,6 +7049,17 @@ function _ubsOutras(sols,exceto,medId){
   });
   return {reservado:reservado,aguardando:aguardando,reservas:reservas};
 }
+// Apaga uma solicitação (só gestor). Se houver separação não estornada, devolve ao estoque (entrada de estorno) antes de apagar,
+// para o saldo não ficar errado. Também libera a trava de envio daquela UBS/período.
+function _ubsApagarSol(sol,user,envios){
+  var p=Promise.resolve();
+  (sol.separacoes||[]).filter(function(r){return !r.estornada;}).forEach(function(r){
+    (r.lotes||[]).forEach(function(l){p=p.then(function(){return db.collection('entries').add({medicamentoId:r.medId,medicamentoNome:r.nome,tipo:'entrada',quantidade:l.qty,lote:l.lote,validade:l.validade,observacao:'ESTORNO (solicitação UBS '+sol.protocolo+' apagada)',estornoUbs:sol.protocolo,autorNome:user.name,autorId:user.uid||'',criadoEm:new Date().toISOString(),tenant_id:sol.tenant_id});});});
+  });
+  p=p.then(function(){return db.collection('ubs_solicitacoes').doc(sol.id).delete();});
+  (envios||[]).filter(function(e){return e.protocolo===sol.protocolo;}).forEach(function(e){p=p.then(function(){return db.collection('ubs_envios').doc(e.id).delete();});});
+  return p;
+}
 function UbsModal(props){
   return(<div onClick={props.onClose} style={{position:'fixed',inset:0,background:'rgba(15,23,42,.6)',zIndex:9500,display:'flex',alignItems:'flex-end',justifyContent:'center',padding:0}}>
     <div onClick={function(e){e.stopPropagation();}} style={{background:'#fff',width:'100%',maxWidth:760,maxHeight:'94vh',overflowY:'auto',borderRadius:'18px 18px 0 0',padding:'18px 16px 28px'}}>{props.children}</div></div>);
@@ -7095,7 +7106,7 @@ function TabUbs(props){
     {sub==='ubs'&&<UbsCadastro user={user} ubsL={ubsL} meds={meds} podeGerir={podeAnalisar} tenant={tenant} flash={flash} card={card}/>}
     {sub==='per'&&<UbsPeriodos pers={pers} ehAdm={ehAdm} tenant={tenant} flash={flash} card={card}/>}
     {sub==='rel'&&<UbsRelatorios sols={sols} ubsL={ubsL} pers={pers} user={user} card={card}/>}
-    {abertaAtual&&<UbsModal onClose={function(){setAberta(null);}}><UbsDetalhe sol={abertaAtual} todas={sols} user={user} entries={entries} meds={meds} podeAnalisar={podeAnalisar} podeSeparar={podeSeparar} onClose={function(){setAberta(null);}} flash={flash}/></UbsModal>}
+    {abertaAtual&&<UbsModal onClose={function(){setAberta(null);}}><UbsDetalhe sol={abertaAtual} envios={envios} todas={sols} user={user} entries={entries} meds={meds} podeAnalisar={podeAnalisar} podeSeparar={podeSeparar} onClose={function(){setAberta(null);}} flash={flash}/></UbsModal>}
   </div>);
 }
 function UbsChip(props){var s=UBS_STATUS[props.st]||{l:props.st,c:'#475569',bg:'#F1F5F9'};return <span style={{background:s.bg,color:s.c,fontWeight:700,fontSize:11.5,borderRadius:99,padding:'3px 10px',whiteSpace:'nowrap'}}>{s.l}</span>;}
@@ -7128,6 +7139,11 @@ function UbsLista(props){
     <div style={{display:'flex',gap:6,margin:'4px 0 10px',flexWrap:'wrap',alignItems:'center'}}>
       {[['todas','Todas'],['abertas','Em andamento'],['enviada','Aguardando análise ('+pendentes+')'],['devolvida','Devolvidas'],['separada','Separadas'],['cancelada','Canceladas']].map(function(f){return <button key={f[0]} onClick={function(){setFiltro(f[0]);}} style={{padding:'6px 11px',borderRadius:99,border:'1px solid '+(filtro===f[0]?'#1351B4':'#E2E8F0'),background:filtro===f[0]?'#EEF3FB':'#fff',color:filtro===f[0]?'#1351B4':'#64748B',fontSize:12,fontWeight:700,cursor:'pointer'}}>{f[1]}</button>;})}
     </div>
+    {props.podeLiberar&&sols.length>0&&<div style={{textAlign:'right',marginBottom:8}}><button data-ubs="apagar-tudo" onClick={function(){
+      var r=window.prompt('Isso apaga TODAS as '+sols.length+' solicitações das UBS (o que foi separado volta ao estoque) e libera novos envios. Para confirmar, digite APAGAR:');
+      if(r!=='APAGAR')return;
+      var p=Promise.resolve();sols.forEach(function(s){p=p.then(function(){return _ubsApagarSol(s,props.user,props.envios);});});
+      p.then(function(){props.flash('Todas as solicitações foram apagadas.');}).catch(function(e){window.alert('Parou no meio: '+((e&&e.message)||'erro')+'. Tente de novo.');});}} style={{padding:'7px 12px',borderRadius:8,border:'1px solid #FCA5A5',background:'#fff',color:'#B91C1C',fontWeight:700,fontSize:12,cursor:'pointer'}}>Apagar todas (limpar testes)</button></div>}
     {lista.length===0&&<div style={Object.assign({},card,{color:'#94A3B8',textAlign:'center'})}>Nenhuma solicitação.</div>}
     {lista.map(function(s){
       var fora=(s.itens||[]).filter(function(i){return i.foraDaLista&&!i.medId;}).length;
@@ -7208,7 +7224,7 @@ function UbsCadastro(props){
         {medsF.length===0&&<div style={{padding:12,color:'#94A3B8',fontSize:13}}>Nenhum produto encontrado.</div>}
       </div>
       {err&&<div style={{background:'#FDECEA',color:'#C2362D',borderRadius:10,padding:'9px 12px',fontSize:13,marginTop:10}}>{err}</div>}
-      <div style={{display:'flex',gap:8,marginTop:14}}><button data-ubs="salvar-ubs" onClick={salvar} style={{flex:1,padding:'12px',borderRadius:10,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,cursor:'pointer'}}>Salvar</button><button onClick={function(){setEd(null);}} style={{padding:'12px 16px',borderRadius:10,border:'1px solid #CBD5E1',background:'#fff',fontWeight:700,cursor:'pointer'}}>Cancelar</button></div>
+      <div style={{display:'flex',gap:8,marginTop:14}}>{ed.id&&props.user.role==='gestor'&&<button data-ubs="excluir-ubs" onClick={function(){if(!window.confirm('Excluir a UBS "'+ed.nome+'"? As solicitações já enviadas continuam salvas. Para só impedir novos envios, desmarque "UBS ativa".'))return;db.collection('ubs').doc(ed.id).delete().then(function(){setEd(null);props.flash('UBS excluída.');}).catch(function(e){setErr('Erro: '+((e&&e.message)||''));});}} style={{padding:'12px 14px',borderRadius:10,border:'1px solid #FCA5A5',background:'#fff',color:'#B91C1C',fontWeight:700,cursor:'pointer'}}>Excluir</button>}<button data-ubs="salvar-ubs" onClick={salvar} style={{flex:1,padding:'12px',borderRadius:10,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,cursor:'pointer'}}>Salvar</button><button onClick={function(){setEd(null);}} style={{padding:'12px 16px',borderRadius:10,border:'1px solid #CBD5E1',background:'#fff',fontWeight:700,cursor:'pointer'}}>Cancelar</button></div>
     </UbsModal>}
   </div>);
 }
@@ -7396,6 +7412,10 @@ function UbsDetalhe(props){
       {separavel&&<button disabled={busy} data-ubs="separar" onClick={separar} style={{flex:'1 1 140px',padding:'12px',borderRadius:10,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,cursor:'pointer'}}>Registrar separação</button>}
       {separavel&&props.podeAnalisar&&<button data-ubs="encerrar" onClick={function(){if(modo==='encerrar')encerrar();else{setModo('encerrar');setErr('Informe a justificativa e toque em Encerrar de novo.');}}} style={{padding:'12px 14px',borderRadius:10,border:'1px solid #CBD5E1',background:'#fff',fontWeight:700,cursor:'pointer'}}>{modo==='encerrar'?'Confirmar encerramento':'Encerrar com pendências'}</button>}
       {props.podeAnalisar&&['enviada','devolvida','aprovada'].indexOf(sol.status)>=0&&<button data-ubs="cancelar" onClick={function(){if(modo==='cancelar')salvarDecisao('cancelada');else{setModo('cancelar');setErr('Informe a justificativa e toque em Cancelar de novo.');}}} style={{padding:'12px 14px',borderRadius:10,border:'1px solid #FCA5A5',background:'#FEF2F2',color:'#B91C1C',fontWeight:700,cursor:'pointer'}}>{modo==='cancelar'?'Confirmar cancelamento':'Cancelar solicitação'}</button>}
+      {user.role==='gestor'&&<button data-ubs="apagar" onClick={function(){
+        var tem=(sol.separacoes||[]).some(function(r){return !r.estornada;});
+        if(!window.confirm('Apagar a solicitação '+sol.protocolo+' de '+sol.ubsNome+'?'+(tem?' O que foi separado será devolvido ao estoque.':'')+' Isso não pode ser desfeito. A UBS poderá enviar outra neste período.'))return;
+        setBusy(true);_ubsApagarSol(sol,user,props.envios).then(function(){props.flash('Solicitação apagada.');props.onClose();}).catch(function(e){setBusy(false);setErr('Não foi possível apagar: '+((e&&e.message)||''));});}} style={{padding:'12px 14px',borderRadius:10,border:'1px solid #FCA5A5',background:'#fff',color:'#B91C1C',fontWeight:700,cursor:'pointer'}}>Apagar</button>}
       <button onClick={props.onClose} style={{padding:'12px 14px',borderRadius:10,border:'1px solid #CBD5E1',background:'#fff',fontWeight:700,cursor:'pointer'}}>Fechar</button>
     </div>
   </div>);
