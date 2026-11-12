@@ -7036,6 +7036,19 @@ function _ubsPlano(disp,qtd,loteEsc){
   if(falta>0&&disp.semLote>0){var s=Math.min(falta,disp.semLote);partes.push({lote:'',validade:'',qty:s});falta-=s;}
   return {partes:partes,falta:falta};
 }
+// O que já está comprometido com OUTRAS solicitações: reservado (aprovado e ainda não separado) e aguardando análise.
+function _ubsOutras(sols,exceto,medId){
+  var reservado=0,aguardando=[],reservas=[];
+  sols.forEach(function(s){
+    if(s.id===exceto)return;
+    (s.itens||[]).forEach(function(i){
+      if(i.medId!==medId)return;
+      if(s.status==='aprovada'||s.status==='parcial'){var r=Math.max(0,(i.qtdAprovada||0)-(i.qtdSeparada||0));if(r>0){reservado+=r;reservas.push({ubs:s.ubsNome,qtd:r});}}
+      else if(s.status==='enviada'){aguardando.push({ubs:s.ubsNome,qtd:i.qtdSolicitada||0});}
+    });
+  });
+  return {reservado:reservado,aguardando:aguardando,reservas:reservas};
+}
 function UbsModal(props){
   return(<div onClick={props.onClose} style={{position:'fixed',inset:0,background:'rgba(15,23,42,.6)',zIndex:9500,display:'flex',alignItems:'flex-end',justifyContent:'center',padding:0}}>
     <div onClick={function(e){e.stopPropagation();}} style={{background:'#fff',width:'100%',maxWidth:760,maxHeight:'94vh',overflowY:'auto',borderRadius:'18px 18px 0 0',padding:'18px 16px 28px'}}>{props.children}</div></div>);
@@ -7082,7 +7095,7 @@ function TabUbs(props){
     {sub==='ubs'&&<UbsCadastro user={user} ubsL={ubsL} meds={meds} podeGerir={podeAnalisar} tenant={tenant} flash={flash} card={card}/>}
     {sub==='per'&&<UbsPeriodos pers={pers} ehAdm={ehAdm} tenant={tenant} flash={flash} card={card}/>}
     {sub==='rel'&&<UbsRelatorios sols={sols} ubsL={ubsL} pers={pers} user={user} card={card}/>}
-    {abertaAtual&&<UbsModal onClose={function(){setAberta(null);}}><UbsDetalhe sol={abertaAtual} user={user} entries={entries} meds={meds} podeAnalisar={podeAnalisar} podeSeparar={podeSeparar} onClose={function(){setAberta(null);}} flash={flash}/></UbsModal>}
+    {abertaAtual&&<UbsModal onClose={function(){setAberta(null);}}><UbsDetalhe sol={abertaAtual} todas={sols} user={user} entries={entries} meds={meds} podeAnalisar={podeAnalisar} podeSeparar={podeSeparar} onClose={function(){setAberta(null);}} flash={flash}/></UbsModal>}
   </div>);
 }
 function UbsChip(props){var s=UBS_STATUS[props.st]||{l:props.st,c:'#475569',bg:'#F1F5F9'};return <span style={{background:s.bg,color:s.c,fontWeight:700,fontSize:11.5,borderRadius:99,padding:'3px 10px',whiteSpace:'nowrap'}}>{s.l}</span>;}
@@ -7111,6 +7124,7 @@ function UbsLista(props){
         </div>);
       })}
     </div>
+    <UbsDemanda sols={sols} entries={props.entries} card={card}/>
     <div style={{display:'flex',gap:6,margin:'4px 0 10px',flexWrap:'wrap',alignItems:'center'}}>
       {[['todas','Todas'],['abertas','Em andamento'],['enviada','Aguardando análise ('+pendentes+')'],['devolvida','Devolvidas'],['separada','Separadas'],['cancelada','Canceladas']].map(function(f){return <button key={f[0]} onClick={function(){setFiltro(f[0]);}} style={{padding:'6px 11px',borderRadius:99,border:'1px solid '+(filtro===f[0]?'#1351B4':'#E2E8F0'),background:filtro===f[0]?'#EEF3FB':'#fff',color:filtro===f[0]?'#1351B4':'#64748B',fontSize:12,fontWeight:700,cursor:'pointer'}}>{f[1]}</button>;})}
     </div>
@@ -7127,6 +7141,35 @@ function UbsLista(props){
         </div>
       </div>);
     })}
+  </div>);
+}
+// Visão para o gestor decidir entre UBS: por material, quanto cada UBS pediu x o estoque. Só solicitações em aberto.
+function UbsDemanda(props){
+  var _o=useState(false);var aberto=_o[0],setAberto=_o[1];
+  var m={};
+  props.sols.forEach(function(s){
+    if(['enviada','aprovada','parcial'].indexOf(s.status)<0)return;
+    (s.itens||[]).forEach(function(i){
+      if(!i.medId)return;var o=m[i.medId]||(m[i.medId]={medId:i.medId,nome:i.nome,pedido:0,reservado:0,por:[]});
+      if(s.status==='enviada'){o.pedido+=i.qtdSolicitada||0;o.por.push(s.ubsNome+' '+(i.qtdSolicitada||0)+' (aguardando)');}
+      else{var r=Math.max(0,(i.qtdAprovada||0)-(i.qtdSeparada||0));if(r>0){o.reservado+=r;o.por.push(s.ubsNome+' '+r+' (aprovado)');}}
+    });
+  });
+  var lista=Object.keys(m).map(function(k){var o=m[k];o.est=_ubsDisp(props.entries,k).total;o.sobra=o.est-o.pedido-o.reservado;return o;}).sort(function(a,b){return a.sobra-b.sobra||a.nome.localeCompare(b.nome);});
+  var faltam=lista.filter(function(o){return o.sobra<0;}).length;
+  if(!lista.length)return null;
+  return(<div style={Object.assign({},props.card,{padding:'12px 16px'})}>
+    <div data-ubs="demanda-titulo" onClick={function(){setAberto(!aberto);}} style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer'}}>
+      <div style={{flex:1,fontWeight:800,fontSize:14}}>Pedidos x estoque</div>
+      {faltam>0?<span style={{background:'#FDECEA',color:'#C2362D',fontWeight:700,fontSize:11.5,borderRadius:99,padding:'3px 10px'}}>{faltam} material(is) não cobre(m) tudo</span>:<span style={{background:'#E2F6EF',color:'#0B7A5F',fontWeight:700,fontSize:11.5,borderRadius:99,padding:'3px 10px'}}>estoque cobre os pedidos</span>}
+      <span style={{color:'#64748B'}}>{aberto?'▲':'▼'}</span>
+    </div>
+    {aberto&&<div style={{marginTop:8,overflowX:'auto'}}>
+      <div style={{fontSize:12,color:'#64748B',marginBottom:6}}>Soma o que está aguardando análise e o que já foi aprovado e ainda não separado, de todas as UBS. Use para ajustar as quantidades antes de aprovar.</div>
+      <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}><thead><tr style={{color:'#64748B'}}><th style={{textAlign:'left',padding:'4px'}}>Material</th><th style={{textAlign:'right'}}>Estoque</th><th style={{textAlign:'right'}}>Pedido</th><th style={{textAlign:'right'}}>Aprovado</th><th style={{textAlign:'right'}}>Saldo</th></tr></thead><tbody>
+      {lista.map(function(o){return(<React.Fragment key={o.medId}><tr style={{borderTop:'1px solid #F1F5F9'}}><td style={{padding:'6px 4px',fontWeight:600}}>{o.nome}</td><td style={{textAlign:'right'}}>{o.est}</td><td style={{textAlign:'right'}}>{o.pedido}</td><td style={{textAlign:'right'}}>{o.reservado}</td><td style={{textAlign:'right',fontWeight:800,color:o.sobra<0?'#C2362D':'#0B7A5F'}}>{o.sobra}</td></tr>
+        <tr><td colSpan="5" style={{fontSize:11.5,color:'#64748B',padding:'0 4px 6px'}}>{o.por.join(' · ')}</td></tr></React.Fragment>);})}
+      </tbody></table></div>}
   </div>);
 }
 function UbsCadastro(props){
@@ -7234,8 +7277,8 @@ function UbsDetalhe(props){
       if(inval){setErr('Informe a quantidade aprovada de todos os itens (pode ser 0).');return;}
       var semMat=itens.filter(function(i){return i.qtdAprovada>0&&!i.medId;});
       if(semMat.length){setErr('"'+semMat[0].nome+'" não está no estoque. Vincule a um produto cadastrado ou aprove 0.');return;}
-      var passou=itens.filter(function(i){return i.medId&&i.qtdAprovada>_ubsDisp(entries,i.medId).total;});
-      if(passou.length&&!window.confirm('Estoque insuficiente para '+passou.map(function(i){return i.nome;}).join(', ')+'. Aprovar mesmo assim? A separação só poderá usar o que existir em estoque.'))return;
+      var passou=itens.filter(function(i){return i.medId&&i.qtdAprovada>Math.max(0,_ubsDisp(entries,i.medId).total-_ubsOutras(props.todas||[],sol.id,i.medId).reservado);});
+      if(passou.length&&!window.confirm('Estoque insuficiente para '+passou.map(function(i){return i.nome;}).join(', ')+'. O estoque livre (descontando o que já foi aprovado para outras UBS) não cobre. Aprovar mesmo assim?'))return;
       if(ajustou&&!obsGeral.trim()){setErr('Você ajustou quantidades: escreva uma observação para a UBS.');return;}
     }
     if(acao==='devolvida'&&!obsGeral.trim()){setErr('Escreva o que a UBS precisa corrigir.');return;}
@@ -7301,9 +7344,9 @@ function UbsDetalhe(props){
     {sol.obs&&<div style={{background:'#F8FAFC',borderRadius:10,padding:'8px 12px',fontSize:13,margin:'8px 0'}}><b>Obs. da UBS:</b> {sol.obs}</div>}
     {sol.obsFarm&&sol.status!=='enviada'&&<div style={{background:'#FFF3DC',borderRadius:10,padding:'8px 12px',fontSize:13,margin:'8px 0'}}><b>Obs. da farmácia:</b> {sol.obsFarm}</div>}
     {(sol.itens||[]).map(function(i){
-      var e=edit[i.id]||{};var disp=i.medId||e.medId?_ubsDisp(entries,i.medId||e.medId):null;
+      var e=edit[i.id]||{};var disp=i.medId||e.medId?_ubsDisp(entries,i.medId||e.medId):null;var outras=disp?_ubsOutras(props.todas||[],sol.id,i.medId||e.medId):null;var livre=disp?Math.max(0,disp.total-outras.reservado):0;
       var ap=decidindo?parseInt(e.ap,10):(i.qtdAprovada||0);
-      var insuf=disp&&(decidindo?ap:Math.max(0,(i.qtdAprovada||0)-(i.qtdSeparada||0)))>disp.total;
+      var insuf=disp&&(decidindo?ap:Math.max(0,(i.qtdAprovada||0)-(i.qtdSeparada||0)))>(decidindo?livre:disp.total);
       var pend=Math.max(0,(i.qtdAprovada||0)-(i.qtdSeparada||0));
       return(<div key={i.id} data-ubs={'item-'+i.id} style={{border:'1px solid '+(i.foraDaLista&&!i.medId?'#FCD34D':'#E2E8F0'),background:i.foraDaLista&&!i.medId?'#FFFBEB':'#fff',borderRadius:12,padding:'10px 12px',marginTop:8}}>
         <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}><div style={{fontWeight:700,flex:'1 1 180px'}}>{i.nome}</div>{i.foraDaLista&&<span style={{background:'#FFF3DC',color:'#B26A00',fontWeight:700,fontSize:11,borderRadius:99,padding:'3px 9px'}}>FORA DA LISTA</span>}</div>
@@ -7312,11 +7355,17 @@ function UbsDetalhe(props){
         <div style={{display:'flex',gap:14,flexWrap:'wrap',fontSize:13,margin:'6px 0'}}>
           <span><span style={lbl}>PEDIDO </span><b>{i.qtdSolicitada}</b></span>
           {disp&&<span><span style={lbl}>EM ESTOQUE </span><b style={{color:disp.total<i.qtdSolicitada?'#C2362D':'#0B7A5F'}}>{disp.total}</b></span>}
+          {disp&&decidindo&&<span><span style={lbl}>JÁ APROVADO P/ OUTRAS </span><b style={{color:outras.reservado>0?'#B26A00':'#64748B'}}>{outras.reservado}</b></span>}
+          {disp&&decidindo&&<span><span style={lbl}>LIVRE </span><b style={{color:livre<i.qtdSolicitada?'#C2362D':'#0B7A5F'}}>{livre}</b></span>}
           {mostraAprov&&<span><span style={lbl}>APROVADO </span><b>{i.qtdAprovada}</b></span>}
           {mostraAprov&&<span><span style={lbl}>SEPARADO </span><b>{i.qtdSeparada||0}</b></span>}
           {mostraAprov&&<span><span style={lbl}>PENDENTE </span><b>{pend}</b></span>}
         </div>
-        {insuf&&<div style={{background:'#FDECEA',color:'#C2362D',fontSize:12.5,fontWeight:700,borderRadius:8,padding:'6px 10px',marginBottom:6}}>Estoque insuficiente: {disp.total} disponível(is) para {decidindo?ap:pend}.</div>}
+        {insuf&&<div style={{background:'#FDECEA',color:'#C2362D',fontSize:12.5,fontWeight:700,borderRadius:8,padding:'6px 10px',marginBottom:6}}>Estoque insuficiente: {decidindo?livre+' livre(s)'+(outras.reservado>0?' (já há '+outras.reservado+' aprovado(s) para outras UBS)':''):disp.total+' disponível(is)'} para {decidindo?ap:pend}.</div>}
+        {decidindo&&outras&&(outras.reservas.length>0||outras.aguardando.length>0)&&<div style={{background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:8,padding:'6px 10px',fontSize:12,color:'#475569',marginBottom:6}}>
+          {outras.reservas.length>0&&<div><b>Já aprovado (falta separar):</b> {outras.reservas.map(function(r){return r.ubs+' '+r.qtd;}).join(' · ')}</div>}
+          {outras.aguardando.length>0&&<div><b>Outras UBS aguardando análise:</b> {outras.aguardando.map(function(r){return r.ubs+' '+r.qtd;}).join(' · ')}</div>}
+        </div>}
         {decidindo&&<div>
           {i.foraDaLista&&<div style={{marginBottom:6}}><div style={lbl}>Vincular a um produto do estoque (só se for atender)</div>
             <select className="inp" data-ubs={'vinc-'+i.id} value={e.medId||''} onChange={function(ev){setCampo(i.id,'medId',ev.target.value);}} style={{marginBottom:0}}><option value="">Não cadastrado (não atender)</option>{props.meds.filter(function(m){return !m.inativo;}).sort(function(a,b){return a.nome.localeCompare(b.nome);}).map(function(m){return <option key={m.id} value={m.id}>{m.nome}</option>;})}</select>

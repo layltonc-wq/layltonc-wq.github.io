@@ -5,53 +5,52 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Solicitação de materiais · UBS · FarmaControl</title>
 <meta name="robots" content="noindex,nofollow">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#F5F7FB;--surface:#fff;--ink:#0B1736;--muted:#4D5A77;--faint:#8893AC;--line:#E2E8F3;--blue:#1351B4;--soft:#EEF3FB;--red:#C2362D;--red-soft:#FDECEA;--amber:#B26A00;--amber-soft:#FFF3DC;--teal:#0B8F72;--teal-soft:#E2F6EF;color-scheme:light}
-@media (prefers-color-scheme:dark){:root{--bg:#0E1424;--surface:#161E33;--ink:#E8EEFB;--muted:#9AA8C7;--faint:#6F7C9B;--line:#26314D;--blue:#7FAAF0;--soft:#1B2540;--red:#FF8A80;--red-soft:#3A1C1C;--amber:#F2B15A;--amber-soft:#3A2D12;--teal:#5BE0B8;--teal-soft:#12332B;color-scheme:dark}}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font-family:'IBM Plex Sans','Segoe UI',system-ui,sans-serif;line-height:1.5;padding:0 max(16px,env(safe-area-inset-right,0px)) 48px max(16px,env(safe-area-inset-left,0px))}
-header{max-width:640px;margin:0 auto;padding:18px 0 6px;display:flex;align-items:center;gap:10px}
-.chip{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#1351B4,#4C8FEF);color:#fff;display:flex;align-items:center;justify-content:center;font:800 12px 'Plus Jakarta Sans',sans-serif;flex:none}
-header b{font-family:'Plus Jakarta Sans',sans-serif;font-size:17px;display:block;line-height:1.2}
-header small{color:var(--muted);font-size:13px}
-main{max-width:640px;margin:0 auto}
-h1{font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;margin:16px 0 4px;line-height:1.2}
-h2{font-family:'Plus Jakarta Sans',sans-serif;font-size:17px;margin:20px 0 8px}
-.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:12px}
-label{display:block;font-size:13.5px;font-weight:600;margin:12px 0 5px;color:var(--muted)}
-input,select,textarea{width:100%;font:inherit;font-size:16px;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+:root{--bg:#EEF2F7;--surface:#fff;--ink:#1E293B;--muted:#475569;--faint:#94A3B8;--line:#E2E8F0;--blue:#1351B4;--blue9:#0A2D6E;--soft:#EFF6FF;--soft-line:#BFDBFE;--red:#B91C1C;--red-soft:#FEE2E2;--amber:#B45309;--amber-soft:#FEF3C7;--teal:#15803D;--teal-soft:#DCFCE7;--sh:0 4px 12px rgba(19,81,180,.08),0 2px 4px rgba(0,0,0,.04);color-scheme:light}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink);font-size:14px;line-height:1.5;padding-bottom:48px}
+header{background:#fff;border-bottom:1px solid var(--line);box-shadow:0 1px 2px rgba(15,23,42,.05);padding:10px max(16px,env(safe-area-inset-left,0px));position:sticky;top:0;z-index:5}
+header .in{max-width:640px;margin:0 auto;display:flex;align-items:center;gap:10px}
+.chip{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--blue9),var(--blue));display:flex;align-items:center;justify-content:center;flex:none;font:900 15px Georgia,'Playfair Display',serif;color:#fff;letter-spacing:-1px}
+header b{font-weight:800;font-size:15px;display:block;line-height:1.15;letter-spacing:-.01em}
+header small{color:var(--faint);font-size:11px}
+main{max-width:640px;margin:0 auto;padding:16px max(14px,env(safe-area-inset-left,0px)) 0}
+h1{font-size:20px;font-weight:800;margin:4px 0 4px;line-height:1.2;color:var(--ink)}
+h2{font-size:15px;font-weight:800;margin:0 0 8px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:18px;box-shadow:var(--sh);padding:16px;margin-top:12px}
+label{display:block;font-size:12px;font-weight:700;margin:12px 0 5px;color:var(--muted)}
+input,select,textarea{width:100%;font:inherit;font-size:15px;padding:11px 14px;border-radius:10px;border:1.5px solid #CBD5E1;background:#fff;color:var(--ink);outline:none;transition:border-color .18s,box-shadow .18s}
 textarea{min-height:76px;resize:vertical}
-input:focus,select:focus,textarea:focus{outline:2px solid var(--blue);outline-offset:1px}
-button{font:inherit;font-weight:600;font-size:16px;border:0;border-radius:11px;padding:13px 18px;cursor:pointer;background:var(--blue);color:#fff;min-height:48px}
-button.sec{background:var(--soft);color:var(--blue)}
-button.lnk{background:none;color:var(--blue);padding:6px 4px;min-height:0;font-size:14px}
-button.red{background:var(--red-soft);color:var(--red)}
+input:focus,select:focus,textarea:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(19,81,180,.12)}
+button{font:inherit;font-weight:600;font-size:14.5px;border:0;border-radius:10px;padding:12px 16px;cursor:pointer;background:var(--blue);color:#fff;min-height:46px;box-shadow:0 2px 8px rgba(19,81,180,.28);transition:background .18s,transform .1s}
+button:active{transform:scale(.98)}
+button.sec{background:var(--soft);color:var(--blue);box-shadow:none;border:1px solid var(--soft-line)}
+button.lnk{background:none;color:var(--blue);padding:6px 4px;min-height:0;font-size:13px;box-shadow:none}
 button:disabled{opacity:.55;cursor:default}
 .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
 .row>*{flex:1 1 140px}
-.msg{border-radius:11px;padding:12px 14px;margin-top:12px;font-size:14.5px}
-.m-err{background:var(--red-soft);color:var(--red)}.m-ok{background:var(--teal-soft);color:var(--teal)}.m-av{background:var(--amber-soft);color:var(--amber)}.m-inf{background:var(--soft);color:var(--muted)}
-.per{display:inline-block;background:var(--teal-soft);color:var(--teal);font-weight:600;font-size:13px;border-radius:99px;padding:4px 11px;margin-top:6px}
+.msg{border-radius:10px;padding:11px 14px;margin-top:12px;font-size:13.5px;font-weight:500}
+.m-err{background:var(--red-soft);color:var(--red)}.m-ok{background:var(--teal-soft);color:var(--teal)}.m-av{background:var(--amber-soft);color:var(--amber)}.m-inf{background:var(--soft);color:var(--blue);border:1px solid var(--soft-line)}
+.per{display:inline-block;background:var(--teal-soft);color:var(--teal);font-weight:700;font-size:12px;border-radius:99px;padding:4px 11px;margin-top:6px}
 .it{display:flex;gap:10px;align-items:center;justify-content:space-between;border-top:1px solid var(--line);padding:10px 0}
 .it:first-child{border-top:0}
-.it .n{min-width:0;flex:1}.it .n b{display:block;font-weight:600;word-break:break-word}.it .n small{color:var(--muted);display:block}
-.it input.q{width:92px;flex:none;text-align:center}
-.tag{font-size:11.5px;font-weight:700;border-radius:99px;padding:3px 9px;background:var(--amber-soft);color:var(--amber);white-space:nowrap}
-.proto{font:800 28px 'Plus Jakarta Sans',sans-serif;letter-spacing:.04em;text-align:center;background:var(--soft);border-radius:12px;padding:14px;margin:12px 0;word-break:break-all}
-.st{display:inline-block;font-weight:700;font-size:13px;border-radius:99px;padding:5px 12px}
-.s-enviada{background:var(--soft);color:var(--blue)}.s-aprovada,.s-separada{background:var(--teal-soft);color:var(--teal)}.s-parcial{background:var(--amber-soft);color:var(--amber)}.s-devolvida{background:var(--amber-soft);color:var(--amber)}.s-cancelada{background:var(--red-soft);color:var(--red)}
-table{width:100%;border-collapse:collapse;font-size:13.5px}th{text-align:right;color:var(--muted);font-weight:600;padding:6px 4px}td{padding:8px 4px;border-top:1px solid var(--line);text-align:right}th:first-child,td:first-child{text-align:left}
-.sug{border:1px solid var(--line);border-radius:10px;max-height:220px;overflow:auto;background:var(--surface)}
-.sug button{display:block;width:100%;text-align:left;background:none;color:var(--ink);border-radius:0;font-weight:500;border-top:1px solid var(--line);min-height:44px;padding:10px 12px}
+.it .n{min-width:0;flex:1}.it .n b{display:block;font-weight:600;word-break:break-word}.it .n small{color:var(--muted);display:block;font-size:12px}
+.it input.q{width:88px;flex:none;text-align:center}
+.tag{font-size:10.5px;font-weight:800;border-radius:99px;padding:2px 8px;background:var(--amber-soft);color:var(--amber);white-space:nowrap}
+.proto{font:800 26px Georgia,serif;letter-spacing:.04em;text-align:center;background:var(--soft);border:1px solid var(--soft-line);color:var(--blue9);border-radius:14px;padding:14px;margin:12px 0;word-break:break-all}
+.st{display:inline-block;font-weight:800;font-size:12px;border-radius:99px;padding:4px 12px}
+.s-enviada{background:var(--soft);color:var(--blue)}.s-aprovada,.s-separada{background:var(--teal-soft);color:var(--teal)}.s-parcial,.s-devolvida{background:var(--amber-soft);color:var(--amber)}.s-cancelada{background:var(--red-soft);color:var(--red)}
+table{width:100%;border-collapse:collapse;font-size:13px}th{text-align:right;color:var(--muted);font-weight:700;padding:6px 4px;font-size:11.5px}td{padding:8px 4px;border-top:1px solid var(--line);text-align:right}th:first-child,td:first-child{text-align:left}
+.sug{border:1.5px solid var(--line);border-radius:10px;max-height:220px;overflow:auto;background:#fff;margin-top:6px}
+.sug button{display:block;width:100%;text-align:left;background:none;color:var(--ink);border-radius:0;font-weight:500;border-top:1px solid var(--line);min-height:44px;padding:10px 12px;box-shadow:none}
 .sug button:first-child{border-top:0}
-footer{max-width:640px;margin:26px auto 0;color:var(--faint);font-size:12.5px;text-align:center}
+.meus{display:flex;justify-content:space-between;gap:8px;align-items:center;border-top:1px solid var(--line);padding:9px 0;font-size:13px}
+.meus:first-of-type{border-top:0}
+footer{max-width:640px;margin:22px auto 0;color:var(--faint);font-size:11.5px;text-align:center;padding:0 16px}
 </style>
 </head>
 <body>
-<header><div class="chip">FC</div><div><b>Solicitação de materiais</b><small id="mun">FarmaControl</small></div></header>
+<header><div class="in"><div class="chip">FC</div><div><b>FarmaControl</b><small id="mun">Solicitação de materiais das UBS</small></div></div></header>
 <main id="app"><div class="card">Carregando…</div></main>
 <footer>Use este link só para a sua UBS. Não informe dados de pacientes.</footer>
 <script>
@@ -65,6 +64,8 @@ var app=document.getElementById('app');
 var S={info:null,ubs:null,nome:'',itens:[],obs:'',fora:false,modo:null,sol:null,prot:'',busy:false};
 try{S.nome=localStorage.getItem('ubs_nome')||'';}catch(e){}
 
+function meusProt(){try{return JSON.parse(localStorage.getItem('ubs_prot_'+TENANT)||'[]');}catch(e){return[];}}
+function guardaProt(ubsId,ubsNome,p){try{var a=meusProt().filter(function(x){return x.p!==p;});a.unshift({u:ubsId,n:ubsNome,p:p,t:new Date().toISOString()});localStorage.setItem('ubs_prot_'+TENANT,JSON.stringify(a.slice(0,15)));}catch(e){}}
 function el(tag,attrs,kids){var e=document.createElement(tag);attrs=attrs||{};
  Object.keys(attrs).forEach(function(k){var v=attrs[k];if(v==null||v===false)return;
   if(k==='class')e.className=v;else if(k==='text')e.textContent=v;else if(k.indexOf('on')===0)e.addEventListener(k.slice(2),v);else if(k==='value')e.value=v;else e.setAttribute(k,v===true?'':v);});
@@ -84,7 +85,7 @@ function telaInicio(erro){
  render([el('div',{class:'card'},['Carregando…'])]);
  post({acao:'info'}).then(function(r){
   if(!r.ok){render([msg('m-err',r.erro||'Link inválido.')]);return;}
-  S.info=r;document.getElementById('mun').textContent=r.municipio||'FarmaControl';
+  S.info=r;document.getElementById('mun').textContent='Solicitação de materiais'+(r.municipio?' · '+r.municipio:'');
   var nome=el('input',{id:'f-nome',autocomplete:'name',placeholder:'Nome e sobrenome',value:S.nome,maxlength:'80'});
   var sel=el('select',{id:'f-ubs'},[el('option',{value:'',text:'Selecione a UBS'})].concat(r.ubs.map(function(u){return el('option',{value:u.id,text:u.nome});})));
   if(S.ubs)sel.value=S.ubs.id;
@@ -183,7 +184,7 @@ function telaResumo(corrigindo){
   err,el('div',{class:'row'},[btn,el('button',{class:'sec',text:'Editar',onclick:function(){telaForm(corrigindo);}})])]);
 }
 function telaProtocolo(p,corrigindo){
- S.prot=p;
+ S.prot=p;guardaProt(S.ubs.ubs.id,S.ubs.ubs.nome,p);
  render([el('h1',{text:corrigindo?'Solicitação reenviada':'Solicitação enviada!'}),
   el('div',{class:'card'},[el('p',{text:'Guarde o número do protocolo. Com ele, e com a sua UBS, você acompanha a solicitação neste mesmo link.',style:'margin:0'}),el('div',{class:'proto',text:p}),
    el('div',{class:'row'},[el('button',{text:'Copiar protocolo',onclick:function(e){try{navigator.clipboard.writeText(p);e.target.textContent='Copiado!';}catch(x){}}}),el('button',{class:'sec',text:'Acompanhar',onclick:function(){S.modo='consultar';telaConsulta(p);}})])]),
@@ -195,11 +196,13 @@ var ROT={enviada:'Enviada — aguardando análise',aprovada:'Aprovada',parcial:'
 function telaConsulta(prot,erro){
  var inp=el('input',{placeholder:'UBS-XXXX-XXXX',autocapitalize:'characters',autocomplete:'off',value:prot||'',maxlength:'20'});
  var err=el('div');if(erro)err.appendChild(msg('m-err',erro));
+ var salvos=meusProt().filter(function(x){return x.u===S.ubs.ubs.id;});
  function buscar(){var p=inp.value.trim();if(!p){err.replaceChildren(msg('m-err','Informe o número do protocolo.'));return;}
   S.prot=p;err.replaceChildren(msg('m-inf','Consultando…'));
   post({acao:'consultar',ubsId:S.ubs.ubs.id,protocolo:p}).then(function(r){if(!r.ok){err.replaceChildren(msg('m-err',r.erro));return;}S.sol=r.solicitacao;S.prot=r.solicitacao.protocolo;telaSolicitacao();});}
  render([el('h1',{text:'Consultar solicitação'}),el('div',{},[el('b',{text:S.ubs.ubs.nome})]),
-  el('div',{class:'card'},[el('label',{text:'Número do protocolo',style:'margin-top:0'}),inp,err,el('div',{class:'row'},[el('button',{text:'Consultar',onclick:buscar}),el('button',{class:'sec',text:'Voltar',onclick:function(){telaInicio();}})])])]);
+  el('div',{class:'card'},[el('label',{text:'Número do protocolo',style:'margin-top:0'}),inp,err,el('div',{class:'row'},[el('button',{text:'Consultar',onclick:buscar}),el('button',{class:'sec',text:'Voltar',onclick:function(){telaInicio();}})])]),
+  salvos.length?el('div',{class:'card'},[el('h2',{text:'Protocolos deste aparelho'})].concat(salvos.map(function(x){return el('div',{class:'meus'},[el('span',{text:x.p+' · '+fmtData(x.t)}),el('button',{class:'lnk',text:'Abrir',onclick:function(){inp.value=x.p;buscar();}})]);}))):el('p',{class:'msg m-inf',text:'Perdeu o protocolo? Peça à farmácia: ele aparece para eles na lista de solicitações.'})]);
  if(prot)buscar();
 }
 function telaSolicitacao(){
