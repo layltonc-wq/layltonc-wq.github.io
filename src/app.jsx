@@ -774,6 +774,7 @@ function destinoDe(e){
 function rotuloDestino(e){var id=destinoDe(e);var r=(DESTINOS[id]||DESTINOS.nc).label;return e&&e.ubsNome&&id!=='nc'?r+' · '+e.ubsNome:r;}
 function _ehSaidaNaoReal(e){
   if(e.ficticioDiv)return true;
+  if(e.entradaEspecial==='permuta')return true; // permuta: troca de itens, não é consumo
   if(e.divergenciaTipo==='real')return true;
   if(e.descarte)return true;
   if(e.isAjuste)return true;
@@ -2699,7 +2700,7 @@ function darBaixaVencido(){if(bloqueadoRO())return;
   </Modal>;})()}
 <div className="tab-sw">{subTabs.map(function(t){return <button key={t.id} onClick={function(){setSub(t.id);}} className={sub===t.id?'on':''}>{t.label}</button>;})}</div>
 {sub==='estoque'&&(<div><div style={{display:'flex',gap:10,marginBottom:10,flexWrap:'wrap'}}><input value={search} onChange={function(e){setSearch(e.target.value);}} placeholder="Buscar medicamento..." className="inp" style={{marginBottom:0,flex:1}}/>{can(user.role,'editar')&&<button onClick={function(){setShowAdd(true);}} className="bp" style={{whiteSpace:'nowrap',padding:'0 18px',width:'auto'}}>+ Novo</button>}{can(user.role,'editar')&&<button onClick={function(){document.getElementById('importXlsInput').click();}} className={document.body.classList.contains('theme-itaq')?'bs':''} style={document.body.classList.contains('theme-itaq')?{whiteSpace:'nowrap',padding:'0 14px',width:'auto'}:{whiteSpace:'nowrap',padding:'0 14px',background:'#7C3AED',border:'none',borderRadius:10,color:'#fff',fontSize:13,fontWeight:600,cursor:'pointer',boxShadow:'0 2px 8px rgba(124,58,237,.3)'}}>Importar Excel</button>}<input id="importXlsInput" type="file" accept=".xlsx,.xls" style={{display:'none'}} onChange={function(e){handleImportXls(e.target.files[0]);e.target.value='';  }}/></div>
-<div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:14,alignItems:'center'}}><button onClick={function(){setFiltCat('todos');}} className={'pill'+(filtCat==='todos'?' on':'')}>Todos</button>{Object.keys(TIPOS).map(function(k){var t=TIPOS[k];var temaItaq=document.body.classList.contains('theme-itaq');var cor=temaItaq?B:t.cor;return <button key={k} onClick={function(){setFiltCat(k);}} className={'pill'+(filtCat===k?' on':'')} style={filtCat===k?{background:cor,borderColor:cor,color:'#fff'}:{}}>{temaItaq?<Icon name={TIPOS_ICON[k]||'pill'} size={12}/>:t.icon} {t.label}</button>;}  )}<button onClick={imprimirEstoquePDF} style={document.body.classList.contains('theme-itaq')?{marginLeft:'auto',padding:'6px 12px',borderRadius:20,fontSize:11,fontWeight:600,cursor:'pointer',border:'1.5px solid var(--itq-line,#E3E9F6)',background:'#fff',color:'var(--itq-soft)'}:{marginLeft:'auto',padding:'6px 12px',borderRadius:20,fontSize:11,fontWeight:600,cursor:'pointer',border:'1.5px solid #B91C1C',background:'#FEF2F2',color:'#B91C1C'}}>{_semEmoji('🖨️ PDF')}</button><button onClick={exportXL} style={document.body.classList.contains('theme-itaq')?{padding:'6px 12px',borderRadius:20,fontSize:11,fontWeight:600,cursor:'pointer',border:'1.5px solid var(--itq-line,#E3E9F6)',background:'#fff',color:'var(--itq-soft)'}:{padding:'6px 12px',borderRadius:20,fontSize:11,fontWeight:600,cursor:'pointer',border:'1.5px solid #0C6B3E',background:'#F0FDF4',color:'#0C6B3E'}}>Excel</button></div>
+<div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:14,alignItems:'center'}}><button onClick={function(){setFiltCat('todos');}} className={'pill'+(filtCat==='todos'?' on':'')}>Todos</button>{Object.keys(TIPOS).filter(function(k){return !(k==='leite'&&_fcLocalAtivo==='satelite');}).map(function(k){var t=TIPOS[k];var temaItaq=document.body.classList.contains('theme-itaq');var cor=temaItaq?B:t.cor;return <button key={k} onClick={function(){setFiltCat(k);}} className={'pill'+(filtCat===k?' on':'')} style={filtCat===k?{background:cor,borderColor:cor,color:'#fff'}:{}}>{temaItaq?<Icon name={TIPOS_ICON[k]||'pill'} size={12}/>:t.icon} {t.label}</button>;}  )}<button onClick={imprimirEstoquePDF} style={document.body.classList.contains('theme-itaq')?{marginLeft:'auto',padding:'6px 12px',borderRadius:20,fontSize:11,fontWeight:600,cursor:'pointer',border:'1.5px solid var(--itq-line,#E3E9F6)',background:'#fff',color:'var(--itq-soft)'}:{marginLeft:'auto',padding:'6px 12px',borderRadius:20,fontSize:11,fontWeight:600,cursor:'pointer',border:'1.5px solid #B91C1C',background:'#FEF2F2',color:'#B91C1C'}}>{_semEmoji('🖨️ PDF')}</button><button onClick={exportXL} style={document.body.classList.contains('theme-itaq')?{padding:'6px 12px',borderRadius:20,fontSize:11,fontWeight:600,cursor:'pointer',border:'1.5px solid var(--itq-line,#E3E9F6)',background:'#fff',color:'var(--itq-soft)'}:{padding:'6px 12px',borderRadius:20,fontSize:11,fontWeight:600,cursor:'pointer',border:'1.5px solid #0C6B3E',background:'#F0FDF4',color:'#0C6B3E'}}>Excel</button></div>
 {importing&&<div className="inf" style={{marginBottom:10}}>⏳ {importStatus}</div>}
 {!importing&&importStatus&&<div className="ok" style={{marginBottom:10}}>{importStatus}</div>}
 <div className="card"><div className="ch"><div className="ch-title"><div className="ch-accent"/><span>Estoque Atual</span></div><span style={{fontSize:12,color:'#94A3B8',fontWeight:500}}>{medList.length} produto(s)</span></div>
@@ -7545,6 +7546,9 @@ function UbsRelatorios(props){
 // Preserva lote e validade (FEFO, sem lote vencido). Ambos os lançamentos levam transferencia:true.
 function TabTransferencia(props){
   var user=props.user,entries=props.entries||[],meds=props.medications||[],origem=props.localAtivo,destino=origem==='satelite'?'caf':'satelite';
+  var _sub=useState('transf');var sub=_sub[0],setSub=_sub[1];
+  var reposAll=useReposicoes(user);var nPend=reposAll.filter(function(r){return r.status==='pendente';}).length;
+  var subs=origem==='satelite'?[['transf','Transferir ao CAF'],['pedir','Pedir ao CAF']]:[['transf','Transferir ao Satélite'],['pedidos','Pedidos do Satélite'+(nPend?' ('+nPend+')':'')]];
   var _q=useState('');var q=_q[0],setQ=_q[1];
   var _m=useState(null);var med=_m[0],setMed=_m[1];
   var _n=useState('');var qtd=_n[0],setQtd=_n[1];
@@ -7580,7 +7584,10 @@ function TabTransferencia(props){
   return(<div style={{maxWidth:640,margin:'0 auto',padding:'16px 14px 90px'}}>
     <div style={{fontSize:20,fontWeight:800,color:'#1E293B'}}>Transferência</div>
     <div style={{fontSize:13,color:'#64748B',margin:'2px 0 12px'}}>Do <b>{nomeLocal(origem)}</b> para o <b>{nomeLocal(destino)}</b>. Sai do estoque de um e entra no do outro, com o mesmo lote e validade.</div>
-    <div style={card}>
+    <div style={{display:'flex',gap:6,marginBottom:12,flexWrap:'wrap'}}>{subs.map(function(s){return <button key={s[0]} type="button" data-fc={'sub-'+s[0]} onClick={function(){setSub(s[0]);}} style={{padding:'8px 14px',borderRadius:99,border:'1.5px solid '+(sub===s[0]?'#1351B4':'#E2E8F0'),background:sub===s[0]?'#1351B4':'#fff',color:sub===s[0]?'#fff':'#475569',fontWeight:700,fontSize:12.5,cursor:'pointer'}}>{s[1]}</button>;})}</div>
+    {sub==='pedir'&&origem==='satelite'&&<ReposicaoSatelite user={user} meds={props.medsCaf||meds}/>}
+    {sub==='pedidos'&&origem==='caf'&&<ReposicaoCaf user={user} entries={entries}/>}
+    {sub==='transf'&&<div style={card}>
       {!med&&<div><input className="inp" data-fc="transf-busca" placeholder="Buscar medicamento…" value={q} onChange={function(e){setQ(e.target.value);}}/>
         {achados.map(function(m){return <button key={m.id} onClick={function(){setMed(m);setQ('');}} style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',border:'none',borderTop:'1px solid #F1F5F9',background:'#fff',cursor:'pointer',fontSize:14}}>{m.nome}</button>;})}</div>}
       {med&&<div>
@@ -7593,10 +7600,287 @@ function TabTransferencia(props){
       </div>}
       {!med&&err&&<div style={{background:'#FDECEA',color:'#C2362D',borderRadius:10,padding:'9px 12px',fontSize:13,marginTop:8}}>{err}</div>}
       {ok&&<div data-fc="transf-msg" style={{background:'#E2F6EF',color:'#0B7A5F',borderRadius:10,padding:'9px 12px',fontSize:13,marginTop:8}}>{ok}</div>}
-    </div>
-    <div style={card}><div style={{fontWeight:800,marginBottom:6}}>Últimas transferências deste local</div>
+    </div>}
+    {sub==='transf'&&<div style={card}><div style={{fontWeight:800,marginBottom:6}}>Últimas transferências deste local</div>
       {hist.length===0&&<div style={{color:'#94A3B8',fontSize:13}}>Nenhuma ainda.</div>}
       {hist.map(function(e){return <div key={e.id} style={{display:'flex',gap:8,fontSize:13,padding:'6px 0',borderTop:'1px solid #F1F5F9'}}><span style={{fontWeight:700,color:e.tipo==='saida'?'#C2362D':'#0B7A5F',width:70}}>{e.tipo==='saida'?'Enviou':'Recebeu'}</span><span style={{flex:1}}>{e.quantidade}x {e.medicamentoNome}{e.lote?' · lote '+e.lote:''}</span><span style={{color:'#94A3B8'}}>{fmtD(e.criadoEm)}</span></div>;})}
+    </div>}
+  </div>);
+}
+// ===== Entradas especiais (Itaquitinga): PERMUTA (troca de um item por outro) e DOAÇÃO =====
+// Doação: lote e validade obrigatórios (lote pode ser "SL" = sem lote; vira "SL MM/AAAA" para a validade continuar valendo).
+// Permuta: sai um item (FEFO, lote vencido nunca sai) e entra outro; lote/validade do que chegou podem ficar PENDENTES
+// (o estoque já muda) e são informados depois, na lista abaixo. Não contam como consumo (ver _ehSaidaNaoReal).
+function _loteSL(validade){return 'SL '+_normValidade(validade);}
+function MedPickerSimples(props){
+  var _q=useState('');var q=_q[0],setQ=_q[1];
+  var nq=_semAcento(q);
+  var achados=nq.length<2?[]:props.meds.filter(function(m){return !m.inativo&&_semAcento(m.nome).indexOf(nq)>=0;}).slice(0,10);
+  if(props.value)return(<div style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',background:'#EFF6FF',border:'1px solid #BFDBFE',borderRadius:10}}><div style={{flex:1,fontWeight:700,fontSize:13}}>{props.value.nome}</div><button type="button" onClick={function(){props.onChange(null);}} style={{border:'none',background:'none',color:'#1351B4',fontWeight:700,cursor:'pointer',fontSize:12}}>Trocar</button></div>);
+  return(<div><input className="inp" data-fc={props.dataFc} placeholder={props.placeholder||'Buscar medicamento…'} value={q} onChange={function(e){setQ(e.target.value);}} style={{marginBottom:4}}/>
+    {achados.map(function(m){return <button type="button" key={m.id} data-fc="pick" onClick={function(){props.onChange(m);setQ('');}} style={{display:'block',width:'100%',textAlign:'left',padding:'9px 12px',border:'none',borderTop:'1px solid #F1F5F9',background:'#fff',cursor:'pointer',fontSize:13.5}}>{m.nome}</button>;})}</div>);
+}
+function LoteValidadeCampos(props){
+  var v=props.valor;
+  return(<div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'flex-end'}}>
+    <div style={{flex:'1 1 130px'}}><div style={{fontSize:11.5,fontWeight:700,color:'#64748B',marginBottom:3}}>Lote{props.obrigatorio?' *':''}</div>
+      <div style={{display:'flex',gap:6}}><input className="inp" data-fc={props.dataFc+'-lote'} value={v.lote} disabled={v.sl} onChange={function(e){props.onChange(Object.assign({},v,{lote:e.target.value}));}} placeholder="Nº do lote" style={{marginBottom:0}}/>
+      {props.permiteSL&&<button type="button" data-fc={props.dataFc+'-sl'} onClick={function(){props.onChange(Object.assign({},v,{sl:!v.sl,lote:''}));}} style={{padding:'0 12px',borderRadius:10,border:'1.5px solid '+(v.sl?'#1351B4':'#CBD5E1'),background:v.sl?'#EFF6FF':'#fff',color:v.sl?'#1351B4':'#475569',fontWeight:800,cursor:'pointer'}}>SL</button>}</div></div>
+    <div style={{flex:'1 1 110px'}}><div style={{fontSize:11.5,fontWeight:700,color:'#64748B',marginBottom:3}}>Validade (MM/AAAA){props.obrigatorio?' *':''}</div>
+      <input className="inp" data-fc={props.dataFc+'-val'} value={v.validade} inputMode="numeric" maxLength={7} onChange={function(e){props.onChange(Object.assign({},v,{validade:_maskValidade(e.target.value)}));}} placeholder="MM/AAAA" style={{marginBottom:0}}/></div>
+  </div>);
+}
+function _validarLoteVal(v,ehSL){
+  if(!v.validade||!_dataValidade(v.validade))return 'Informe a validade no formato MM/AAAA.';
+  if(!v.sl&&!String(v.lote||'').trim())return 'Informe o lote (ou marque SL se o produto não tem lote).';
+  return '';
+}
+function EntradaEspecial(props){
+  var user=props.user,modo=props.modo,meds=props.medications,entries=props.entries||[];
+  var _data=useState(todayStr());var data=_data[0],setData=_data[1];
+  var _orig=useState('');var origem=_orig[0],setOrigem=_orig[1];
+  var _obs=useState('');var obs=_obs[0],setObs=_obs[1];
+  var _err=useState('');var err=_err[0],setErr=_err[1];
+  var _ok=useState('');var ok=_ok[0],setOk=_ok[1];
+  var _bu=useState(false);var busy=_bu[0],setBusy=_bu[1];
+  // doação
+  var _itD=useState([{key:1,med:null,qtd:'',lv:{lote:'',validade:'',sl:false}}]);var itD=_itD[0],setItD=_itD[1];
+  // permuta
+  var _sai=useState({med:null,qtd:''});var sai=_sai[0],setSai=_sai[1];
+  var _ent=useState({med:null,qtd:'',lv:{lote:'',validade:'',sl:false},pend:false});var ent=_ent[0],setEnt=_ent[1];
+  var _edP=useState(null);var edP=_edP[0],setEdP=_edP[1]; // pendência em edição {id,lv}
+  function base(){return {criadoEm:new Date().toISOString(),date:data||todayStr(),autorId:user.uid,autorNome:user.name||user.email,autorCargo:user.role||'',tenant_id:tenantDe(user)};}
+  function setItem(k,patch){setItD(itD.map(function(i){return i.key===k?Object.assign({},i,patch):i;}));}
+  function salvarDoacao(){
+    setErr('');setOk('');
+    if(origem.trim().length<2){setErr('Informe quem doou (origem da doação).');return;}
+    for(var i=0;i<itD.length;i++){var it=itD[i];
+      if(!it.med){setErr('Escolha o medicamento do item '+(i+1)+'.');return;}
+      if(!(parseInt(it.qtd,10)>=1)){setErr('Informe a quantidade do item '+(i+1)+'.');return;}
+      var e=_validarLoteVal(it.lv);if(e){setErr('Item '+(i+1)+': '+e);return;}
+    }
+    setBusy(true);var b=db.batch();
+    itD.forEach(function(it){
+      var lote=it.lv.sl?_loteSL(it.lv.validade):it.lv.lote.trim();
+      b.set(db.collection('entries').doc(),Object.assign({},base(),{medicamentoId:it.med.id,medicamentoNome:it.med.nome,tipo:'entrada',quantidade:parseInt(it.qtd,10),lote:lote,validade:_normValidade(it.lv.validade),entradaEspecial:'doacao',doador:origem.trim(),observacao:'Doação — '+origem.trim()+(obs.trim()?' · '+obs.trim():'')}));
+    });
+    b.commit().then(function(){setBusy(false);setOk('Doação registrada: '+itD.length+' item(ns) entraram no estoque.');setItD([{key:Date.now(),med:null,qtd:'',lv:{lote:'',validade:'',sl:false}}]);setOrigem('');setObs('');}).catch(function(e){setBusy(false);setErr('Não foi possível registrar: '+((e&&e.message)||'erro'));});
+  }
+  var disp=sai.med?_ubsDisp(entries,sai.med.id):null;
+  function salvarPermuta(){
+    setErr('');setOk('');
+    if(origem.trim().length<2){setErr('Informe com quem foi a permuta.');return;}
+    if(!sai.med||!(parseInt(sai.qtd,10)>=1)){setErr('Escolha o item que saiu e a quantidade.');return;}
+    var nq=parseInt(sai.qtd,10);
+    if(nq>disp.total){setErr('Quantidade que saiu maior que o disponível ('+disp.total+').');return;}
+    var pl=_ubsPlano(disp,nq,'');if(pl.falta>0){setErr('Os lotes dentro da validade não cobrem a quantidade que saiu.');return;}
+    if(!ent.med||!(parseInt(ent.qtd,10)>=1)){setErr('Escolha o item que chegou e a quantidade.');return;}
+    var lote='',validade='';
+    if(!ent.pend){var e=_validarLoteVal(ent.lv);if(e){setErr('Item que chegou: '+e+' Ou marque "Lote e validade pendentes".');return;}lote=ent.lv.sl?_loteSL(ent.lv.validade):ent.lv.lote.trim();validade=_normValidade(ent.lv.validade);}
+    if(!window.confirm('Registrar a permuta? Sai '+nq+'x '+sai.med.nome+' e entra '+ent.qtd+'x '+ent.med.nome+'.'))return;
+    setBusy(true);var pid='pm'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);var b=db.batch();
+    var resumo='Permuta com '+origem.trim()+': sai '+nq+'x '+sai.med.nome+' / entra '+parseInt(ent.qtd,10)+'x '+ent.med.nome;
+    pl.partes.forEach(function(pt){b.set(db.collection('entries').doc(),Object.assign({},base(),{medicamentoId:sai.med.id,medicamentoNome:sai.med.nome,tipo:'saida',quantidade:pt.qty,lote:pt.lote,validade:pt.validade,destino:'permuta',destinoNome:'Permuta',entradaEspecial:'permuta',permutaId:pid,parceiro:origem.trim(),observacao:resumo+(obs.trim()?' · '+obs.trim():'')}));});
+    b.set(db.collection('entries').doc(),Object.assign({},base(),{medicamentoId:ent.med.id,medicamentoNome:ent.med.nome,tipo:'entrada',quantidade:parseInt(ent.qtd,10),lote:lote,validade:validade,lotePendente:!!ent.pend,entradaEspecial:'permuta',permutaId:pid,parceiro:origem.trim(),observacao:resumo+(ent.pend?' · lote/validade PENDENTES':'')+(obs.trim()?' · '+obs.trim():'')}));
+    b.commit().then(function(){setBusy(false);setOk('Permuta registrada.'+(ent.pend?' Lembre de informar lote e validade quando chegarem (lista abaixo).':''));setSai({med:null,qtd:''});setEnt({med:null,qtd:'',lv:{lote:'',validade:'',sl:false},pend:false});setOrigem('');setObs('');}).catch(function(e){setBusy(false);setErr('Não foi possível registrar: '+((e&&e.message)||'erro'));});
+  }
+  function salvarPendencia(){
+    var lv=edP.lv;var e=_validarLoteVal(lv);if(e){alert(e);return;}
+    var lote=lv.sl?_loteSL(lv.validade):lv.lote.trim();
+    db.collection('entries').doc(edP.id).update({lote:lote,validade:_normValidade(lv.validade),lotePendente:false,loteInformadoPor:user.name||'',loteInformadoEm:new Date().toISOString()}).then(function(){try{_bumpEntriesVersion(user,[edP.id]);}catch(x){}setEdP(null);}).catch(function(er){alert('Não foi possível salvar: '+((er&&er.message)||''));});
+  }
+  var lista=entries.filter(function(e){return e.entradaEspecial;}).slice().sort(function(x,y){return String(y.criadoEm||'').localeCompare(String(x.criadoEm||''));}).slice(0,40);
+  var pendentes=lista.filter(function(e){return e.lotePendente===true;});
+  var card={background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:12,padding:'12px',marginBottom:10};
+  var lbl={fontSize:11.5,fontWeight:700,color:'#64748B',marginBottom:3};
+  return(<div data-fc={'ent-'+modo}>
+    {pendentes.length>0&&<div data-fc="pendencias" style={{background:'#FFF3DC',border:'1px solid #FCD34D',borderRadius:12,padding:'10px 12px',marginBottom:12}}>
+      <div style={{fontWeight:800,fontSize:13,color:'#92400E',marginBottom:6}}>Lote e validade pendentes ({pendentes.length})</div>
+      {pendentes.map(function(e){return(<div key={e.id} style={{borderTop:'1px solid #FDE68A',paddingTop:6,marginTop:6}}>
+        <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}><div style={{flex:1,fontSize:13}}><b>{e.quantidade}x {e.medicamentoNome}</b><div style={{fontSize:11.5,color:'#92400E'}}>Permuta com {e.parceiro||'—'} · {fmtD(e.criadoEm)}</div></div>
+          {!edP||edP.id!==e.id?<button type="button" data-fc={'pend-'+e.id} onClick={function(){setEdP({id:e.id,lv:{lote:'',validade:'',sl:false}});}} style={{padding:'7px 12px',borderRadius:8,border:'none',background:'#B45309',color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>Informar</button>:null}</div>
+        {edP&&edP.id===e.id&&<div style={{marginTop:8}}><LoteValidadeCampos dataFc="pend" valor={edP.lv} permiteSL obrigatorio onChange={function(v){setEdP({id:edP.id,lv:v});}}/>
+          <div style={{display:'flex',gap:8,marginTop:8}}><button type="button" data-fc="pend-salvar" onClick={salvarPendencia} style={{padding:'9px 14px',borderRadius:8,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,cursor:'pointer'}}>Salvar lote/validade</button><button type="button" onClick={function(){setEdP(null);}} style={{padding:'9px 12px',borderRadius:8,border:'1px solid #CBD5E1',background:'#fff',cursor:'pointer'}}>Cancelar</button></div></div>}
+      </div>);})}
+    </div>}
+    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
+      <div><div style={lbl}>Data</div><input className="inp" type="date" value={data} max={todayStr()} onChange={function(e){setData(e.target.value);}} style={{marginBottom:0}}/></div>
+      <div><div style={lbl}>{modo==='doacao'?'Quem doou *':'Permuta com *'}</div><input className="inp" data-fc="origem" value={origem} onChange={function(e){setOrigem(e.target.value);}} placeholder={modo==='doacao'?'Ex.: Secretaria de Saúde de ...':'Ex.: Hospital / outro município'} style={{marginBottom:0}}/></div>
+    </div>
+    {modo==='doacao'&&<div>
+      {itD.map(function(it,idx){return(<div key={it.key} style={card}>
+        <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}><div style={{fontSize:11,fontWeight:700,color:'#94A3B8'}}>Item {idx+1}</div>{itD.length>1&&<button type="button" onClick={function(){setItD(itD.filter(function(x){return x.key!==it.key;}));}} style={{border:'none',background:'none',color:'#C2362D',fontWeight:700,fontSize:12,cursor:'pointer'}}>Remover</button>}</div>
+        <MedPickerSimples meds={meds} value={it.med} dataFc={'doa-busca-'+idx} onChange={function(m){setItem(it.key,{med:m});}}/>
+        <div style={{display:'flex',gap:8,margin:'8px 0'}}><div style={{width:110}}><div style={lbl}>Quantidade *</div><input className="inp" type="number" min="1" data-fc={'doa-qtd-'+idx} value={it.qtd} onChange={function(e){setItem(it.key,{qtd:e.target.value});}} style={{marginBottom:0}}/></div></div>
+        <LoteValidadeCampos dataFc={'doa-'+idx} valor={it.lv} permiteSL obrigatorio onChange={function(v){setItem(it.key,{lv:v});}}/>
+      </div>);})}
+      <button type="button" onClick={function(){setItD(itD.concat([{key:Date.now(),med:null,qtd:'',lv:{lote:'',validade:'',sl:false}}]));}} style={{padding:'9px 14px',borderRadius:10,border:'1.5px dashed #94A3B8',background:'#fff',color:'#475569',fontWeight:700,cursor:'pointer',marginBottom:10}}>+ Outro item</button>
+    </div>}
+    {modo==='permuta'&&<div>
+      <div style={card}><div style={{fontWeight:800,fontSize:13,color:'#B91C1C',marginBottom:6}}>Item que SAIU</div>
+        <MedPickerSimples meds={meds} value={sai.med} dataFc="perm-sai-busca" onChange={function(m){setSai(Object.assign({},sai,{med:m}));}}/>
+        {sai.med&&<div style={{marginTop:8}}><div style={{fontSize:12.5,color:'#475569',marginBottom:6}}>Disponível aqui: <b>{disp.total}</b></div><div style={{width:130}}><div style={lbl}>Quantidade *</div><input className="inp" type="number" min="1" data-fc="perm-sai-qtd" value={sai.qtd} onChange={function(e){setSai(Object.assign({},sai,{qtd:e.target.value}));}} style={{marginBottom:0}}/></div></div>}
+      </div>
+      <div style={card}><div style={{fontWeight:800,fontSize:13,color:'#0B7A5F',marginBottom:6}}>Item que CHEGOU em troca</div>
+        <MedPickerSimples meds={meds} value={ent.med} dataFc="perm-ent-busca" onChange={function(m){setEnt(Object.assign({},ent,{med:m}));}}/>
+        {ent.med&&<div style={{marginTop:8}}>
+          <div style={{width:130,marginBottom:8}}><div style={lbl}>Quantidade *</div><input className="inp" type="number" min="1" data-fc="perm-ent-qtd" value={ent.qtd} onChange={function(e){setEnt(Object.assign({},ent,{qtd:e.target.value}));}} style={{marginBottom:0}}/></div>
+          <label style={{display:'flex',alignItems:'center',gap:8,fontSize:13,marginBottom:8,cursor:'pointer'}}><input type="checkbox" data-fc="perm-pend" checked={ent.pend} onChange={function(e){setEnt(Object.assign({},ent,{pend:e.target.checked}));}}/> Lote e validade <b>pendentes</b> (ainda não chegou / não sei)</label>
+          {!ent.pend&&<LoteValidadeCampos dataFc="perm-ent" valor={ent.lv} permiteSL obrigatorio onChange={function(v){setEnt(Object.assign({},ent,{lv:v}));}}/>}
+          {ent.pend&&<div style={{fontSize:12,color:'#92400E'}}>O estoque muda agora. Depois você informa lote e validade na lista de pendências.</div>}
+        </div>}
+      </div>
+    </div>}
+    <input className="inp" placeholder="Observação (opcional)" value={obs} onChange={function(e){setObs(e.target.value);}}/>
+    {err&&<div data-fc="ent-erro" style={{background:'#FDECEA',color:'#C2362D',borderRadius:10,padding:'9px 12px',fontSize:13,marginBottom:8}}>{err}</div>}
+    {ok&&<div data-fc="ent-ok" style={{background:'#E2F6EF',color:'#0B7A5F',borderRadius:10,padding:'9px 12px',fontSize:13,marginBottom:8}}>{ok}</div>}
+    <button type="button" data-fc="ent-salvar" disabled={busy} onClick={modo==='doacao'?salvarDoacao:salvarPermuta} style={{width:'100%',padding:'13px',borderRadius:10,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,cursor:'pointer'}}>{busy?'Salvando…':(modo==='doacao'?'Registrar doação':'Registrar permuta')}</button>
+    {lista.length>0&&<div style={{marginTop:16}}><div style={{fontWeight:800,fontSize:13,marginBottom:6}}>Últimas permutas e doações</div>
+      {lista.slice(0,15).map(function(e){return <div key={e.id} style={{display:'flex',gap:8,fontSize:12.5,padding:'6px 0',borderTop:'1px solid #F1F5F9'}}><span style={{width:62,fontWeight:700,color:e.entradaEspecial==='doacao'?'#0B7A5F':'#7C3AED'}}>{e.entradaEspecial==='doacao'?'Doação':'Permuta'}</span><span style={{flex:1}}>{e.tipo==='saida'?'Saiu ':'Entrou '}{e.quantidade}x {e.medicamentoNome}{e.lote?' · '+e.lote:''}{e.lotePendente?' · PENDENTE':''}</span><span style={{color:'#94A3B8'}}>{fmtD(e.criadoEm)}</span></div>;})}</div>}
+  </div>);
+}
+// ===== Pedidos de reposição do Satélite ao CAF =====
+// O Satélite escolhe produtos (só os NOMES, sem saldo do CAF) e as quantidades; o CAF vê o pedido, confere o estoque dele,
+// ajusta, devolve, cancela ou atende (a transferência acontece na hora, com lote/validade, e fica ligada ao pedido).
+var REPO_STATUS={pendente:{l:'Aguardando o CAF',c:'#1351B4',bg:'#EEF3FB'},parcial:{l:'Atendido em parte',c:'#B26A00',bg:'#FFF3DC'},atendida:{l:'Atendido',c:'#0B7A5F',bg:'#E2F6EF'},devolvida:{l:'Devolvido p/ ajuste',c:'#B26A00',bg:'#FFF3DC'},cancelada:{l:'Cancelado',c:'#C2362D',bg:'#FDECEA'}};
+function RepoChip(props){var s=REPO_STATUS[props.st]||{l:props.st,c:'#475569',bg:'#F1F5F9'};return <span style={{background:s.bg,color:s.c,fontWeight:700,fontSize:11.5,borderRadius:99,padding:'3px 10px',whiteSpace:'nowrap'}}>{s.l}</span>;}
+function useReposicoes(user){
+  var _l=useState([]);var lista=_l[0],setLista=_l[1];
+  useEffect(function(){return db.collection('reposicoes').where('tenant_id','==',tenantDe(user)).limit(500).onSnapshot(function(sn){var a=sn.docs.map(function(d){return Object.assign({id:d.id},d.data());});a.sort(function(x,y){return String(y.criadoEm||'').localeCompare(String(x.criadoEm||''));});setLista(a);},function(){});},[tenantDe(user)]);
+  return lista;
+}
+function ReposicaoSatelite(props){
+  var user=props.user,meds=props.meds,lista=useReposicoes(user);
+  var _it=useState([]);var itens=_it[0],setItens=_it[1];
+  var _ob=useState('');var obs=_ob[0],setObs=_ob[1];
+  var _ed=useState(null);var editId=_ed[0],setEditId=_ed[1];
+  var _pk=useState(null);var pick=_pk[0],setPick=_pk[1];
+  var _er=useState('');var err=_er[0],setErr=_er[1];
+  var _ok=useState('');var ok=_ok[0],setOk=_ok[1];
+  var _bu=useState(false);var busy=_bu[0],setBusy=_bu[1];
+  function addItem(m){if(itens.some(function(i){return i.medId===m.id;})){setErr('Esse produto já está no pedido.');return;}setErr('');setItens(itens.concat([{medId:m.id,nome:m.nome,qtd:''}]));setPick(null);}
+  function enviar(){
+    setErr('');setOk('');
+    if(!itens.length){setErr('Adicione pelo menos um produto.');return;}
+    if(itens.some(function(i){return !(parseInt(i.qtd,10)>=1);})){setErr('Informe a quantidade de todos os produtos.');return;}
+    setBusy(true);var agora=new Date().toISOString();
+    var its=itens.map(function(i){return {id:i.id||('i'+Math.random().toString(36).slice(2,7)),medId:i.medId,nome:i.nome,qtdSolicitada:parseInt(i.qtd,10),qtdTransferida:i.qtdTransferida||0,obsCaf:i.obsCaf||''};});
+    var p;
+    if(editId){var atual=lista.filter(function(x){return x.id===editId;})[0]||{};p=db.collection('reposicoes').doc(editId).update({itens:its,obs:obs.trim(),status:'pendente',historico:(atual.historico||[]).concat([{em:agora,acao:'reenviado',por:user.name,obs:''}]),atualizadoEm:agora});}
+    else p=db.collection('reposicoes').add({tenant_id:tenantDe(user),status:'pendente',itens:its,obs:obs.trim(),solicitanteId:user.uid,solicitanteNome:user.name||user.email,historico:[{em:agora,acao:'enviado',por:user.name,obs:''}],criadoEm:agora,atualizadoEm:agora,obsCaf:''});
+    p.then(function(){setBusy(false);setOk(editId?'Pedido reenviado ao CAF.':'Pedido enviado ao CAF.');setItens([]);setObs('');setEditId(null);}).catch(function(e){setBusy(false);setErr('Não foi possível enviar: '+((e&&e.message)||''));});
+  }
+  function cancelarMeu(r){if(!window.confirm('Cancelar este pedido?'))return;db.collection('reposicoes').doc(r.id).update({status:'cancelada',historico:(r.historico||[]).concat([{em:new Date().toISOString(),acao:'cancelada',por:user.name,obs:'Cancelado pelo Satélite'}]),atualizadoEm:new Date().toISOString()});}
+  function corrigir(r){setEditId(r.id);setItens(r.itens.map(function(i){return Object.assign({},i,{qtd:String(i.qtdSolicitada)});}));setObs(r.obs||'');window.scrollTo(0,0);}
+  var card={background:'#fff',borderRadius:14,border:'1px solid #E2E8F0',padding:'14px 16px',marginBottom:10};
+  return(<div data-fc="repo-sat">
+    <div style={card}>
+      <div style={{fontWeight:800,marginBottom:2}}>{editId?'Corrigir pedido':'Novo pedido ao CAF'}</div>
+      <div style={{fontSize:12.5,color:'#64748B',marginBottom:8}}>Escolha os produtos e as quantidades que o Satélite precisa. O CAF vai analisar e transferir.</div>
+      <MedPickerSimples meds={meds} value={pick} dataFc="repo-busca" placeholder="Buscar produto do CAF…" onChange={function(m){if(m)addItem(m);}}/>
+      {itens.map(function(i,idx){return(<div key={i.medId} style={{display:'flex',alignItems:'center',gap:8,borderTop:'1px solid #F1F5F9',padding:'8px 0',marginTop:idx?0:8}}>
+        <div style={{flex:1,fontSize:13.5,fontWeight:600}}>{i.nome}{i.obsCaf&&<div style={{fontSize:11.5,color:'#B26A00',fontWeight:500}}>CAF: {i.obsCaf}</div>}</div>
+        <input className="inp" type="number" min="1" data-fc={'repo-qtd-'+idx} value={i.qtd} placeholder="Qtd" onChange={function(e){setItens(itens.map(function(x){return x.medId===i.medId?Object.assign({},x,{qtd:e.target.value}):x;}));}} style={{width:90,marginBottom:0,textAlign:'center'}}/>
+        <button type="button" onClick={function(){setItens(itens.filter(function(x){return x.medId!==i.medId;}));}} style={{border:'none',background:'none',color:'#C2362D',fontWeight:700,fontSize:12,cursor:'pointer'}}>Remover</button></div>);})}
+      <input className="inp" placeholder="Observação para o CAF (opcional)" value={obs} onChange={function(e){setObs(e.target.value);}} style={{marginTop:8}}/>
+      {err&&<div data-fc="repo-erro" style={{background:'#FDECEA',color:'#C2362D',borderRadius:10,padding:'9px 12px',fontSize:13,marginBottom:8}}>{err}</div>}
+      {ok&&<div data-fc="repo-ok" style={{background:'#E2F6EF',color:'#0B7A5F',borderRadius:10,padding:'9px 12px',fontSize:13,marginBottom:8}}>{ok}</div>}
+      <button type="button" data-fc="repo-enviar" disabled={busy} onClick={enviar} style={{width:'100%',padding:'12px',borderRadius:10,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,cursor:'pointer'}}>{busy?'Enviando…':(editId?'Reenviar ao CAF':'Enviar pedido ao CAF')}</button>
+    </div>
+    <div style={{fontWeight:800,margin:'14px 0 6px'}}>Meus pedidos</div>
+    {lista.length===0&&<div style={Object.assign({},card,{color:'#94A3B8',textAlign:'center'})}>Nenhum pedido ainda.</div>}
+    {lista.slice(0,30).map(function(r){return(<div key={r.id} style={card}>
+      <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}><div style={{flex:1,fontSize:12.5,color:'#64748B'}}>{fmtD(r.criadoEm)} {fmtT(r.criadoEm)} · {r.solicitanteNome}</div><RepoChip st={r.status}/></div>
+      {r.obsCaf&&<div style={{background:'#FFF3DC',borderRadius:8,padding:'6px 10px',fontSize:12.5,margin:'6px 0'}}><b>CAF:</b> {r.obsCaf}</div>}
+      {r.itens.map(function(i){return <div key={i.id} style={{display:'flex',gap:8,fontSize:13,padding:'4px 0',borderTop:'1px solid #F1F5F9'}}><span style={{flex:1}}>{i.nome}</span><span style={{color:'#64748B'}}>pediu {i.qtdSolicitada}</span><span style={{fontWeight:700,color:i.qtdTransferida>=i.qtdSolicitada?'#0B7A5F':'#B26A00'}}>recebeu {i.qtdTransferida||0}</span></div>;})}
+      <div style={{display:'flex',gap:8,marginTop:8}}>{r.status==='devolvida'&&<button type="button" data-fc={'repo-corrigir'} onClick={function(){corrigir(r);}} style={{padding:'8px 12px',borderRadius:8,border:'none',background:'#B45309',color:'#fff',fontWeight:700,cursor:'pointer'}}>Corrigir e reenviar</button>}{(r.status==='pendente'||r.status==='devolvida')&&<button type="button" onClick={function(){cancelarMeu(r);}} style={{padding:'8px 12px',borderRadius:8,border:'1px solid #FCA5A5',background:'#fff',color:'#B91C1C',fontWeight:700,cursor:'pointer'}}>Cancelar pedido</button>}</div>
+    </div>);})}
+  </div>);
+}
+function ReposicaoCaf(props){
+  var user=props.user,entries=props.entries||[],lista=useReposicoes(user);
+  var _ab=useState(null);var abertoId=_ab[0],setAbertoId=_ab[1];
+  var _fl=useState('abertos');var filtro=_fl[0],setFiltro=_fl[1];
+  var card={background:'#fff',borderRadius:14,border:'1px solid #E2E8F0',padding:'14px 16px',marginBottom:10};
+  var vis=lista.filter(function(r){return filtro==='abertos'?(r.status==='pendente'||r.status==='parcial'||r.status==='devolvida'):true;});
+  var aberto=abertoId?lista.filter(function(r){return r.id===abertoId;})[0]:null;
+  var pend=lista.filter(function(r){return r.status==='pendente';}).length;
+  return(<div data-fc="repo-caf">
+    <div style={{display:'flex',gap:6,marginBottom:10}}>{[['abertos','Em aberto'+(pend?' ('+pend+' novos)':'')],['todos','Todos']].map(function(f){return <button key={f[0]} type="button" onClick={function(){setFiltro(f[0]);}} style={{padding:'7px 13px',borderRadius:99,border:'1.5px solid '+(filtro===f[0]?'#1351B4':'#E2E8F0'),background:filtro===f[0]?'#EEF3FB':'#fff',color:filtro===f[0]?'#1351B4':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>{f[1]}</button>;})}</div>
+    {vis.length===0&&<div style={Object.assign({},card,{color:'#94A3B8',textAlign:'center'})}>Nenhum pedido do Satélite.</div>}
+    {vis.map(function(r){return(<div key={r.id} data-fc={'repo-item-'+r.id} onClick={function(){setAbertoId(r.id);}} style={Object.assign({},card,{cursor:'pointer',display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'})}>
+      <div style={{flex:'1 1 180px'}}><div style={{fontWeight:800,fontSize:14}}>Pedido do Satélite</div><div style={{fontSize:12,color:'#64748B'}}>{fmtD(r.criadoEm)} {fmtT(r.criadoEm)} · {r.solicitanteNome} · {r.itens.length} produto(s)</div></div><RepoChip st={r.status}/></div>);})}
+    {aberto&&<UbsModal onClose={function(){setAbertoId(null);}}><ReposicaoCafDetalhe r={aberto} user={user} entries={entries} onClose={function(){setAbertoId(null);}}/></UbsModal>}
+  </div>);
+}
+function ReposicaoCafDetalhe(props){
+  var r=props.r,user=props.user,entries=props.entries;
+  var _q=useState(function(){var o={};r.itens.forEach(function(i){var pend=Math.max(0,i.qtdSolicitada-(i.qtdTransferida||0));var d=_ubsDisp(entries,i.medId).total;o[i.id]={env:String(Math.min(pend,d)),obs:i.obsCaf||''};});return o;});var ed=_q[0],setEd=_q[1];
+  var _ob=useState('');var obs=_ob[0],setObs=_ob[1];
+  var _er=useState('');var err=_er[0],setErr=_er[1];
+  var _bu=useState(false);var busy=_bu[0],setBusy=_bu[1];
+  var _md=useState('');var modo=_md[0],setModo=_md[1];
+  var aberta=r.status==='pendente'||r.status==='parcial';
+  function hist(acao,o){return (r.historico||[]).concat([{em:new Date().toISOString(),acao:acao,por:user.name,obs:o||''}]);}
+  function setCampo(id,c,v){var n=Object.assign({},ed);n[id]=Object.assign({},n[id],{[c]:v});setEd(n);}
+  function transferir(){
+    setErr('');
+    var b=db.batch(),movs=[],problema='';var agora=new Date().toISOString();
+    var itens=r.itens.map(function(i){return Object.assign({},i,{obsCaf:(ed[i.id]||{}).obs||''});});
+    itens.forEach(function(i){
+      var n=parseInt((ed[i.id]||{}).env,10);if(!(n>0))return;
+      var pend=i.qtdSolicitada-(i.qtdTransferida||0);
+      if(n>pend){problema=problema||'"'+i.nome+'": mais do que o pedido ('+pend+' pendente).';return;}
+      var disp=_ubsDisp(entries,i.medId);
+      if(n>disp.total){problema=problema||'"'+i.nome+'": estoque do CAF insuficiente (disponível '+disp.total+').';return;}
+      var pl=_ubsPlano(disp,n,'');
+      if(pl.falta>0){problema=problema||'"'+i.nome+'": os lotes dentro da validade não cobrem a quantidade.';return;}
+      movs.push({i:i,n:n,partes:pl.partes});
+    });
+    if(problema){setErr(problema);return;}
+    if(!movs.length){setErr('Informe a quantidade a transferir em pelo menos um produto.');return;}
+    movs.forEach(function(m){
+      m.partes.forEach(function(pt){
+        var base={medicamentoId:m.i.medId,medicamentoNome:m.i.nome,quantidade:pt.qty,lote:pt.lote,validade:pt.validade,criadoEm:agora,date:todayStr(),autorId:user.uid,autorNome:user.name||user.email,autorCargo:user.role||'',tenant_id:tenantDe(user),transferencia:true,destino:'transferencia',destinoNome:'Transferência',reposicaoId:r.id,observacao:'Pedido de reposição do Satélite · Transferência CAF → Satélite'};
+        b.set(db.collection('entries').doc(),Object.assign({},base,{tipo:'saida',local:'caf'}));
+        b.set(db.collection('entries').doc(),Object.assign({},base,{tipo:'entrada',local:'satelite'}));
+      });
+      m.i.qtdTransferida=(m.i.qtdTransferida||0)+m.n;
+    });
+    var tudo=itens.every(function(i){return (i.qtdTransferida||0)>=i.qtdSolicitada;});
+    var resumo=movs.map(function(m){return m.n+'x '+m.i.nome;}).join(', ');
+    b.update(db.collection('reposicoes').doc(r.id),{itens:itens,status:tudo?'atendida':'parcial',obsCaf:obs.trim()||r.obsCaf||'',historico:hist(tudo?'atendida':'parcial',resumo),atualizadoEm:agora,atendidoPor:user.name});
+    setBusy(true);
+    b.commit().then(function(){setBusy(false);props.onClose();}).catch(function(e){setBusy(false);setErr('Não foi possível transferir: '+((e&&e.message)||''));});
+  }
+  function mudar(acao){
+    if(!obs.trim()){setErr(acao==='devolvida'?'Escreva o que o Satélite precisa ajustar.':'Informe a justificativa.');return;}
+    var itens=r.itens.map(function(i){return Object.assign({},i,{obsCaf:(ed[i.id]||{}).obs||''});});
+    setBusy(true);db.collection('reposicoes').doc(r.id).update({status:acao,itens:itens,obsCaf:obs.trim(),historico:hist(acao,obs.trim()),atualizadoEm:new Date().toISOString()}).then(function(){setBusy(false);props.onClose();}).catch(function(e){setBusy(false);setErr('Erro: '+((e&&e.message)||''));});
+  }
+  function encerrar(){
+    if(!obs.trim()){setErr('Informe por que está encerrando com pendências.');return;}
+    setBusy(true);db.collection('reposicoes').doc(r.id).update({status:'atendida',obsCaf:obs.trim(),historico:hist('atendida','Encerrado com pendências: '+obs.trim()),atualizadoEm:new Date().toISOString()}).then(function(){setBusy(false);props.onClose();});
+  }
+  var lbl={fontSize:11.5,fontWeight:700,color:'#64748B'};
+  return(<div data-fc="repo-detalhe">
+    <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:6}}><div style={{flex:1}}><div style={{fontWeight:800,fontSize:17}}>Pedido do Satélite</div><div style={{fontSize:12.5,color:'#64748B'}}>{fmtD(r.criadoEm)} {fmtT(r.criadoEm)} · {r.solicitanteNome}</div></div><RepoChip st={r.status}/></div>
+    {r.obs&&<div style={{background:'#F8FAFC',borderRadius:10,padding:'8px 12px',fontSize:13,margin:'8px 0'}}><b>Obs. do Satélite:</b> {r.obs}</div>}
+    {r.itens.map(function(i){var disp=_ubsDisp(entries,i.medId).total;var pend=Math.max(0,i.qtdSolicitada-(i.qtdTransferida||0));var e=ed[i.id]||{};var falta=parseInt(e.env,10)>disp;
+      return(<div key={i.id} data-fc={'repo-it-'+i.id} style={{border:'1px solid '+(disp<pend?'#FCA5A5':'#E2E8F0'),borderRadius:12,padding:'10px 12px',marginTop:8}}>
+        <div style={{fontWeight:700}}>{i.nome}</div>
+        <div style={{display:'flex',gap:14,flexWrap:'wrap',fontSize:13,margin:'4px 0'}}><span><span style={lbl}>PEDIDO </span><b>{i.qtdSolicitada}</b></span><span><span style={lbl}>JÁ ENVIADO </span><b>{i.qtdTransferida||0}</b></span><span><span style={lbl}>ESTOQUE CAF </span><b style={{color:disp<pend?'#C2362D':'#0B7A5F'}}>{disp}</b></span></div>
+        {disp<pend&&<div style={{background:'#FDECEA',color:'#C2362D',fontSize:12.5,fontWeight:700,borderRadius:8,padding:'5px 10px',marginBottom:6}}>Estoque do CAF não cobre o pedido.</div>}
+        {aberta&&<div style={{display:'flex',gap:8,flexWrap:'wrap'}}><div style={{width:110}}><div style={lbl}>Enviar agora</div><input className="inp" type="number" min="0" data-fc={'repo-env-'+i.id} value={e.env} onChange={function(ev){setCampo(i.id,'env',ev.target.value);}} style={{marginBottom:0}}/></div><div style={{flex:1,minWidth:140}}><div style={lbl}>Observação do item</div><input className="inp" value={e.obs} onChange={function(ev){setCampo(i.id,'obs',ev.target.value);}} style={{marginBottom:0}}/></div></div>}
+      </div>);})}
+    {(aberta||modo)&&<div style={{marginTop:10}}><div style={lbl}>Observação para o Satélite (obrigatória para devolver ou cancelar)</div><textarea className="inp" data-fc="repo-obs" value={obs} onChange={function(e){setObs(e.target.value);}} style={{minHeight:60}}/></div>}
+    {err&&<div data-fc="repo-det-erro" style={{background:'#FDECEA',color:'#C2362D',borderRadius:10,padding:'9px 12px',fontSize:13,marginTop:8}}>{err}</div>}
+    <div style={{display:'flex',gap:8,marginTop:12,flexWrap:'wrap'}}>
+      {aberta&&<button type="button" data-fc="repo-transferir" disabled={busy} onClick={transferir} style={{flex:'1 1 140px',padding:'12px',borderRadius:10,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,cursor:'pointer'}}>{busy?'Transferindo…':'Transferir agora'}</button>}
+      {r.status==='pendente'&&<button type="button" data-fc="repo-devolver" disabled={busy} onClick={function(){mudar('devolvida');}} style={{padding:'12px 14px',borderRadius:10,border:'none',background:'#B26A00',color:'#fff',fontWeight:700,cursor:'pointer'}}>Devolver p/ ajuste</button>}
+      {r.status==='parcial'&&<button type="button" data-fc="repo-encerrar" disabled={busy} onClick={encerrar} style={{padding:'12px 14px',borderRadius:10,border:'1px solid #CBD5E1',background:'#fff',fontWeight:700,cursor:'pointer'}}>Encerrar com pendências</button>}
+      {(aberta||r.status==='devolvida')&&<button type="button" data-fc="repo-cancelar" disabled={busy} onClick={function(){mudar('cancelada');}} style={{padding:'12px 14px',borderRadius:10,border:'1px solid #FCA5A5',background:'#FEF2F2',color:'#B91C1C',fontWeight:700,cursor:'pointer'}}>Cancelar pedido</button>}
+      <button type="button" onClick={props.onClose} style={{padding:'12px 14px',borderRadius:10,border:'1px solid #CBD5E1',background:'#fff',fontWeight:700,cursor:'pointer'}}>Fechar</button>
     </div>
   </div>);
 }
@@ -12188,7 +12472,7 @@ function TabRecebimento(props){
   // recebimento (tudo bateu certinho), Nº da nota e Valor total viram obrigatórios e o recebimento já
   // entra CONCILIADO — não fica pendente aguardando a conciliação de Importar Notas. Também gera o
   // registro da nota fiscal (notas_fiscais) na mesma hora, pros relatórios/histórico que leem de lá.
-  var _modoRec=useState('simples');var modoRec=_modoRec[0];var setModoRec=_modoRec[1];// 'simples' | 'nota'
+  var _modoRec=useState(temLocais(user)?'nota':'simples');var modoRec=_modoRec[0];var setModoRec=_modoRec[1];// 'simples' | 'nota' | 'permuta' | 'doacao' (permuta/doação só com módulo locais = Itaquitinga, que recebe apenas com nota)
   var _nfNumero=useState('');var nfNumero=_nfNumero[0];var setNfNumero=_nfNumero[1];
   var _nfValorTotal=useState('');var nfValorTotal=_nfValorTotal[0];var setNfValorTotal=_nfValorTotal[1];
   var _resp=useState(user.name||'');var responsavel=_resp[0];var setResponsavel=_resp[1];
@@ -12616,9 +12900,11 @@ function TabRecebimento(props){
       <div data-tour="receb-form" style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9',marginBottom:16}}>
         <div style={{fontWeight:800,fontSize:15,color:'#1E293B',marginBottom:12}}>Novo recebimento</div>
         <div style={{display:'flex',gap:8,marginBottom:14}}>
-          <button type="button" onClick={function(){setModoRec('simples');}} style={{flex:1,padding:'11px',borderRadius:10,border:'1.5px solid '+(modoRec==='simples'?B:'#E2E8F0'),background:modoRec==='simples'?'#EFF6FF':'#fff',color:modoRec==='simples'?B:'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>{_semEmoji('📦 Recebimento simples')}</button>
+          {!temLocais(user)&&<button type="button" onClick={function(){setModoRec('simples');}} style={{flex:1,padding:'11px',borderRadius:10,border:'1.5px solid '+(modoRec==='simples'?B:'#E2E8F0'),background:modoRec==='simples'?'#EFF6FF':'#fff',color:modoRec==='simples'?B:'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>{_semEmoji('📦 Recebimento simples')}</button>}
           <button type="button" onClick={function(){setModoRec('nota');}} style={{flex:1,padding:'11px',borderRadius:10,border:'1.5px solid '+(modoRec==='nota'?B:'#E2E8F0'),background:modoRec==='nota'?'#EFF6FF':'#fff',color:modoRec==='nota'?B:'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>{_semEmoji('📄 Já tenho a Nota Fiscal')}</button>
+          {temLocais(user)&&['permuta','doacao'].map(function(m){return <button key={m} type="button" data-fc={'modo-'+m} onClick={function(){setModoRec(m);}} style={{flex:1,padding:'11px',borderRadius:10,border:'1.5px solid '+(modoRec===m?B:'#E2E8F0'),background:modoRec===m?'#EFF6FF':'#fff',color:modoRec===m?B:'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>{m==='permuta'?'🔁 Permuta':'🎁 Doação'}</button>;})}
         </div>
+        {(modoRec==='permuta'||modoRec==='doacao')?<EntradaEspecial user={user} modo={modoRec} medications={medications} entries={props.entries||[]}/>:<React.Fragment>
         {modoRec==='nota'&&<div style={temaItaq?{background:'var(--itq-tint)',border:'1px solid var(--itq-tint-line)',borderRadius:10,padding:'10px 12px',marginBottom:12,fontSize:11,color:'var(--blue-700)'}:{background:'#F0FDF4',border:'1px solid #86EFAC',borderRadius:10,padding:'10px 12px',marginBottom:12,fontSize:11,color:'#0C6B3E'}}>Tudo que chegou bate com a nota — esse recebimento já entra conciliado, sem precisar passar por Importar Notas depois.</div>}
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:12}}>
           <div><label style={lbl}>📅 Data do recebimento</label><input type="date" value={data} max={todayStr()} onChange={function(e){setData(e.target.value);}} style={inp}/></div>
@@ -12666,6 +12952,7 @@ function TabRecebimento(props){
         <button onClick={addItem} style={{marginTop:10,width:'100%',padding:'11px',background:'#EFF6FF',border:'1.5px dashed #BFDBFE',borderRadius:10,color:B,fontWeight:700,fontSize:13,cursor:'pointer'}}>+ Adicionar item</button>
         {ok&&<div style={{marginTop:12,background:'#DCFCE7',border:'1px solid #86EFAC',borderRadius:10,padding:'10px 12px',fontSize:13,color:'#059669',fontWeight:600}}>{ok}</div>}
         <button data-tour="receb-finalizar" onClick={pedirConfirmacaoFinalizar} disabled={saving} style={{marginTop:12,width:'100%',padding:'14px',background:saving?'#94A3B8':'#0C6B3E',border:'none',borderRadius:12,color:'#fff',fontWeight:800,fontSize:15,cursor:saving?'default':'pointer'}}>{saving?'Finalizando...':'✅ Finalizar Recebimento'}</button>
+        </React.Fragment>}
       </div>
 
       {/* MUDANÇA 2 — Modal de cadastro rápido de medicamento */}
@@ -13257,7 +13544,7 @@ var _avisoConv=useState(_CONVITE_URL);var avisoConv=_avisoConv[0];var setAvisoCo
 var _tenantVer=useState(0);var tenantVer=_tenantVer[0];var setTenantVer=_tenantVer[1];
 var _destSaida=useState('sus');var destinoSaida=_destSaida[0];var setDestinoSaida=_destSaida[1];var _ubsSaida=useState('');var ubsSaida=_ubsSaida[0];var setUbsSaida=_ubsSaida[1];var _destCfgRaw=useState(null);var destCfgRaw=_destCfgRaw[0];var setDestCfgRaw=_destCfgRaw[1];
 var _histPronto=useState(false);var histPronto=_histPronto[0];var setHistPronto=_histPronto[1];
-var _ready=useState(false);var ready=_ready[0];var setReady=_ready[1];var _user=useState(null);var user=_user[0];var setUser=_user[1];var _histEntries=useState([]);var histEntries=_histEntries[0];var setHistEntries=_histEntries[1];var _recentEntries=useState([]);var recentEntries=_recentEntries[0];var setRecentEntries=_recentEntries[1];var _fcWinStart=useRef(null);if(!_fcWinStart.current){var _w0=new Date();_w0.setDate(_w0.getDate()-3);_fcWinStart.current=_w0.toISOString();}var _meds=useState([]);var meds=_meds[0];var setMeds=_meds[1];var _loading=useState(true);var loading=_loading[0];var setLoading=_loading[1];var _tab=useState('dashboard');var tab=_tab[0];var setTab=_tab[1];useEffect(function(){_fcCtx.user=user;_fcCtx.tab=tab;},[user,tab]);var _menuAberto=useState(false);var menuAberto=_menuAberto[0];var setMenuAberto=_menuAberto[1];var _showSairModal=useState(false);var showSairModal=_showSairModal[0];var setShowSairModal=_showSairModal[1];var _pending=useState(0);var pending=_pending[0];var setPending=_pending[1];var _alertCount=useState(0);var alertCount=_alertCount[0];var setAlertCount=_alertCount[1];
+var _ready=useState(false);var ready=_ready[0];var setReady=_ready[1];var _user=useState(null);var user=_user[0];var setUser=_user[1];var _histEntries=useState([]);var histEntries=_histEntries[0];var setHistEntries=_histEntries[1];var _recentEntries=useState([]);var recentEntries=_recentEntries[0];var setRecentEntries=_recentEntries[1];var _fcWinStart=useRef(null);if(!_fcWinStart.current){var _w0=new Date();_w0.setDate(_w0.getDate()-3);_fcWinStart.current=_w0.toISOString();}var _repoN=useState(0);var repoNovos=_repoN[0],setRepoNovos=_repoN[1];var _meds=useState([]);var medsTodos=_meds[0];var setMeds=_meds[1];var _loading=useState(true);var loading=_loading[0];var setLoading=_loading[1];var _tab=useState('dashboard');var tab=_tab[0];var setTab=_tab[1];useEffect(function(){_fcCtx.user=user;_fcCtx.tab=tab;},[user,tab]);var _menuAberto=useState(false);var menuAberto=_menuAberto[0];var setMenuAberto=_menuAberto[1];var _showSairModal=useState(false);var showSairModal=_showSairModal[0];var setShowSairModal=_showSairModal[1];var _pending=useState(0);var pending=_pending[0];var setPending=_pending[1];var _alertCount=useState(0);var alertCount=_alertCount[0];var setAlertCount=_alertCount[1];
 var _convites=useState([]);var convites=_convites[0];var setConvites=_convites[1];
 var _lowStock=useState([]);var lowStock=_lowStock[0];var setLowStock=_lowStock[1];var _solicitCount=useState(0);var solicitCount=_solicitCount[0];var setSolicitCount=_solicitCount[1];var _online=useState(navigator.onLine);var online=_online[0];var setOnline=_online[1];var _busca=useState(false);var busca=_busca[0];var setBusca=_busca[1];var _showSolicit=useState(false);var showSolicit=_showSolicit[0];var setShowSolicit=_showSolicit[1];var _showShift=useState(false);var showShift=_showShift[0];var setShowShift=_showShift[1];var _showShiftModal=useState(false);var showShiftModal=_showShiftModal[0];var setShowShiftModal=_showShiftModal[1];
 var _pendingInvite=useState(null);var pendingInvite=_pendingInvite[0];var setPendingInvite=_pendingInvite[1];var _plantao=useState(null);var plantao=_plantao[0];var setPlantao=_plantao[1];var _isGuest=useState(false);var isGuest=_isGuest[0];var setIsGuest=_isGuest[1];var _allUsers=useState([]);var allUsers=_allUsers[0];var setAllUsers=_allUsers[1];var _shiftChecked=useState(false);var shiftChecked=_shiftChecked[0];var setShiftChecked=_shiftChecked[1];var _shiftId=useState(null);var shiftId=_shiftId[0];var setShiftId=_shiftId[1];var _solicitacoesPlantao=useState([]);var solicitacoesPlantao=_solicitacoesPlantao[0];var setSolicitacoesPlantao=_solicitacoesPlantao[1];var lastAct=useRef(Date.now());
@@ -13437,6 +13724,7 @@ useEffect(function(){if(!ready||!user)return;
   // Mesmo assim, faltava o filtro por tenant_id aqui — como toda outra leitura do app já é isolada
   // por tenant, deixamos essa também, pra não sobrar nenhuma leitura "global" caso essa coleção
   // algum dia volte a receber dado.
+  if(temLocais(user)){unsubs.push(db.collection('reposicoes').where('tenant_id','==',tenantDe(user)).where('status','==','pendente').onSnapshot(function(s){setRepoNovos(s.size);},function(){}));}
   // Cargo/local/modo de consulta da própria conta ao vivo: se a gestora mudar, vale na hora (sem sair e entrar).
   unsubs.push(db.collection('users').doc(user.uid).onSnapshot(function(s){var d=s.exists?s.data():null;if(!d)return;setUser(function(u){if(!u)return u;if((u.acessoLocal||'')===(d.acessoLocal||'')&&u.somenteLeitura===(d.somenteLeitura===true)&&u.role===d.role)return u;var n=Object.assign({},u,{acessoLocal:d.acessoLocal||'',somenteLeitura:d.somenteLeitura===true,role:d.role});try{localStorage.setItem('fc_user',JSON.stringify(n));}catch(e){}return n;});},function(){}));
   if(user.role==='gestor'||user.role==='tecnico'){unsubs.push(db.collection('medications').where('tenant_id','==',tenantDe(user)).onSnapshot(function(s){var mds=s.docs.map(function(d){return Object.assign({id:d.id},d.data());});setLowStock(mds.filter(function(m){return m.estoqueMin&&m.estoqueMin>0;}));}));}
@@ -13461,7 +13749,7 @@ var destinosTodos=useMemo(function(){
   if(!user||!temModulo(user,'destinos'))return fixos;
   var base=(destCfgRaw&&destCfgRaw.destinos)?destCfgRaw.destinos:DESTINOS_PADRAO;
   var out=fixos.slice();
-  base.forEach(function(d){if(!d||!d.id||d.id==='sus'||d.id==='emergencia')return;out.push({id:d.id,nome:d.nome||d.id,ativo:d.ativo!==false,pedeUbs:!!d.pedeUbs});});
+  base.forEach(function(d){if(!d||!d.id||d.id==='sus'||d.id==='emergencia')return;if(temLocais(user)&&_semAcento(d.nome||d.id).indexOf('satelite')>=0)return;/* Satélite agora é um local com transferência própria */out.push({id:d.id,nome:d.nome||d.id,ativo:d.ativo!==false,pedeUbs:!!d.pedeUbs});});
   return out;
 },[user&&user.tenant_id,destCfgRaw,tenantVer]);
 var ubsTodas=useMemo(function(){
@@ -13492,6 +13780,11 @@ var acessoLocal=acessoLocalDe(user);
 var localAtivo=!acessoLocal?null:(acessoLocal==='ambos'?(lcSel==='satelite'?'satelite':'caf'):acessoLocal);
 _fcLocalAtivo=localAtivo;
 function trocarLocal(l){try{localStorage.setItem('fc_local',l);}catch(e){}setLcSel(l);}
+var ehSat=localAtivo==='satelite';
+// No Satélite: sem a categoria Leite e só os produtos que já tiveram movimento lá (cadastro segue único; o resto aparece quando chega por transferência/recebimento).
+var satIds=useMemo(function(){if(!ehSat)return null;var s={};entriesTodas.forEach(function(e){if(e.local==='satelite'&&e.medicamentoId)s[e.medicamentoId]=1;});medsTodos.forEach(function(m){if(m.estoqueLocal&&m.estoqueLocal.satelite!==undefined)s[m.id]=1;});return s;},[ehSat,entriesTodas,medsTodos]);
+var meds=useMemo(function(){if(!ehSat)return medsTodos;return medsTodos.filter(function(m){return m.categoria!=='leite'&&satIds&&satIds[m.id];});},[ehSat,medsTodos,satIds]);
+var medsSemLeite=useMemo(function(){return ehSat?medsTodos.filter(function(m){return m.categoria!=='leite';}):medsTodos;},[ehSat,medsTodos]);
 var entries=useMemo(function(){if(!localAtivo)return entriesTodas;return entriesTodas.filter(function(e){return _noLocal(e,localAtivo);});},[entriesTodas,localAtivo]);
 function estoqueDoLocal(m){var tot=m.estoqueAtual||0;if(!localAtivo)return tot;var sat=(m.estoqueLocal&&m.estoqueLocal.satelite)||0;return localAtivo==='satelite'?sat:tot-sat;}
 var stock=useMemo(function(){var s={};meds.forEach(function(m){var v=estoqueDoLocal(m);s[m.id]=v<0?0:v;});return s;},[meds,localAtivo]);
@@ -13600,6 +13893,8 @@ if(pendingInvite)return <InviteScreen invite={pendingInvite} onConfirm={handleCo
 var isManagerRole=(user.role==='gestor'||user.role==='tecnico');
 var ro=somenteLeitura(user); // conta só de consulta (ex.: farmacêutica em Itaquitinga): vê o estoque, não movimenta
 var podePedidos=isManagerRole||(user.role==='farmaceutico'&&temLocais(user)); // aba Previsão/Pedido e atas
+var TABS_SAT_OCULTAS=['leites','saidasreg','ubs'];
+var ocultaSat=ehSat&&TABS_SAT_OCULTAS.indexOf(tab)>=0;
 var TABS_MOVIMENTO=['transferencia','saida','recebimento','conferencia','saidasreg','leites','antibiotico','pacientes','pedidosjudiciais','ubs'];
 var temaItaq=true;// identidade visual v2 agora é o padrão pra todos os municípios (Itaquitinga + Vicência)
 var canMove=isManagerRole||!isGuest;
@@ -13706,7 +14001,7 @@ return(
         {!ro&&tab==='saida'&&<TabSaida destino={destinoSaida} onDestino={setDestinoSaida} destinos={destinosTodos.filter(function(d){return d.ativo;})} destinosTodos={destinosTodos} ubsLista={ubsTodas.filter(function(u){return u.ativo;})} ubsTodas={ubsTodas} ubs={ubsSaida} onUbs={setUbsSaida} podeEditarDest={temModulo(user,'destinos')&&(user.role==='gestor'||user.role==='tecnico')} user={user} medications={meds} stock={stock} entries={entries} onSave={addEntryStable} onSolicitar={addSolicitacaoStable} latest={latest} isGuest={isGuest} canMove={canMove} confirm2={confirm2} alert2={alert2}/>}
         {tab==='estoque'&&<TabEstoque user={user} medications={meds} entries={entries} stock={stock} estoqueBruto={estoqueBruto} onSave={addEntryStable} confirm2={confirm2} alert2={alert2}/>}
         {!ro&&tab==='conferencia'&&<ErrBoundary><TabConferencia user={user} medications={meds} entries={entries} stock={stock} estoqueBruto={estoqueBruto} histPronto={histPronto}/></ErrBoundary>}
-        {!ro&&tab==='saidasreg'&&<ErrBoundary><TabSaidasRegistradas user={user} entries={entries} medications={meds} destinos={destinosTodos} ubsTodas={ubsTodas}/></ErrBoundary>}
+        {!ro&&!ocultaSat&&tab==='saidasreg'&&<ErrBoundary><TabSaidasRegistradas user={user} entries={entries} medications={meds} destinos={destinosTodos} ubsTodas={ubsTodas}/></ErrBoundary>}
         {tab==='relatorio'&&<TabRelatorio destinos={destinosTodos} ubsTodas={ubsTodas} entries={entries} medications={meds} db={db} user={user}/>}
         {tab==='gestao'&&can(user.role,'gestao')&&<TabGestao currentUser={user} entries={entries}/>}
         {tab==='log'&&can(user.role,'log')&&<TabLog user={user}/>}
@@ -13715,12 +14010,13 @@ return(
         {tab==='histcontas'&&can(user.role,'log')&&<TabHistContas user={user}/>}
         {!ro&&tab==='antibiotico'&&<TabAntibiotico user={user} medications={meds} stock={stock} allUsers={allUsers}/>}
         {tab==='pedidosjudiciais'&&!ro&&temModulo(user,'judicial')&&isManagerRole&&<ErrBoundary><TabPedidosJudiciais user={user} medications={meds} stock={stock} entries={entries} onSave={addEntryStable} confirm2={confirm2} alert2={alert2} allUsers={allUsers}/></ErrBoundary>}
-        {!ro&&tab==='recebimento'&&<ErrBoundary><TabRecebimento user={user} medications={meds} onSave={addEntry} stock={stock}/></ErrBoundary>}
+        {!ro&&tab==='recebimento'&&<ErrBoundary><TabRecebimento user={user} medications={ehSat?medsSemLeite:meds} onSave={addEntry} stock={stock} entries={entries} localAtivo={localAtivo}/></ErrBoundary>}
         {tab==='pacientes'&&!ro&&temModulo(user,'controlados')&&<ErrBoundary><TabPacientes user={user} entries={entries} onSave={addEntryStable} confirm2={confirm2} alert2={alert2}/></ErrBoundary>}
-        {!ro&&tab==='leites'&&<ErrBoundary><TabLeites user={user} medications={meds} stock={stock} onSave={addEntry} confirm2={confirm2} alert2={alert2}/></ErrBoundary>}
-        {tab==='ubs'&&!ro&&temModulo(user,'ubsSolicitacoes')&&<ErrBoundary><TabUbs user={user} entries={entries} medications={meds}/></ErrBoundary>}
+        {!ro&&!ocultaSat&&tab==='leites'&&<ErrBoundary><TabLeites user={user} medications={meds} stock={stock} onSave={addEntry} confirm2={confirm2} alert2={alert2}/></ErrBoundary>}
+        {tab==='ubs'&&!ro&&!ocultaSat&&temModulo(user,'ubsSolicitacoes')&&<ErrBoundary><TabUbs user={user} entries={entries} medications={meds}/></ErrBoundary>}
+        {ocultaSat&&<div style={{maxWidth:520,margin:'40px auto',padding:'0 16px',textAlign:'center',color:'#64748B'}}><div style={{fontSize:16,fontWeight:800,color:'#1E293B',marginBottom:6}}>Não existe no Satélite</div>Esta aba é só do CAF.</div>}
         {ro&&TABS_MOVIMENTO.indexOf(tab)>=0&&<div style={{maxWidth:520,margin:'40px auto',padding:'0 16px',textAlign:'center',color:'#64748B'}}><div style={{fontSize:16,fontWeight:800,color:'#1E293B',marginBottom:6}}>Acesso somente consulta</div>Sua conta pode ver o estoque do CAF e fazer pedidos, mas não movimenta o estoque.</div>}
-        {tab==='transferencia'&&!ro&&localAtivo&&<ErrBoundary><TabTransferencia user={user} entries={entries} medications={meds} localAtivo={localAtivo}/></ErrBoundary>}
+        {tab==='transferencia'&&!ro&&localAtivo&&<ErrBoundary><TabTransferencia user={user} entries={entries} medications={meds} medsCaf={medsSemLeite} localAtivo={localAtivo}/></ErrBoundary>}
         {tab==='ajuda'&&<ErrBoundary><TabAjuda user={user} onIr={function(t){setTab(t);}}/></ErrBoundary>}
         {tab==='superadmin'&&user.isSuper&&<ErrBoundary><TabSuperAdmin user={user}/></ErrBoundary>}
         {tab==='admin'&&user.role==='tecnico'&&<TabAdmin user={user} entries={entries} medications={meds} db={db}/>}
@@ -13782,10 +14078,10 @@ return(
               {id:'recebimento',icon:'🚚',label:'Recebimento',show:true},
               {id:'pacientes',icon:'🔒',label:'Pacientes (Controlados)',show:temModulo(user,'controlados')},
               {id:'conferencia',icon:'🧾',label:'Conferência',show:!ro},
-              {id:'leites',icon:'🍼',label:'Leites',show:!ro},
-              {id:'saidasreg',icon:'🧾',label:'Saídas registradas',show:!ro},
-              {id:'transferencia',icon:'🔁',label:'Transferência CAF ⇄ Satélite',show:!ro&&!!localAtivo},
-              {id:'ubs',icon:'🏥',label:'Solicitações das UBS',show:!ro&&temModulo(user,'ubsSolicitacoes')&&['gestor','tecnico','farmaceutico','auxiliar'].indexOf(user.role)>=0},
+              {id:'leites',icon:'🍼',label:'Leites',show:!ro&&!ehSat},
+              {id:'saidasreg',icon:'🧾',label:'Saídas registradas',show:!ro&&!ehSat},
+              {id:'transferencia',icon:'🔁',label:'Transferência CAF ⇄ Satélite'+(repoNovos>0&&localAtivo==='caf'?' ('+repoNovos+')':''),show:!ro&&!!localAtivo},
+              {id:'ubs',icon:'🏥',label:'Solicitações das UBS',show:!ro&&!ehSat&&temModulo(user,'ubsSolicitacoes')&&['gestor','tecnico','farmaceutico','auxiliar'].indexOf(user.role)>=0},
               {id:'relatorio',icon:'📊',label:'Relatório',show:true},
               {id:'gestao',icon:'👥',label:'Gestão',badge:badge,show:can(user.role,'gestao')},
               {id:'log',icon:'🔐',label:'Log de Acesso',show:can(user.role,'log')},
@@ -13833,7 +14129,7 @@ return(
             <div style={{fontSize:11,color:temaItaq?'var(--itq-faint)':'rgba(255,255,255,0.5)',marginTop:2}}>{ROLES[user.role]||user.role}</div>
           </div>
           <div style={{flex:1,overflowY:'auto',padding:'8px 0'}}>
-            {[{id:'estoque',icon:'📦',label:'Estoque'},{id:'recebimento',icon:'🚚',label:'Recebimento'},{id:'pacientes',icon:'🔒',label:'Pacientes (Controlados)'},{id:'conferencia',icon:'🧾',label:'Conferência'},{id:'leites',icon:'🍼',label:'Leites'},{id:'saidasreg',icon:'🧾',label:'Saídas registradas'},{id:'transferencia',icon:'🔁',label:'Transferência CAF ⇄ Satélite'},{id:'ubs',icon:'🏥',label:'Solicitações das UBS'},{id:'relatorio',icon:'📊',label:'Relatório'},{id:'previsao',icon:'📋',label:'Previsão / Pedido'},{id:'ajuda',icon:'❓',label:'Ajuda'}].filter(function(t){return t.id!=='pacientes'||temModulo(user,'controlados');}).filter(function(t){if(t.id==='transferencia')return !ro&&!!localAtivo;if(t.id==='ubs')return !ro&&temModulo(user,'ubsSolicitacoes');if(t.id==='previsao')return podePedidos;return !(ro&&TABS_MOVIMENTO.indexOf(t.id)>=0);}).map(function(t){return(
+            {[{id:'estoque',icon:'📦',label:'Estoque'},{id:'recebimento',icon:'🚚',label:'Recebimento'},{id:'pacientes',icon:'🔒',label:'Pacientes (Controlados)'},{id:'conferencia',icon:'🧾',label:'Conferência'},{id:'leites',icon:'🍼',label:'Leites'},{id:'saidasreg',icon:'🧾',label:'Saídas registradas'},{id:'transferencia',icon:'🔁',label:'Transferência CAF ⇄ Satélite'+(repoNovos>0&&localAtivo==='caf'?' ('+repoNovos+')':'')},{id:'ubs',icon:'🏥',label:'Solicitações das UBS'},{id:'relatorio',icon:'📊',label:'Relatório'},{id:'previsao',icon:'📋',label:'Previsão / Pedido'},{id:'ajuda',icon:'❓',label:'Ajuda'}].filter(function(t){return t.id!=='pacientes'||temModulo(user,'controlados');}).filter(function(t){if(t.id==='transferencia')return !ro&&!!localAtivo;if(t.id==='ubs')return !ro&&!ehSat&&temModulo(user,'ubsSolicitacoes');if(ehSat&&TABS_SAT_OCULTAS.indexOf(t.id)>=0)return false;if(t.id==='previsao')return podePedidos;return !(ro&&TABS_MOVIMENTO.indexOf(t.id)>=0);}).map(function(t){return(
               <button key={t.id} data-tour={'nav-'+t.id} className={temaItaq?'menu-drawer-item'+(tab===t.id?' on':''):''} onClick={function(){setTab(t.id);setMenuAberto(false);}} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'13px 20px',border:'none',background:temaItaq?undefined:(tab===t.id?'#EFF6FF':'transparent'),cursor:'pointer',borderLeft:temaItaq?undefined:(tab===t.id?'3px solid #1351B4':'3px solid transparent')}}>
                 <span className={temaItaq?'menu-drawer-ic':''} style={{fontSize:20}}>{temaItaq?<Icon name={menuIconName(t.id)} size={18}/>:t.icon}</span>
                 <span className={temaItaq?'menu-drawer-lbl':''} style={{fontSize:14,fontWeight:tab===t.id?700:500,color:temaItaq?undefined:(tab===t.id?'#1351B4':'#1E293B')}}>{t.label}</span>
