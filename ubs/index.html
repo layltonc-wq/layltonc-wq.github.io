@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Solicitação de materiais · UBS · FarmaControl</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F5F7FB;--surface:#fff;--ink:#0B1736;--muted:#4D5A77;--faint:#8893AC;--line:#E2E8F3;--blue:#1351B4;--soft:#EEF3FB;--red:#C2362D;--red-soft:#FDECEA;--amber:#B26A00;--amber-soft:#FFF3DC;--teal:#0B8F72;--teal-soft:#E2F6EF;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#0E1424;--surface:#161E33;--ink:#E8EEFB;--muted:#9AA8C7;--faint:#6F7C9B;--line:#26314D;--blue:#7FAAF0;--soft:#1B2540;--red:#FF8A80;--red-soft:#3A1C1C;--amber:#F2B15A;--amber-soft:#3A2D12;--teal:#5BE0B8;--teal-soft:#12332B;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'IBM Plex Sans','Segoe UI',system-ui,sans-serif;line-height:1.5;padding:0 max(16px,env(safe-area-inset-right,0px)) 48px max(16px,env(safe-area-inset-left,0px))}
+header{max-width:640px;margin:0 auto;padding:18px 0 6px;display:flex;align-items:center;gap:10px}
+.chip{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#1351B4,#4C8FEF);color:#fff;display:flex;align-items:center;justify-content:center;font:800 12px 'Plus Jakarta Sans',sans-serif;flex:none}
+header b{font-family:'Plus Jakarta Sans',sans-serif;font-size:17px;display:block;line-height:1.2}
+header small{color:var(--muted);font-size:13px}
+main{max-width:640px;margin:0 auto}
+h1{font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;margin:16px 0 4px;line-height:1.2}
+h2{font-family:'Plus Jakarta Sans',sans-serif;font-size:17px;margin:20px 0 8px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:12px}
+label{display:block;font-size:13.5px;font-weight:600;margin:12px 0 5px;color:var(--muted)}
+input,select,textarea{width:100%;font:inherit;font-size:16px;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+textarea{min-height:76px;resize:vertical}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--blue);outline-offset:1px}
+button{font:inherit;font-weight:600;font-size:16px;border:0;border-radius:11px;padding:13px 18px;cursor:pointer;background:var(--blue);color:#fff;min-height:48px}
+button.sec{background:var(--soft);color:var(--blue)}
+button.lnk{background:none;color:var(--blue);padding:6px 4px;min-height:0;font-size:14px}
+button.red{background:var(--red-soft);color:var(--red)}
+button:disabled{opacity:.55;cursor:default}
+.row{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+.row>*{flex:1 1 140px}
+.msg{border-radius:11px;padding:12px 14px;margin-top:12px;font-size:14.5px}
+.m-err{background:var(--red-soft);color:var(--red)}.m-ok{background:var(--teal-soft);color:var(--teal)}.m-av{background:var(--amber-soft);color:var(--amber)}.m-inf{background:var(--soft);color:var(--muted)}
+.per{display:inline-block;background:var(--teal-soft);color:var(--teal);font-weight:600;font-size:13px;border-radius:99px;padding:4px 11px;margin-top:6px}
+.it{display:flex;gap:10px;align-items:center;justify-content:space-between;border-top:1px solid var(--line);padding:10px 0}
+.it:first-child{border-top:0}
+.it .n{min-width:0;flex:1}.it .n b{display:block;font-weight:600;word-break:break-word}.it .n small{color:var(--muted);display:block}
+.it input.q{width:92px;flex:none;text-align:center}
+.tag{font-size:11.5px;font-weight:700;border-radius:99px;padding:3px 9px;background:var(--amber-soft);color:var(--amber);white-space:nowrap}
+.proto{font:800 28px 'Plus Jakarta Sans',sans-serif;letter-spacing:.04em;text-align:center;background:var(--soft);border-radius:12px;padding:14px;margin:12px 0;word-break:break-all}
+.st{display:inline-block;font-weight:700;font-size:13px;border-radius:99px;padding:5px 12px}
+.s-enviada{background:var(--soft);color:var(--blue)}.s-aprovada,.s-separada{background:var(--teal-soft);color:var(--teal)}.s-parcial{background:var(--amber-soft);color:var(--amber)}.s-devolvida{background:var(--amber-soft);color:var(--amber)}.s-cancelada{background:var(--red-soft);color:var(--red)}
+table{width:100%;border-collapse:collapse;font-size:13.5px}th{text-align:right;color:var(--muted);font-weight:600;padding:6px 4px}td{padding:8px 4px;border-top:1px solid var(--line);text-align:right}th:first-child,td:first-child{text-align:left}
+.sug{border:1px solid var(--line);border-radius:10px;max-height:220px;overflow:auto;background:var(--surface)}
+.sug button{display:block;width:100%;text-align:left;background:none;color:var(--ink);border-radius:0;font-weight:500;border-top:1px solid var(--line);min-height:44px;padding:10px 12px}
+.sug button:first-child{border-top:0}
+footer{max-width:640px;margin:26px auto 0;color:var(--faint);font-size:12.5px;text-align:center}
+</style>
+</head>
+<body>
+<header><div class="chip">FC</div><div><b>Solicitação de materiais</b><small id="mun">FarmaControl</small></div></header>
+<main id="app"><div class="card">Carregando…</div></main>
+<footer>Use este link só para a sua UBS. Não informe dados de pacientes.</footer>
+<script>
+(function(){
+'use strict';
+var H=location.hostname;
+var PROJ=(H==='www.farmacontrol.app.br'||H==='farmacontrol.app.br')?'app-farma-b21e2':'farmacontrol-dev-6a3e3';
+var API='https://southamerica-east1-'+PROJ+'.cloudfunctions.net/ubsApi';
+var TENANT=(new URLSearchParams(location.search).get('m')||'').toLowerCase();
+var app=document.getElementById('app');
+var S={info:null,ubs:null,nome:'',itens:[],obs:'',fora:false,modo:null,sol:null,prot:'',busy:false};
+try{S.nome=localStorage.getItem('ubs_nome')||'';}catch(e){}
+
+function el(tag,attrs,kids){var e=document.createElement(tag);attrs=attrs||{};
+ Object.keys(attrs).forEach(function(k){var v=attrs[k];if(v==null||v===false)return;
+  if(k==='class')e.className=v;else if(k==='text')e.textContent=v;else if(k.indexOf('on')===0)e.addEventListener(k.slice(2),v);else if(k==='value')e.value=v;else e.setAttribute(k,v===true?'':v);});
+ (kids||[]).forEach(function(c){if(c==null||c===false)return;e.appendChild(typeof c==='string'?document.createTextNode(c):c);});return e;}
+function fmtData(iso){if(!iso)return'';var p=String(iso).slice(0,10).split('-');return p[2]+'/'+p[1]+'/'+p[0];}
+function fmtDH(iso){if(!iso)return'';var d=new Date(iso);return d.toLocaleString('pt-BR',{timeZone:'America/Recife',dateStyle:'short',timeStyle:'short'});}
+function render(nodes){app.replaceChildren.apply(app,nodes);window.scrollTo(0,0);}
+function msg(cls,t){return el('div',{class:'msg '+cls,text:t});}
+function post(body){body.tenant=TENANT;
+ return fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+  .then(function(r){return r.json().catch(function(){return{ok:false,erro:'Resposta inválida.'};});})
+  .catch(function(){return{ok:false,erro:'Sem conexão. Verifique a internet e tente de novo.'};});}
+function perTag(p){return p?el('span',{class:'per',text:(p.nome?p.nome+' · ':'')+'aberto de '+fmtData(p.inicio)+' a '+fmtData(p.fim)}):null;}
+
+function telaInicio(erro){
+ if(!/^[a-z0-9][a-z0-9-]{1,58}$/.test(TENANT)){render([msg('m-err','Link inválido. Peça à farmácia o link correto.')]);return;}
+ render([el('div',{class:'card'},['Carregando…'])]);
+ post({acao:'info'}).then(function(r){
+  if(!r.ok){render([msg('m-err',r.erro||'Link inválido.')]);return;}
+  S.info=r;document.getElementById('mun').textContent=r.municipio||'FarmaControl';
+  var nome=el('input',{id:'f-nome',autocomplete:'name',placeholder:'Nome e sobrenome',value:S.nome,maxlength:'80'});
+  var sel=el('select',{id:'f-ubs'},[el('option',{value:'',text:'Selecione a UBS'})].concat(r.ubs.map(function(u){return el('option',{value:u.id,text:u.nome});})));
+  if(S.ubs)sel.value=S.ubs.id;
+  var err=el('div');if(erro)err.appendChild(msg('m-err',erro));
+  function seguir(modo){
+   var n=nome.value.trim();if(modo==='enviar'&&n.length<3){err.replaceChildren(msg('m-err','Informe o seu nome.'));return;}
+   if(!sel.value){err.replaceChildren(msg('m-err','Selecione a sua UBS.'));return;}
+   S.nome=n;try{localStorage.setItem('ubs_nome',n);}catch(e){}
+   S.modo=modo;carregarUbs(sel.value,modo);}
+  render([el('h1',{text:'O que você deseja fazer?'}),
+   r.periodo?el('div',{},[perTag(r.periodo)]):msg('m-av',r.proximoPeriodo?('Nenhum período aberto agora. O próximo começa em '+fmtData(r.proximoPeriodo.inicio)+'.'):'Nenhum período de solicitação aberto no momento. Você ainda pode consultar uma solicitação.'),
+   el('div',{class:'card'},[el('label',{for:'f-nome',text:'Seu nome'}),nome,el('label',{for:'f-ubs',text:'Sua UBS'}),sel,err,
+    el('div',{class:'row'},[el('button',{text:'Fazer solicitação',onclick:function(){seguir('enviar');}}),el('button',{class:'sec',text:'Consultar solicitação',onclick:function(){seguir('consultar');}})])])]);
+ });
+}
+function carregarUbs(id,modo){
+ render([el('div',{class:'card'},['Carregando…'])]);
+ post({acao:'ubs',ubsId:id}).then(function(r){
+  if(!r.ok){telaInicio(r.erro);return;}
+  S.ubs=r;S.itens=[];S.obs='';S.fora=false;
+  if(modo==='consultar')telaConsulta();else telaForm();
+ });
+}
+
+// ---------- formulário ----------
+function telaForm(corrigindo){
+ var u=S.ubs;
+ if(!corrigindo){
+  if(!u.periodo){render([el('h1',{text:u.ubs.nome}),msg('m-av',u.proximoPeriodo?('Não há período aberto. O próximo começa em '+fmtData(u.proximoPeriodo.inicio)+'.'):'Não há período de solicitação aberto no momento.'),el('div',{class:'row'},[el('button',{class:'sec',text:'Voltar',onclick:function(){telaInicio();}})])]);return;}
+  if(u.jaEnviou){render([el('h1',{text:u.ubs.nome}),msg('m-av','A sua UBS já enviou a solicitação deste período. Para enviar outra, peça à gestora da farmácia para liberar um novo envio. Se precisar acompanhar, use "Consultar solicitação" com o protocolo.'),el('div',{class:'row'},[el('button',{text:'Consultar solicitação',onclick:function(){S.modo='consultar';telaConsulta();}}),el('button',{class:'sec',text:'Voltar',onclick:function(){telaInicio();}})])]);return;}
+ }
+ var lista=el('div',{class:'card'});
+ var busca=el('input',{placeholder:'Buscar material para adicionar…',type:'search',autocomplete:'off'});
+ var sug=el('div');
+ function desenharLista(){
+  lista.replaceChildren(el('h2',{text:'Itens da solicitação ('+S.itens.length+')',style:'margin-top:0'}));
+  if(!S.itens.length)lista.appendChild(el('p',{class:'msg m-inf',text:'Nenhum item ainda. Busque o material acima e toque nele para adicionar.'}));
+  S.itens.forEach(function(it,i){
+   var q=el('input',{class:'q',type:'number',inputmode:'numeric',min:'1',step:'1',value:String(it.qtd||''),'aria-label':'Quantidade de '+it.nome});
+   q.addEventListener('input',function(){it.qtd=parseInt(q.value,10)||0;});
+   lista.appendChild(el('div',{class:'it'},[el('div',{class:'n'},[el('b',{text:it.nome}),it.fora?el('span',{class:'tag',text:'Fora da lista'}):null,it.fora?el('small',{text:'Justificativa: '+it.just}):null]),q,
+    el('button',{class:'lnk',text:'Remover','aria-label':'Remover '+it.nome,onclick:function(){S.itens.splice(i,1);desenharLista();}})]));
+  });
+ }
+ function sugerir(){
+  var t=busca.value.trim().toLowerCase();sug.replaceChildren();
+  if(!t)return;
+  var ja={};S.itens.forEach(function(i){if(i.medId)ja[i.medId]=1;});
+  var achados=u.materiais.filter(function(m){return !ja[m.id]&&m.nome.toLowerCase().indexOf(t)>=0;}).slice(0,30);
+  var box=el('div',{class:'sug'},achados.map(function(m){return el('button',{text:m.nome+(m.unidade?' ('+m.unidade+')':''),onclick:function(){S.itens.push({medId:m.id,nome:m.nome,qtd:1});busca.value='';sug.replaceChildren();desenharLista();}});}));
+  if(!achados.length)box.appendChild(el('button',{text:'Nenhum resultado. Toque aqui para pedir um material fora da lista.',onclick:function(){S.fora=true;foraBox();foraNome.value=busca.value.trim();busca.value='';sug.replaceChildren();}}));
+  sug.appendChild(box);
+ }
+ busca.addEventListener('input',sugerir);
+ // fora da lista
+ var foraNome=el('input',{placeholder:'Nome do material',maxlength:'80'}),foraQtd=el('input',{type:'number',inputmode:'numeric',min:'1',placeholder:'Quantidade'}),foraJust=el('textarea',{placeholder:'Por que a UBS precisa deste material?',maxlength:'300'});
+ var foraErr=el('div');var foraCard=el('div',{class:'card',style:'display:none'});
+ function foraBox(){foraCard.style.display=S.fora?'block':'none';}
+ foraCard.appendChild(el('h2',{text:'Material fora da lista',style:'margin-top:0'}));
+ foraCard.appendChild(el('p',{class:'msg m-inf',text:'A farmácia vai analisar. O pedido não entra no estoque automaticamente.'}));
+ [el('label',{text:'Nome do material'}),foraNome,el('label',{text:'Quantidade'}),foraQtd,el('label',{text:'Justificativa'}),foraJust,foraErr,
+  el('div',{class:'row'},[el('button',{text:'Adicionar à lista',onclick:function(){
+   var q=parseInt(foraQtd.value,10);
+   if(foraNome.value.trim().length<2||!(q>=1)||foraJust.value.trim().length<3){foraErr.replaceChildren(msg('m-err','Preencha nome, quantidade e justificativa.'));return;}
+   S.itens.push({medId:'',nome:foraNome.value.trim(),qtd:q,fora:true,just:foraJust.value.trim()});
+   foraNome.value='';foraQtd.value='';foraJust.value='';foraErr.replaceChildren();S.fora=false;foraBox();desenharLista();}}),
+   el('button',{class:'sec',text:'Cancelar',onclick:function(){S.fora=false;foraBox();}})])].forEach(function(n){foraCard.appendChild(n);});
+ var obs=el('textarea',{placeholder:'Observações para a farmácia (opcional)',maxlength:'500'});obs.value=S.obs;obs.addEventListener('input',function(){S.obs=obs.value;});
+ var err=el('div');
+ desenharLista();
+ render([el('h1',{text:corrigindo?'Corrigir solicitação':'Nova solicitação'}),el('div',{},[el('b',{text:u.ubs.nome}),el('span',{text:' · '+S.nome,style:'color:var(--muted)'})]),perTag(u.periodo),
+  el('div',{class:'card'},[el('label',{text:'Adicionar material',style:'margin-top:0'}),busca,sug,
+   el('div',{class:'row'},[el('button',{class:'sec',text:'+ Material fora da lista',onclick:function(){S.fora=true;foraBox();foraNome.focus();}})])]),
+  foraCard,lista,el('div',{class:'card'},[el('label',{text:'Observações',style:'margin-top:0'}),obs]),err,
+  el('div',{class:'row'},[el('button',{text:'Revisar e enviar',onclick:function(){
+    var bons=S.itens.filter(function(i){return i.qtd>=1;});
+    if(!S.itens.length){err.replaceChildren(msg('m-err','Adicione pelo menos um material.'));return;}
+    if(bons.length!==S.itens.length){err.replaceChildren(msg('m-err','Informe a quantidade de todos os itens (mínimo 1).'));return;}
+    telaResumo(corrigindo);}}),el('button',{class:'sec',text:'Voltar',onclick:function(){telaInicio();}})])]);
+ foraBox();
+}
+function telaResumo(corrigindo){
+ var u=S.ubs,err=el('div'),btn;
+ var total=S.itens.reduce(function(a,i){return a+i.qtd;},0);
+ var linhas=S.itens.map(function(i){return el('div',{class:'it'},[el('div',{class:'n'},[el('b',{text:i.nome}),i.fora?el('span',{class:'tag',text:'Fora da lista'}):null,i.fora?el('small',{text:i.just}):null]),el('b',{text:String(i.qtd)})]);});
+ btn=el('button',{text:corrigindo?'Reenviar solicitação':'Confirmar e enviar',onclick:function(){
+  if(S.busy)return;S.busy=true;btn.disabled=true;btn.textContent='Enviando…';
+  var itens=S.itens.map(function(i){var o={qtd:i.qtd,obs:i.obs||''};if(i.id)o.id=i.id;if(i.medId)o.medId=i.medId;else{o.nome=i.nome;o.justificativa=i.just;}return o;});
+  var body=corrigindo?{acao:'corrigir',ubsId:u.ubs.id,protocolo:S.prot,nome:S.nome,itens:itens,obs:S.obs}:{acao:'enviar',ubsId:u.ubs.id,nome:S.nome,itens:itens,obs:S.obs};
+  post(body).then(function(r){S.busy=false;
+   if(!r.ok){btn.disabled=false;btn.textContent=corrigindo?'Reenviar solicitação':'Confirmar e enviar';err.replaceChildren(msg('m-err',r.erro||'Não foi possível enviar.'));return;}
+   telaProtocolo(r.protocolo,corrigindo);});}});
+ render([el('h1',{text:'Confira antes de enviar'}),el('div',{},[el('b',{text:u.ubs.nome}),el('span',{text:' · '+S.nome,style:'color:var(--muted)'})]),perTag(u.periodo),
+  el('div',{class:'card'},linhas.concat([el('div',{class:'it'},[el('span',{text:S.itens.length+' item(ns)',style:'color:var(--muted)'}),el('span',{text:'Total: '+total,style:'font-weight:700'})])])),
+  S.obs?el('div',{class:'card'},[el('b',{text:'Observações'}),el('p',{text:S.obs,style:'margin:6px 0 0'})]):null,
+  err,el('div',{class:'row'},[btn,el('button',{class:'sec',text:'Editar',onclick:function(){telaForm(corrigindo);}})])]);
+}
+function telaProtocolo(p,corrigindo){
+ S.prot=p;
+ render([el('h1',{text:corrigindo?'Solicitação reenviada':'Solicitação enviada!'}),
+  el('div',{class:'card'},[el('p',{text:'Guarde o número do protocolo. Com ele, e com a sua UBS, você acompanha a solicitação neste mesmo link.',style:'margin:0'}),el('div',{class:'proto',text:p}),
+   el('div',{class:'row'},[el('button',{text:'Copiar protocolo',onclick:function(e){try{navigator.clipboard.writeText(p);e.target.textContent='Copiado!';}catch(x){}}}),el('button',{class:'sec',text:'Acompanhar',onclick:function(){S.modo='consultar';telaConsulta(p);}})])]),
+  el('div',{class:'row'},[el('button',{class:'lnk',text:'Voltar ao início',onclick:function(){S.ubs=null;telaInicio();}})])]);
+}
+
+// ---------- consulta ----------
+var ROT={enviada:'Enviada — aguardando análise',aprovada:'Aprovada',parcial:'Parcialmente separada',separada:'Separada',devolvida:'Devolvida para correção',cancelada:'Cancelada'};
+function telaConsulta(prot,erro){
+ var inp=el('input',{placeholder:'UBS-XXXX-XXXX',autocapitalize:'characters',autocomplete:'off',value:prot||'',maxlength:'20'});
+ var err=el('div');if(erro)err.appendChild(msg('m-err',erro));
+ function buscar(){var p=inp.value.trim();if(!p){err.replaceChildren(msg('m-err','Informe o número do protocolo.'));return;}
+  S.prot=p;err.replaceChildren(msg('m-inf','Consultando…'));
+  post({acao:'consultar',ubsId:S.ubs.ubs.id,protocolo:p}).then(function(r){if(!r.ok){err.replaceChildren(msg('m-err',r.erro));return;}S.sol=r.solicitacao;S.prot=r.solicitacao.protocolo;telaSolicitacao();});}
+ render([el('h1',{text:'Consultar solicitação'}),el('div',{},[el('b',{text:S.ubs.ubs.nome})]),
+  el('div',{class:'card'},[el('label',{text:'Número do protocolo',style:'margin-top:0'}),inp,err,el('div',{class:'row'},[el('button',{text:'Consultar',onclick:buscar}),el('button',{class:'sec',text:'Voltar',onclick:function(){telaInicio();}})])])]);
+ if(prot)buscar();
+}
+function telaSolicitacao(){
+ var s=S.sol,mostraQ=['aprovada','parcial','separada'].indexOf(s.status)>=0;
+ var thead=el('tr',{},[el('th',{text:'Material'}),el('th',{text:'Pedido'})].concat(mostraQ?[el('th',{text:'Aprov.'}),el('th',{text:'Separ.'}),el('th',{text:'Pend.'})]:[]));
+ var corpo=s.itens.map(function(i){return el('tr',{},[el('td',{},[i.nome,i.foraDaLista?el('span',{class:'tag',text:'Fora da lista',style:'margin-left:6px'}):null,i.obsFarm?el('div',{text:'Farmácia: '+i.obsFarm,style:'font-size:12.5px;color:var(--amber)'}):null]),el('td',{text:String(i.qtdSolicitada)})].concat(mostraQ?[el('td',{text:i.qtdAprovada==null?'—':String(i.qtdAprovada)}),el('td',{text:String(i.qtdSeparada||0)}),el('td',{text:i.qtdPendente==null?'—':String(i.qtdPendente)})]:[]));});
+ var nodes=[el('h1',{text:'Protocolo '+s.protocolo}),el('div',{class:'card'},[el('span',{class:'st s-'+s.status,text:ROT[s.status]||s.status}),
+  el('p',{text:s.ubs+' · enviada em '+fmtDH(s.enviadaEm)+(s.periodo?' · '+s.periodo:''),style:'color:var(--muted);font-size:13.5px;margin:10px 0 0'}),
+  s.obsFarm?msg('m-av','Observação da farmácia: '+s.obsFarm):null]),
+  el('div',{class:'card',style:'overflow-x:auto'},[el('table',{},[el('thead',{},[thead]),el('tbody',{},corpo)])])];
+ if(s.historico&&s.historico.length)nodes.push(el('div',{class:'card'},[el('b',{text:'Histórico'})].concat(s.historico.map(function(h){return el('div',{text:fmtDH(h.em)+' — '+(ROT[h.acao]||h.acao)+(h.obs?': '+h.obs:''),style:'font-size:13.5px;color:var(--muted);margin-top:6px'});}))));
+ var acoes=[];
+ if(s.podeCorrigir)acoes.push(el('button',{text:'Corrigir e reenviar',onclick:function(){
+   S.itens=s.itens.map(function(i){return{id:i.id,medId:i.medId,nome:i.nome,qtd:i.qtdSolicitada,fora:i.foraDaLista,just:i.justificativa,obs:i.obs};});
+   S.obs=s.obs||'';
+   // materiais ainda permitidos: se a UBS perdeu acesso a algum, o servidor recusa e avisa
+   telaForm(true);}}));
+ acoes.push(el('button',{class:'sec',text:'Atualizar',onclick:function(){telaConsulta(s.protocolo);}}));
+ acoes.push(el('button',{class:'sec',text:'Início',onclick:function(){S.ubs=null;telaInicio();}}));
+ nodes.push(el('div',{class:'row'},acoes));
+ render(nodes);
+}
+telaInicio();
+})();
+</script>
+</body>
+</html>

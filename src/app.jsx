@@ -42,7 +42,7 @@ function _padraoTenant(id){
       '<b>DADOS PARA ENTREGA:</b><br>Entregar na Farmácia Municipal ao lado UNIDADE MISTA ADELINA AZEVEDO<br>'+
       'Rua da União, nº 347, Centro - Itaquitinga -PE, CEP: 55.950-000<br>Horário para entrega: de segunda a sexta-feira das 08h00 às 14h00.<br>'+
       '<b>DADOS PARA CONTATO:</b><br>E-mail: cafitaquitinga@hotmail.com<br>Fones: (81) 9.9168-8103',
-    modulos:{atb:true,judicial:true,controlados:false,comparaPedido:false,ordemFornecimento:true,destinos:false}
+    modulos:{atb:true,judicial:true,controlados:false,comparaPedido:false,ordemFornecimento:true,destinos:false,ubsSolicitacoes:true}
   };
   return {nome:'',cidadeUf:'',cor:'#1351B4',assinatura:'COORDENADOR(A) DA FARMÁCIA',nomeFarmacia:'Farmácia Municipal',
     org:{l1:'',l2:'',rodape:''},logoPrint:'',logoPedidoPath:'',pedido:{orgLinha1:'',orgLinha2:'',mostrarBoxEmpresa:true,autoDescontarAta:true,mostrarColunaMarca:false},ordemDados:'',modulos:_MODULOS_NENHUM};
@@ -5361,7 +5361,7 @@ function TabNotas({user,medications}){
 // prefeitura nova) e entra em outra prefeitura (função trocarPrefeitura, ver functions/index.js). O link de convite é
 // https://www.farmacontrol.app.br/?tenant=<id>; o cadastro só é aceito se tenants/<id> existir e estiver ativo (firestore.rules).
 var FC_SITE='https://www.farmacontrol.app.br';
-var MODULOS_LISTA=[['atb','ATB (antibióticos)'],['judicial','Judicial / Ajuda'],['controlados','Pacientes controlados (Morfina/Tramal)'],['comparaPedido','Comparação de pedido'],['ordemFornecimento','Ordem de fornecimento (atas)'],['destinos','Destinos de saída e UBS']];
+var MODULOS_LISTA=[['atb','ATB (antibióticos)'],['judicial','Judicial / Ajuda'],['controlados','Pacientes controlados (Morfina/Tramal)'],['comparaPedido','Comparação de pedido'],['ordemFornecimento','Ordem de fornecimento (atas)'],['destinos','Destinos de saída e UBS'],['ubsSolicitacoes','Solicitações das UBS (link público)']];
 function fcLinkConvite(id){return FC_SITE+'/?tenant='+encodeURIComponent(id);}
 function fcSlug(t){return String(t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40);}
 // Troca a "prefeitura" da conta (só super admin): a função do servidor muda a marca no token de login; depois é só recarregar.
@@ -7015,6 +7015,390 @@ function ReportarProblemaModal(props){
   </div>);
 }
 
+// ===== SOLICITAÇÕES DAS UBS (módulo ubsSolicitacoes) =====
+// A parte pública (link único das enfermeiras) vive em /ubs/ e fala só com a Cloud Function ubsApi.
+// Aqui fica o lado da farmácia: cadastro das UBS, períodos, análise, separação (com baixa no estoque) e relatórios.
+var UBS_STATUS={enviada:{l:'Aguardando análise',c:'#1351B4',bg:'#EEF3FB'},aprovada:{l:'Aprovada',c:'#0B7A5F',bg:'#E2F6EF'},parcial:{l:'Separação parcial',c:'#B26A00',bg:'#FFF3DC'},separada:{l:'Separada',c:'#0B7A5F',bg:'#E2F6EF'},devolvida:{l:'Devolvida p/ correção',c:'#B26A00',bg:'#FFF3DC'},cancelada:{l:'Cancelada',c:'#C2362D',bg:'#FDECEA'}};
+function _ubsFmtDia(iso){if(!iso)return '';var p=String(iso).slice(0,10).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:iso;}
+function _ubsHoje(){return new Date().toLocaleDateString('en-CA',{timeZone:'America/Recife'});}
+function _ubsDisp(entries,medId){
+  var mine=(entriesPorMed(entries||[])[medId])||[];
+  var c=calcLotesMed(mine);var hoje=new Date();// disponível = só lotes dentro da validade (+ saldo sem lote); lote vencido não sai para UBS
+  var lotes=c.lotes.filter(function(l){return l.qty>0;}).map(function(l){var d=_dataValidade(l.validade);return Object.assign({},l,{vencido:!!(d&&d<hoje)});});
+  var validos=lotes.filter(function(l){return !l.vencido;}).reduce(function(t,l){return t+l.qty;},0);
+  return {total:validos+Math.max(0,c.semLote),lotes:lotes,semLote:Math.max(0,c.semLote)};
+}
+// FEFO só com lotes vencendo primeiro e não vencidos; sobra vai "sem lote" apenas se existir saldo sem lote.
+function _ubsPlano(disp,qtd,loteEsc){
+  var partes=[],falta=qtd;
+  if(loteEsc){var l=disp.lotes.filter(function(x){return loteKey(x.lote)===loteKey(loteEsc);})[0];if(!l)return {partes:[],falta:qtd};var t=Math.min(falta,l.qty);partes.push({lote:l.lote,validade:l.validade,qty:t});return {partes:partes,falta:falta-t};}
+  disp.lotes.filter(function(l){return !l.vencido;}).forEach(function(l){if(falta<=0)return;var t=Math.min(falta,l.qty);partes.push({lote:l.lote,validade:l.validade,qty:t});falta-=t;});
+  if(falta>0&&disp.semLote>0){var s=Math.min(falta,disp.semLote);partes.push({lote:'',validade:'',qty:s});falta-=s;}
+  return {partes:partes,falta:falta};
+}
+function UbsModal(props){
+  return(<div onClick={props.onClose} style={{position:'fixed',inset:0,background:'rgba(15,23,42,.6)',zIndex:9500,display:'flex',alignItems:'flex-end',justifyContent:'center',padding:0}}>
+    <div onClick={function(e){e.stopPropagation();}} style={{background:'#fff',width:'100%',maxWidth:760,maxHeight:'94vh',overflowY:'auto',borderRadius:'18px 18px 0 0',padding:'18px 16px 28px'}}>{props.children}</div></div>);
+}
+function TabUbs(props){
+  var user=props.user,entries=props.entries||[],meds=props.medications||[];
+  var tenant=tenantDe(user);
+  var role=user.role;
+  var podeAnalisar=role==='gestor'||role==='tecnico'||role==='farmaceutico';
+  var podeSeparar=podeAnalisar||role==='auxiliar';
+  var ehAdm=role==='gestor'||role==='tecnico';
+  var _st=useState('sol');var sub=_st[0],setSub=_st[1];
+  var _u=useState([]);var ubsL=_u[0],setUbsL=_u[1];
+  var _p=useState([]);var pers=_p[0],setPers=_p[1];
+  var _s=useState([]);var sols=_s[0],setSols=_s[1];
+  var _e=useState([]);var envios=_e[0],setEnvios=_e[1];
+  var _ab=useState(null);var aberta=_ab[0],setAberta=_ab[1];
+  var _msg=useState('');var msg=_msg[0],setMsg=_msg[1];
+  useEffect(function(){
+    function col(nome,set,lim){return db.collection(nome).where('tenant_id','==',tenant).limit(lim).onSnapshot(function(sn){set(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));},function(){});}
+    var a=col('ubs',setUbsL,300),b=col('ubs_periodos',setPers,300),c=col('ubs_solicitacoes',setSols,2000),d=col('ubs_envios',setEnvios,2000);
+    return function(){a();b();c();d();};
+  },[tenant]);
+  var hoje=_ubsHoje();
+  var perAtual=pers.filter(function(p){return p.inicio<=hoje&&hoje<=p.fim;}).sort(function(x,y){return y.inicio.localeCompare(x.inicio);})[0]||null;
+  var solsOrd=useMemo(function(){return sols.slice().sort(function(x,y){return String(y.criadoEm||'').localeCompare(String(x.criadoEm||''));});},[sols]);
+  var link='https://www.farmacontrol.app.br/ubs/?m='+encodeURIComponent(tenant);
+  var card={background:'#fff',borderRadius:14,border:'1px solid #E2E8F0',padding:'14px 16px',marginBottom:10};
+  function flash(t){setMsg(t);setTimeout(function(){setMsg('');},4000);}
+  var abas=[['sol','Solicitações'],['ubs','UBS'],['per','Períodos'],['rel','Relatórios']];
+  var abertaAtual=aberta?(sols.filter(function(s){return s.id===aberta;})[0]||null):null;
+  return(<div style={{maxWidth:820,margin:'0 auto',padding:'16px 14px 90px'}}>
+    <div style={{fontSize:20,fontWeight:800,color:'#1E293B'}}>Solicitações das UBS</div>
+    <div style={{fontSize:13,color:'#64748B',margin:'2px 0 12px'}}>As enfermeiras pedem pelo link único; você analisa, separa e o estoque baixa na separação.</div>
+    <div style={Object.assign({},card,{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'})}>
+      <div style={{flex:'1 1 220px',minWidth:0}}><div style={{fontSize:11,fontWeight:700,color:'#64748B'}}>LINK PARA AS UBS</div><div style={{fontSize:13,color:'#1351B4',wordBreak:'break-all'}}>{link}</div></div>
+      <button className="btn" data-ubs="copiar-link" onClick={function(){try{navigator.clipboard.writeText(link);flash('Link copiado!');}catch(e){flash('Copie manualmente o link.');}}} style={{padding:'9px 14px',borderRadius:10,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,cursor:'pointer'}}>Copiar link</button>
+    </div>
+    {msg&&<div style={{background:'#E2F6EF',color:'#0B7A5F',borderRadius:10,padding:'9px 12px',fontSize:13,marginBottom:10}}>{msg}</div>}
+    <div style={{display:'flex',gap:6,marginBottom:12,overflowX:'auto'}}>
+      {abas.map(function(a){return <button key={a[0]} data-ubs={'aba-'+a[0]} onClick={function(){setSub(a[0]);}} style={{padding:'9px 14px',borderRadius:99,border:'1.5px solid '+(sub===a[0]?'#1351B4':'#E2E8F0'),background:sub===a[0]?'#1351B4':'#fff',color:sub===a[0]?'#fff':'#475569',fontWeight:700,fontSize:13,cursor:'pointer',whiteSpace:'nowrap'}}>{a[1]}</button>;})}
+    </div>
+    {sub==='sol'&&<UbsLista user={user} sols={solsOrd} ubsL={ubsL} perAtual={perAtual} envios={envios} entries={entries} onAbrir={setAberta} podeLiberar={role==='gestor'} flash={flash} tenant={tenant} card={card}/>}
+    {sub==='ubs'&&<UbsCadastro user={user} ubsL={ubsL} meds={meds} podeGerir={podeAnalisar} tenant={tenant} flash={flash} card={card}/>}
+    {sub==='per'&&<UbsPeriodos pers={pers} ehAdm={ehAdm} tenant={tenant} flash={flash} card={card}/>}
+    {sub==='rel'&&<UbsRelatorios sols={sols} ubsL={ubsL} pers={pers} user={user} card={card}/>}
+    {abertaAtual&&<UbsModal onClose={function(){setAberta(null);}}><UbsDetalhe sol={abertaAtual} user={user} entries={entries} meds={meds} podeAnalisar={podeAnalisar} podeSeparar={podeSeparar} onClose={function(){setAberta(null);}} flash={flash}/></UbsModal>}
+  </div>);
+}
+function UbsChip(props){var s=UBS_STATUS[props.st]||{l:props.st,c:'#475569',bg:'#F1F5F9'};return <span style={{background:s.bg,color:s.c,fontWeight:700,fontSize:11.5,borderRadius:99,padding:'3px 10px',whiteSpace:'nowrap'}}>{s.l}</span>;}
+function UbsLista(props){
+  var sols=props.sols,perAtual=props.perAtual,envios=props.envios,card=props.card;
+  var _f=useState('todas');var filtro=_f[0],setFiltro=_f[1];
+  var lista=sols.filter(function(s){return filtro==='todas'||(filtro==='abertas'?['enviada','devolvida','aprovada','parcial'].indexOf(s.status)>=0:s.status===filtro);});
+  var ativas=props.ubsL.filter(function(u){return u.ativa!==false;}).sort(function(a,b){return a.nome.localeCompare(b.nome);});
+  function liberar(u){
+    if(!perAtual)return;
+    if(!window.confirm('Liberar novo envio para '+u.nome+' neste período? A UBS poderá enviar outra solicitação.'))return;
+    db.collection('ubs_envios').doc(props.tenant+'__'+u.id+'__'+perAtual.id).delete().then(function(){props.flash('Novo envio liberado para '+u.nome+'.');}).catch(function(e){window.alert('Não foi possível liberar: '+((e&&e.message)||'erro'));});
+  }
+  var pendentes=sols.filter(function(s){return s.status==='enviada';}).length;
+  return(<div>
+    <div style={card}>
+      <div style={{fontWeight:800,fontSize:14,color:'#1E293B'}}>{perAtual?('Período aberto: '+(perAtual.nome||'')+' ('+_ubsFmtDia(perAtual.inicio)+' a '+_ubsFmtDia(perAtual.fim)+')'):'Nenhum período aberto agora'}</div>
+      {!perAtual&&<div style={{fontSize:12.5,color:'#B26A00',marginTop:4}}>As UBS não conseguem enviar. Crie um período na aba Períodos.</div>}
+      {perAtual&&ativas.length===0&&<div style={{fontSize:12.5,color:'#B26A00',marginTop:4}}>Cadastre as UBS na aba UBS.</div>}
+      {perAtual&&ativas.map(function(u){
+        var env=envios.filter(function(e){return e.ubsId===u.id&&e.periodoId===perAtual.id;})[0];
+        return(<div key={u.id} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 0',borderTop:'1px solid #F1F5F9',flexWrap:'wrap'}}>
+          <div style={{flex:'1 1 150px',fontSize:13.5,fontWeight:600}}>{u.nome}</div>
+          <span style={{fontSize:12,fontWeight:700,color:env?'#0B7A5F':'#94A3B8'}}>{env?('Enviou · '+env.protocolo):'Ainda não enviou'}</span>
+          {env&&props.podeLiberar&&<button data-ubs={'liberar-'+u.id} onClick={function(){liberar(u);}} style={{padding:'6px 10px',borderRadius:8,border:'1px solid #FCD34D',background:'#FFFBEB',color:'#92400E',fontWeight:700,fontSize:12,cursor:'pointer'}}>Liberar novo envio</button>}
+        </div>);
+      })}
+    </div>
+    <div style={{display:'flex',gap:6,margin:'4px 0 10px',flexWrap:'wrap',alignItems:'center'}}>
+      {[['todas','Todas'],['abertas','Em andamento'],['enviada','Aguardando análise ('+pendentes+')'],['devolvida','Devolvidas'],['separada','Separadas'],['cancelada','Canceladas']].map(function(f){return <button key={f[0]} onClick={function(){setFiltro(f[0]);}} style={{padding:'6px 11px',borderRadius:99,border:'1px solid '+(filtro===f[0]?'#1351B4':'#E2E8F0'),background:filtro===f[0]?'#EEF3FB':'#fff',color:filtro===f[0]?'#1351B4':'#64748B',fontSize:12,fontWeight:700,cursor:'pointer'}}>{f[1]}</button>;})}
+    </div>
+    {lista.length===0&&<div style={Object.assign({},card,{color:'#94A3B8',textAlign:'center'})}>Nenhuma solicitação.</div>}
+    {lista.map(function(s){
+      var fora=(s.itens||[]).filter(function(i){return i.foraDaLista&&!i.medId;}).length;
+      var insuf=(s.status==='enviada'||s.status==='devolvida')&&(s.itens||[]).some(function(i){return i.medId&&_ubsDisp(props.entries,i.medId).total<i.qtdSolicitada;});
+      return(<div key={s.id} data-ubs={'sol-'+s.protocolo} onClick={function(){props.onAbrir(s.id);}} style={Object.assign({},card,{cursor:'pointer',display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'})}>
+        <div style={{flex:'1 1 200px',minWidth:0}}><div style={{fontWeight:800,fontSize:14}}>{s.ubsNome}</div><div style={{fontSize:12,color:'#64748B'}}>{s.protocolo} · {s.periodoNome||''} · {fmtD(s.criadoEm)} {fmtT(s.criadoEm)} · {s.enfermeira}</div></div>
+        <div style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center'}}>
+          {fora>0&&<span style={{background:'#FFF3DC',color:'#B26A00',fontWeight:700,fontSize:11,borderRadius:99,padding:'3px 9px'}}>{fora} fora da lista</span>}
+          {insuf&&<span style={{background:'#FDECEA',color:'#C2362D',fontWeight:700,fontSize:11,borderRadius:99,padding:'3px 9px'}}>Estoque insuficiente</span>}
+          <UbsChip st={s.status}/>
+        </div>
+      </div>);
+    })}
+  </div>);
+}
+function UbsCadastro(props){
+  var ubsL=props.ubsL,meds=props.meds,card=props.card;
+  var _ed=useState(null);var ed=_ed[0],setEd=_ed[1];
+  var _b=useState('');var busca=_b[0],setBusca=_b[1];
+  var _er=useState('');var err=_er[0],setErr=_er[1];
+  var lista=ubsL.slice().sort(function(a,b){return a.nome.localeCompare(b.nome);});
+  function salvar(){
+    var nome=(ed.nome||'').trim();
+    if(nome.length<3){setErr('Informe o nome da UBS.');return;}
+    if(ubsL.some(function(u){return u.id!==ed.id&&_semAcento(u.nome)===_semAcento(nome);})){setErr('Já existe uma UBS com esse nome.');return;}
+    var dados={nome:nome,ativa:ed.ativa!==false,materiais:ed.materiais||[],tenant_id:props.tenant,atualizadoEm:new Date().toISOString()};
+    var p=ed.id?db.collection('ubs').doc(ed.id).update(dados):db.collection('ubs').add(Object.assign(dados,{criadoEm:new Date().toISOString()}));
+    p.then(function(){setEd(null);setErr('');props.flash('UBS salva.');}).catch(function(e){setErr('Erro ao salvar: '+((e&&e.message)||''));});
+  }
+  function toggleMat(id){var a=(ed.materiais||[]).slice();var i=a.indexOf(id);if(i>=0)a.splice(i,1);else a.push(id);setEd(Object.assign({},ed,{materiais:a}));}
+  var nb=_semAcento(busca);
+  var medsF=meds.filter(function(m){return !m.inativo&&(!nb||_semAcento(m.nome).indexOf(nb)>=0);}).sort(function(a,b){var sa=(ed&&(ed.materiais||[]).indexOf(a.id)>=0)?0:1,sb=(ed&&(ed.materiais||[]).indexOf(b.id)>=0)?0:1;return sa-sb||a.nome.localeCompare(b.nome);}).slice(0,80);
+  return(<div>
+    {props.podeGerir&&<button data-ubs="nova-ubs" onClick={function(){setEd({nome:'',ativa:true,materiais:[]});setErr('');}} style={{padding:'10px 16px',borderRadius:10,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,cursor:'pointer',marginBottom:10}}>+ Nova UBS</button>}
+    {lista.length===0&&<div style={Object.assign({},card,{color:'#94A3B8',textAlign:'center'})}>Nenhuma UBS cadastrada.</div>}
+    {lista.map(function(u){return(<div key={u.id} style={Object.assign({},card,{display:'flex',alignItems:'center',gap:10,opacity:u.ativa===false?.55:1})}>
+      <div style={{flex:1,minWidth:0}}><div style={{fontWeight:800}}>{u.nome}{u.ativa===false&&<span style={{fontSize:11,color:'#C2362D',marginLeft:8}}>desativada</span>}</div><div style={{fontSize:12,color:'#64748B'}}>{(u.materiais||[]).length} material(is) liberado(s)</div></div>
+      {props.podeGerir&&<button onClick={function(){setEd(Object.assign({},u));setErr('');}} style={{padding:'7px 12px',borderRadius:8,border:'1px solid #CBD5E1',background:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>Editar</button>}
+    </div>);})}
+    {ed&&<UbsModal onClose={function(){setEd(null);}}>
+      <div style={{fontWeight:800,fontSize:17,marginBottom:10}}>{ed.id?'Editar UBS':'Nova UBS'}</div>
+      <input className="inp" data-ubs="ubs-nome" placeholder="Nome da UBS" value={ed.nome} onChange={function(e){setEd(Object.assign({},ed,{nome:e.target.value}));}}/>
+      <label style={{display:'flex',alignItems:'center',gap:8,fontSize:13.5,marginBottom:10}}><input type="checkbox" checked={ed.ativa!==false} onChange={function(e){setEd(Object.assign({},ed,{ativa:e.target.checked}));}}/> UBS ativa (pode enviar solicitações)</label>
+      <div style={{fontWeight:700,fontSize:13,marginBottom:4}}>Materiais que esta UBS pode pedir ({(ed.materiais||[]).length})</div>
+      <div style={{fontSize:12,color:'#64748B',marginBottom:6}}>Marque os produtos do estoque. A enfermeira ainda poderá pedir algo fora da lista; isso chega destacado para você analisar.</div>
+      <input className="inp" placeholder="Buscar produto…" value={busca} onChange={function(e){setBusca(e.target.value);}}/>
+      <div style={{maxHeight:260,overflowY:'auto',border:'1px solid #E2E8F0',borderRadius:10}}>
+        {medsF.map(function(m){var on=(ed.materiais||[]).indexOf(m.id)>=0;return(<label key={m.id} style={{display:'flex',alignItems:'center',gap:10,padding:'9px 12px',borderTop:'1px solid #F1F5F9',fontSize:13.5,cursor:'pointer',background:on?'#EEF3FB':'#fff'}}><input type="checkbox" checked={on} onChange={function(){toggleMat(m.id);}}/><span>{m.nome}</span></label>);})}
+        {medsF.length===0&&<div style={{padding:12,color:'#94A3B8',fontSize:13}}>Nenhum produto encontrado.</div>}
+      </div>
+      {err&&<div style={{background:'#FDECEA',color:'#C2362D',borderRadius:10,padding:'9px 12px',fontSize:13,marginTop:10}}>{err}</div>}
+      <div style={{display:'flex',gap:8,marginTop:14}}><button data-ubs="salvar-ubs" onClick={salvar} style={{flex:1,padding:'12px',borderRadius:10,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,cursor:'pointer'}}>Salvar</button><button onClick={function(){setEd(null);}} style={{padding:'12px 16px',borderRadius:10,border:'1px solid #CBD5E1',background:'#fff',fontWeight:700,cursor:'pointer'}}>Cancelar</button></div>
+    </UbsModal>}
+  </div>);
+}
+function UbsPeriodos(props){
+  var pers=props.pers.slice().sort(function(a,b){return b.inicio.localeCompare(a.inicio);}),card=props.card;
+  var _f=useState({tipo:'semanal',inicio:'',fim:'',nome:''});var f=_f[0],setF=_f[1];
+  var _er=useState('');var err=_er[0],setErr=_er[1];
+  function setIni(v){
+    var fim=f.fim;
+    if(v&&f.tipo==='semanal'){var d=new Date(v+'T12:00:00');d.setDate(d.getDate()+6);fim=d.toISOString().slice(0,10);}
+    else if(v&&f.tipo==='mensal'){var d2=new Date(v+'T12:00:00');var u=new Date(d2.getFullYear(),d2.getMonth()+1,0,12);fim=u.toISOString().slice(0,10);}
+    setF(Object.assign({},f,{inicio:v,fim:fim}));
+  }
+  function criar(){
+    if(!f.inicio||!f.fim){setErr('Informe as datas de abertura e de fechamento.');return;}
+    if(f.fim<f.inicio){setErr('A data de fechamento não pode ser antes da abertura.');return;}
+    var choque=props.pers.filter(function(p){return !(f.fim<p.inicio||f.inicio>p.fim);})[0];
+    if(choque){setErr('Esse período coincide com "'+(choque.nome||'')+'" ('+_ubsFmtDia(choque.inicio)+' a '+_ubsFmtDia(choque.fim)+').');return;}
+    var nome=(f.nome||'').trim()||((f.tipo==='semanal'?'Semana ':'Mês ')+_ubsFmtDia(f.inicio)+' a '+_ubsFmtDia(f.fim));
+    db.collection('ubs_periodos').add({tipo:f.tipo,nome:nome,inicio:f.inicio,fim:f.fim,tenant_id:props.tenant,criadoEm:new Date().toISOString()}).then(function(){setF({tipo:f.tipo,inicio:'',fim:'',nome:''});setErr('');props.flash('Período criado.');}).catch(function(e){setErr('Erro: '+((e&&e.message)||''));});
+  }
+  function apagar(p){if(!window.confirm('Apagar o período "'+p.nome+'"? As solicitações já enviadas continuam salvas.'))return;db.collection('ubs_periodos').doc(p.id).delete().catch(function(e){window.alert('Não foi possível apagar: '+((e&&e.message)||''));});}
+  var hoje=_ubsHoje();
+  return(<div>
+    {props.ehAdm&&<div style={card}>
+      <div style={{fontWeight:800,marginBottom:8}}>Novo período de solicitação</div>
+      <div style={{display:'flex',gap:8,marginBottom:8}}>{[['semanal','Semanal'],['mensal','Mensal']].map(function(t){return <button key={t[0]} onClick={function(){setF(Object.assign({},f,{tipo:t[0],fim:''}));}} style={{flex:1,padding:'9px',borderRadius:10,border:'1.5px solid '+(f.tipo===t[0]?'#1351B4':'#E2E8F0'),background:f.tipo===t[0]?'#EEF3FB':'#fff',color:f.tipo===t[0]?'#1351B4':'#64748B',fontWeight:700,cursor:'pointer'}}>{t[1]}</button>;})}</div>
+      <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+        <div style={{flex:'1 1 140px'}}><div style={{fontSize:11.5,fontWeight:700,color:'#64748B'}}>Abre em</div><input className="inp" type="date" data-ubs="per-ini" value={f.inicio} onChange={function(e){setIni(e.target.value);}}/></div>
+        <div style={{flex:'1 1 140px'}}><div style={{fontSize:11.5,fontWeight:700,color:'#64748B'}}>Fecha em (inclusive)</div><input className="inp" type="date" data-ubs="per-fim" value={f.fim} onChange={function(e){setF(Object.assign({},f,{fim:e.target.value}));}}/></div>
+      </div>
+      <input className="inp" placeholder="Nome (opcional, ex.: Semana 46)" value={f.nome} onChange={function(e){setF(Object.assign({},f,{nome:e.target.value}));}}/>
+      {err&&<div style={{background:'#FDECEA',color:'#C2362D',borderRadius:10,padding:'9px 12px',fontSize:13,marginBottom:8}}>{err}</div>}
+      <button data-ubs="criar-periodo" onClick={criar} style={{padding:'11px 16px',borderRadius:10,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,cursor:'pointer'}}>Criar período</button>
+    </div>}
+    {!props.ehAdm&&<div style={Object.assign({},card,{fontSize:13,color:'#64748B'})}>Só gestor ou técnico cria períodos.</div>}
+    {pers.map(function(p){var aberto=p.inicio<=hoje&&hoje<=p.fim;return(<div key={p.id} style={Object.assign({},card,{display:'flex',alignItems:'center',gap:10})}>
+      <div style={{flex:1}}><div style={{fontWeight:800}}>{p.nome}</div><div style={{fontSize:12.5,color:'#64748B'}}>{_ubsFmtDia(p.inicio)} a {_ubsFmtDia(p.fim)} · {p.tipo==='mensal'?'mensal':'semanal'}</div></div>
+      <span style={{fontSize:11.5,fontWeight:700,borderRadius:99,padding:'3px 10px',background:aberto?'#E2F6EF':(p.inicio>hoje?'#EEF3FB':'#F1F5F9'),color:aberto?'#0B7A5F':(p.inicio>hoje?'#1351B4':'#64748B')}}>{aberto?'Aberto':(p.inicio>hoje?'Programado':'Encerrado')}</span>
+      {props.ehAdm&&<button onClick={function(){apagar(p);}} style={{border:'none',background:'none',color:'#C2362D',fontWeight:700,fontSize:12,cursor:'pointer'}}>Apagar</button>}
+    </div>);})}
+  </div>);
+}
+function UbsDetalhe(props){
+  var sol=props.sol,entries=props.entries,user=props.user;
+  var _it=useState(function(){var o={};(sol.itens||[]).forEach(function(i){o[i.id]={ap:(i.qtdAprovada!=null&&sol.status!=='enviada')?String(i.qtdAprovada):String(i.qtdSolicitada),obs:i.obsFarm||'',medId:i.medId||''};});return o;});var edit=_it[0],setEdit=_it[1];
+  var _o=useState(sol.obsFarm||'');var obsGeral=_o[0],setObsGeral=_o[1];
+  var _er=useState('');var err=_er[0],setErr=_er[1];
+  var _bu=useState(false);var busy=_bu[0],setBusy=_bu[1];
+  var _sp=useState({});var sep=_sp[0],setSep=_sp[1];
+  var _md=useState('');var modo=_md[0],setModo=_md[1];
+  var _jus=useState('');var jus=_jus[0],setJus=_jus[1];
+    var separavel=props.podeSeparar&&(sol.status==='aprovada'||sol.status==='parcial');
+  function medDe(id){return props.meds.filter(function(m){return m.id===id;})[0];}
+  function setCampo(id,c,v){var n=Object.assign({},edit);n[id]=Object.assign({},n[id],{[c]:v});setEdit(n);}
+  function novoHist(acao,obs){return (sol.historico||[]).concat([{em:new Date().toISOString(),acao:acao,por:user.name,obs:obs||''}]);}
+  function salvarDecisao(acao){
+    setErr('');
+    var itens=(sol.itens||[]).map(function(i){
+      var e=edit[i.id]||{};var ap=parseInt(e.ap,10);
+      return Object.assign({},i,{medId:e.medId||'',nome:e.medId&&!i.medId?(medDe(e.medId)||{nome:i.nome}).nome:i.nome,qtdAprovada:acao==='aprovada'?(isNaN(ap)||ap<0?0:ap):i.qtdAprovada,obsFarm:(e.obs||'').trim()});
+    });
+    var ajustou=itens.some(function(i){return acao==='aprovada'&&i.qtdAprovada!==i.qtdSolicitada;});
+    if(acao==='aprovada'){
+      var inval=(sol.itens||[]).some(function(i){var ap=parseInt((edit[i.id]||{}).ap,10);return isNaN(ap)||ap<0;});
+      if(inval){setErr('Informe a quantidade aprovada de todos os itens (pode ser 0).');return;}
+      var semMat=itens.filter(function(i){return i.qtdAprovada>0&&!i.medId;});
+      if(semMat.length){setErr('"'+semMat[0].nome+'" não está no estoque. Vincule a um produto cadastrado ou aprove 0.');return;}
+      var passou=itens.filter(function(i){return i.medId&&i.qtdAprovada>_ubsDisp(entries,i.medId).total;});
+      if(passou.length&&!window.confirm('Estoque insuficiente para '+passou.map(function(i){return i.nome;}).join(', ')+'. Aprovar mesmo assim? A separação só poderá usar o que existir em estoque.'))return;
+      if(ajustou&&!obsGeral.trim()){setErr('Você ajustou quantidades: escreva uma observação para a UBS.');return;}
+    }
+    if(acao==='devolvida'&&!obsGeral.trim()){setErr('Escreva o que a UBS precisa corrigir.');return;}
+    if(acao==='cancelada'&&!jus.trim()){setErr('Informe a justificativa do cancelamento.');return;}
+    var obs=acao==='cancelada'?jus.trim():obsGeral.trim();
+    setBusy(true);
+    db.collection('ubs_solicitacoes').doc(sol.id).update({itens:itens,status:acao,obsFarm:obs,historico:novoHist(acao,obs),atualizadoEm:new Date().toISOString(),analisadoPor:user.name}).then(function(){setBusy(false);props.flash('Solicitação '+(acao==='aprovada'?'aprovada':acao==='devolvida'?'devolvida':'cancelada')+'.');props.onClose();}).catch(function(e){setBusy(false);setErr('Erro: '+((e&&e.message)||''));});
+  }
+  function separar(){
+    setErr('');
+    var movimentos=[],itens=(sol.itens||[]).map(function(i){return Object.assign({},i);}),qualquer=false,problema='';
+    itens.forEach(function(i){
+      var s=sep[i.id]||{};var q=parseInt(s.q,10);if(!q||q<=0)return;
+      var pend=(i.qtdAprovada||0)-(i.qtdSeparada||0);
+      if(!i.medId){problema=problema||'"'+i.nome+'" não está vinculado a um produto do estoque.';return;}
+      if(q>pend){problema=problema||'Quantidade de "'+i.nome+'" maior que a aprovada/pendente ('+pend+').';return;}
+      var disp=_ubsDisp(entries,i.medId);
+      if(q>disp.total){problema=problema||'Saldo insuficiente de "'+i.nome+'" (disponível: '+disp.total+').';return;}
+      var pl=_ubsPlano(disp,q,s.lote||'');
+      if(pl.falta>0){problema=problema||(s.lote?'O lote escolhido de "'+i.nome+'" não tem saldo suficiente.':'Os lotes válidos de "'+i.nome+'" não cobrem a quantidade (há lotes vencidos ou sem validade).');return;}
+      movimentos.push({item:i,partes:pl.partes,q:q});qualquer=true;
+    });
+    if(problema){setErr(problema);return;}
+    if(!qualquer){setErr('Informe a quantidade a separar em pelo menos um item.');return;}
+    setBusy(true);
+    var agora=new Date().toISOString();var registros=[];
+    var p=Promise.resolve();
+    movimentos.forEach(function(m){
+      var lotesReg=[];
+      m.partes.forEach(function(pt){p=p.then(function(){
+        return db.collection('entries').add({medicamentoId:m.item.medId,medicamentoNome:m.item.nome,tipo:'saida',quantidade:pt.qty,lote:pt.lote,validade:pt.validade,destino:'ubs',destinoNome:'UBS',ubsNome:sol.ubsNome,observacao:'Solicitação UBS '+sol.protocolo,solicitacaoUbs:sol.protocolo,autorNome:user.name,autorId:user.uid||'',criadoEm:new Date().toISOString(),tenant_id:sol.tenant_id}).then(function(r){lotesReg.push({lote:pt.lote,validade:pt.validade,qty:pt.qty,entryId:r.id});});
+      });});
+      p=p.then(function(){registros.push({id:'s'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),itemId:m.item.id,medId:m.item.medId,nome:m.item.nome,qtd:m.q,lotes:lotesReg,por:user.name,em:agora,estornada:false});m.item.qtdSeparada=(m.item.qtdSeparada||0)+m.q;});
+    });
+    p.then(function(){
+      var tudo=itens.filter(function(i){return (i.qtdAprovada||0)>0;}).every(function(i){return (i.qtdSeparada||0)>=i.qtdAprovada;});
+      var st=tudo?'separada':'parcial';
+      var resumo=movimentos.map(function(m){return m.q+'x '+m.item.nome;}).join(', ');
+      return db.collection('ubs_solicitacoes').doc(sol.id).update({itens:itens,status:st,separacoes:(sol.separacoes||[]).concat(registros),historico:novoHist(st,resumo),atualizadoEm:new Date().toISOString()});
+    }).then(function(){setBusy(false);props.flash('Separação registrada e estoque baixado.');props.onClose();}).catch(function(e){setBusy(false);setErr('Algo falhou no meio: '+((e&&e.message)||'')+'. Confira o histórico de saídas antes de repetir.');});
+  }
+  function estornar(reg){
+    if(!jus.trim()){setErr('Informe a justificativa do estorno.');return;}
+    setBusy(true);var p=Promise.resolve();
+    reg.lotes.forEach(function(l){p=p.then(function(){return db.collection('entries').add({medicamentoId:reg.medId,medicamentoNome:reg.nome,tipo:'entrada',quantidade:l.qty,lote:l.lote,validade:l.validade,observacao:'ESTORNO solicitação UBS '+sol.protocolo+': '+jus.trim(),estornoUbs:sol.protocolo,autorNome:user.name,autorId:user.uid||'',criadoEm:new Date().toISOString(),tenant_id:sol.tenant_id});});});
+    p.then(function(){
+      var seps=(sol.separacoes||[]).map(function(s){return s.id===reg.id?Object.assign({},s,{estornada:true,estornoEm:new Date().toISOString(),estornoPor:user.name,estornoMotivo:jus.trim()}):s;});
+      var itens=(sol.itens||[]).map(function(i){return i.id===reg.itemId?Object.assign({},i,{qtdSeparada:Math.max(0,(i.qtdSeparada||0)-reg.qtd)}):i;});
+      var tudo=itens.filter(function(i){return (i.qtdAprovada||0)>0;}).every(function(i){return (i.qtdSeparada||0)>=i.qtdAprovada;});
+      var algum=itens.some(function(i){return (i.qtdSeparada||0)>0;});
+      return db.collection('ubs_solicitacoes').doc(sol.id).update({itens:itens,separacoes:seps,status:tudo?'separada':(algum?'parcial':'aprovada'),historico:novoHist('estorno',reg.qtd+'x '+reg.nome+': '+jus.trim()),atualizadoEm:new Date().toISOString()});
+    }).then(function(){setBusy(false);props.flash('Estorno registrado; estoque devolvido.');props.onClose();}).catch(function(e){setBusy(false);setErr('Erro no estorno: '+((e&&e.message)||''));});
+  }
+  function encerrar(){
+    if(!jus.trim()){setErr('Informe por que a separação está sendo encerrada com pendências.');return;}
+    db.collection('ubs_solicitacoes').doc(sol.id).update({status:'separada',historico:novoHist('separada','Encerrada com pendências: '+jus.trim()),atualizadoEm:new Date().toISOString()}).then(function(){props.flash('Solicitação encerrada.');props.onClose();});
+  }
+  var lbl={fontSize:11.5,fontWeight:700,color:'#64748B'};
+  var mostraAprov=['aprovada','parcial','separada'].indexOf(sol.status)>=0;
+  var decidindo=props.podeAnalisar&&sol.status==='enviada';
+  return(<div data-ubs="detalhe">
+    <div style={{display:'flex',alignItems:'flex-start',gap:8,marginBottom:6}}><div style={{flex:1}}><div style={{fontWeight:800,fontSize:18}}>{sol.ubsNome}</div><div style={{fontSize:12.5,color:'#64748B'}}>{sol.protocolo} · {sol.periodoNome||''} · enviada por {sol.enfermeira} em {fmtD(sol.criadoEm)} {fmtT(sol.criadoEm)}</div></div><UbsChip st={sol.status}/></div>
+    {sol.obs&&<div style={{background:'#F8FAFC',borderRadius:10,padding:'8px 12px',fontSize:13,margin:'8px 0'}}><b>Obs. da UBS:</b> {sol.obs}</div>}
+    {sol.obsFarm&&sol.status!=='enviada'&&<div style={{background:'#FFF3DC',borderRadius:10,padding:'8px 12px',fontSize:13,margin:'8px 0'}}><b>Obs. da farmácia:</b> {sol.obsFarm}</div>}
+    {(sol.itens||[]).map(function(i){
+      var e=edit[i.id]||{};var disp=i.medId||e.medId?_ubsDisp(entries,i.medId||e.medId):null;
+      var ap=decidindo?parseInt(e.ap,10):(i.qtdAprovada||0);
+      var insuf=disp&&(decidindo?ap:Math.max(0,(i.qtdAprovada||0)-(i.qtdSeparada||0)))>disp.total;
+      var pend=Math.max(0,(i.qtdAprovada||0)-(i.qtdSeparada||0));
+      return(<div key={i.id} data-ubs={'item-'+i.id} style={{border:'1px solid '+(i.foraDaLista&&!i.medId?'#FCD34D':'#E2E8F0'),background:i.foraDaLista&&!i.medId?'#FFFBEB':'#fff',borderRadius:12,padding:'10px 12px',marginTop:8}}>
+        <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}><div style={{fontWeight:700,flex:'1 1 180px'}}>{i.nome}</div>{i.foraDaLista&&<span style={{background:'#FFF3DC',color:'#B26A00',fontWeight:700,fontSize:11,borderRadius:99,padding:'3px 9px'}}>FORA DA LISTA</span>}</div>
+        {i.foraDaLista&&<div style={{fontSize:12.5,color:'#92400E',margin:'4px 0'}}>Justificativa da UBS: {i.justificativa}</div>}
+        {i.obs&&<div style={{fontSize:12.5,color:'#64748B'}}>Obs.: {i.obs}</div>}
+        <div style={{display:'flex',gap:14,flexWrap:'wrap',fontSize:13,margin:'6px 0'}}>
+          <span><span style={lbl}>PEDIDO </span><b>{i.qtdSolicitada}</b></span>
+          {disp&&<span><span style={lbl}>EM ESTOQUE </span><b style={{color:disp.total<i.qtdSolicitada?'#C2362D':'#0B7A5F'}}>{disp.total}</b></span>}
+          {mostraAprov&&<span><span style={lbl}>APROVADO </span><b>{i.qtdAprovada}</b></span>}
+          {mostraAprov&&<span><span style={lbl}>SEPARADO </span><b>{i.qtdSeparada||0}</b></span>}
+          {mostraAprov&&<span><span style={lbl}>PENDENTE </span><b>{pend}</b></span>}
+        </div>
+        {insuf&&<div style={{background:'#FDECEA',color:'#C2362D',fontSize:12.5,fontWeight:700,borderRadius:8,padding:'6px 10px',marginBottom:6}}>Estoque insuficiente: {disp.total} disponível(is) para {decidindo?ap:pend}.</div>}
+        {decidindo&&<div>
+          {i.foraDaLista&&<div style={{marginBottom:6}}><div style={lbl}>Vincular a um produto do estoque (só se for atender)</div>
+            <select className="inp" data-ubs={'vinc-'+i.id} value={e.medId||''} onChange={function(ev){setCampo(i.id,'medId',ev.target.value);}} style={{marginBottom:0}}><option value="">Não cadastrado (não atender)</option>{props.meds.filter(function(m){return !m.inativo;}).sort(function(a,b){return a.nome.localeCompare(b.nome);}).map(function(m){return <option key={m.id} value={m.id}>{m.nome}</option>;})}</select>
+            <div style={{fontSize:11.5,color:'#64748B',marginTop:3}}>Produto novo? Cadastre antes em Estoque. Nada entra no estoque automaticamente.</div></div>}
+          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+            <div style={{width:110}}><div style={lbl}>Qtd. aprovada</div><input className="inp" type="number" min="0" data-ubs={'ap-'+i.id} value={e.ap} onChange={function(ev){setCampo(i.id,'ap',ev.target.value);}} style={{marginBottom:0}}/></div>
+            <div style={{flex:1,minWidth:150}}><div style={lbl}>Observação do item</div><input className="inp" value={e.obs} onChange={function(ev){setCampo(i.id,'obs',ev.target.value);}} style={{marginBottom:0}}/></div>
+          </div></div>}
+        {separavel&&pend>0&&i.medId&&(function(){var s=sep[i.id]||{};return(<div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:4}}>
+          <div style={{width:110}}><div style={lbl}>Separar agora</div><input className="inp" type="number" min="0" max={pend} data-ubs={'sep-'+i.id} value={s.q||''} onChange={function(ev){var n=Object.assign({},sep);n[i.id]=Object.assign({},s,{q:ev.target.value});setSep(n);}} style={{marginBottom:0}}/></div>
+          <div style={{flex:1,minWidth:170}}><div style={lbl}>Lote</div><select className="inp" value={s.lote||''} onChange={function(ev){var n=Object.assign({},sep);n[i.id]=Object.assign({},s,{lote:ev.target.value});setSep(n);}} style={{marginBottom:0}}><option value="">Automático (vence primeiro)</option>{disp.lotes.map(function(l){return <option key={l.lote} value={l.lote} disabled={l.vencido}>{l.lote} · val {l.validade||'—'} · {l.qty} un.{l.vencido?' · VENCIDO':''}</option>;})}</select></div>
+          <button type="button" onClick={function(){var n=Object.assign({},sep);n[i.id]=Object.assign({},s,{q:String(Math.min(pend,disp.total))});setSep(n);}} style={{alignSelf:'flex-end',padding:'10px 12px',borderRadius:10,border:'1px solid #CBD5E1',background:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>Tudo</button>
+        </div>);})()}
+      </div>);
+    })}
+    {decidindo&&<div style={{marginTop:10}}><div style={lbl}>Observação para a UBS (obrigatória se ajustar quantidades ou devolver)</div><textarea className="inp" data-ubs="obs-geral" value={obsGeral} onChange={function(e){setObsGeral(e.target.value);}} style={{minHeight:64}}/></div>}
+    {modo&&<div><div style={lbl}>Justificativa</div><textarea className="inp" data-ubs="justificativa" value={jus} onChange={function(e){setJus(e.target.value);}} style={{minHeight:56}}/></div>}
+    {(sol.separacoes||[]).length>0&&<div style={{marginTop:12}}><div style={{fontWeight:800,fontSize:13,marginBottom:4}}>Separações registradas</div>
+      {(sol.separacoes||[]).map(function(r){return(<div key={r.id} style={{display:'flex',gap:8,alignItems:'center',fontSize:12.5,padding:'6px 0',borderTop:'1px solid #F1F5F9',flexWrap:'wrap',opacity:r.estornada?.5:1}}>
+        <div style={{flex:1,minWidth:180}}><b>{r.qtd}x {r.nome}</b> · {(r.lotes||[]).map(function(l){return (l.lote||'sem lote')+' ('+l.qty+')';}).join(', ')}<div style={{color:'#64748B'}}>{r.por} · {fmtD(r.em)} {fmtT(r.em)}{r.estornada?' · ESTORNADA: '+(r.estornoMotivo||''):''}</div></div>
+        {!r.estornada&&props.podeAnalisar&&<button data-ubs={'estornar-'+r.id} onClick={function(){if(modo==='estorno:'+r.id){estornar(r);}else{setModo('estorno:'+r.id);setErr('Informe a justificativa do estorno e toque em Estornar de novo.');}}} style={{padding:'6px 10px',borderRadius:8,border:'1px solid #FCA5A5',background:'#FEF2F2',color:'#B91C1C',fontWeight:700,fontSize:12,cursor:'pointer'}}>{modo==='estorno:'+r.id?'Confirmar estorno':'Estornar'}</button>}
+      </div>);})}</div>}
+    {(sol.historico||[]).length>0&&<details style={{marginTop:10,fontSize:12.5,color:'#64748B'}}><summary style={{cursor:'pointer',fontWeight:700}}>Histórico</summary>{(sol.historico||[]).map(function(h,k){return <div key={k} style={{marginTop:4}}>{fmtD(h.em)} {fmtT(h.em)} · {h.acao}{h.por?' · '+h.por:''}{h.obs?': '+h.obs:''}</div>;})}</details>}
+    {err&&<div data-ubs="erro" style={{background:'#FDECEA',color:'#C2362D',borderRadius:10,padding:'9px 12px',fontSize:13,marginTop:10}}>{err}</div>}
+    <div style={{display:'flex',gap:8,marginTop:14,flexWrap:'wrap'}}>
+      {decidindo&&<button disabled={busy} data-ubs="aprovar" onClick={function(){salvarDecisao('aprovada');}} style={{flex:'1 1 120px',padding:'12px',borderRadius:10,border:'none',background:'#0B7A5F',color:'#fff',fontWeight:700,cursor:'pointer'}}>Aprovar</button>}
+      {decidindo&&<button disabled={busy} data-ubs="devolver" onClick={function(){salvarDecisao('devolvida');}} style={{flex:'1 1 120px',padding:'12px',borderRadius:10,border:'none',background:'#B26A00',color:'#fff',fontWeight:700,cursor:'pointer'}}>Devolver p/ correção</button>}
+      {separavel&&<button disabled={busy} data-ubs="separar" onClick={separar} style={{flex:'1 1 140px',padding:'12px',borderRadius:10,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,cursor:'pointer'}}>Registrar separação</button>}
+      {separavel&&props.podeAnalisar&&<button data-ubs="encerrar" onClick={function(){if(modo==='encerrar')encerrar();else{setModo('encerrar');setErr('Informe a justificativa e toque em Encerrar de novo.');}}} style={{padding:'12px 14px',borderRadius:10,border:'1px solid #CBD5E1',background:'#fff',fontWeight:700,cursor:'pointer'}}>{modo==='encerrar'?'Confirmar encerramento':'Encerrar com pendências'}</button>}
+      {props.podeAnalisar&&['enviada','devolvida','aprovada'].indexOf(sol.status)>=0&&<button data-ubs="cancelar" onClick={function(){if(modo==='cancelar')salvarDecisao('cancelada');else{setModo('cancelar');setErr('Informe a justificativa e toque em Cancelar de novo.');}}} style={{padding:'12px 14px',borderRadius:10,border:'1px solid #FCA5A5',background:'#FEF2F2',color:'#B91C1C',fontWeight:700,cursor:'pointer'}}>{modo==='cancelar'?'Confirmar cancelamento':'Cancelar solicitação'}</button>}
+      <button onClick={props.onClose} style={{padding:'12px 14px',borderRadius:10,border:'1px solid #CBD5E1',background:'#fff',fontWeight:700,cursor:'pointer'}}>Fechar</button>
+    </div>
+  </div>);
+}
+function UbsRelatorios(props){
+  var sols=props.sols,card=props.card;
+  var _a=useState('');var de=_a[0],setDe=_a[1];
+  var _b=useState('');var ate=_b[0],setAte=_b[1];
+  var _c=useState('todas');var ubsSel=_c[0],setUbsSel=_c[1];
+  var validas=sols.filter(function(s){return s.status!=='cancelada'&&(!de||s.periodoFim>=de)&&(!ate||s.periodoInicio<=ate)&&(ubsSel==='todas'||s.ubsId===ubsSel);});
+  function agrega(chave){
+    var m={};
+    validas.forEach(function(s){(s.itens||[]).forEach(function(i){
+      var k=chave(s,i);var o=m[k]||(m[k]={chave:k,sol:0,apr:0,sep:0,pend:0});
+      o.sol+=i.qtdSolicitada||0;
+      if(['aprovada','parcial','separada'].indexOf(s.status)>=0){o.apr+=i.qtdAprovada||0;o.sep+=i.qtdSeparada||0;o.pend+=Math.max(0,(i.qtdAprovada||0)-(i.qtdSeparada||0));}
+    });});
+    return Object.keys(m).map(function(k){return m[k];});
+  }
+  var porUbs=agrega(function(s){return s.ubsNome;}).sort(function(a,b){return a.chave.localeCompare(b.chave);});
+  var porMat=agrega(function(s,i){return i.nome;}).sort(function(a,b){return b.sol-a.sol;});
+  var porPer=agrega(function(s){return s.periodoInicio+'|'+(s.periodoNome||'');}).sort(function(a,b){return b.chave.localeCompare(a.chave);}).map(function(o){return Object.assign({},o,{chave:o.chave.split('|')[1]||_ubsFmtDia(o.chave.split('|')[0])});});
+  var tot=porUbs.reduce(function(t,o){return {sol:t.sol+o.sol,apr:t.apr+o.apr,sep:t.sep+o.sep,pend:t.pend+o.pend};},{sol:0,apr:0,sep:0,pend:0});
+  var cab=['Solicitado','Aprovado','Separado','Pendente'];
+  function tabela(titulo,lista,rotulo){
+    return(<div style={card}><div style={{fontWeight:800,marginBottom:6}}>{titulo}</div><div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}><thead><tr><th style={{textAlign:'left',padding:'5px 4px',color:'#64748B'}}>{rotulo}</th>{cab.map(function(c){return <th key={c} style={{textAlign:'right',padding:'5px 4px',color:'#64748B'}}>{c}</th>;})}</tr></thead><tbody>
+      {lista.map(function(o){return <tr key={o.chave} style={{borderTop:'1px solid #F1F5F9'}}><td style={{padding:'6px 4px'}}>{o.chave}</td><td style={{textAlign:'right'}}>{o.sol}</td><td style={{textAlign:'right'}}>{o.apr}</td><td style={{textAlign:'right'}}>{o.sep}</td><td style={{textAlign:'right'}}>{o.pend}</td></tr>;})}
+      {lista.length===0&&<tr><td colSpan="5" style={{padding:10,color:'#94A3B8'}}>Sem dados no filtro.</td></tr>}</tbody></table></div></div>);
+  }
+  function linhas(){
+    var r=[['Relatório de solicitações das UBS'],['Filtro',(de?_ubsFmtDia(de):'início')+' a '+(ate?_ubsFmtDia(ate):'hoje'),ubsSel==='todas'?'Todas as UBS':(props.ubsL.filter(function(u){return u.id===ubsSel;})[0]||{}).nome],[]];
+    [['Consolidado por UBS',porUbs,'UBS'],['Materiais mais solicitados',porMat,'Material'],['Histórico por período',porPer,'Período']].forEach(function(t){r.push([t[0]]);r.push([t[2]].concat(cab));t[1].forEach(function(o){r.push([o.chave,o.sol,o.apr,o.sep,o.pend]);});if(t[0]==='Consolidado por UBS')r.push(['TOTAL',tot.sol,tot.apr,tot.sep,tot.pend]);r.push([]);});
+    return r;
+  }
+  function excel(){var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(linhas()),'Solicitacoes UBS');XLSX.writeFile(wb,'solicitacoes_ubs_'+todayStr()+'.xlsx');}
+  function pdf(){
+    function th(t,r){return '<h2>'+_escHtml(t)+'</h2><table><tr><th style="text-align:left">'+_escHtml(r)+'</th>'+cab.map(function(c){return '<th>'+c+'</th>';}).join('')+'</tr>';}
+    function bloco(t,l,r){return th(t,r)+l.map(function(o){return '<tr><td>'+_escHtml(o.chave)+'</td><td>'+o.sol+'</td><td>'+o.apr+'</td><td>'+o.sep+'</td><td>'+o.pend+'</td></tr>';}).join('')+'</table>';}
+    var h='<html><head><meta charset="utf-8"><title>Solicitações das UBS</title><style>body{font-family:Arial,sans-serif;padding:24px;color:#0B1736}h1{font-size:20px}h2{font-size:15px;margin:20px 0 6px}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border-bottom:1px solid #ddd;padding:5px 4px;text-align:right}td:first-child{text-align:left}</style></head><body><h1>Solicitações das UBS</h1><p>Período: '+(de?_ubsFmtDia(de):'início')+' a '+(ate?_ubsFmtDia(ate):'hoje')+' · Gerado em '+new Date().toLocaleString('pt-BR')+'</p>'+bloco('Consolidado por UBS',porUbs,'UBS')+'<p><b>Total:</b> solicitado '+tot.sol+' · aprovado '+tot.apr+' · separado '+tot.sep+' · pendente '+tot.pend+'</p>'+bloco('Materiais mais solicitados',porMat.slice(0,30),'Material')+bloco('Histórico por período',porPer,'Período')+'</body></html>';
+    _imprimirDoc(h);
+  }
+  return(<div>
+    <div style={card}><div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'flex-end'}}>
+      <div style={{flex:'1 1 130px'}}><div style={{fontSize:11.5,fontWeight:700,color:'#64748B'}}>Períodos a partir de</div><input className="inp" type="date" value={de} onChange={function(e){setDe(e.target.value);}} style={{marginBottom:0}}/></div>
+      <div style={{flex:'1 1 130px'}}><div style={{fontSize:11.5,fontWeight:700,color:'#64748B'}}>até</div><input className="inp" type="date" value={ate} onChange={function(e){setAte(e.target.value);}} style={{marginBottom:0}}/></div>
+      <div style={{flex:'1 1 150px'}}><div style={{fontSize:11.5,fontWeight:700,color:'#64748B'}}>UBS</div><select className="inp" value={ubsSel} onChange={function(e){setUbsSel(e.target.value);}} style={{marginBottom:0}}><option value="todas">Todas (consolidado)</option>{props.ubsL.map(function(u){return <option key={u.id} value={u.id}>{u.nome}</option>;})}</select></div>
+    </div>
+    <div style={{display:'flex',gap:8,marginTop:10}}><button data-ubs="rel-pdf" onClick={pdf} style={{padding:'10px 14px',borderRadius:10,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,cursor:'pointer'}}>Exportar PDF</button><button data-ubs="rel-xlsx" onClick={excel} style={{padding:'10px 14px',borderRadius:10,border:'1px solid #1351B4',background:'#fff',color:'#1351B4',fontWeight:700,cursor:'pointer'}}>Exportar Excel</button></div>
+    <div style={{fontSize:12,color:'#64748B',marginTop:8}}>Total no filtro: solicitado <b>{tot.sol}</b> · aprovado <b>{tot.apr}</b> · separado <b>{tot.sep}</b> · pendente <b>{tot.pend}</b>. Canceladas não entram.</div></div>
+    {tabela('Por UBS',porUbs,'UBS')}{tabela('Materiais mais solicitados',porMat.slice(0,30),'Material')}{tabela('Histórico por período',porPer,'Período')}
+  </div>);
+}
 function TabAjuda(props){
   var user=props.user;var onIr=props.onIr;
   var _q=useState('');var q=_q[0],setQ=_q[1];
@@ -13012,7 +13396,7 @@ function menuIconName(id){
   var m={dashboard:'home',saida:'pill',recebimento:'truck',antibiotico:'vial',pedidosjudiciais:'scale',
     visaogeral:'trendUp',comparapedido:'search',estoque:'package',pacientes:'lock',conferencia:'clipboard',
     leites:'droplet',saidasreg:'edit',relatorio:'barChart',gestao:'users',log:'lock',histnotas:'folder',previsao:'clipboard',
-    histcontas:'clipboard',admin:'gear',superadmin:'gear',perfil:'users',ajuda:'help'};
+    histcontas:'clipboard',admin:'gear',superadmin:'gear',perfil:'users',ajuda:'help',ubs:'package'};
   return m[id]||'folder';
 }
 // Para gestor/técnico em Itaquitinga, o slot de maior destaque da navegação (sempre visível) troca
@@ -13117,6 +13501,7 @@ return(
         {tab==='recebimento'&&<ErrBoundary><TabRecebimento user={user} medications={meds} onSave={addEntry} stock={stock}/></ErrBoundary>}
         {tab==='pacientes'&&temModulo(user,'controlados')&&<ErrBoundary><TabPacientes user={user} entries={entries} onSave={addEntryStable} confirm2={confirm2} alert2={alert2}/></ErrBoundary>}
         {tab==='leites'&&<ErrBoundary><TabLeites user={user} medications={meds} stock={stock} onSave={addEntry} confirm2={confirm2} alert2={alert2}/></ErrBoundary>}
+        {tab==='ubs'&&temModulo(user,'ubsSolicitacoes')&&<ErrBoundary><TabUbs user={user} entries={entries} medications={meds}/></ErrBoundary>}
         {tab==='ajuda'&&<ErrBoundary><TabAjuda user={user} onIr={function(t){setTab(t);}}/></ErrBoundary>}
         {tab==='superadmin'&&user.isSuper&&<ErrBoundary><TabSuperAdmin user={user}/></ErrBoundary>}
         {tab==='admin'&&user.role==='tecnico'&&<TabAdmin user={user} entries={entries} medications={meds} db={db}/>}
@@ -13180,6 +13565,7 @@ return(
               {id:'conferencia',icon:'🧾',label:'Conferência',show:true},
               {id:'leites',icon:'🍼',label:'Leites',show:true},
               {id:'saidasreg',icon:'🧾',label:'Saídas registradas',show:true},
+              {id:'ubs',icon:'🏥',label:'Solicitações das UBS',show:temModulo(user,'ubsSolicitacoes')&&['gestor','tecnico','farmaceutico','auxiliar'].indexOf(user.role)>=0},
               {id:'relatorio',icon:'📊',label:'Relatório',show:true},
               {id:'gestao',icon:'👥',label:'Gestão',badge:badge,show:can(user.role,'gestao')},
               {id:'log',icon:'🔐',label:'Log de Acesso',show:can(user.role,'log')},
