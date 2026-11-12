@@ -7089,7 +7089,7 @@ function TabUbs(props){
   var link='https://www.farmacontrol.app.br/ubs/?m='+encodeURIComponent(tenant);
   var card={background:'#fff',borderRadius:14,border:'1px solid #E2E8F0',padding:'14px 16px',marginBottom:10};
   function flash(t){setMsg(t);setTimeout(function(){setMsg('');},4000);}
-  var abas=[['sol','Solicitações'],['ubs','UBS'],['per','Períodos'],['rel','Relatórios']];
+  var abas=[['sol','Solicitações'],['ubs','UBS'],['per','Períodos'],['rel','Relatórios']].concat(ehAdm?[['lim','Limpeza']]:[]);
   var abertaAtual=aberta?(sols.filter(function(s){return s.id===aberta;})[0]||null):null;
   return(<div style={{maxWidth:820,margin:'0 auto',padding:'16px 14px 90px'}}>
     <div style={{fontSize:20,fontWeight:800,color:'#1E293B'}}>Solicitações das UBS</div>
@@ -7102,9 +7102,10 @@ function TabUbs(props){
     <div style={{display:'flex',gap:6,marginBottom:12,overflowX:'auto'}}>
       {abas.map(function(a){return <button key={a[0]} data-ubs={'aba-'+a[0]} onClick={function(){setSub(a[0]);}} style={{padding:'9px 14px',borderRadius:99,border:'1.5px solid '+(sub===a[0]?'#1351B4':'#E2E8F0'),background:sub===a[0]?'#1351B4':'#fff',color:sub===a[0]?'#fff':'#475569',fontWeight:700,fontSize:13,cursor:'pointer',whiteSpace:'nowrap'}}>{a[1]}</button>;})}
     </div>
-    {sub==='sol'&&<UbsLista user={user} sols={solsOrd} ubsL={ubsL} perAtual={perAtual} envios={envios} entries={entries} onAbrir={setAberta} podeLiberar={role==='gestor'} flash={flash} tenant={tenant} card={card}/>}
+    {sub==='sol'&&<UbsLista user={user} sols={solsOrd} ubsL={ubsL} perAtual={perAtual} envios={envios} entries={entries} onAbrir={setAberta} podeLiberar={ehAdm} flash={flash} tenant={tenant} card={card}/>}
     {sub==='ubs'&&<UbsCadastro user={user} ubsL={ubsL} meds={meds} podeGerir={podeAnalisar} tenant={tenant} flash={flash} card={card}/>}
     {sub==='per'&&<UbsPeriodos pers={pers} ehAdm={ehAdm} tenant={tenant} flash={flash} card={card}/>}
+    {sub==='lim'&&ehAdm&&<UbsLimpeza user={user} ubsL={ubsL} pers={pers} sols={sols} envios={envios} flash={flash} card={card}/>}
     {sub==='rel'&&<UbsRelatorios sols={sols} ubsL={ubsL} pers={pers} user={user} card={card}/>}
     {abertaAtual&&<UbsModal onClose={function(){setAberta(null);}}><UbsDetalhe sol={abertaAtual} envios={envios} todas={sols} user={user} entries={entries} meds={meds} podeAnalisar={podeAnalisar} podeSeparar={podeSeparar} onClose={function(){setAberta(null);}} flash={flash}/></UbsModal>}
   </div>);
@@ -7188,6 +7189,43 @@ function UbsDemanda(props){
       </tbody></table></div>}
   </div>);
 }
+// Limpeza de dados (gestor/técnico): cada botão pede para digitar APAGAR e mostra quanto será apagado.
+function UbsLimpeza(props){
+  var _b=useState(false);var busy=_b[0],setBusy=_b[1];
+  var sols=props.sols,envios=props.envios;
+  var hoje=_ubsHoje();
+  var encerradas=sols.filter(function(s){return s.status==='separada'||s.status==='cancelada';});
+  var perEnc=props.pers.filter(function(p){return p.fim<hoje;});
+  function delDocs(col,lista){var p=Promise.resolve();lista.forEach(function(x){p=p.then(function(){return db.collection(col).doc(x.id).delete();});});return p;}
+  function apagarSols(lista){var p=Promise.resolve();lista.forEach(function(s){p=p.then(function(){return _ubsApagarSol(s,props.user,envios);});});return p;}
+  function rodar(titulo,detalhe,fn){
+    var r=window.prompt(titulo+'\n\n'+detalhe+'\n\nIsso não pode ser desfeito. Para confirmar, digite APAGAR:');
+    if(r!=='APAGAR')return;
+    setBusy(true);
+    fn().then(function(){setBusy(false);props.flash('Pronto: '+titulo.toLowerCase()+'.');}).catch(function(e){setBusy(false);window.alert('Parou no meio: '+((e&&e.message)||'erro')+'. Tente de novo.');});
+  }
+  var itens=[
+    {id:'hist',t:'Apagar histórico',d:'Apaga as solicitações já encerradas (separadas e canceladas) e os períodos que já terminaram. NÃO mexe no estoque: as saídas continuam registradas.',n:encerradas.length+' solicitação(ões) e '+perEnc.length+' período(s)',
+      fn:function(){return delDocs('ubs_solicitacoes',encerradas).then(function(){return delDocs('ubs_envios',envios.filter(function(e){return encerradas.some(function(s){return s.protocolo===e.protocolo;});}));}).then(function(){return delDocs('ubs_periodos',perEnc);});},qtd:encerradas.length+perEnc.length},
+    {id:'sol',t:'Apagar solicitações',d:'Apaga TODAS as solicitações (qualquer status). O que foi separado volta ao estoque (entrada de estorno) e as UBS podem enviar de novo.',n:sols.length+' solicitação(ões)',
+      fn:function(){return apagarSols(sols);},qtd:sols.length},
+    {id:'ubs',t:'Apagar cadastro de UBS',d:'Apaga todas as UBS cadastradas (e a lista de materiais liberados de cada uma). As solicitações já enviadas continuam salvas.',n:props.ubsL.length+' UBS',
+      fn:function(){return delDocs('ubs',props.ubsL);},qtd:props.ubsL.length},
+    {id:'per',t:'Apagar períodos',d:'Apaga todos os períodos. Sem período aberto, as UBS não conseguem enviar.',n:props.pers.length+' período(s)',
+      fn:function(){return delDocs('ubs_periodos',props.pers);},qtd:props.pers.length},
+    {id:'tudo',t:'Apagar tudo',d:'Apaga solicitações (devolvendo ao estoque o que foi separado), cadastro de UBS, períodos e travas de envio. O módulo volta a ficar vazio, como no começo.',n:sols.length+' solicitação(ões), '+props.ubsL.length+' UBS, '+props.pers.length+' período(s)',
+      fn:function(){return apagarSols(sols).then(function(){return delDocs('ubs_envios',envios);}).then(function(){return delDocs('ubs',props.ubsL);}).then(function(){return delDocs('ubs_periodos',props.pers);});},qtd:sols.length+props.ubsL.length+props.pers.length+envios.length,perigo:true}
+  ];
+  return(<div>
+    <div style={Object.assign({},props.card,{fontSize:13,color:'#64748B'})}>Área para limpar dados de teste. Só gestor e técnico veem esta aba.</div>
+    {itens.map(function(i){return(<div key={i.id} style={Object.assign({},props.card,{borderColor:i.perigo?'#FCA5A5':'#E2E8F0'})}>
+      <div style={{fontWeight:800,color:i.perigo?'#B91C1C':'#1E293B'}}>{i.t}</div>
+      <div style={{fontSize:12.5,color:'#64748B',margin:'3px 0 8px'}}>{i.d}</div>
+      <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}><span style={{fontSize:12.5,fontWeight:700}}>{i.n}</span>
+      <button disabled={busy||i.qtd===0} data-ubs={'lim-'+i.id} onClick={function(){rodar(i.t,i.d+'\n\nSerá apagado: '+i.n+'.',i.fn);}} style={{marginLeft:'auto',padding:'9px 14px',borderRadius:10,border:'none',background:i.qtd===0?'#CBD5E1':'#B91C1C',color:'#fff',fontWeight:700,cursor:i.qtd===0?'default':'pointer'}}>{busy?'Apagando…':i.t}</button></div>
+    </div>);})}
+  </div>);
+}
 function UbsCadastro(props){
   var ubsL=props.ubsL,meds=props.meds,card=props.card;
   var _ed=useState(null);var ed=_ed[0],setEd=_ed[1];
@@ -7224,7 +7262,7 @@ function UbsCadastro(props){
         {medsF.length===0&&<div style={{padding:12,color:'#94A3B8',fontSize:13}}>Nenhum produto encontrado.</div>}
       </div>
       {err&&<div style={{background:'#FDECEA',color:'#C2362D',borderRadius:10,padding:'9px 12px',fontSize:13,marginTop:10}}>{err}</div>}
-      <div style={{display:'flex',gap:8,marginTop:14}}>{ed.id&&props.user.role==='gestor'&&<button data-ubs="excluir-ubs" onClick={function(){if(!window.confirm('Excluir a UBS "'+ed.nome+'"? As solicitações já enviadas continuam salvas. Para só impedir novos envios, desmarque "UBS ativa".'))return;db.collection('ubs').doc(ed.id).delete().then(function(){setEd(null);props.flash('UBS excluída.');}).catch(function(e){setErr('Erro: '+((e&&e.message)||''));});}} style={{padding:'12px 14px',borderRadius:10,border:'1px solid #FCA5A5',background:'#fff',color:'#B91C1C',fontWeight:700,cursor:'pointer'}}>Excluir</button>}<button data-ubs="salvar-ubs" onClick={salvar} style={{flex:1,padding:'12px',borderRadius:10,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,cursor:'pointer'}}>Salvar</button><button onClick={function(){setEd(null);}} style={{padding:'12px 16px',borderRadius:10,border:'1px solid #CBD5E1',background:'#fff',fontWeight:700,cursor:'pointer'}}>Cancelar</button></div>
+      <div style={{display:'flex',gap:8,marginTop:14}}>{ed.id&&(props.user.role==='gestor'||props.user.role==='tecnico')&&<button data-ubs="excluir-ubs" onClick={function(){if(!window.confirm('Excluir a UBS "'+ed.nome+'"? As solicitações já enviadas continuam salvas. Para só impedir novos envios, desmarque "UBS ativa".'))return;db.collection('ubs').doc(ed.id).delete().then(function(){setEd(null);props.flash('UBS excluída.');}).catch(function(e){setErr('Erro: '+((e&&e.message)||''));});}} style={{padding:'12px 14px',borderRadius:10,border:'1px solid #FCA5A5',background:'#fff',color:'#B91C1C',fontWeight:700,cursor:'pointer'}}>Excluir</button>}<button data-ubs="salvar-ubs" onClick={salvar} style={{flex:1,padding:'12px',borderRadius:10,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,cursor:'pointer'}}>Salvar</button><button onClick={function(){setEd(null);}} style={{padding:'12px 16px',borderRadius:10,border:'1px solid #CBD5E1',background:'#fff',fontWeight:700,cursor:'pointer'}}>Cancelar</button></div>
     </UbsModal>}
   </div>);
 }
@@ -7412,7 +7450,7 @@ function UbsDetalhe(props){
       {separavel&&<button disabled={busy} data-ubs="separar" onClick={separar} style={{flex:'1 1 140px',padding:'12px',borderRadius:10,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,cursor:'pointer'}}>Registrar separação</button>}
       {separavel&&props.podeAnalisar&&<button data-ubs="encerrar" onClick={function(){if(modo==='encerrar')encerrar();else{setModo('encerrar');setErr('Informe a justificativa e toque em Encerrar de novo.');}}} style={{padding:'12px 14px',borderRadius:10,border:'1px solid #CBD5E1',background:'#fff',fontWeight:700,cursor:'pointer'}}>{modo==='encerrar'?'Confirmar encerramento':'Encerrar com pendências'}</button>}
       {props.podeAnalisar&&['enviada','devolvida','aprovada'].indexOf(sol.status)>=0&&<button data-ubs="cancelar" onClick={function(){if(modo==='cancelar')salvarDecisao('cancelada');else{setModo('cancelar');setErr('Informe a justificativa e toque em Cancelar de novo.');}}} style={{padding:'12px 14px',borderRadius:10,border:'1px solid #FCA5A5',background:'#FEF2F2',color:'#B91C1C',fontWeight:700,cursor:'pointer'}}>{modo==='cancelar'?'Confirmar cancelamento':'Cancelar solicitação'}</button>}
-      {user.role==='gestor'&&<button data-ubs="apagar" onClick={function(){
+      {(user.role==='gestor'||user.role==='tecnico')&&<button data-ubs="apagar" onClick={function(){
         var tem=(sol.separacoes||[]).some(function(r){return !r.estornada;});
         if(!window.confirm('Apagar a solicitação '+sol.protocolo+' de '+sol.ubsNome+'?'+(tem?' O que foi separado será devolvido ao estoque.':'')+' Isso não pode ser desfeito. A UBS poderá enviar outra neste período.'))return;
         setBusy(true);_ubsApagarSol(sol,user,props.envios).then(function(){props.flash('Solicitação apagada.');props.onClose();}).catch(function(e){setBusy(false);setErr('Não foi possível apagar: '+((e&&e.message)||''));});}} style={{padding:'12px 14px',borderRadius:10,border:'1px solid #FCA5A5',background:'#fff',color:'#B91C1C',fontWeight:700,cursor:'pointer'}}>Apagar</button>}
