@@ -339,6 +339,13 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // ===== PEDIDOS DE REPOSIÇÃO (Satélite -> CAF) =====
+    match /reposicoes/{id} {
+      allow read: if membro() && resource.data.tenant_id == userTenant();
+      allow create: if membro() && !leituraSo() && tenantOk(request.resource.data);
+      allow update: if membro() && !leituraSo() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
+      allow delete: if ehAdmin() && resource.data.tenant_id == userTenant();
+    }
     // conciliacoes: REMOVIDO (Fase 1, achado #8 — sem coleção correspondente no código).
 
   }
