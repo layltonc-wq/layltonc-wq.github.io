@@ -295,6 +295,37 @@ service cloud.firestore {
       allow update: if membro() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
       allow delete: if ehAdmin() && resource.data.tenant_id == userTenant() && resource.data.status == 'cancelado';
     }
+    // ===== SOLICITAÇÕES DAS UBS =====
+    // A página pública NÃO acessa o banco: ela fala só com a função ubsApi (acesso administrativo).
+    // Aqui valem apenas as regras da equipe logada, cada uma só no seu município.
+    function podeGerirUbs() { return ehAdmin() || (logado() && statusOk() && meuPerfil().role == 'farmaceutico'); }
+    match /ubs/{id} {
+      allow read: if membro() && resource.data.tenant_id == userTenant();
+      allow create: if podeGerirUbs() && tenantOk(request.resource.data);
+      allow update: if podeGerirUbs() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
+      allow delete: if ehGestor() && resource.data.tenant_id == userTenant();
+    }
+    match /ubs_periodos/{id} {
+      allow read: if membro() && resource.data.tenant_id == userTenant();
+      allow create: if ehAdmin() && tenantOk(request.resource.data);
+      allow update: if ehAdmin() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
+      allow delete: if ehAdmin() && resource.data.tenant_id == userTenant();
+    }
+    match /ubs_solicitacoes/{id} {
+      allow read: if membro() && resource.data.tenant_id == userTenant();
+      allow create: if false;  // só a função ubsApi cria (protocolo, período e duplicidade validados no servidor)
+      allow update: if membro() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
+      allow delete: if ehGestor() && resource.data.tenant_id == userTenant();
+    }
+    match /ubs_envios/{id} {
+      allow read: if membro() && resource.data.tenant_id == userTenant();
+      allow create, update: if false;
+      allow delete: if ehGestor() && resource.data.tenant_id == userTenant();  // "liberar novo envio" — só a gestora
+    }
+    match /ubs_limites/{id} {
+      allow read, write: if false;
+    }
+
     // conciliacoes: REMOVIDO (Fase 1, achado #8 — sem coleção correspondente no código).
 
   }

@@ -126,3 +126,18 @@ exports.sincronizarClaimUsuario = onDocumentWritten('users/{uid}', async (event)
     logger.error('Falha ao sincronizar claim de users/' + uid + ': ' + e.message);
   }
 });
+
+// ---- Solicitações das UBS (link público, sem login) ----
+// Toda a lógica está em ubs.js. A página pública /ubs/ só fala com esta função; nunca com o banco.
+const { onRequest } = require('firebase-functions/v2/https');
+const ubs = require('./ubs');
+exports.ubsApi = onRequest(
+  { region: 'southamerica-east1', invoker: 'public', cors: ['https://www.farmacontrol.app.br', 'https://farmacontrol.app.br', 'https://farmacontrol-dev-6a3e3.web.app'], maxInstances: 10, memory: '256MiB' },
+  async (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    if (req.method !== 'POST') { res.status(405).json({ ok: false, erro: 'Método não permitido.' }); return; }
+    const ip = String((req.headers['x-forwarded-for'] || req.ip || '')).split(',')[0].trim() || 'sem-ip';
+    const r = await ubs.processar(db, req.body, { ip, agora: new Date() });
+    res.status(r.status).json(r.json);
+  }
+);
