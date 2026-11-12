@@ -17,6 +17,16 @@ service cloud.firestore {
     function ehGestor() { return logado() && statusOk() && meuPerfil().role == 'gestor'; }
     function ehTecnico() { return logado() && statusOk() && meuPerfil().role == 'tecnico'; }
     function ehAdmin() { return ehGestor() || ehTecnico(); }
+    // ESTOQUES SEPARADOS (CAF / Satélite): cada conta tem acessoLocal ('caf' | 'satelite' | 'ambos'; sem o campo = 'caf') e pode ter
+    // somenteLeitura=true (só consulta). Lançamento sem campo local conta como CAF. Gestor/técnico atuam nos dois locais. A entrada de
+    // uma transferência (transferencia=true) pode ser gravada no outro local, porque a saída correspondente sai do local da própria conta.
+    function leituraSo() { return meuPerfil().get('somenteLeitura', false) == true; }
+    function localOk(d) {
+      return ehAdmin() || (!leituraSo() && (
+        meuPerfil().get('acessoLocal', 'caf') == 'ambos'
+        || meuPerfil().get('acessoLocal', 'caf') == d.get('local', 'caf')
+        || (d.get('transferencia', false) == true && d.get('tipo', '') == 'entrada')));
+    }
     // NOVO: tenant do usuário logado — todas as regras abaixo comparam com isso.
     // Performance (18/09/2026): antes fazia get(users/{uid}) TODA vez que era chamada — em
     // listas grandes (ex.: entries, ~19 mil docs em produção) isso deixava a consulta lentíssima.
@@ -71,6 +81,7 @@ service cloud.firestore {
       allow create: if request.auth != null
                     && request.auth.uid == userId
                     && request.resource.data.status == 'pending'
+                    && !request.resource.data.keys().hasAny(['acessoLocal', 'somenteLeitura'])
                     && request.resource.data.tenant_id is string
                     && request.resource.data.tenant_id != ''
                     && exists(/databases/$(database)/documents/tenants/$(request.resource.data.tenant_id))
@@ -80,6 +91,8 @@ service cloud.firestore {
                     || (logado()
                         && request.auth.uid == userId
                         && request.resource.data.role == resource.data.role
+                        && request.resource.data.get('acessoLocal', null) == resource.data.get('acessoLocal', null)
+                        && request.resource.data.get('somenteLeitura', null) == resource.data.get('somenteLeitura', null)
                         && request.resource.data.status == resource.data.status
                         && request.resource.data.tenant_id == resource.data.tenant_id);
       allow delete: if ehSuperAdmin() || (ehAdmin() && tenantOk(resource.data));
@@ -96,8 +109,8 @@ service cloud.firestore {
     // ===== ENTRADAS E SAÍDAS =====
     match /entries/{id} {
       allow read: if membro() && resource.data.tenant_id == userTenant();
-      allow create: if membro() && tenantOk(request.resource.data);
-      allow update: if membro() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
+      allow create: if membro() && tenantOk(request.resource.data) && localOk(request.resource.data);
+      allow update: if membro() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data) && localOk(resource.data);
       // Apagar movimentação (histórico do estoque) só gestor ou técnico; no app essas ações já são só deles.
       allow delete: if ehAdmin() && resource.data.tenant_id == userTenant();
     }
