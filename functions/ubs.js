@@ -250,7 +250,155 @@ async function acaoCorrigir(db, b, ctx) {
   return { protocolo: sol.protocolo, status: 'enviada' };
 }
 
-const ACOES = { info: acaoInfo, ubs: acaoUbs, enviar: acaoEnviar, consultar: acaoConsultar, corrigir: acaoCorrigir };
+
+// ===================================================================================================================
+// CONFERÊNCIA DAS UBS (Vicência): as enfermeiras (sem login) informam o que ainda têm de cada medicamento enviado pela
+// farmácia, com lote e validade. Serve para acompanhar o que está vencendo nas UBS. Só funciona se a farmácia ativou o link
+// (config/ubsconf__<tenant> com ativo=true); se houver "codigo" nessa ficha, ele é exigido (compartilhado com as enfermeiras).
+// As UBS vêm da lista do app (config/destinos__<tenant>.ubs; sem ela, a lista padrão). Nada de estoque da farmácia é exposto:
+// só o que foi ENVIADO para a UBS escolhida (nome, lote, validade, quantidade enviada).
+// ===================================================================================================================
+const UBS_PADRAO_CONF = ['João Ramos','Com. Cristã','Chã dos M.','Agrovila','Angélicas','Usina Barra','Nova Vic. 3','Murupé','Borracha','Mãe Rainha','Trigueiros','Turiaçú','Anexo Maltex','Anexo Barra','Imbú'];
+const LIM_CONF = { falhaCodigo: { max: 10, janelaMs: 15 * 60 * 1000 }, maxItens: 300, maxExtras: 40 };
+
+function loteNorm(l) { return String(l == null ? '' : l).trim().replace(/\s+/g, ' ').toUpperCase(); }
+// "MM/AAAA" a partir de "MM/AA", "MM/AAAA" ou "DD/MM/AAAA" ('' se inválida)
+function validadeNorm(v) {
+  const s = String(v == null ? '' : v).trim(); if (!s) return '';
+  const p = s.split('/'); let mes, ano;
+  if (p.length === 3) { mes = parseInt(p[1], 10); ano = parseInt(p[2], 10); }
+  else if (p.length === 2) { mes = parseInt(p[0], 10); ano = parseInt(p[1], 10); }
+  else return '';
+  if (isNaN(mes) || isNaN(ano) || mes < 1 || mes > 12) return '';
+  if (ano < 100) ano += ano <= 50 ? 2000 : 1900;
+  if (ano < 2000 || ano > 2100) return '';
+  return (mes < 10 ? '0' + mes : '' + mes) + '/' + ano;
+}
+function chaveItem(medId, lote, validade) { return String(medId || '') + '|' + loteNorm(lote) + '|' + validadeNorm(validade); }
+
+// Estimativa do que ainda está na UBS. Mesma regra do painel do app:
+//  - com conferência (a mais recente da UBS): saldo declarado + o que foi enviado DEPOIS dela;
+//  - sem conferência daquele lote: tudo o que foi enviado (suposição conservadora: ainda está lá).
+// envios: [{medId,nome,lote,validade,qtd,em}]  conf: {criadoEm,itens:[{medId,nome,lote,validade,qtd,origem}]} ou null
+function estimarUbs(envios, conf) {
+  const mapa = {};
+  envios.forEach(function (e) {
+    const k = chaveItem(e.medId, e.lote, e.validade);
+    const o = mapa[k] || (mapa[k] = { key: k, medId: e.medId, nome: e.nome, lote: String(e.lote || '').trim(), validade: validadeNorm(e.validade), enviado: 0, ultimoEnvio: '', envios: [] });
+    o.enviado += Number(e.qtd) || 0; o.envios.push({ qtd: Number(e.qtd) || 0, em: e.em || '' });
+    if ((e.em || '') > o.ultimoEnvio) o.ultimoEnvio = e.em || '';
+  });
+  const decl = {};
+  if (conf && Array.isArray(conf.itens)) conf.itens.forEach(function (i) { decl[chaveItem(i.medId, i.lote, i.validade)] = i; });
+  const linhas = Object.keys(mapa).map(function (k) {
+    const o = mapa[k]; const d = decl[k];
+    let est, fonte;
+    if (d && conf) { est = Math.max(0, Number(d.qtd) || 0) + o.envios.filter(function (x) { return x.em > conf.criadoEm; }).reduce(function (t, x) { return t + x.qtd; }, 0); fonte = 'declarado'; }
+    else { est = o.enviado; fonte = 'estimado'; }
+    return { key: k, medId: o.medId, nome: o.nome, lote: o.lote, validade: o.validade, enviado: o.enviado, ultimoEnvio: o.ultimoEnvio, estimado: est, fonte: fonte, declaradoEm: d && conf ? conf.criadoEm : '' };
+  });
+  // itens que a UBS declarou e que não têm envio registrado (sobra de antes do sistema, por exemplo)
+  if (conf && Array.isArray(conf.itens)) conf.itens.forEach(function (i) {
+    const k = chaveItem(i.medId, i.lote, i.validade);
+    if (!mapa[k] && (Number(i.qtd) || 0) > 0) linhas.push({ key: k, medId: i.medId || '', nome: i.nome, lote: String(i.lote || '').trim(), validade: validadeNorm(i.validade), enviado: 0, ultimoEnvio: '', estimado: Number(i.qtd) || 0, fonte: 'declarado', declaradoEm: conf.criadoEm, semEnvio: true });
+  });
+  return linhas;
+}
+
+async function carregarConfConf(db, tenantId) {
+  const sn = await db.collection('config').doc('ubsconf__' + tenantId).get();
+  if (!sn.exists || sn.data().ativo !== true) throw new ErroUbs('conf_inativa', 'A conferência das UBS não está ativada. Procure a farmácia.', 403);
+  return sn.data();
+}
+async function listaUbsConf(db, tenantId) {
+  const sn = await db.collection('config').doc('destinos__' + tenantId).get();
+  const arr = sn.exists && Array.isArray(sn.data().ubs) ? sn.data().ubs : null;
+  const base = arr ? arr.filter(function (u) { return u && u.nome; }).map(function (u) { return { id: String(u.id || u.nome), nome: String(u.nome), ativo: u.ativo !== false }; })
+    : UBS_PADRAO_CONF.map(function (n, i) { return { id: 'u' + i, nome: n, ativo: true }; });
+  return base.filter(function (u) { return u.ativo; });
+}
+async function checarCodigo(db, cfg, b, ctx) {
+  const cod = String(cfg.codigo || '').trim();
+  if (!cod) return true;
+  const tentado = String(b.codigo == null ? '' : b.codigo).trim();
+  if (!tentado) return false;
+  if (!(await limitar(db, 'codigo|' + ctx.ip, LIM_CONF.falhaCodigo, ctx.agora.getTime(), true))) throw new ErroUbs('muitas_tentativas', 'Muitas tentativas de código. Aguarde alguns minutos.', 429);
+  const ok = crypto.timingSafeEqual(crypto.createHash('sha256').update(cod).digest(), crypto.createHash('sha256').update(tentado).digest());
+  if (!ok) { await limitar(db, 'codigo|' + ctx.ip, LIM_CONF.falhaCodigo, ctx.agora.getTime()); throw new ErroUbs('codigo_invalido', 'Código incorreto.', 403); }
+  return true;
+}
+async function ubsEscolhida(db, tenantId, ubsId) {
+  const lista = await listaUbsConf(db, tenantId);
+  const alvo = lista.filter(function (u) { return u.id === String(ubsId) || u.nome === String(ubsId); })[0];
+  if (!alvo) throw new ErroUbs('ubs_invalida', 'UBS não encontrada.', 404);
+  return alvo;
+}
+async function itensDaUbs(db, tenantId, ubsNome) {
+  const sn = await db.collection('entries').where('tenant_id', '==', tenantId).where('destino', '==', 'ubs').where('ubsNome', '==', ubsNome).get();
+  const envios = [];
+  sn.forEach(function (d) { const e = d.data(); if (e.tipo !== 'saida' || e.ficticioDiv || e.descarte || !e.medicamentoId) return; envios.push({ medId: e.medicamentoId, nome: e.medicamentoNome || '', lote: e.lote || '', validade: e.validade || '', qtd: Number(e.quantidade) || 0, em: e.criadoEm || '' }); });
+  const cs = await db.collection('ubs_conferencias').where('tenant_id', '==', tenantId).where('ubsNome', '==', ubsNome).get();
+  let conf = null; cs.forEach(function (d) { const c = d.data(); if (!conf || String(c.criadoEm) > String(conf.criadoEm)) conf = c; });
+  return { linhas: estimarUbs(envios, conf), conf: conf };
+}
+
+async function acaoConfInfo(db, b, ctx) {
+  const t = await carregarTenant(db, b.tenant);
+  const cfg = await carregarConfConf(db, t.id);
+  const exige = !!String(cfg.codigo || '').trim();
+  const liberado = await checarCodigo(db, cfg, b, ctx);
+  if (!liberado) return { municipio: t.nome, exigeCodigo: true, liberado: false, ubs: [] };
+  const lista = await listaUbsConf(db, t.id);
+  return { municipio: t.nome, exigeCodigo: exige, liberado: true, ubs: lista.map(function (u) { return { id: u.id, nome: u.nome }; }).sort(function (x, y) { return x.nome.localeCompare(y.nome); }) };
+}
+async function acaoConfItens(db, b, ctx) {
+  if (!(await limitar(db, 'confitens|' + ctx.ip, LIM.ipConsulta, ctx.agora.getTime()))) throw new ErroUbs('muitas_tentativas', 'Muitas consultas. Aguarde alguns minutos.', 429);
+  const t = await carregarTenant(db, b.tenant);
+  const cfg = await carregarConfConf(db, t.id);
+  if (!(await checarCodigo(db, cfg, b, ctx))) throw new ErroUbs('codigo_invalido', 'Informe o código de acesso.', 403);
+  const ubs = await ubsEscolhida(db, t.id, b.ubsId);
+  const r = await itensDaUbs(db, t.id, ubs.nome);
+  const itens = r.linhas.filter(function (l) { return !l.semEnvio && l.estimado > 0; })
+    .sort(function (x, y) { const a = validadeOrd(x.validade), c = validadeOrd(y.validade); return a - c || x.nome.localeCompare(y.nome); })
+    .slice(0, LIM_CONF.maxItens)
+    .map(function (l) { return { key: l.key, nome: l.nome, lote: l.lote, validade: l.validade, enviado: l.enviado, ultimoEnvio: l.ultimoEnvio, estimado: l.estimado, fonte: l.fonte }; });
+  return { ubs: { id: ubs.id, nome: ubs.nome }, itens: itens, ultimaConferencia: r.conf ? r.conf.criadoEm : '' };
+}
+function validadeOrd(v) { const m = String(v || '').split('/'); return m.length === 2 ? parseInt(m[1], 10) * 12 + parseInt(m[0], 10) : 9e9; }
+async function acaoConfEnviar(db, b, ctx) {
+  if (!(await limitar(db, 'envio|' + ctx.ip, LIM.ipEnvio, ctx.agora.getTime()))) throw new ErroUbs('muitas_tentativas', 'Muitas tentativas. Aguarde um pouco e tente de novo.', 429);
+  const t = await carregarTenant(db, b.tenant);
+  const cfg = await carregarConfConf(db, t.id);
+  if (!(await checarCodigo(db, cfg, b, ctx))) throw new ErroUbs('codigo_invalido', 'Informe o código de acesso.', 403);
+  const ubs = await ubsEscolhida(db, t.id, b.ubsId);
+  const enfermeira = txt(b.nome, 80);
+  if (enfermeira.length < 3) throw new ErroUbs('nome_invalido', 'Informe o seu nome.');
+  const r = await itensDaUbs(db, t.id, ubs.nome);
+  const conhecidos = {}; r.linhas.forEach(function (l) { conhecidos[l.key] = l; });
+  const itens = []; const vistos = {};
+  (Array.isArray(b.itens) ? b.itens : []).slice(0, LIM_CONF.maxItens).forEach(function (i) {
+    const l = conhecidos[String(i && i.key)];
+    if (!l) throw new ErroUbs('item_invalido', 'Um dos itens não pertence a esta UBS. Atualize a página e tente de novo.');
+    const q = Number(i.qtd);
+    if (!Number.isInteger(q) || q < 0 || q > LIM.maxQtd) throw new ErroUbs('qtd_invalida', 'Quantidade inválida em "' + l.nome + '".');
+    if (vistos[l.key]) return; vistos[l.key] = 1;
+    itens.push({ medId: l.medId, nome: l.nome, lote: l.lote, validade: l.validade, qtd: q, enviado: l.enviado, origem: 'lista' });
+  });
+  (Array.isArray(b.extras) ? b.extras : []).slice(0, LIM_CONF.maxExtras).forEach(function (x) {
+    const nome = txt(x && x.nome, 80); const q = Number(x && x.qtd);
+    if (nome.length < 2) throw new ErroUbs('nome_invalido', 'Informe o nome do medicamento que não está na lista.');
+    if (!Number.isInteger(q) || q < 0 || q > LIM.maxQtd) throw new ErroUbs('qtd_invalida', 'Quantidade inválida em "' + nome + '".');
+    const val = validadeNorm(x.validade);
+    if (txt(x.validade, 12) && !val) throw new ErroUbs('validade_invalida', 'Validade inválida em "' + nome + '". Use MM/AAAA.');
+    itens.push({ medId: '', nome: nome, lote: txt(x.lote, 40), validade: val, qtd: q, enviado: 0, origem: 'extra' });
+  });
+  if (!itens.length) throw new ErroUbs('sem_itens', 'Informe a quantidade de pelo menos um item.');
+  const agoraIso = ctx.agora.toISOString();
+  const ref = await db.collection('ubs_conferencias').add({ tenant_id: t.id, ubsId: ubs.id, ubsNome: ubs.nome, enfermeira: enfermeira, itens: itens, obs: txtLivre(b.obs, 500), criadoEm: agoraIso });
+  return { id: ref.id, itens: itens.length, em: agoraIso };
+}
+
+const ACOES = { confInfo: acaoConfInfo, confItens: acaoConfItens, confEnviar: acaoConfEnviar, info: acaoInfo, ubs: acaoUbs, enviar: acaoEnviar, consultar: acaoConsultar, corrigir: acaoCorrigir };
 
 // Entrada única (usada pela função HTTP e pelos testes). Nunca devolve detalhes internos de erro.
 async function processar(db, body, ctx) {
@@ -267,4 +415,4 @@ async function processar(db, body, ctx) {
   }
 }
 
-module.exports = { processar, hojeRecife, normProtocolo, LIM };
+module.exports = { processar, hojeRecife, normProtocolo, LIM, estimarUbs, validadeNorm, chaveItem };

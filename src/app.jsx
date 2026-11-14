@@ -1987,12 +1987,13 @@ var temaItaq=true;// identidade visual v2 agora é o padrão pra todos os munic�
       if(st<=0){erros.push(item.medNome+': estoque zerado — saída bloqueada');next();return;}
       if(item.qty>st){erros.push(item.medNome+': qtd ('+item.qty+') maior que disponível ('+st+')');next();return;}
       var _pl=planoLotes(item.medId,item.qty,item.lote,feitas[item.medId]);
+      if(item.destino==='ubs'){var _alc=_alertaValidadeUbs(_pl.partes);if(_alc&&!window.confirm(item.medNome+'\n\n'+_alc)){erros.push(item.medNome+': envio cancelado (validade curta)');next();return;}}
       feitas[item.medId]=(feitas[item.medId]||[]).concat(_pl.partes.map(function(pt){return {tipo:'saida',quantidade:pt.qty,lote:pt.lote,validade:pt.validade};}));
       gravarPartes({medicamentoId:item.medId,medicamentoNome:item.medNome,tipo:'saida',observacao:item.obs||'',destino:item.destino||'sus',destinoNome:item.destinoNome||(DESTINOS[item.destino||'sus']||DESTINOS.sus).label,...(item.ubsNome?{ubsNome:item.ubsNome}:{})},_pl.partes,onSave).then(next).catch(function(e){erros.push(item.medNome+': '+((e&&e.message)||'erro'));next();});
     }
     next();
   }
-  async function save(){if(!sel){setErr('Selecione um medicamento.');return;}if(pedeUbs&&!ubsSel){setErr('Escolha qual UBS vai receber esta saída.');return;}var q=parseInt(qty);if(!q||q<=0){setErr('Quantidade inválida.');return;}if(cur<=0){setErr('Estoque zerado! Saída bloqueada — não há unidades disponíveis de '+sel.nome+'.');return;}if(q>cur){setErr('Quantidade ('+q+') maior que o estoque disponível ('+cur+' un.). Máximo permitido: '+cur+' un.');return;}if(q>=500&&!obs.trim()){setErr('⚠️ Saída de '+q+' un. (500 ou mais) exige justificativa. Preencha o campo de observação antes de continuar.');return;}if(q>cur*0.7&&!warn){setWarn('Saida alta: '+q+' de '+cur+' un. disponivel. Confirme clicando novamente.');return;}var plano=planoLotes(sel.id,q,lote);if(plano.digitadoInvalido&&!warn){setWarn('O lote "'+lote.trim()+'" não tem saldo neste medicamento. A saída será dada pelo(s) lote(s): '+plano.resumo+'. Confirme clicando novamente.');return;}var lt=plano.partes[0].lote;var vl=plano.partes[0].validade;var data={medicamentoId:sel.id,medicamentoNome:sel.nome,ean:sel.ean||'',tipo:'saida',quantidade:q,lote:lt.trim(),validade:vl.trim(),observacao:obs.trim()};if(q>=500)data.saidaGrande=true;Object.assign(data,dadosDestino());
+  async function save(){if(!sel){setErr('Selecione um medicamento.');return;}if(pedeUbs&&!ubsSel){setErr('Escolha qual UBS vai receber esta saída.');return;}var q=parseInt(qty);if(!q||q<=0){setErr('Quantidade inválida.');return;}if(cur<=0){setErr('Estoque zerado! Saída bloqueada — não há unidades disponíveis de '+sel.nome+'.');return;}if(q>cur){setErr('Quantidade ('+q+') maior que o estoque disponível ('+cur+' un.). Máximo permitido: '+cur+' un.');return;}if(q>=500&&!obs.trim()){setErr('⚠️ Saída de '+q+' un. (500 ou mais) exige justificativa. Preencha o campo de observação antes de continuar.');return;}if(q>cur*0.7&&!warn){setWarn('Saida alta: '+q+' de '+cur+' un. disponivel. Confirme clicando novamente.');return;}var plano=planoLotes(sel.id,q,lote);if(plano.digitadoInvalido&&!warn){setWarn('O lote "'+lote.trim()+'" não tem saldo neste medicamento. A saída será dada pelo(s) lote(s): '+plano.resumo+'. Confirme clicando novamente.');return;}var lt=plano.partes[0].lote;var vl=plano.partes[0].validade;var data={medicamentoId:sel.id,medicamentoNome:sel.nome,ean:sel.ean||'',tipo:'saida',quantidade:q,lote:lt.trim(),validade:vl.trim(),observacao:obs.trim()};if(q>=500)data.saidaGrande=true;Object.assign(data,dadosDestino());if(data.destino==='ubs'){var _alv=_alertaValidadeUbs(plano.partes);if(_alv&&!window.confirm(_alv))return;}
     // Controlados (Morfina/Tramal): abre o popup obrigatório de paciente/médico/CRM ANTES de salvar —
     // a saída só é registrada depois que o popup confirmar (ver confirmarSaidaControlada).
     if(_ehMedControlado(sel.nome)){setErr('');setWarn('');var _dc=Object.assign({},data,{destino:'emergencia',destinoNome:DESTINOS.emergencia.label});delete _dc.ubsNome;setControladoData(_dc);setShowControlado(true);return;}
@@ -7881,6 +7882,154 @@ function ReposicaoCafDetalhe(props){
       {r.status==='parcial'&&<button type="button" data-fc="repo-encerrar" disabled={busy} onClick={encerrar} style={{padding:'12px 14px',borderRadius:10,border:'1px solid #CBD5E1',background:'#fff',fontWeight:700,cursor:'pointer'}}>Encerrar com pendências</button>}
       {(aberta||r.status==='devolvida')&&<button type="button" data-fc="repo-cancelar" disabled={busy} onClick={function(){mudar('cancelada');}} style={{padding:'12px 14px',borderRadius:10,border:'1px solid #FCA5A5',background:'#FEF2F2',color:'#B91C1C',fontWeight:700,cursor:'pointer'}}>Cancelar pedido</button>}
       <button type="button" onClick={props.onClose} style={{padding:'12px 14px',borderRadius:10,border:'1px solid #CBD5E1',background:'#fff',fontWeight:700,cursor:'pointer'}}>Fechar</button>
+    </div>
+  </div>);
+}
+// ===== UBS: validades (acompanhamento do que foi enviado às UBS) — módulo 'destinos' (Vicência) =====
+// As UBS não usam o FarmaControl, então o que ainda existe lá é ESTIMADO a partir das saídas com destino UBS (lote e validade já
+// registrados) e CORRIGIDO pelas conferências que as enfermeiras fazem pelo link público /conferencia/ (ver functions/ubs.js).
+// Regra (igual à do servidor): com conferência do lote = saldo declarado + o que foi enviado depois dela; sem conferência = tudo o que foi enviado.
+var UBSMED_ALERTA_DIAS=90; // saída para UBS de lote que vence em menos que isso pede confirmação
+function _umChave(medId,lote,validade){return String(medId||'')+'|'+loteKey(lote)+'|'+_normValidade(validade||'');}
+function _alertaValidadeUbs(partes){
+  var ruins=(partes||[]).map(function(p){var d=getDiasVal(p.validade);return d==null?null:{p:p,d:d};}).filter(function(x){return x&&x.d<=UBSMED_ALERTA_DIAS;});
+  if(!ruins.length)return '';
+  var venc=ruins.some(function(x){return x.d<0;});
+  return (venc?'ATENÇÃO: este envio inclui lote VENCIDO para a UBS.\n':'Atenção: este envio para a UBS inclui lote que vence em pouco tempo.\n')+ruins.map(function(x){return '• lote '+(x.p.lote||'sem lote')+' — '+(x.d<0?'vencido há '+(-x.d)+' dia(s)':'vence em '+x.d+' dia(s)')+' ('+(x.p.validade||'')+') — '+x.p.qty+' un.';}).join('\n')+'\n\nMedicamento que vence na UBS vira perda. Enviar mesmo assim?';
+}
+function _umLinhas(entries,confs){
+  var porUbs={};
+  (entries||[]).forEach(function(e){
+    if(e.tipo!=='saida'||e.ficticioDiv||e.descarte||e.isAjuste||!e.medicamentoId||!e.ubsNome)return;
+    if(destinoDe(e)!=='ubs')return;
+    var u=porUbs[e.ubsNome]||(porUbs[e.ubsNome]={nome:e.ubsNome,env:[]});
+    u.env.push({medId:e.medicamentoId,nome:e.medicamentoNome||'',lote:e.lote||'',validade:e.validade||'',qtd:Number(e.quantidade)||0,em:e.criadoEm||''});
+  });
+  var ultima={};
+  (confs||[]).forEach(function(c){if(!ultima[c.ubsNome]||String(c.criadoEm)>String(ultima[c.ubsNome].criadoEm))ultima[c.ubsNome]=c;});
+  var linhas=[];
+  var nomes=Object.keys(porUbs);
+  (confs||[]).forEach(function(c){if(nomes.indexOf(c.ubsNome)<0)nomes.push(c.ubsNome);});
+  nomes.forEach(function(nome){
+    var env=(porUbs[nome]&&porUbs[nome].env)||[],conf=ultima[nome]||null;
+    var mapa={};
+    env.forEach(function(e){var k=_umChave(e.medId,e.lote,e.validade);var o=mapa[k]||(mapa[k]={medId:e.medId,nome:e.nome,lote:String(e.lote||'').trim(),validade:_normValidade(e.validade||''),enviado:0,ult:'',envios:[]});o.enviado+=e.qtd;o.envios.push(e);if((e.em||'')>o.ult)o.ult=e.em||'';});
+    var decl={};
+    if(conf&&Array.isArray(conf.itens))conf.itens.forEach(function(i){decl[_umChave(i.medId,i.lote,i.validade)]=i;});
+    Object.keys(mapa).forEach(function(k){
+      var o=mapa[k],d=decl[k],est,fonte;
+      if(d&&conf){est=Math.max(0,Number(d.qtd)||0)+o.envios.filter(function(x){return (x.em||'')>conf.criadoEm;}).reduce(function(t,x){return t+x.qtd;},0);fonte='declarado';}
+      else{est=o.enviado;fonte='estimado';}
+      linhas.push({ubs:nome,medId:o.medId,nome:o.nome,lote:o.lote,validade:o.validade,enviado:o.enviado,ult:o.ult,est:est,fonte:fonte,declaradoEm:d&&conf?conf.criadoEm:'',dias:getDiasVal(o.validade)});
+    });
+    if(conf&&Array.isArray(conf.itens))conf.itens.forEach(function(i){
+      var k=_umChave(i.medId,i.lote,i.validade);
+      if(!mapa[k]&&(Number(i.qtd)||0)>0)linhas.push({ubs:nome,medId:i.medId||'',nome:i.nome,lote:String(i.lote||'').trim(),validade:_normValidade(i.validade||''),enviado:0,ult:'',est:Number(i.qtd)||0,fonte:'declarado',declaradoEm:conf.criadoEm,semEnvio:true,dias:getDiasVal(_normValidade(i.validade||''))});
+    });
+  });
+  return {linhas:linhas,ultima:ultima,ubsNomes:nomes};
+}
+function _umFaixa(d){if(d==null)return 'sem';if(d<0)return 'venc';if(d<=30)return 'd30';if(d<=60)return 'd60';if(d<=90)return 'd90';return 'ok';}
+var UM_FAIXAS={venc:{l:'Vencido',c:'#B91C1C',bg:'#FEE2E2'},d30:{l:'≤ 30 dias',c:'#C2362D',bg:'#FEE2E2'},d60:{l:'≤ 60 dias',c:'#B45309',bg:'#FEF3C7'},d90:{l:'≤ 90 dias',c:'#92400E',bg:'#FFFBEB'},ok:{l:'Em dia',c:'#0B7A5F',bg:'#E2F6EF'},sem:{l:'Sem validade',c:'#64748B',bg:'#F1F5F9'}};
+function TabUbsValidades(props){
+  var user=props.user,entries=props.entries||[];
+  var tenant=tenantDe(user);var ehAdm=user.role==='gestor'||user.role==='tecnico';
+  var _cf=useState([]);var confs=_cf[0],setConfs=_cf[1];
+  var _cg=useState(null);var cfg=_cg[0],setCfg=_cg[1];
+  var _u=useState('todas');var fUbs=_u[0],setFUbs=_u[1];
+  var _r=useState('risco');var fRisco=_r[0],setFRisco=_r[1];
+  var _q=useState('');var busca=_q[0],setBusca=_q[1];
+  var _ms=useState('');var msg=_ms[0],setMsg=_ms[1];
+  var _cd=useState('');var codigo=_cd[0],setCodigo=_cd[1];
+  var _ab=useState(false);var verConf=_ab[0],setVerConf=_ab[1];
+  useEffect(function(){
+    var a=db.collection('ubs_conferencias').where('tenant_id','==',tenant).limit(1000).onSnapshot(function(sn){setConfs(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));},function(){});
+    var b=db.collection('config').doc('ubsconf__'+tenant).onSnapshot(function(s){var d=s.exists?s.data():null;setCfg(d);if(d)setCodigo(d.codigo||'');},function(){});
+    return function(){a();b();};
+  },[tenant]);
+  var calc=useMemo(function(){return _umLinhas(entries,confs);},[entries,confs]);
+  function flash(t){setMsg(t);setTimeout(function(){setMsg('');},3500);}
+  var link='https://www.farmacontrol.app.br/conferencia/?m='+encodeURIComponent(tenant);
+  var ativo=!!(cfg&&cfg.ativo===true);
+  function salvarCfg(patch){
+    return db.collection('config').doc('ubsconf__'+tenant).set(Object.assign({tenant_id:tenant,ativo:ativo,codigo:(cfg&&cfg.codigo)||'',atualizadoEm:new Date().toISOString(),atualizadoPor:user.name||''},patch),{merge:true});
+  }
+  var linhasVis=calc.linhas.filter(function(l){return l.est>0;});
+  var nq=_semAcento(busca);
+  var lista=linhasVis.filter(function(l){
+    if(fUbs!=='todas'&&l.ubs!==fUbs)return false;
+    if(nq&&_semAcento(l.nome+' '+l.lote+' '+l.ubs).indexOf(nq)<0)return false;
+    var f=_umFaixa(l.dias);
+    if(fRisco==='risco')return f==='venc'||f==='d30'||f==='d60'||f==='d90';
+    if(fRisco==='todos')return true;
+    return f===fRisco;
+  }).sort(function(a,b){var x=a.dias==null?9e9:a.dias,y=b.dias==null?9e9:b.dias;return x-y||a.ubs.localeCompare(b.ubs)||a.nome.localeCompare(b.nome);});
+  function soma(faixas){var s=0;linhasVis.forEach(function(l){if(faixas.indexOf(_umFaixa(l.dias))>=0)s+=l.est;});return s;}
+  var cards=[['venc','Vencidos',soma(['venc'])],['d30','Vencem em até 30 dias',soma(['d30'])],['d60','Em até 60 dias',soma(['d60'])],['d90','Em até 90 dias',soma(['d90'])]];
+  var hojeMs=Date.now();
+  var resumo=calc.ubsNomes.slice().sort(function(a,b){return a.localeCompare(b);}).map(function(n){
+    var ls=linhasVis.filter(function(l){return l.ubs===n;});
+    var risco=ls.filter(function(l){var f=_umFaixa(l.dias);return f==='venc'||f==='d30';}).reduce(function(t,l){return t+l.est;},0);
+    var u=calc.ultima[n];var dd=u?Math.floor((hojeMs-new Date(u.criadoEm).getTime())/86400000):null;
+    return {nome:n,lotes:ls.length,unid:ls.reduce(function(t,l){return t+l.est;},0),risco:risco,ultima:u?u.criadoEm:'',dd:dd,por:u?u.enfermeira:''};
+  });
+  var card={background:'#fff',borderRadius:14,border:'1px solid #E2E8F0',padding:'14px 16px',marginBottom:10};
+  function rotuloFonte(l){return l.fonte==='declarado'?('declarado em '+fmtD(l.declaradoEm)+(l.semEnvio?' (sem envio registrado)':'')):'estimado (tudo que foi enviado)';}
+  function excel(){
+    var rows=[['UBS','Medicamento','Lote','Validade','Dias p/ vencer','Enviado','Quantidade estimada/declarada','Origem do número']];
+    lista.forEach(function(l){rows.push([l.ubs,l.nome,l.lote,l.validade,l.dias==null?'':l.dias,l.enviado,l.est,rotuloFonte(l)]);});
+    var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'Validades nas UBS');XLSX.writeFile(wb,'validades_ubs_'+todayStr()+'.xlsx');
+  }
+  function pdf(){
+    var c=tcfg(user);
+    var h='<html><head><meta charset="utf-8"><title>Medicamentos nas UBS</title><style>body{font-family:Arial,sans-serif;padding:22px;color:#0B1736}h1{font-size:19px;margin:0}h2{font-size:14px;margin:18px 0 6px}table{width:100%;border-collapse:collapse;font-size:11.5px}th,td{border-bottom:1px solid #ddd;padding:4px 5px;text-align:left}th{background:#f1f5f9}.r{text-align:right}.v{color:#b91c1c;font-weight:bold}.a{color:#b45309;font-weight:bold}</style></head><body>';
+    h+=_orgLinhasHtml(c)+'<h1>Medicamentos enviados às UBS — acompanhamento de validade</h1><p style="font-size:12px;color:#475569">Gerado em '+new Date().toLocaleString('pt-BR')+'. Quantidades <b>estimadas</b> a partir das saídas para as UBS, corrigidas pelas conferências informadas pelas enfermeiras.</p>';
+    h+='<h2>Resumo por UBS</h2><table><tr><th>UBS</th><th class="r">Lotes</th><th class="r">Unidades</th><th class="r">Vencidos ou ≤30 dias</th><th>Última conferência</th></tr>'+resumo.map(function(r){return '<tr><td>'+_escHtml(r.nome)+'</td><td class="r">'+r.lotes+'</td><td class="r">'+r.unid+'</td><td class="r '+(r.risco>0?'v':'')+'">'+r.risco+'</td><td>'+(r.ultima?fmtD(r.ultima)+' — '+_escHtml(r.por||''):'nunca')+'</td></tr>';}).join('')+'</table>';
+    h+='<h2>Itens ('+({risco:'vencidos ou vencendo em até 90 dias',todos:'todos',venc:'vencidos',d30:'até 30 dias',d60:'até 60 dias',d90:'até 90 dias'}[fRisco]||'')+(fUbs!=='todas'?' — '+_escHtml(fUbs):'')+')</h2><table><tr><th>UBS</th><th>Medicamento</th><th>Lote</th><th>Validade</th><th class="r">Dias</th><th class="r">Qtd</th><th>Origem</th></tr>'+lista.map(function(l){var f=_umFaixa(l.dias);return '<tr><td>'+_escHtml(l.ubs)+'</td><td>'+_escHtml(l.nome)+'</td><td>'+_escHtml(l.lote)+'</td><td>'+_escHtml(l.validade)+'</td><td class="r '+(f==='venc'||f==='d30'?'v':f==='d60'||f==='d90'?'a':'')+'">'+(l.dias==null?'—':l.dias)+'</td><td class="r">'+l.est+'</td><td>'+_escHtml(rotuloFonte(l))+'</td></tr>';}).join('')+'</table></body></html>';
+    _imprimirDoc(h);
+  }
+  var confOrd=confs.slice().sort(function(a,b){return String(b.criadoEm).localeCompare(String(a.criadoEm));});
+  return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px 90px'}}>
+    <div style={{fontSize:20,fontWeight:800,color:'#1E293B'}}>UBS: validades</div>
+    <div style={{fontSize:13,color:'#64748B',margin:'2px 0 12px'}}>O que foi enviado às UBS e quando vence. As UBS não usam o FarmaControl: o número é <b>estimado</b> pelas saídas e fica mais exato quando a enfermeira faz a conferência.</div>
+    {msg&&<div style={{background:'#E2F6EF',color:'#0B7A5F',borderRadius:10,padding:'9px 12px',fontSize:13,marginBottom:10}}>{msg}</div>}
+    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:8,marginBottom:12}} data-ubsmed="cards">
+      {cards.map(function(c){var f=UM_FAIXAS[c[0]];return <div key={c[0]} onClick={function(){setFRisco(c[0]);}} data-ubsmed={'card-'+c[0]} style={{background:f.bg,borderRadius:14,padding:'12px 14px',cursor:'pointer',border:fRisco===c[0]?'2px solid '+f.c:'2px solid transparent'}}><div style={{fontSize:11.5,fontWeight:700,color:f.c}}>{c[1]}</div><div style={{fontSize:24,fontWeight:800,color:f.c}}>{c[2]}</div><div style={{fontSize:11,color:f.c}}>unidades nas UBS</div></div>;})}
+    </div>
+    <div style={card}>
+      <div style={{fontWeight:800,fontSize:14,marginBottom:6}}>Resumo por UBS</div>
+      <div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}} data-ubsmed="resumo"><thead><tr style={{color:'#64748B'}}><th style={{textAlign:'left',padding:'4px'}}>UBS</th><th style={{textAlign:'right'}}>Lotes</th><th style={{textAlign:'right'}}>Unid.</th><th style={{textAlign:'right'}}>Vencidos/≤30d</th><th style={{textAlign:'left',paddingLeft:10}}>Última conferência</th></tr></thead><tbody>
+        {resumo.length===0&&<tr><td colSpan="5" style={{padding:10,color:'#94A3B8'}}>Nenhuma saída para UBS registrada ainda.</td></tr>}
+        {resumo.map(function(r){var atrasada=r.dd==null||r.dd>30;return(<tr key={r.nome} style={{borderTop:'1px solid #F1F5F9'}}><td style={{padding:'6px 4px',fontWeight:600}}><span style={{cursor:'pointer',color:'#1351B4'}} onClick={function(){setFUbs(r.nome);}}>{r.nome}</span></td><td style={{textAlign:'right'}}>{r.lotes}</td><td style={{textAlign:'right'}}>{r.unid}</td><td style={{textAlign:'right',fontWeight:800,color:r.risco>0?'#C2362D':'#64748B'}}>{r.risco}</td><td style={{paddingLeft:10}}><span style={{fontSize:11.5,fontWeight:700,borderRadius:99,padding:'2px 9px',background:atrasada?'#FEF3C7':'#E2F6EF',color:atrasada?'#92400E':'#0B7A5F'}}>{r.ultima?fmtD(r.ultima)+(r.dd>30?' · há '+r.dd+' dias':''):'nunca conferiu'}</span></td></tr>);})}
+      </tbody></table></div>
+    </div>
+    <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:8,alignItems:'center'}}>
+      <select className="inp" value={fUbs} onChange={function(e){setFUbs(e.target.value);}} style={{width:'auto',marginBottom:0,flex:'1 1 150px'}} data-ubsmed="f-ubs"><option value="todas">Todas as UBS</option>{calc.ubsNomes.slice().sort().map(function(n){return <option key={n} value={n}>{n}</option>;})}</select>
+      <input className="inp" placeholder="Buscar medicamento ou lote…" value={busca} onChange={function(e){setBusca(e.target.value);}} style={{marginBottom:0,flex:'2 1 180px'}}/>
+    </div>
+    <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:10}}>{[['risco','Em risco (≤90d)'],['venc','Vencidos'],['d30','≤30 dias'],['d60','≤60 dias'],['d90','≤90 dias'],['todos','Todos']].map(function(f){return <button key={f[0]} type="button" data-ubsmed={'chip-'+f[0]} onClick={function(){setFRisco(f[0]);}} style={{padding:'6px 12px',borderRadius:99,border:'1.5px solid '+(fRisco===f[0]?'#1351B4':'#E2E8F0'),background:fRisco===f[0]?'#EEF3FB':'#fff',color:fRisco===f[0]?'#1351B4':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>{f[1]}</button>;})}
+      <span style={{flex:1}}/><button type="button" data-ubsmed="pdf" onClick={pdf} style={{padding:'6px 12px',borderRadius:8,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>PDF</button><button type="button" data-ubsmed="xlsx" onClick={excel} style={{padding:'6px 12px',borderRadius:8,border:'1px solid #1351B4',background:'#fff',color:'#1351B4',fontWeight:700,fontSize:12,cursor:'pointer'}}>Excel</button></div>
+    {lista.length===0&&<div style={Object.assign({},card,{color:'#94A3B8',textAlign:'center'})}>{linhasVis.length===0?'Nada enviado às UBS para acompanhar.':'Nenhum item neste filtro.'}</div>}
+    {lista.slice(0,300).map(function(l,i){var f=UM_FAIXAS[_umFaixa(l.dias)];return(<div key={i} data-ubsmed="linha" style={Object.assign({},card,{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap',padding:'10px 14px',marginBottom:6})}>
+      <div style={{flex:'1 1 220px',minWidth:0}}><div style={{fontWeight:700,fontSize:13.5}}>{l.nome}</div><div style={{fontSize:12,color:'#64748B'}}>{l.ubs} · lote {l.lote||'—'} · {l.fonte==='declarado'?'declarado em '+fmtD(l.declaradoEm):'estimado'}{l.semEnvio?' · sem envio registrado':''}</div></div>
+      <div style={{textAlign:'right'}}><div style={{fontWeight:800,fontSize:16}}>{l.est} <span style={{fontSize:11,fontWeight:600,color:'#64748B'}}>un.</span></div><div style={{fontSize:11,color:'#94A3B8'}}>enviado: {l.enviado}</div></div>
+      <span style={{background:f.bg,color:f.c,fontWeight:700,fontSize:11.5,borderRadius:99,padding:'3px 10px',whiteSpace:'nowrap'}}>{l.dias==null?'sem validade':(l.dias<0?'vencido há '+(-l.dias)+' d':'vence em '+l.dias+' d')} · {l.validade||'—'}</span>
+    </div>);})}
+    {lista.length>300&&<div style={{textAlign:'center',color:'#64748B',fontSize:12}}>Mostrando 300 de {lista.length}. Use os filtros ou exporte.</div>}
+    <div style={Object.assign({},card,{marginTop:16})} data-ubsmed="conferencia">
+      <div style={{fontWeight:800,fontSize:14}}>Conferência pelas enfermeiras (link)</div>
+      <div style={{fontSize:12.5,color:'#64748B',margin:'3px 0 8px'}}>A enfermeira abre o link no celular, escolhe a UBS e informa quanto ainda tem de cada medicamento enviado. Sem login.</div>
+      <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
+        <span style={{fontSize:12,fontWeight:700,borderRadius:99,padding:'3px 10px',background:ativo?'#E2F6EF':'#F1F5F9',color:ativo?'#0B7A5F':'#64748B'}}>{ativo?'● Link ativado':'○ Link desativado'}</span>
+        {ehAdm&&<button type="button" data-ubsmed="toggle-link" onClick={function(){salvarCfg({ativo:!ativo}).then(function(){flash(!ativo?'Link ativado.':'Link desativado.');}).catch(function(e){alert('Não foi possível salvar: '+((e&&e.message)||''));});}} style={{padding:'7px 12px',borderRadius:8,border:'1px solid #CBD5E1',background:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>{ativo?'Desativar':'Ativar'}</button>}
+      </div>
+      <div style={{fontSize:12.5,color:'#1351B4',wordBreak:'break-all',margin:'8px 0 4px'}}>{link}</div>
+      <button type="button" data-ubsmed="copiar" onClick={function(){try{navigator.clipboard.writeText(link);flash('Link copiado!');}catch(e){flash('Copie o link manualmente.');}}} style={{padding:'7px 12px',borderRadius:8,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>Copiar link</button>
+      {ehAdm&&<div style={{marginTop:12}}><div style={{fontSize:11.5,fontWeight:700,color:'#64748B'}}>Código de acesso (opcional — as enfermeiras digitam para entrar)</div>
+        <div style={{display:'flex',gap:8,marginTop:3}}><input className="inp" data-ubsmed="codigo" value={codigo} onChange={function(e){setCodigo(e.target.value);}} placeholder="Deixe vazio para não exigir código" style={{marginBottom:0,flex:1}} maxLength={40}/><button type="button" data-ubsmed="salvar-codigo" onClick={function(){salvarCfg({codigo:codigo.trim()}).then(function(){flash('Código salvo.');}).catch(function(e){alert('Não foi possível salvar: '+((e&&e.message)||''));});}} style={{padding:'0 14px',borderRadius:10,border:'1px solid #1351B4',background:'#fff',color:'#1351B4',fontWeight:700,cursor:'pointer'}}>Salvar</button></div></div>}
+      <div style={{marginTop:12}}><button type="button" onClick={function(){setVerConf(!verConf);}} style={{border:'none',background:'none',color:'#1351B4',fontWeight:700,cursor:'pointer',padding:0}}>{verConf?'Esconder':'Ver'} conferências recebidas ({confOrd.length})</button>
+      {verConf&&confOrd.slice(0,40).map(function(c){return <div key={c.id} style={{display:'flex',gap:8,alignItems:'center',fontSize:12.5,padding:'6px 0',borderTop:'1px solid #F1F5F9'}}><div style={{flex:1}}><b>{c.ubsNome}</b> · {c.enfermeira}<div style={{color:'#64748B'}}>{fmtD(c.criadoEm)} {fmtT(c.criadoEm)} · {(c.itens||[]).length} item(ns){c.obs?' · '+c.obs:''}</div></div>{ehAdm&&<button type="button" onClick={function(){if(!window.confirm('Apagar esta conferência?'))return;db.collection('ubs_conferencias').doc(c.id).delete().catch(function(e){alert('Não foi possível apagar: '+((e&&e.message)||''));});}} style={{border:'none',background:'none',color:'#C2362D',fontWeight:700,fontSize:12,cursor:'pointer'}}>Apagar</button>}</div>;})}
+      </div>
     </div>
   </div>);
 }
@@ -13905,7 +14054,7 @@ function menuIconName(id){
   var m={dashboard:'home',saida:'pill',recebimento:'truck',antibiotico:'vial',pedidosjudiciais:'scale',
     visaogeral:'trendUp',comparapedido:'search',estoque:'package',pacientes:'lock',conferencia:'clipboard',
     leites:'droplet',saidasreg:'edit',relatorio:'barChart',gestao:'users',log:'lock',histnotas:'folder',previsao:'clipboard',
-    histcontas:'clipboard',admin:'gear',superadmin:'gear',perfil:'users',ajuda:'help',ubs:'package',transferencia:'truck'};
+    histcontas:'clipboard',admin:'gear',superadmin:'gear',perfil:'users',ajuda:'help',ubs:'package',transferencia:'truck',ubsmed:'calendar'};
   return m[id]||'folder';
 }
 // Para gestor/técnico em Itaquitinga, o slot de maior destaque da navegação (sempre visível) troca
@@ -14016,6 +14165,7 @@ return(
         {tab==='ubs'&&!ro&&!ocultaSat&&temModulo(user,'ubsSolicitacoes')&&<ErrBoundary><TabUbs user={user} entries={entries} medications={meds}/></ErrBoundary>}
         {ocultaSat&&<div style={{maxWidth:520,margin:'40px auto',padding:'0 16px',textAlign:'center',color:'#64748B'}}><div style={{fontSize:16,fontWeight:800,color:'#1E293B',marginBottom:6}}>Não existe no Satélite</div>Esta aba é só do CAF.</div>}
         {ro&&TABS_MOVIMENTO.indexOf(tab)>=0&&<div style={{maxWidth:520,margin:'40px auto',padding:'0 16px',textAlign:'center',color:'#64748B'}}><div style={{fontSize:16,fontWeight:800,color:'#1E293B',marginBottom:6}}>Acesso somente consulta</div>Sua conta pode ver o estoque do CAF e fazer pedidos, mas não movimenta o estoque.</div>}
+        {tab==='ubsmed'&&!ro&&temModulo(user,'destinos')&&<ErrBoundary><TabUbsValidades user={user} entries={entries}/></ErrBoundary>}
         {tab==='transferencia'&&!ro&&localAtivo&&<ErrBoundary><TabTransferencia user={user} entries={entries} medications={meds} medsCaf={medsSemLeite} localAtivo={localAtivo}/></ErrBoundary>}
         {tab==='ajuda'&&<ErrBoundary><TabAjuda user={user} onIr={function(t){setTab(t);}}/></ErrBoundary>}
         {tab==='superadmin'&&user.isSuper&&<ErrBoundary><TabSuperAdmin user={user}/></ErrBoundary>}
@@ -14080,6 +14230,7 @@ return(
               {id:'conferencia',icon:'🧾',label:'Conferência',show:!ro},
               {id:'leites',icon:'🍼',label:'Leites',show:!ro&&!ehSat},
               {id:'saidasreg',icon:'🧾',label:'Saídas registradas',show:!ro&&!ehSat},
+              {id:'ubsmed',icon:'📅',label:'UBS: validades',show:!ro&&temModulo(user,'destinos')},
               {id:'transferencia',icon:'🔁',label:'Transferência CAF ⇄ Satélite'+(repoNovos>0&&localAtivo==='caf'?' ('+repoNovos+')':''),show:!ro&&!!localAtivo},
               {id:'ubs',icon:'🏥',label:'Solicitações das UBS',show:!ro&&!ehSat&&temModulo(user,'ubsSolicitacoes')&&['gestor','tecnico','farmaceutico','auxiliar'].indexOf(user.role)>=0},
               {id:'relatorio',icon:'📊',label:'Relatório',show:true},
@@ -14129,7 +14280,7 @@ return(
             <div style={{fontSize:11,color:temaItaq?'var(--itq-faint)':'rgba(255,255,255,0.5)',marginTop:2}}>{ROLES[user.role]||user.role}</div>
           </div>
           <div style={{flex:1,overflowY:'auto',padding:'8px 0'}}>
-            {[{id:'estoque',icon:'📦',label:'Estoque'},{id:'recebimento',icon:'🚚',label:'Recebimento'},{id:'pacientes',icon:'🔒',label:'Pacientes (Controlados)'},{id:'conferencia',icon:'🧾',label:'Conferência'},{id:'leites',icon:'🍼',label:'Leites'},{id:'saidasreg',icon:'🧾',label:'Saídas registradas'},{id:'transferencia',icon:'🔁',label:'Transferência CAF ⇄ Satélite'+(repoNovos>0&&localAtivo==='caf'?' ('+repoNovos+')':'')},{id:'ubs',icon:'🏥',label:'Solicitações das UBS'},{id:'relatorio',icon:'📊',label:'Relatório'},{id:'previsao',icon:'📋',label:'Previsão / Pedido'},{id:'ajuda',icon:'❓',label:'Ajuda'}].filter(function(t){return t.id!=='pacientes'||temModulo(user,'controlados');}).filter(function(t){if(t.id==='transferencia')return !ro&&!!localAtivo;if(t.id==='ubs')return !ro&&!ehSat&&temModulo(user,'ubsSolicitacoes');if(ehSat&&TABS_SAT_OCULTAS.indexOf(t.id)>=0)return false;if(t.id==='previsao')return podePedidos;return !(ro&&TABS_MOVIMENTO.indexOf(t.id)>=0);}).map(function(t){return(
+            {[{id:'estoque',icon:'📦',label:'Estoque'},{id:'recebimento',icon:'🚚',label:'Recebimento'},{id:'pacientes',icon:'🔒',label:'Pacientes (Controlados)'},{id:'conferencia',icon:'🧾',label:'Conferência'},{id:'leites',icon:'🍼',label:'Leites'},{id:'saidasreg',icon:'🧾',label:'Saídas registradas'},{id:'ubsmed',icon:'📅',label:'UBS: validades'},{id:'transferencia',icon:'🔁',label:'Transferência CAF ⇄ Satélite'+(repoNovos>0&&localAtivo==='caf'?' ('+repoNovos+')':'')},{id:'ubs',icon:'🏥',label:'Solicitações das UBS'},{id:'relatorio',icon:'📊',label:'Relatório'},{id:'previsao',icon:'📋',label:'Previsão / Pedido'},{id:'ajuda',icon:'❓',label:'Ajuda'}].filter(function(t){return t.id!=='pacientes'||temModulo(user,'controlados');}).filter(function(t){if(t.id==='ubsmed')return !ro&&temModulo(user,'destinos');if(t.id==='transferencia')return !ro&&!!localAtivo;if(t.id==='ubs')return !ro&&!ehSat&&temModulo(user,'ubsSolicitacoes');if(ehSat&&TABS_SAT_OCULTAS.indexOf(t.id)>=0)return false;if(t.id==='previsao')return podePedidos;return !(ro&&TABS_MOVIMENTO.indexOf(t.id)>=0);}).map(function(t){return(
               <button key={t.id} data-tour={'nav-'+t.id} className={temaItaq?'menu-drawer-item'+(tab===t.id?' on':''):''} onClick={function(){setTab(t.id);setMenuAberto(false);}} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'13px 20px',border:'none',background:temaItaq?undefined:(tab===t.id?'#EFF6FF':'transparent'),cursor:'pointer',borderLeft:temaItaq?undefined:(tab===t.id?'3px solid #1351B4':'3px solid transparent')}}>
                 <span className={temaItaq?'menu-drawer-ic':''} style={{fontSize:20}}>{temaItaq?<Icon name={menuIconName(t.id)} size={18}/>:t.icon}</span>
                 <span className={temaItaq?'menu-drawer-lbl':''} style={{fontSize:14,fontWeight:tab===t.id?700:500,color:temaItaq?undefined:(tab===t.id?'#1351B4':'#1E293B')}}>{t.label}</span>
