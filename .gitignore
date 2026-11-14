@@ -4,3 +4,4 @@ package.json
 !functions/package.json
 !tests/package.json
 !tests/package-lock.json
+*-debug.log
