@@ -1,0 +1,50 @@
+name: Testes
+
+# Roda todos os testes automaticos a cada mudanca (pull request e envio para a main).
+# O resultado aparece no proprio pull request: verde = pode mesclar; vermelho = algo quebrou.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tests/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Instalar dependencias dos testes
+        working-directory: tests
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+        run: npm ci --no-audit --no-fund
+
+      - name: Instalar o navegador de teste
+        working-directory: tests
+        run: npx playwright install --with-deps chromium
+
+      - name: Guardar o emulador do Firestore em cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ hashFiles('tests/package-lock.json') }}
+
+      - name: Rodar os testes
+        working-directory: tests
+        run: npm test
