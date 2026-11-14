@@ -4567,6 +4567,28 @@ function TabLeites(props){
     </div>}
   </div>);
 }
+// Cartão "Instalar no celular" (Perfil): no Android/Chrome abre o instalador do próprio navegador; no iPhone mostra o passo a passo
+// (Safari não tem botão de instalar); já instalado/standalone, não aparece. Só informação: não mexe em nenhum dado.
+function InstalarApp(){
+  var _t=useState(0);var tick=_t[0],setTick=_t[1];
+  useEffect(function(){function f(){setTick(function(n){return n+1;});}window.addEventListener('fc-install-pronto',f);return function(){window.removeEventListener('fc-install-pronto',f);};},[]);
+  var standalone=false;try{standalone=(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||window.navigator.standalone===true;}catch(e){}
+  if(standalone||window.__fcDemo)return null;
+  var ua=(navigator.userAgent||'');var ios=/iPhone|iPad|iPod/i.test(ua);var android=/Android/i.test(ua);
+  var evt=window.__fcInstallEvt;
+  if(!ios&&!android&&!evt)return null; // computador sem suporte: não mostra
+  var box={background:'#EFF6FF',border:'1px solid #BFDBFE',borderRadius:16,padding:'14px 16px',marginBottom:14,display:'flex',gap:12,alignItems:'center',flexWrap:'wrap'};
+  return(<div data-fc="instalar-app" style={box}>
+    <div style={{width:42,height:42,borderRadius:12,background:'linear-gradient(135deg,#0A2D6E,#1351B4)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'Georgia,serif',fontWeight:900,fontSize:16,flex:'none'}}>FC</div>
+    <div style={{flex:'1 1 180px',minWidth:0}}>
+      <div style={{fontWeight:800,fontSize:14,color:'#1E293B'}}>Instalar o FarmaControl no celular</div>
+      {evt&&<div style={{fontSize:12.5,color:'#475569'}}>Vira um ícone na tela inicial e abre em tela cheia, como um aplicativo.</div>}
+      {!evt&&ios&&<div style={{fontSize:12.5,color:'#475569',lineHeight:1.45}}>No Safari, toque em <b>Compartilhar</b> (o quadrado com a seta) e depois em <b>Adicionar à Tela de Início</b>.</div>}
+      {!evt&&!ios&&<div style={{fontSize:12.5,color:'#475569',lineHeight:1.45}}>No Chrome, toque nos <b>três pontinhos</b> e em <b>Instalar aplicativo</b> (ou <b>Adicionar à tela inicial</b>).</div>}
+    </div>
+    {evt&&<button type="button" data-fc="instalar-btn" onClick={function(){var e=window.__fcInstallEvt;if(!e)return;try{e.prompt();e.userChoice.then(function(){window.__fcInstallEvt=null;setTick(function(n){return n+1;});});}catch(x){}}} style={{padding:'10px 16px',borderRadius:10,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,fontSize:13,cursor:'pointer'}}>Instalar</button>}
+  </div>);
+}
 function TabPerfil(props){var user=props.user;var onUpdate=props.onUpdate;var onLogout=props.onLogout;var entries=props.entries;var medications=props.medications;var stock=props.stock;
   var temaItaq=true;// identidade visual v2 agora é o padrão pra todos os municípios (Itaquitinga + Vicência)
   var _amb=useState((typeof window!=='undefined'&&window.__fcEnv)||'prod');var amb=_amb[0];var setAmb=_amb[1];
@@ -4604,6 +4626,7 @@ var melhorMedalha=(function(){
 })();
 return(
 <div style={{maxWidth:440,margin:'0 auto',padding:'16px 14px'}}>
+  <InstalarApp/>
   <div style={{background:gradBg,borderRadius:24,padding:'32px 24px 28px',marginBottom:16,color:'#fff',textAlign:'center',boxShadow:temaItaq?'0 12px 32px -8px rgba(16,42,90,.45)':'0 12px 40px rgba(0,0,0,.2)',position:'relative',overflow:'hidden'}}>
     <div style={{position:'absolute',top:-60,right:-60,width:200,height:200,borderRadius:'50%',background:'rgba(255,255,255,.06)',pointerEvents:'none'}}/>
     <div style={{position:'absolute',bottom:-50,left:-50,width:160,height:160,borderRadius:'50%',background:'rgba(255,255,255,.04)',pointerEvents:'none'}}/>

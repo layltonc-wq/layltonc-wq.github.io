@@ -4,7 +4,27 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>FarmaControl</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#1351B4">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="FarmaControl">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="apple-touch-icon" href="/assets/pwa/apple-touch-icon.png">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%231351B4'/><text x='50%25' y='54%25' font-family='Georgia,serif' font-size='28' font-weight='900' fill='white' text-anchor='middle' dominant-baseline='middle' letter-spacing='-2'>FC</text></svg>"/>
+<script>
+// ===== App instalável (PWA) =====
+// Guarda o evento "instalar" do Chrome/Android para o botão em Perfil; registra o service worker mínimo (sw.js: só tela
+// de "sem internet", nada de cache do app — ver comentário no próprio sw.js). Fora de produção/localhost também funciona.
+window.__fcInstallEvt=null;
+window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__fcInstallEvt=e;try{window.dispatchEvent(new Event('fc-install-pronto'));}catch(x){}});
+window.addEventListener('appinstalled',function(){window.__fcInstallEvt=null;try{window.dispatchEvent(new Event('fc-install-pronto'));}catch(x){}});
+(function(){
+  if(!('serviceWorker' in navigator))return;
+  if(window.__fcDemo)return;
+  window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){});});
+})();
+</script>
 <script>
 // ===== Auto-atualização: checa em segundo plano se existe uma versão mais nova no servidor e,
 // se existir, força um recarregamento de verdade (com um parâmetro novo na URL, que nunca bate
@@ -19,7 +39,7 @@
 // caso a página NUNCA recarrega sozinha, então sem isso ela ficava presa na versão antiga até
 // fechar e abrir o app de verdade), e (3) a cada 5 minutos enquanto ficar aberta, pro caso raro
 // de o próprio celular manter a aba viva em segundo plano por muito tempo sem trocar de app.
-window.__FC_VERSION=1794622058;
+window.__FC_VERSION=1794697274;
 (function(){
   function checarVersaoNova(){
     try{
@@ -398,6 +418,6 @@ select.inp{cursor:pointer}
   };
 </script>
 <div id="root"></div>
-<script src="app.js?v=ca29b78ae9"></script>
+<script src="app.js?v=114eb80cf7"></script>
 </body>
 </html>
