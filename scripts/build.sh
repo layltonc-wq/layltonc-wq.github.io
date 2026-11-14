@@ -21,3 +21,5 @@ assert n2==1
 open('index.html','w',encoding='utf-8').write(s)
 print('app.js hash',h)
 PY
+# a demonstração (demo/index.html) é derivada do index.html: mantém sempre em dia
+python3 scripts/build_demo.py

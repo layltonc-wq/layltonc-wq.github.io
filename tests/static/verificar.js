@@ -39,6 +39,12 @@ try {
   if (bom) ok(true, 'scripts inline de ' + f + ' (' + blocos.length + ')');
 });
 
+// 2b) a demonstracao (demo/index.html) e derivada do index.html: precisa estar em dia
+try {
+  execFileSync('python3', [path.join(ROOT, 'scripts', 'build_demo.py'), '--check'], { stdio: 'pipe' });
+  ok(true, 'demo/index.html esta em dia com o index.html');
+} catch (e) { ok(false, 'demo/index.html desatualizado: rode "bash scripts/build.sh" e faca commit. ' + String(e.stdout || '').trim()); }
+
 // 3) configuracao
 try {
   const mf = JSON.parse(fs.readFileSync(path.join(ROOT, 'manifest.webmanifest'), 'utf8'));

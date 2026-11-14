@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<script src="isolamento.js"></script>
+<meta name="robots" content="noindex">
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>FarmaControl — Demonstração</title>
+<meta name="theme-color" content="#1351B4">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="FarmaControl">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="apple-touch-icon" href="/assets/pwa/apple-touch-icon.png">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%231351B4'/><text x='50%25' y='54%25' font-family='Georgia,serif' font-size='28' font-weight='900' fill='white' text-anchor='middle' dominant-baseline='middle' letter-spacing='-2'>FC</text></svg>"/>
+<script>
+// ===== App instalável (PWA) =====
+// Guarda o evento "instalar" do Chrome/Android para o botão em Perfil; registra o service worker mínimo (sw.js: só tela
+// de "sem internet", nada de cache do app — ver comentário no próprio sw.js). Fora de produção/localhost também funciona.
+window.__fcInstallEvt=null;
+window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__fcInstallEvt=e;try{window.dispatchEvent(new Event('fc-install-pronto'));}catch(x){}});
+window.addEventListener('appinstalled',function(){window.__fcInstallEvt=null;try{window.dispatchEvent(new Event('fc-install-pronto'));}catch(x){}});
+(function(){
+  if(!('serviceWorker' in navigator))return;
+  if(window.__fcDemo)return;
+  window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){});});
+})();
+</script>
+<script>
+// ===== Auto-atualização: checa em segundo plano se existe uma versão mais nova no servidor e,
+// se existir, força um recarregamento de verdade (com um parâmetro novo na URL, que nunca bate
+// com nada em cache — um location.reload() comum pode ainda servir do cache do navegador).
+// IMPORTANTE PRA QUEM FOR FAZER O PRÓXIMO DEPLOY: troque o número de __FC_VERSION abaixo (pode
+// ser a data/hora atual em segundos, ex.: no terminal `date +%s`) — sem isso, o auto-update não
+// detecta a mudança e navegadores/ícones de tela inicial com cache antigo continuam presos até
+// alguém limpar o cache manualmente (foi exatamente isso que causou o incidente de 18/09/2026).
+//
+// A checagem roda: (1) uma vez já ao carregar, (2) de novo sempre que a aba/app volta a ficar
+// visível (ex.: a pessoa troca de app pra responder uma mensagem e volta pro navegador — nesse
+// caso a página NUNCA recarrega sozinha, então sem isso ela ficava presa na versão antiga até
+// fechar e abrir o app de verdade), e (3) a cada 5 minutos enquanto ficar aberta, pro caso raro
+// de o próprio celular manter a aba viva em segundo plano por muito tempo sem trocar de app.
+window.__FC_VERSION=1794697274;
+(function(){
+  function checarVersaoNova(){
+    try{
+      fetch(location.pathname+'?_vcheck='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(html){
+        var m=html.match(/window\.__FC_VERSION=(\d+)/);
+        if(m&&parseInt(m[1],10)!==window.__FC_VERSION){
+          location.href=location.pathname+'?_v='+Date.now();
+        }
+      }).catch(function(){});
+    }catch(e){}
+  }
+  checarVersaoNova();
+  setInterval(checarVersaoNova,5*60*1000);
+  document.addEventListener('visibilitychange',function(){
+    if(document.visibilityState==='visible')checarVersaoNova();
+  });
+})();
+</script>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://unpkg.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+<script src="fake-firebase.js"></script>
+<script src="seed.js"></script>
+<script src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+<script defer src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<style>
+:root{
+  --blue-900:#0A2D6E;--blue-800:#0E3D96;--blue-700:#1351B4;--blue-600:#1A64D6;
+  --blue-200:#BFDBFE;--blue-100:#DBEAFE;--blue-50:#EFF6FF;
+  --green-700:#0C6B3E;--green-600:#15803D;--green-100:#DCFCE7;--green-50:#F0FDF4;
+  --red-700:#B91C1C;--red-600:#DC2626;--red-100:#FEE2E2;--red-50:#FEF2F2;
+  --amber-700:#B45309;--amber-100:#FEF3C7;--amber-50:#FFFBEB;
+  --gray-900:#0F172A;--gray-800:#1E293B;--gray-700:#334155;--gray-600:#475569;
+  --gray-500:#64748B;--gray-400:#94A3B8;--gray-300:#CBD5E1;--gray-200:#E2E8F0;
+  --gray-100:#F1F5F9;--gray-50:#F8FAFC;--white:#FFFFFF;
+  --shadow-sm:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
+  --shadow-md:0 4px 12px rgba(19,81,180,.08),0 2px 4px rgba(0,0,0,.04);
+  --shadow-lg:0 8px 32px rgba(19,81,180,.12),0 4px 8px rgba(0,0,0,.06);
+  --shadow-xl:0 16px 48px rgba(19,81,180,.16),0 8px 16px rgba(0,0,0,.08);
+  --r-sm:6px;--r-md:10px;--r-lg:14px;--r-xl:18px;--r-2xl:24px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#EEF2F7;color:var(--gray-800);padding-bottom:72px;font-size:14px;line-height:1.5}
+
+/* ── INPUTS ── */
+.inp{width:100%;background:var(--white);border:1.5px solid var(--gray-300);border-radius:var(--r-md);padding:11px 14px;font-size:14px;outline:none;margin-bottom:10px;transition:border-color .18s,box-shadow .18s;color:var(--gray-800);font-family:inherit}
+.inp:focus{border-color:var(--blue-700);box-shadow:0 0 0 3px rgba(19,81,180,.12);background:var(--white)}
+.inp::placeholder{color:var(--gray-400)}
+select.inp{cursor:pointer}
+
+/* ── BUTTONS ── */
+.bp{background:var(--blue-700);border:none;border-radius:var(--r-md);padding:12px 16px;color:#fff;font-size:14px;font-weight:600;cursor:pointer;width:100%;transition:background .18s,box-shadow .18s,transform .1s;box-shadow:0 2px 8px rgba(19,81,180,.28);font-family:inherit;letter-spacing:.01em}
+.bp:hover:not(:disabled){background:var(--blue-800);box-shadow:0 4px 14px rgba(19,81,180,.38)}
+.bp:active:not(:disabled){transform:translateY(1px)}
+.bs{background:var(--white);border:1.5px solid var(--gray-300);border-radius:var(--r-md);padding:11px 16px;color:var(--gray-700);font-size:14px;font-weight:500;cursor:pointer;width:100%;transition:border-color .18s,background .18s;font-family:inherit}
+.bs:hover:not(:disabled){border-color:var(--gray-400);background:var(--gray-50)}
+.bg{background:var(--green-700);border:none;border-radius:var(--r-md);padding:12px 16px;color:#fff;font-size:14px;font-weight:600;cursor:pointer;width:100%;transition:background .18s,box-shadow .18s;box-shadow:0 2px 8px rgba(12,107,62,.28);font-family:inherit}
+.bg:hover:not(:disabled){background:var(--green-600);box-shadow:0 4px 14px rgba(12,107,62,.38)}
+.br{background:var(--red-700);border:none;border-radius:var(--r-md);padding:12px 16px;color:#fff;font-size:14px;font-weight:600;cursor:pointer;width:100%;transition:background .18s,box-shadow .18s;box-shadow:0 2px 8px rgba(185,28,28,.28);font-family:inherit}
+.br:hover:not(:disabled){background:var(--red-600)}
+
+/* ── ALERTS ── */
+.ok{background:var(--green-50);border:1px solid #86EFAC;border-radius:var(--r-md);padding:10px 14px;color:var(--green-700);font-size:13px;margin-bottom:10px;display:flex;align-items:center;gap:8px;font-weight:500}
+.er{background:var(--red-50);border:1px solid #FCA5A5;border-radius:var(--r-md);padding:10px 14px;color:var(--red-700);font-size:13px;margin-bottom:10px;display:flex;align-items:center;gap:8px;font-weight:500}
+.wn{background:var(--amber-50);border:1px solid #FCD34D;border-radius:var(--r-md);padding:10px 14px;color:var(--amber-700);font-size:13px;margin-bottom:10px;display:flex;align-items:center;gap:8px;font-weight:500}
+.inf{background:var(--blue-50);border:1px solid var(--blue-200);border-radius:var(--r-md);padding:10px 14px;color:var(--blue-700);font-size:13px;margin-bottom:10px;display:flex;align-items:center;gap:8px;font-weight:500}
+
+/* ── CARD ── */
+.card{background:var(--white);border-radius:var(--r-xl);box-shadow:var(--shadow-md);border:1px solid var(--gray-200);}
+.ch{padding:14px 20px;border-bottom:1px solid var(--gray-100);display:flex;justify-content:space-between;align-items:center;background:var(--gray-50)}
+.ch-title{font-size:13px;font-weight:700;color:var(--gray-800);text-transform:uppercase;letter-spacing:.04em;display:flex;align-items:center;gap:8px}
+.ch-accent{width:3px;height:16px;background:var(--blue-700);border-radius:2px;flex-shrink:0}
+
+/* ── STAT CARD ── */
+.stat-card{background:var(--white);border-radius:var(--r-xl);box-shadow:var(--shadow-md);border:1px solid var(--gray-200);padding:18px 16px;display:flex;flex-direction:column;gap:4px;position:relative;overflow:hidden}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:currentColor;opacity:.15}
+.stat-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:8px;flex-shrink:0}
+.stat-val{font-size:30px;font-weight:800;line-height:1;letter-spacing:-.02em}
+.stat-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-500);margin-top:2px}
+.stat-sub{font-size:11px;color:var(--gray-400);margin-top:2px}
+
+/* ── BOTTOM NAV ── */
+.bnav{position:fixed;bottom:0;left:0;right:0;background:var(--white);border-top:1px solid var(--gray-200);display:flex;z-index:50;height:64px;box-shadow:0 -4px 20px rgba(0,0,0,.06)}
+.nb{flex:1;padding:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border:none;background:transparent;cursor:pointer;position:relative;transition:background .15s}
+.nb .ni{font-size:19px;line-height:1;transition:transform .18s}
+.nb .nl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;transition:color .15s}
+.nb.on .nl{color:var(--blue-700)}
+.nb:not(.on) .nl{color:var(--gray-400)}
+.nb.on .ni{transform:translateY(-1px)}
+.nb:not(.on) .ni{filter:grayscale(.4);opacity:.7}
+.nb.on::after{content:'';position:absolute;top:0;left:20%;right:20%;height:2.5px;background:var(--blue-700);border-radius:0 0 3px 3px}
+.nbadge{position:absolute;top:6px;right:calc(50% - 20px);background:var(--red-600);color:#fff;border-radius:10px;min-width:16px;height:16px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;padding:0 4px;border:2px solid var(--white)}
+
+/* ── TABLE ── */
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th{padding:11px 16px;text-align:left;font-size:10px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.06em;background:var(--gray-50);border-bottom:1px solid var(--gray-200)}
+.tbl td{padding:13px 16px;border-bottom:1px solid var(--gray-100);vertical-align:middle}
+.tbl tbody tr:hover td{background:var(--blue-50)}
+.tbl tbody tr:last-child td{border-bottom:none}
+
+/* ── BADGES ── */
+.pill{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid var(--gray-200);background:var(--white);color:var(--gray-600);transition:all .15s;white-space:nowrap}
+.pill:hover{border-color:var(--blue-700);color:var(--blue-700)}
+.pill.on{background:var(--blue-700);border-color:var(--blue-700);color:#fff}
+.av{border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;flex-shrink:0}
+.badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;gap:4px}
+.badge-blue{background:var(--blue-50);color:var(--blue-700);border:1px solid var(--blue-200)}
+.badge-green{background:var(--green-50);color:var(--green-700);border:1px solid #86EFAC}
+.badge-red{background:var(--red-50);color:var(--red-700);border:1px solid #FCA5A5}
+.badge-amber{background:var(--amber-50);color:var(--amber-700);border:1px solid #FCD34D}
+.badge-gray{background:var(--gray-100);color:var(--gray-600);border:1px solid var(--gray-200)}
+.tag-s{background:var(--red-50);color:var(--red-700);border:1px solid #FCA5A5;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600}
+.tag-e{background:var(--green-50);color:var(--green-700);border:1px solid #86EFAC;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600}
+
+/* ── DROPDOWN ── */
+.dark,.dark body{background:#070D1A!important;color:#E2E8F0!important}
+.dark .card{background:#0F172A!important;border-color:#1E293B!important;color:#E2E8F0!important;box-shadow:0 2px 12px rgba(0,0,0,0.4)!important}
+.dark .card *{color:#E2E8F0!important}
+.dark .inp{background:#0F172A!important;border-color:#1E293B!important;color:#F1F5F9!important}
+.dark .inp::placeholder{color:#475569!important}
+.dark .ch{border-color:#1E293B!important;background:#0F172A!important}
+.dark .ch-title span,.dark .ch-title{color:#E2E8F0!important}
+.dark .ch-accent{background:#1351B4!important}
+.dark .bnav{background:#0A0F1E!important;border-color:#1E293B!important;box-shadow:0 -2px 20px rgba(0,0,0,0.5)!important}
+.dark .nb .nl{color:#475569!important}
+.dark .nb.on{background:transparent!important}
+.nb.on::after{content:'';position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:20px;height:3px;background:var(--blue);border-radius:3px 3px 0 0;}
+.nb.on .ni{transform:translateY(-2px) scale(1.1);}
+.dark .nb.on .nl{color:#60A5FA!important}
+.dark .nb.on .ni{filter:none!important}
+.dark .inf{color:#94A3B8!important}
+.dark .bp{background:#1351B4!important}
+.dark .br{background:#DC2626!important}
+.dark textarea,.dark select{background:#0F172A!important;border-color:#1E293B!important;color:#F1F5F9!important}
+.dark .badge{background:#1E293B!important;color:#94A3B8!important}
+.dark .badge-blue{background:#1351B4!important;color:#fff!important}
+.dark .badge-green{background:#059669!important;color:#fff!important}
+.dark .badge-red{background:#DC2626!important;color:#fff!important}
+.dark .tbl th{background:#0A0F1E!important;color:#94A3B8!important;border-color:#1E293B!important}
+.dark .tbl td{border-color:#1E293B!important;color:#E2E8F0!important}
+.dark .tbl tr:hover td{background:#1E293B!important}
+.dark label{color:#94A3B8!important}
+.dark .wn{background:#1E293B!important;color:#94A3B8!important;border-color:#334155!important}
+.dark .ok{background:#064E3B!important;color:#6EE7B7!important}
+.dark .er{background:#450A0A!important;color:#FCA5A5!important}
+.dark .sdi{background:#0F172A!important;color:#E2E8F0!important}
+.dark .sdi:hover{background:#1E293B!important}
+.dark .sdrop{background:#0F172A!important;border-color:#1E293B!important}
+.sdrop{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--white);border:1.5px solid var(--blue-700);border-radius:var(--r-lg);z-index:500;box-shadow:0 8px 32px rgba(0,0,0,0.2);max-height:320px;overflow-y:auto}
+.sdi{padding:12px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--gray-100);transition:background .12s}
+.sdi:hover{background:var(--blue-50)}
+.sdi:last-child{border-bottom:none}
+
+/* ── QTD BUTTONS ── */
+.qb{padding:8px 14px;border-radius:8px;border:1.5px solid var(--gray-200);background:var(--white);color:var(--gray-700);cursor:pointer;font-size:13px;font-weight:600;transition:all .15s;font-family:inherit}
+.qb:hover{border-color:var(--blue-700);color:var(--blue-700);background:var(--blue-50)}
+.qb.on{border-color:var(--blue-700);background:var(--blue-700);color:#fff}
+
+/* ── SECTION HEADER ── */
+.sec-header{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.sec-line{flex:1;height:1px;background:var(--gray-200)}
+.sec-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--gray-500);white-space:nowrap}
+
+/* ── UTILS ── */
+.photo-wrap{position:relative;display:inline-block}
+.photo-cam{position:absolute;bottom:-2px;right:-2px;width:30px;height:30px;border-radius:50%;background:var(--blue-700);border:2.5px solid var(--white);display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:var(--shadow-md)}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.fadeUp{animation:fadeUp .25s ease}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── TABS SWITCHER ── */
+.tab-sw{display:flex;background:var(--gray-100);border-radius:var(--r-md);padding:3px;gap:3px;margin-bottom:16px}
+.tab-sw button{flex:1;padding:9px 4px;border-radius:8px;border:none;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;font-family:inherit}
+.tab-sw button.on{background:var(--white);color:var(--blue-700);box-shadow:var(--shadow-sm)}
+.tab-sw button:not(.on){background:transparent;color:var(--gray-500)}
+
+/* ── SHIFT CARD ── */
+.shift-card{background:linear-gradient(135deg,var(--blue-900) 0%,var(--blue-800) 100%);border-radius:var(--r-xl);padding:16px 18px;margin-bottom:14px;color:#fff;box-shadow:var(--shadow-lg)}
+
+/* ── UTILITÁRIOS DE TEXTO/PAINEL (padroniza entre abas) ── */
+.text-strong{color:var(--gray-800)}
+.text-soft{color:var(--gray-500)}
+.text-faint{color:var(--gray-400)}
+.panel-soft{background:var(--blue-50);border:1.5px solid var(--blue-200);border-radius:12px}
+.row-item{display:flex;gap:10px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--gray-100)}
+.row-item:last-child{border-bottom:none}
+.row-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:var(--red-100);color:var(--red-700)}
+.cart-box{background:#FFFBEB;border:2px solid #F59E0B;border-radius:12px}
+.cart-item{background:#fff;border:1px solid #FCD34D;border-radius:8px}
+
+/* ── SCROLL ── */
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--gray-300);border-radius:4px}
+
+/* =====================================================================
+   IDENTIDADE VISUAL — ITAQUITINGA (v2, 10/2026)
+   Mantém a cor azul do gov.br (--blue-700 #1351B4) — pedido explícito da
+   usuária ("gosto das cores azul do padrão que está"). Não é um tema
+   escuro: é o MESMO azul, só com tipografia, espaçamento, cards, ícones
+   e navegação mais refinados e consistentes — ativado só quando
+   tenantDe(user)==='itaquitinga-pe' (classe .theme-itaq no <body>).
+   ===================================================================== */
+.theme-itaq{
+  --itq-ink:#101B33;--itq-text:#3C4A66;--itq-soft:#5B6B8C;--itq-faint:#94A3B8;
+  --itq-bg:#DCE6F5;--itq-line:#E3E9F6;--itq-tint:#EBF2FD;--itq-tint-line:#CFE0FA;
+  --itq-radius:16px;--itq-shadow:0 1px 2px rgba(15,23,42,.04),0 12px 28px -18px rgba(16,42,90,.22);
+  background:var(--itq-bg)!important;color:var(--itq-text)!important;
+  font-family:'IBM Plex Sans','Segoe UI',system-ui,sans-serif!important;
+}
+.theme-itaq .fc-mark{font-family:'IBM Plex Sans','Segoe UI',system-ui,sans-serif!important;font-weight:800!important;letter-spacing:-.03em!important;position:relative}
+/* Selo "FC" único e consistente em todo canto do app (navbar, sidebar, menu, tela de carregamento) —
+   pedido da usuária: o logo estava "fora do padrão" (formato/sombra diferentes em cada lugar). */
+.theme-itaq .fc-badge{border-radius:30%!important;box-shadow:0 3px 10px -2px rgba(13,27,75,.45),inset 0 1px 0 rgba(255,255,255,.18)!important;position:relative;overflow:hidden}
+.theme-itaq .fc-badge::after{content:'';position:absolute;top:0;left:0;right:0;height:45%;background:linear-gradient(rgba(255,255,255,.16),rgba(255,255,255,0));pointer-events:none}
+.theme-itaq .text-strong{color:var(--itq-ink)!important}
+.theme-itaq .text-soft{color:var(--itq-soft)!important}
+.theme-itaq .text-faint{color:var(--itq-faint)!important}
+
+/* Cards: um só raio, uma só sombra, em todo lugar */
+.theme-itaq .card,.theme-itaq .stat-card,.theme-itaq .menu-drawer,.theme-itaq .shift-empty{
+  background:#fff!important;border:1px solid var(--itq-line)!important;
+  border-radius:var(--itq-radius)!important;box-shadow:var(--itq-shadow)!important;
+}
+.theme-itaq .stat-card::before{display:none}
+.theme-itaq .stat-icon{background:var(--itq-tint)!important;color:var(--blue-700)!important;border-radius:12px!important}
+.theme-itaq .ch{background:#fff!important;border-bottom:1px solid var(--itq-line)!important;border-radius:var(--itq-radius) var(--itq-radius) 0 0!important}
+.theme-itaq .ch-title,.theme-itaq .ch-title span{color:var(--itq-ink)!important}
+
+/* Botões e controles — mesmo azul, bordas/raio consistentes */
+.theme-itaq .bp{border-radius:12px!important;box-shadow:0 8px 20px -8px rgba(19,81,180,.45)!important}
+.theme-itaq .bs{background:#fff!important;border-color:var(--itq-line)!important;color:var(--itq-text)!important;border-radius:12px!important}
+.theme-itaq .bg{border-radius:12px!important}
+.theme-itaq .br{border-radius:12px!important}
+.theme-itaq .inp,.theme-itaq textarea{border:1.5px solid var(--itq-line)!important;border-radius:12px!important;color:var(--itq-ink)!important}
+.theme-itaq .inp:focus{border-color:var(--blue-700)!important}
+.theme-itaq .pill{border-radius:10px!important;border-color:var(--itq-line)!important;color:var(--itq-soft)!important}
+.theme-itaq .pill.on{background:var(--blue-700)!important;border-color:var(--blue-700)!important;color:#fff!important}
+.theme-itaq .qb{border-radius:10px!important;border-color:var(--itq-line)!important;color:var(--itq-text)!important}
+.theme-itaq .qb.on{background:var(--blue-700)!important;border-color:var(--blue-700)!important;color:#fff!important}
+.theme-itaq .tab-sw{background:var(--itq-tint)!important;border-radius:12px!important}
+.theme-itaq .tab-sw button.on{background:#fff!important;color:var(--blue-700)!important;box-shadow:0 1px 4px rgba(15,23,42,.1)!important;border-radius:9px!important}
+.theme-itaq .tab-sw button:not(.on){color:var(--itq-soft)!important}
+.theme-itaq .sdrop{border-color:var(--blue-700)!important;border-radius:12px!important;box-shadow:0 16px 36px -12px rgba(16,42,90,.28)!important}
+.theme-itaq .sdi{border-bottom-color:var(--itq-line)!important}
+.theme-itaq .sdi:hover{background:var(--itq-tint)!important}
+.theme-itaq .panel-soft{background:var(--itq-tint)!important;border-color:var(--itq-tint-line)!important;border-radius:12px!important}
+.theme-itaq .row-item{border-bottom-color:var(--itq-line)!important}
+.theme-itaq .row-icon{background:var(--itq-tint)!important;color:var(--blue-700)!important}
+.theme-itaq .cart-box{border-radius:12px!important}
+.theme-itaq .cart-item{border-radius:10px!important}
+
+/* Navbar / menu-drawer já usam o degradê azul da marca — só refina cantos/sombra pra bater com o resto */
+.theme-itaq .menu-drawer-item{border-radius:0 12px 12px 0!important}
+.theme-itaq .menu-drawer-item.on{background:var(--itq-tint)!important}
+.theme-itaq .shift-empty{background:var(--itq-tint)!important;border:1.5px dashed var(--itq-tint-line)!important}
+
+/* ── BAR CHART / BARRA LATERAL / MENU DRAWER (estrutura, não cor) ── */
+.bar-fill{background:var(--blue-200)}
+.bar-fill-on{background:var(--blue-700)}
+.bar-lbl{color:var(--gray-400)}
+.bar-lbl-on{color:var(--blue-700)}
+
+.itaq-sidebar{display:none}
+@media (min-width:900px){
+  .theme-itaq .bnav{height:0!important;min-height:0!important;padding:0!important;border:none!important;box-shadow:none!important;background:transparent!important;overflow:visible!important;z-index:200!important}
+  .theme-itaq .bnav-row{display:none!important}
+  .theme-itaq .itaq-sidebar{
+    display:flex;flex-direction:column;align-items:center;gap:4px;
+    position:fixed;top:0;left:0;bottom:0;width:76px;z-index:60;
+    background:#fff;border-right:1px solid var(--itq-line,#E3E9F6);padding:16px 0 20px;
+    box-shadow:2px 0 16px -8px rgba(16,42,90,.12);
+  }
+  body.theme-itaq{padding-bottom:0;padding-left:76px}
+  .theme-itaq .menu-drawer{left:76px!important}
+  /* O fundo escurecido por trás do menu não pode cobrir a barra lateral — senão ela "some"
+     (vira uma coluna em branco/escurecida) enquanto o menu está aberto. */
+  .theme-itaq .itaq-backdrop{left:76px!important}
+}
+.itaq-sidebar-logo{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,var(--blue-900),var(--blue-700));display:flex;align-items:center;justify-content:center;color:#fff;margin-bottom:22px;flex-shrink:0}
+.itaq-sidebar-nav{display:flex;flex-direction:column;gap:6px;flex:1;width:100%;align-items:center}
+.itaq-sidebar-btn{display:flex;flex-direction:column;align-items:center;gap:4px;width:60px;padding:9px 2px;border:none;background:transparent;border-radius:12px;cursor:pointer;color:var(--gray-400);transition:background .15s,color .15s}
+.itaq-sidebar-btn span{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.02em;text-align:center;line-height:1.15}
+.itaq-sidebar-btn:hover{background:var(--gray-50);color:var(--gray-600)}
+.itaq-sidebar-btn.on{background:var(--blue-50);color:var(--blue-700)}
+
+/* ── MENU DRAWER (painel "Menu completo") ── */
+.menu-drawer{background:var(--white)}
+.menu-drawer-head{background:linear-gradient(135deg,#0D1B4B,#1351B4)}
+.menu-drawer-item{width:100%;display:flex;align-items:center;gap:14px;padding:13px 20px;border:none;background:transparent;cursor:pointer;position:relative;border-left:3px solid transparent;transition:background .15s;text-align:left}
+.menu-drawer-item:hover{background:var(--gray-50)}
+.menu-drawer-item.on{background:var(--blue-50);border-left-color:var(--blue-700)}
+.menu-drawer-ic{font-size:20px;width:26px;text-align:center;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;color:var(--gray-600)}
+.menu-drawer-item.on .menu-drawer-ic{color:var(--blue-700)}
+.menu-drawer-lbl{font-size:14px;font-weight:500;color:var(--gray-800);flex:1}
+.menu-drawer-item.on .menu-drawer-lbl{font-weight:700;color:var(--blue-700)}
+.menu-drawer-badge{background:var(--red-600);color:#fff;border-radius:99px;min-width:18px;height:18px;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 5px}
+.menu-drawer-footer{border-top:1px solid var(--gray-100)}
+</style>
+</head>
+<body>
+<script>
+  // ===== Detecção automática de ambiente por HOSTNAME (produção x teste) =====
+  // Regra: SÓ os domínios oficiais de produção usam o Firebase de produção.
+  // Qualquer outro host (previews da Vercel, branch testing, localhost) usa o Firebase de teste.
+  // Não existe process.env no navegador — a decisão é feita 100% pelo window.location.hostname.
+  window.__fcIsProducao = (function(){
+    var h = (window.location && window.location.hostname) || '';
+    return h === 'www.farmacontrol.app.br' || h === 'farmacontrol.app.br';
+  })();
+  // Ambiente efetivo: por padrão segue o hostname. Um override manual opcional em localStorage
+  // ('farmacontrol_env' = 'prod' | 'dev') mantém funcionando o seletor de ambiente do Técnico.
+  window.__fcEnv = (function(){
+    try{ var ov = localStorage.getItem('farmacontrol_env'); if(ov === 'prod' || ov === 'dev') return ov; }catch(e){}
+    return window.__fcIsProducao ? 'prod' : 'dev';
+  })();
+  if(window.__fcEnv === 'dev' && !window.__fcDemo) {
+    var banner = document.createElement('div');
+    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#F59E0B;color:#78350F;padding:12px 16px;font-weight:bold;font-size:13px;z-index:9999;text-align:center;box-shadow:0 2px 10px rgba(0,0,0,0.1)';
+    banner.innerHTML = '🧪 AMBIENTE DE TESTE — Dados ficam separados de PRODUÇÃO';
+    document.body.appendChild(banner);
+  }
+  // ===== Auto-reload de segurança =====
+  // Computador que fica com o FarmaControl aberto por dias sem dar F5 pode ter a conexão em tempo
+  // real do Firestore travando silenciosamente depois de uma queda de internet: a tela parece
+  // normal mas para de mostrar lançamentos novos até alguém recarregar manualmente (foi a causa de
+  // um farmacêutico ver só parte das saídas do dia depois de oscilar a rede). Recarrega sozinho só
+  // em momentos em que ninguém deveria estar no meio de um formulário: quando a internet volta
+  // depois de ter caído de verdade, ou quando a aba volta a ficar visível após passar muito tempo
+  // em segundo plano — nunca enquanto um campo de texto/seleção está com foco.
+  (function(){
+    var LOAD_AT = Date.now(), MAX_IDLE_MS = 4*60*60*1000, houveQueda = false;
+    function campoAtivo(){var el=document.activeElement;return !!el && (el.tagName==='INPUT'||el.tagName==='TEXTAREA'||el.tagName==='SELECT');}
+    window.addEventListener('offline', function(){ houveQueda = true; });
+    window.addEventListener('online', function(){
+      if(!houveQueda) return;
+      setTimeout(function(){ if(!campoAtivo()) window.location.reload(); }, 3000);
+    });
+    document.addEventListener('visibilitychange', function(){
+      if(document.visibilityState === 'visible' && (Date.now()-LOAD_AT) > MAX_IDLE_MS && !campoAtivo()) window.location.reload();
+    });
+  })();
+  // ===== Carregamento sob demanda de bibliotecas pesadas (OCR e leitor de PDF) =====
+  // Tesseract.js (motor de OCR) e PDF.js eram carregados sempre, em toda abertura do app, mesmo pra
+  // quem só ia olhar o estoque — são as duas bibliotecas mais pesadas da lista e só servem pras telas
+  // de leitura de documento por câmera e importação de nota fiscal em PDF. Agora só entram quando uma
+  // dessas telas realmente precisa, deixando a abertura normal do app mais rápida.
+  window.__garantirScript = function(id, src){
+    return new Promise(function(resolve, reject){
+      if(window.__scriptsCarregados && window.__scriptsCarregados[id]){ resolve(); return; }
+      var existente = document.getElementById(id);
+      if(existente){
+        existente.addEventListener('load', function(){ resolve(); });
+        existente.addEventListener('error', function(){ reject(new Error('Falha ao carregar biblioteca.')); });
+        return;
+      }
+      var s = document.createElement('script');
+      s.id = id; s.src = src;
+      s.onload = function(){
+        window.__scriptsCarregados = window.__scriptsCarregados || {};
+        window.__scriptsCarregados[id] = true;
+        resolve();
+      };
+      s.onerror = function(){ reject(new Error('Falha ao carregar biblioteca.')); };
+      document.head.appendChild(s);
+    });
+  };
+  window.__garantirTesseract = function(){
+    return window.Tesseract ? Promise.resolve() : window.__garantirScript('lib-tesseract','https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js');
+  };
+  window.__garantirPdfJs = function(){
+    return window.pdfjsLib ? Promise.resolve() : window.__garantirScript('lib-pdfjs','https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js');
+  };
+</script>
+<div id="root"></div>
+<script>window.__fcAppSrc="../app.js?v=114eb80cf7";</script>
+<script src="demo.js"></script>
+</body>
+</html>
