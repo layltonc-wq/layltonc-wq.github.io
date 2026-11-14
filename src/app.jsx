@@ -7942,6 +7942,7 @@ function TabUbsValidades(props){
   var _ms=useState('');var msg=_ms[0],setMsg=_ms[1];
   var _cd=useState('');var codigo=_cd[0],setCodigo=_cd[1];
   var _ab=useState(false);var verConf=_ab[0],setVerConf=_ab[1];
+  var _ct=useState('todas');var fCat=_ct[0],setFCat=_ct[1];
   useEffect(function(){
     var a=db.collection('ubs_conferencias').where('tenant_id','==',tenant).limit(1000).onSnapshot(function(sn){setConfs(sn.docs.map(function(d){return Object.assign({id:d.id},d.data());}));},function(){});
     var b=db.collection('config').doc('ubsconf__'+tenant).onSnapshot(function(s){var d=s.exists?s.data():null;setCfg(d);if(d)setCodigo(d.codigo||'');},function(){});
@@ -7954,7 +7955,11 @@ function TabUbsValidades(props){
   function salvarCfg(patch){
     return db.collection('config').doc('ubsconf__'+tenant).set(Object.assign({tenant_id:tenant,ativo:ativo,codigo:(cfg&&cfg.codigo)||'',atualizadoEm:new Date().toISOString(),atualizadoPor:user.name||''},patch),{merge:true});
   }
-  var linhasVis=calc.linhas.filter(function(l){return l.est>0;});
+  // categoria de cada produto (Farm. Básica, Penso/Material...) para o filtro; itens sem produto cadastrado ficam só em "Todas"
+  var catDe={};(props.medications||[]).forEach(function(m){catDe[m.id]=m.categoria||'medicamento';});
+  var linhasTodas=calc.linhas.filter(function(l){return l.est>0;}).map(function(l){return Object.assign({},l,{cat:catDe[l.medId]||''});});
+  var catsPresentes=Object.keys(TIPOS).filter(function(k){return linhasTodas.some(function(l){return l.cat===k;});});
+  var linhasVis=fCat==='todas'?linhasTodas:linhasTodas.filter(function(l){return l.cat===fCat;});
   var nq=_semAcento(busca);
   var lista=linhasVis.filter(function(l){
     if(fUbs!=='todas'&&l.ubs!==fUbs)return false;
@@ -7985,7 +7990,7 @@ function TabUbsValidades(props){
     var h='<html><head><meta charset="utf-8"><title>Medicamentos nas UBS</title><style>body{font-family:Arial,sans-serif;padding:22px;color:#0B1736}h1{font-size:19px;margin:0}h2{font-size:14px;margin:18px 0 6px}table{width:100%;border-collapse:collapse;font-size:11.5px}th,td{border-bottom:1px solid #ddd;padding:4px 5px;text-align:left}th{background:#f1f5f9}.r{text-align:right}.v{color:#b91c1c;font-weight:bold}.a{color:#b45309;font-weight:bold}</style></head><body>';
     h+=_orgLinhasHtml(c)+'<h1>Medicamentos enviados às UBS — acompanhamento de validade</h1><p style="font-size:12px;color:#475569">Gerado em '+new Date().toLocaleString('pt-BR')+'. Quantidades <b>estimadas</b> a partir das saídas para as UBS, corrigidas pelas conferências informadas pelas enfermeiras.</p>';
     h+='<h2>Resumo por UBS</h2><table><tr><th>UBS</th><th class="r">Lotes</th><th class="r">Unidades</th><th class="r">Vencidos ou ≤30 dias</th><th>Última conferência</th></tr>'+resumo.map(function(r){return '<tr><td>'+_escHtml(r.nome)+'</td><td class="r">'+r.lotes+'</td><td class="r">'+r.unid+'</td><td class="r '+(r.risco>0?'v':'')+'">'+r.risco+'</td><td>'+(r.ultima?fmtD(r.ultima)+' — '+_escHtml(r.por||''):'nunca')+'</td></tr>';}).join('')+'</table>';
-    h+='<h2>Itens ('+({risco:'vencidos ou vencendo em até 90 dias',todos:'todos',venc:'vencidos',d30:'até 30 dias',d60:'até 60 dias',d90:'até 90 dias'}[fRisco]||'')+(fUbs!=='todas'?' — '+_escHtml(fUbs):'')+')</h2><table><tr><th>UBS</th><th>Medicamento</th><th>Lote</th><th>Validade</th><th class="r">Dias</th><th class="r">Qtd</th><th>Origem</th></tr>'+lista.map(function(l){var f=_umFaixa(l.dias);return '<tr><td>'+_escHtml(l.ubs)+'</td><td>'+_escHtml(l.nome)+'</td><td>'+_escHtml(l.lote)+'</td><td>'+_escHtml(l.validade)+'</td><td class="r '+(f==='venc'||f==='d30'?'v':f==='d60'||f==='d90'?'a':'')+'">'+(l.dias==null?'—':l.dias)+'</td><td class="r">'+l.est+'</td><td>'+_escHtml(rotuloFonte(l))+'</td></tr>';}).join('')+'</table></body></html>';
+    h+='<h2>Itens ('+({risco:'vencidos ou vencendo em até 90 dias',todos:'todos',venc:'vencidos',d30:'até 30 dias',d60:'até 60 dias',d90:'até 90 dias'}[fRisco]||'')+(fUbs!=='todas'?' — '+_escHtml(fUbs):'')+(fCat!=='todas'?' — '+_escHtml(_semEmoji((TIPOS[fCat]||{}).label||fCat)):'')+')</h2><table><tr><th>UBS</th><th>Medicamento</th><th>Lote</th><th>Validade</th><th class="r">Dias</th><th class="r">Qtd</th><th>Origem</th></tr>'+lista.map(function(l){var f=_umFaixa(l.dias);return '<tr><td>'+_escHtml(l.ubs)+'</td><td>'+_escHtml(l.nome)+'</td><td>'+_escHtml(l.lote)+'</td><td>'+_escHtml(l.validade)+'</td><td class="r '+(f==='venc'||f==='d30'?'v':f==='d60'||f==='d90'?'a':'')+'">'+(l.dias==null?'—':l.dias)+'</td><td class="r">'+l.est+'</td><td>'+_escHtml(rotuloFonte(l))+'</td></tr>';}).join('')+'</table></body></html>';
     _imprimirDoc(h);
   }
   var confOrd=confs.slice().sort(function(a,b){return String(b.criadoEm).localeCompare(String(a.criadoEm));});
@@ -8007,6 +8012,7 @@ function TabUbsValidades(props){
       <select className="inp" value={fUbs} onChange={function(e){setFUbs(e.target.value);}} style={{width:'auto',marginBottom:0,flex:'1 1 150px'}} data-ubsmed="f-ubs"><option value="todas">Todas as UBS</option>{calc.ubsNomes.slice().sort().map(function(n){return <option key={n} value={n}>{n}</option>;})}</select>
       <input className="inp" placeholder="Buscar medicamento ou lote…" value={busca} onChange={function(e){setBusca(e.target.value);}} style={{marginBottom:0,flex:'2 1 180px'}}/>
     </div>
+    {catsPresentes.length>1&&<div data-ubsmed="cats" style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:8}}>{[['todas','Todas as categorias']].concat(catsPresentes.map(function(k){return [k,_semEmoji(TIPOS[k].label)];})).map(function(c){return <button key={c[0]} type="button" data-ubsmed={'cat-'+c[0]} onClick={function(){setFCat(c[0]);}} style={{padding:'6px 12px',borderRadius:99,border:'1.5px solid '+(fCat===c[0]?'#0C6B3E':'#E2E8F0'),background:fCat===c[0]?'#F0FDF4':'#fff',color:fCat===c[0]?'#0C6B3E':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>{c[1]}</button>;})}</div>}
     <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:10}}>{[['risco','Em risco (≤90d)'],['venc','Vencidos'],['d30','≤30 dias'],['d60','≤60 dias'],['d90','≤90 dias'],['todos','Todos']].map(function(f){return <button key={f[0]} type="button" data-ubsmed={'chip-'+f[0]} onClick={function(){setFRisco(f[0]);}} style={{padding:'6px 12px',borderRadius:99,border:'1.5px solid '+(fRisco===f[0]?'#1351B4':'#E2E8F0'),background:fRisco===f[0]?'#EEF3FB':'#fff',color:fRisco===f[0]?'#1351B4':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>{f[1]}</button>;})}
       <span style={{flex:1}}/><button type="button" data-ubsmed="pdf" onClick={pdf} style={{padding:'6px 12px',borderRadius:8,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>PDF</button><button type="button" data-ubsmed="xlsx" onClick={excel} style={{padding:'6px 12px',borderRadius:8,border:'1px solid #1351B4',background:'#fff',color:'#1351B4',fontWeight:700,fontSize:12,cursor:'pointer'}}>Excel</button></div>
     {lista.length===0&&<div style={Object.assign({},card,{color:'#94A3B8',textAlign:'center'})}>{linhasVis.length===0?'Nada enviado às UBS para acompanhar.':'Nenhum item neste filtro.'}</div>}
@@ -14165,7 +14171,7 @@ return(
         {tab==='ubs'&&!ro&&!ocultaSat&&temModulo(user,'ubsSolicitacoes')&&<ErrBoundary><TabUbs user={user} entries={entries} medications={meds}/></ErrBoundary>}
         {ocultaSat&&<div style={{maxWidth:520,margin:'40px auto',padding:'0 16px',textAlign:'center',color:'#64748B'}}><div style={{fontSize:16,fontWeight:800,color:'#1E293B',marginBottom:6}}>Não existe no Satélite</div>Esta aba é só do CAF.</div>}
         {ro&&TABS_MOVIMENTO.indexOf(tab)>=0&&<div style={{maxWidth:520,margin:'40px auto',padding:'0 16px',textAlign:'center',color:'#64748B'}}><div style={{fontSize:16,fontWeight:800,color:'#1E293B',marginBottom:6}}>Acesso somente consulta</div>Sua conta pode ver o estoque do CAF e fazer pedidos, mas não movimenta o estoque.</div>}
-        {tab==='ubsmed'&&!ro&&temModulo(user,'destinos')&&<ErrBoundary><TabUbsValidades user={user} entries={entries}/></ErrBoundary>}
+        {tab==='ubsmed'&&!ro&&temModulo(user,'destinos')&&<ErrBoundary><TabUbsValidades user={user} entries={entries} medications={meds}/></ErrBoundary>}
         {tab==='transferencia'&&!ro&&localAtivo&&<ErrBoundary><TabTransferencia user={user} entries={entries} medications={meds} medsCaf={medsSemLeite} localAtivo={localAtivo}/></ErrBoundary>}
         {tab==='ajuda'&&<ErrBoundary><TabAjuda user={user} onIr={function(t){setTab(t);}}/></ErrBoundary>}
         {tab==='superadmin'&&user.isSuper&&<ErrBoundary><TabSuperAdmin user={user}/></ErrBoundary>}
