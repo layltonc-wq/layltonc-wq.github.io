@@ -54,8 +54,8 @@ async function abrir(br,user,mod){
  await pg.waitForTimeout(300);
  ok(await estoque('Dipirona')===25,'saída feita enquanto está no Satélite sai do Satélite');
  r=await pg.evaluate(()=>Object.values(window.__store.entries).filter(x=>x.quantidade===5)[0]);ok(r.local==='satelite','lançamento novo recebe local automaticamente');
- // devolve 10 do Satélite para o CAF
- await go('transferencia');
+ // devolve 10 do Satélite para a CAF (aba Devolver à CAF; a aba abre em Pedir à CAF)
+ await go('transferencia');await pg.click('[data-fc="sub-transf"]');
  await pg.fill('[data-fc="transf-busca"]','dipi');await pg.click('[data-fc="transf-busca"] ~ button');
  await pg.fill('[data-fc="transf-qtd"]','10');await pg.click('[data-fc="transf-ok"]');await pg.waitForTimeout(400);
  await pg.click('[data-fc="local-caf"]');await go('estoque');

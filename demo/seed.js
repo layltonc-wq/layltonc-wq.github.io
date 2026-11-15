@@ -49,7 +49,7 @@
     gestor: { uid: 'demo-gestora', name: 'Gestora (demonstração)', role: 'gestor', acessoLocal: '', somenteLeitura: false, cor: '#1351B4', rotulo: 'Gestora', desc: 'Vê tudo, escolhe entre CAF e Satélite, aprova contas e analisa pedidos.' },
     farmaceutica: { uid: 'demo-farm', name: 'Farmacêutica (demonstração)', role: 'farmaceutico', acessoLocal: 'caf', somenteLeitura: true, cor: '#7B1FA2', rotulo: 'Farmacêutica', desc: 'Só consulta o estoque do CAF e faz Previsão/Pedido e atas.' },
     caf: { uid: 'demo-caf', name: 'Auxiliar do CAF (demonstração)', role: 'auxiliar', acessoLocal: 'caf', somenteLeitura: false, cor: '#0C7B4A', rotulo: 'Auxiliar do CAF', desc: 'Dá saída, recebe e transfere no estoque do CAF.' },
-    satelite: { uid: 'demo-sat', name: 'Auxiliar do Satélite (demonstração)', role: 'auxiliar', acessoLocal: 'satelite', somenteLeitura: false, cor: '#E65100', rotulo: 'Auxiliar do Satélite', desc: 'Vê só o estoque do Satélite e pede reposição ao CAF.' }
+    satelite: { uid: 'demo-sat', name: 'Auxiliar do Satélite (demonstração)', role: 'auxiliar', acessoLocal: 'satelite', somenteLeitura: false, cor: '#E65100', rotulo: 'Auxiliar do Satélite', desc: 'Vê só o estoque do Satélite e pede reposição à CAF.' }
   };
 
   function criar(perfilId) {
@@ -118,7 +118,7 @@
       lancar(m, 'saida', q, lote, val, { iso: iso(14, 10) }, Object.assign({}, base, { local: 'caf' }));
       lancar(m, 'entrada', q, lote, val, { iso: iso(14, 10) }, Object.assign({}, base, { local: 'satelite' }));
       var gasto = Math.round(q * (0.25 + R() * 0.35));
-      for (var k = 0; k < 4; k++) lancar(m, 'saida', Math.max(1, Math.round(gasto / 4)), lote, val, { iso: iso(1 + k * 3, 9 + k) }, { destino: 'sus', destinoNome: '', local: 'satelite', autorId: 'demo-sat', autorNome: 'Auxiliar do Satélite (demonstração)' });
+      for (var k = 0; k < 4; k++) lancar(m, 'saida', Math.max(1, Math.round(gasto / 4)), lote, val, { iso: iso(1 + k * 3, 9 + k) }, { destino: 'emergencia', destinoNome: '', local: 'satelite', autorId: 'demo-sat', autorNome: 'Auxiliar do Satélite (demonstração)' });
     });
     // ----- pessoas (fictícias) -----
     Object.keys(PERFIS).forEach(function (k) { var p = PERFIS[k]; S.users[p.uid] = { name: p.name, role: p.role, status: 'approved', tenant_id: TENANT, color: p.cor, email: p.uid + '@demo.invalid', acessoLocal: p.acessoLocal, somenteLeitura: p.somenteLeitura, sessionTimeout: 12, crf: p.role === 'farmaceutico' ? 'CRF-PE 00000' : '', criadoEm: iso(90) }; });
@@ -143,7 +143,7 @@
     solic('UBS-DEMO-0002', 1, 'enviada', [item(1, meds[2], null, 500), item(2, meds[16], null, 900), item(3, meds[22], null, 30)]);
     solic('UBS-DEMO-0003', 2, 'aprovada', [item(1, meds[1], null, 60, { qtdAprovada: 60 }), item(2, meds[19], null, 300, { qtdAprovada: 250, obsFarm: 'Ajustado pelo estoque' })], { obsFarm: 'Ajustei o omeprazol conforme o estoque.', historico: [{ em: iso(1, 10), acao: 'enviada', por: 'Enfermeira', obs: '' }, { em: iso(1, 15), acao: 'aprovada', por: 'Gestora (demonstração)', obs: 'Ajustei o omeprazol conforme o estoque.' }] });
     solic('UBS-DEMO-0004', 3, 'devolvida', [item(1, meds[4], null, 5000)], { obsFarm: 'Quantidade muito acima do consumo. Reduza e reenvie.' });
-    // ----- pedidos de reposição do Satélite ao CAF -----
+    // ----- pedidos de reposição do Satélite à CAF -----
     function repo(status, itens, extra) { S.reposicoes[id('rep')] = Object.assign({ tenant_id: TENANT, status: status, itens: itens, obs: '', solicitanteId: 'demo-sat', solicitanteNome: 'Auxiliar do Satélite (demonstração)', historico: [{ em: iso(2, 9), acao: 'enviado', por: 'Satélite', obs: '' }], criadoEm: iso(2, 9), atualizadoEm: iso(2, 9), obsCaf: '' }, extra || {}); }
     function ri(i, med, q, t) { return { id: 'r' + i + med.id, medId: med.id, nome: med.nome, qtdSolicitada: q, qtdTransferida: t || 0, obsCaf: '' }; }
     repo('pendente', [ri(1, meds[0], 200), ri(2, meds[16], 400), ri(3, meds[36], 40)]);

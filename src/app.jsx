@@ -76,6 +76,12 @@ function temModulo(u,m){var c=tcfg(u);return !!(c.modulos&&c.modulos[m]);}
 // medicamentos.estoqueLocal.satelite é a parte do Satélite (mantida pela Cloud Function); CAF = total − satélite.
 var LOCAIS_LISTA=[{id:'caf',nome:'CAF'},{id:'satelite',nome:'Satélite'}];
 function nomeLocal(id){return id==='satelite'?'Satélite':'CAF';}
+// "a CAF" (feminino) e "o Satélite" (masculino): frases certas nas telas de transferência/solicitação
+function deLocal(id){return id==='satelite'?'do Satélite':'da CAF';}
+function paraLocal(id){return id==='satelite'?'para o Satélite':'para a CAF';}
+function emLocal(id){return id==='satelite'?'no Satélite':'na CAF';}
+function aLocal(id){return id==='satelite'?'ao Satélite':'à CAF';}
+function maiusc1(s){return s?s.charAt(0).toUpperCase()+s.slice(1):s;}
 function temLocais(u){return !!u&&temModulo(u,'locais');}
 // 'caf' | 'satelite' | 'ambos' | null (município sem locais). Gestor/técnico atuam nos dois.
 function acessoLocalDe(u){if(!temLocais(u))return null;if(u.role==='gestor'||u.role==='tecnico')return 'ambos';return u.acessoLocal==='satelite'?'satelite':(u.acessoLocal==='ambos'?'ambos':'caf');}
@@ -7570,9 +7576,9 @@ function UbsRelatorios(props){
 // Preserva lote e validade (FEFO, sem lote vencido). Ambos os lançamentos levam transferencia:true.
 function TabTransferencia(props){
   var user=props.user,entries=props.entries||[],meds=props.medications||[],origem=props.localAtivo,destino=origem==='satelite'?'caf':'satelite';
-  var _sub=useState('transf');var sub=_sub[0],setSub=_sub[1];
+  var _sub=useState(origem==='satelite'?'pedir':'transf');var sub=_sub[0],setSub=_sub[1];
   var reposAll=useReposicoes(user);var nPend=reposAll.filter(function(r){return r.status==='pendente';}).length;
-  var subs=origem==='satelite'?[['transf','Transferir ao CAF'],['pedir','Pedir ao CAF']]:[['transf','Transferir ao Satélite'],['pedidos','Pedidos do Satélite'+(nPend?' ('+nPend+')':'')]];
+  var subs=origem==='satelite'?[['pedir','Pedir à CAF'],['transf','Devolver à CAF']]:[['transf','Transferir ao Satélite'],['pedidos','Pedidos do Satélite'+(nPend?' ('+nPend+')':'')]];
   var _q=useState('');var q=_q[0],setQ=_q[1];
   var _m=useState(null);var med=_m[0],setMed=_m[1];
   var _n=useState('');var qtd=_n[0],setQtd=_n[1];
@@ -7589,10 +7595,10 @@ function TabTransferencia(props){
     var n=parseInt(qtd,10);
     if(!med){setErr('Escolha o medicamento.');return;}
     if(!(n>=1)){setErr('Informe a quantidade.');return;}
-    if(n>disp.total){setErr('Quantidade maior que o disponível no '+nomeLocal(origem)+' ('+disp.total+').');return;}
+    if(n>disp.total){setErr('Quantidade maior que o disponível '+emLocal(origem)+' ('+disp.total+').');return;}
     var pl=_ubsPlano(disp,n,'');
     if(pl.falta>0){setErr('Os lotes dentro da validade não cobrem a quantidade (há lote vencido ou sem validade). Resolva em Estoque antes.');return;}
-    if(!window.confirm('Transferir '+n+' un. de '+med.nome+' do '+nomeLocal(origem)+' para o '+nomeLocal(destino)+'?'))return;
+    if(!window.confirm('Transferir '+n+' un. de '+med.nome+' '+deLocal(origem)+' '+paraLocal(destino)+'?'))return;
     setBusy(true);
     var agora=new Date().toISOString();
     var base={medicamentoId:med.id,medicamentoNome:med.nome,criadoEm:agora,date:todayStr(),autorId:user.uid,autorNome:user.name||user.email,autorCargo:user.role||'',tenant_id:tenantDe(user),transferencia:true,destino:'transferencia',destinoNome:'Transferência'};
@@ -7602,12 +7608,12 @@ function TabTransferencia(props){
       b.set(db.collection('entries').doc(),Object.assign({},base,comum,{tipo:'saida',local:origem}));
       b.set(db.collection('entries').doc(),Object.assign({},base,comum,{tipo:'entrada',local:destino}));
     });
-    b.commit().then(function(){setBusy(false);setOk(n+' un. de '+med.nome+' enviadas ao '+nomeLocal(destino)+'.');setMed(null);setQ('');setQtd('');setObs('');}).catch(function(e){setBusy(false);setErr('Não foi possível transferir: '+((e&&e.message)||'erro'));});
+    b.commit().then(function(){setBusy(false);setOk(n+' un. de '+med.nome+' enviadas '+aLocal(destino)+'.');setMed(null);setQ('');setQtd('');setObs('');}).catch(function(e){setBusy(false);setErr('Não foi possível transferir: '+((e&&e.message)||'erro'));});
   }
   var card={background:'#fff',borderRadius:14,border:'1px solid #E2E8F0',padding:'14px 16px',marginBottom:10};
   return(<div style={{maxWidth:640,margin:'0 auto',padding:'16px 14px 90px'}}>
-    <div style={{fontSize:20,fontWeight:800,color:'#1E293B'}}>Transferência</div>
-    <div style={{fontSize:13,color:'#64748B',margin:'2px 0 12px'}}>Do <b>{nomeLocal(origem)}</b> para o <b>{nomeLocal(destino)}</b>. Sai do estoque de um e entra no do outro, com o mesmo lote e validade.</div>
+    <div style={{fontSize:20,fontWeight:800,color:'#1E293B'}}>{origem==='satelite'?'Solicitação':'Transferência'}</div>
+    <div style={{fontSize:13,color:'#64748B',margin:'2px 0 12px'}}>{origem==='satelite'?(sub==='pedir'?<span>Peça <b>à CAF</b> os produtos de que o Satélite precisa. A CAF analisa e envia.</span>:<span><b>Devolver à CAF</b>: o que o Satélite não vai usar sai do estoque do Satélite e volta para a CAF, com o mesmo lote e validade. O histórico fica logo abaixo.</span>):<span><b>{maiusc1(deLocal(origem))}</b> <b>{paraLocal(destino)}</b>. Sai do estoque de um e entra no do outro, com o mesmo lote e validade.</span>}</div>
     <div style={{display:'flex',gap:6,marginBottom:12,flexWrap:'wrap'}}>{subs.map(function(s){return <button key={s[0]} type="button" data-fc={'sub-'+s[0]} onClick={function(){setSub(s[0]);}} style={{padding:'8px 14px',borderRadius:99,border:'1.5px solid '+(sub===s[0]?'#1351B4':'#E2E8F0'),background:sub===s[0]?'#1351B4':'#fff',color:sub===s[0]?'#fff':'#475569',fontWeight:700,fontSize:12.5,cursor:'pointer'}}>{s[1]}</button>;})}</div>
     {sub==='pedir'&&origem==='satelite'&&<ReposicaoSatelite user={user} meds={props.medsCaf||meds}/>}
     {sub==='pedidos'&&origem==='caf'&&<ReposicaoCaf user={user} entries={entries}/>}
@@ -7616,11 +7622,11 @@ function TabTransferencia(props){
         {achados.map(function(m){return <button key={m.id} onClick={function(){setMed(m);setQ('');}} style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',border:'none',borderTop:'1px solid #F1F5F9',background:'#fff',cursor:'pointer',fontSize:14}}>{m.nome}</button>;})}</div>}
       {med&&<div>
         <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}><div style={{flex:1,fontWeight:800}}>{med.nome}</div><button onClick={function(){setMed(null);}} style={{border:'none',background:'none',color:'#1351B4',fontWeight:700,cursor:'pointer'}}>Trocar</button></div>
-        <div style={{fontSize:13,color:'#475569',marginBottom:8}}>Disponível no {nomeLocal(origem)}: <b>{disp.total}</b>{disp.lotes.length>0&&' · '+disp.lotes.filter(function(l){return !l.vencido;}).map(function(l){return l.lote+' ('+l.qty+')';}).join(', ')}</div>
+        <div style={{fontSize:13,color:'#475569',marginBottom:8}}>Disponível {emLocal(origem)}: <b>{disp.total}</b>{disp.lotes.length>0&&' · '+disp.lotes.filter(function(l){return !l.vencido;}).map(function(l){return l.lote+' ('+l.qty+')';}).join(', ')}</div>
         <input className="inp" type="number" min="1" data-fc="transf-qtd" placeholder="Quantidade" value={qtd} onChange={function(e){setQtd(e.target.value);}}/>
         <input className="inp" placeholder="Observação (opcional)" value={obs} onChange={function(e){setObs(e.target.value);}}/>
         {err&&<div style={{background:'#FDECEA',color:'#C2362D',borderRadius:10,padding:'9px 12px',fontSize:13,marginBottom:8}}>{err}</div>}
-        <button data-fc="transf-ok" disabled={busy} onClick={transferir} style={{width:'100%',padding:'12px',borderRadius:10,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,cursor:'pointer'}}>{busy?'Transferindo…':'Transferir para o '+nomeLocal(destino)}</button>
+        <button data-fc="transf-ok" disabled={busy} onClick={transferir} style={{width:'100%',padding:'12px',borderRadius:10,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,cursor:'pointer'}}>{busy?'Transferindo…':(origem==='satelite'?'Devolver à CAF':'Transferir '+paraLocal(destino))}</button>
       </div>}
       {!med&&err&&<div style={{background:'#FDECEA',color:'#C2362D',borderRadius:10,padding:'9px 12px',fontSize:13,marginTop:8}}>{err}</div>}
       {ok&&<div data-fc="transf-msg" style={{background:'#E2F6EF',color:'#0B7A5F',borderRadius:10,padding:'9px 12px',fontSize:13,marginTop:8}}>{ok}</div>}
@@ -7763,10 +7769,10 @@ function EntradaEspecial(props){
       {lista.slice(0,15).map(function(e){return <div key={e.id} style={{display:'flex',gap:8,fontSize:12.5,padding:'6px 0',borderTop:'1px solid #F1F5F9'}}><span style={{width:62,fontWeight:700,color:e.entradaEspecial==='doacao'?'#0B7A5F':'#7C3AED'}}>{e.entradaEspecial==='doacao'?'Doação':'Permuta'}</span><span style={{flex:1}}>{e.tipo==='saida'?'Saiu ':'Entrou '}{e.quantidade}x {e.medicamentoNome}{e.lote?' · '+e.lote:''}{e.lotePendente?' · PENDENTE':''}</span><span style={{color:'#94A3B8'}}>{fmtD(e.criadoEm)}</span></div>;})}</div>}
   </div>);
 }
-// ===== Pedidos de reposição do Satélite ao CAF =====
-// O Satélite escolhe produtos (só os NOMES, sem saldo do CAF) e as quantidades; o CAF vê o pedido, confere o estoque dele,
+// ===== Pedidos de reposição do Satélite à CAF =====
+// O Satélite escolhe produtos (só os NOMES, sem saldo da CAF) e as quantidades; o CAF vê o pedido, confere o estoque dele,
 // ajusta, devolve, cancela ou atende (a transferência acontece na hora, com lote/validade, e fica ligada ao pedido).
-var REPO_STATUS={pendente:{l:'Aguardando o CAF',c:'#1351B4',bg:'#EEF3FB'},parcial:{l:'Atendido em parte',c:'#B26A00',bg:'#FFF3DC'},atendida:{l:'Atendido',c:'#0B7A5F',bg:'#E2F6EF'},devolvida:{l:'Devolvido p/ ajuste',c:'#B26A00',bg:'#FFF3DC'},cancelada:{l:'Cancelado',c:'#C2362D',bg:'#FDECEA'}};
+var REPO_STATUS={pendente:{l:'Aguardando a CAF',c:'#1351B4',bg:'#EEF3FB'},parcial:{l:'Atendido em parte',c:'#B26A00',bg:'#FFF3DC'},atendida:{l:'Atendido',c:'#0B7A5F',bg:'#E2F6EF'},devolvida:{l:'Devolvido p/ ajuste',c:'#B26A00',bg:'#FFF3DC'},cancelada:{l:'Cancelado',c:'#C2362D',bg:'#FDECEA'}};
 function RepoChip(props){var s=REPO_STATUS[props.st]||{l:props.st,c:'#475569',bg:'#F1F5F9'};return <span style={{background:s.bg,color:s.c,fontWeight:700,fontSize:11.5,borderRadius:99,padding:'3px 10px',whiteSpace:'nowrap'}}>{s.l}</span>;}
 function useReposicoes(user){
   var _l=useState([]);var lista=_l[0],setLista=_l[1];
@@ -7792,24 +7798,24 @@ function ReposicaoSatelite(props){
     var p;
     if(editId){var atual=lista.filter(function(x){return x.id===editId;})[0]||{};p=db.collection('reposicoes').doc(editId).update({itens:its,obs:obs.trim(),status:'pendente',historico:(atual.historico||[]).concat([{em:agora,acao:'reenviado',por:user.name,obs:''}]),atualizadoEm:agora});}
     else p=db.collection('reposicoes').add({tenant_id:tenantDe(user),status:'pendente',itens:its,obs:obs.trim(),solicitanteId:user.uid,solicitanteNome:user.name||user.email,historico:[{em:agora,acao:'enviado',por:user.name,obs:''}],criadoEm:agora,atualizadoEm:agora,obsCaf:''});
-    p.then(function(){setBusy(false);setOk(editId?'Pedido reenviado ao CAF.':'Pedido enviado ao CAF.');setItens([]);setObs('');setEditId(null);}).catch(function(e){setBusy(false);setErr('Não foi possível enviar: '+((e&&e.message)||''));});
+    p.then(function(){setBusy(false);setOk(editId?'Pedido reenviado à CAF.':'Pedido enviado à CAF.');setItens([]);setObs('');setEditId(null);}).catch(function(e){setBusy(false);setErr('Não foi possível enviar: '+((e&&e.message)||''));});
   }
   function cancelarMeu(r){if(!window.confirm('Cancelar este pedido?'))return;db.collection('reposicoes').doc(r.id).update({status:'cancelada',historico:(r.historico||[]).concat([{em:new Date().toISOString(),acao:'cancelada',por:user.name,obs:'Cancelado pelo Satélite'}]),atualizadoEm:new Date().toISOString()});}
   function corrigir(r){setEditId(r.id);setItens(r.itens.map(function(i){return Object.assign({},i,{qtd:String(i.qtdSolicitada)});}));setObs(r.obs||'');window.scrollTo(0,0);}
   var card={background:'#fff',borderRadius:14,border:'1px solid #E2E8F0',padding:'14px 16px',marginBottom:10};
   return(<div data-fc="repo-sat">
     <div style={card}>
-      <div style={{fontWeight:800,marginBottom:2}}>{editId?'Corrigir pedido':'Novo pedido ao CAF'}</div>
-      <div style={{fontSize:12.5,color:'#64748B',marginBottom:8}}>Escolha os produtos e as quantidades que o Satélite precisa. O CAF vai analisar e transferir.</div>
-      <MedPickerSimples meds={meds} value={pick} dataFc="repo-busca" placeholder="Buscar produto do CAF…" onChange={function(m){if(m)addItem(m);}}/>
+      <div style={{fontWeight:800,marginBottom:2}}>{editId?'Corrigir pedido':'Novo pedido à CAF'}</div>
+      <div style={{fontSize:12.5,color:'#64748B',marginBottom:8}}>Escolha os produtos e as quantidades que o Satélite precisa. A CAF vai analisar e transferir.</div>
+      <MedPickerSimples meds={meds} value={pick} dataFc="repo-busca" placeholder="Buscar produto da CAF…" onChange={function(m){if(m)addItem(m);}}/>
       {itens.map(function(i,idx){return(<div key={i.medId} style={{display:'flex',alignItems:'center',gap:8,borderTop:'1px solid #F1F5F9',padding:'8px 0',marginTop:idx?0:8}}>
         <div style={{flex:1,fontSize:13.5,fontWeight:600}}>{i.nome}{i.obsCaf&&<div style={{fontSize:11.5,color:'#B26A00',fontWeight:500}}>CAF: {i.obsCaf}</div>}</div>
         <input className="inp" type="number" min="1" data-fc={'repo-qtd-'+idx} value={i.qtd} placeholder="Qtd" onChange={function(e){setItens(itens.map(function(x){return x.medId===i.medId?Object.assign({},x,{qtd:e.target.value}):x;}));}} style={{width:90,marginBottom:0,textAlign:'center'}}/>
         <button type="button" onClick={function(){setItens(itens.filter(function(x){return x.medId!==i.medId;}));}} style={{border:'none',background:'none',color:'#C2362D',fontWeight:700,fontSize:12,cursor:'pointer'}}>Remover</button></div>);})}
-      <input className="inp" placeholder="Observação para o CAF (opcional)" value={obs} onChange={function(e){setObs(e.target.value);}} style={{marginTop:8}}/>
+      <input className="inp" placeholder="Observação para a CAF (opcional)" value={obs} onChange={function(e){setObs(e.target.value);}} style={{marginTop:8}}/>
       {err&&<div data-fc="repo-erro" style={{background:'#FDECEA',color:'#C2362D',borderRadius:10,padding:'9px 12px',fontSize:13,marginBottom:8}}>{err}</div>}
       {ok&&<div data-fc="repo-ok" style={{background:'#E2F6EF',color:'#0B7A5F',borderRadius:10,padding:'9px 12px',fontSize:13,marginBottom:8}}>{ok}</div>}
-      <button type="button" data-fc="repo-enviar" disabled={busy} onClick={enviar} style={{width:'100%',padding:'12px',borderRadius:10,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,cursor:'pointer'}}>{busy?'Enviando…':(editId?'Reenviar ao CAF':'Enviar pedido ao CAF')}</button>
+      <button type="button" data-fc="repo-enviar" disabled={busy} onClick={enviar} style={{width:'100%',padding:'12px',borderRadius:10,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,cursor:'pointer'}}>{busy?'Enviando…':(editId?'Reenviar à CAF':'Enviar pedido à CAF')}</button>
     </div>
     <div style={{fontWeight:800,margin:'14px 0 6px'}}>Meus pedidos</div>
     {lista.length===0&&<div style={Object.assign({},card,{color:'#94A3B8',textAlign:'center'})}>Nenhum pedido ainda.</div>}
@@ -7856,7 +7862,7 @@ function ReposicaoCafDetalhe(props){
       var pend=i.qtdSolicitada-(i.qtdTransferida||0);
       if(n>pend){problema=problema||'"'+i.nome+'": mais do que o pedido ('+pend+' pendente).';return;}
       var disp=_ubsDisp(entries,i.medId);
-      if(n>disp.total){problema=problema||'"'+i.nome+'": estoque do CAF insuficiente (disponível '+disp.total+').';return;}
+      if(n>disp.total){problema=problema||'"'+i.nome+'": estoque da CAF insuficiente (disponível '+disp.total+').';return;}
       var pl=_ubsPlano(disp,n,'');
       if(pl.falta>0){problema=problema||'"'+i.nome+'": os lotes dentro da validade não cobrem a quantidade.';return;}
       movs.push({i:i,n:n,partes:pl.partes});
@@ -7894,7 +7900,7 @@ function ReposicaoCafDetalhe(props){
       return(<div key={i.id} data-fc={'repo-it-'+i.id} style={{border:'1px solid '+(disp<pend?'#FCA5A5':'#E2E8F0'),borderRadius:12,padding:'10px 12px',marginTop:8}}>
         <div style={{fontWeight:700}}>{i.nome}</div>
         <div style={{display:'flex',gap:14,flexWrap:'wrap',fontSize:13,margin:'4px 0'}}><span><span style={lbl}>PEDIDO </span><b>{i.qtdSolicitada}</b></span><span><span style={lbl}>JÁ ENVIADO </span><b>{i.qtdTransferida||0}</b></span><span><span style={lbl}>ESTOQUE CAF </span><b style={{color:disp<pend?'#C2362D':'#0B7A5F'}}>{disp}</b></span></div>
-        {disp<pend&&<div style={{background:'#FDECEA',color:'#C2362D',fontSize:12.5,fontWeight:700,borderRadius:8,padding:'5px 10px',marginBottom:6}}>Estoque do CAF não cobre o pedido.</div>}
+        {disp<pend&&<div style={{background:'#FDECEA',color:'#C2362D',fontSize:12.5,fontWeight:700,borderRadius:8,padding:'5px 10px',marginBottom:6}}>Estoque da CAF não cobre o pedido.</div>}
         {aberta&&<div style={{display:'flex',gap:8,flexWrap:'wrap'}}><div style={{width:110}}><div style={lbl}>Enviar agora</div><input className="inp" type="number" min="0" data-fc={'repo-env-'+i.id} value={e.env} onChange={function(ev){setCampo(i.id,'env',ev.target.value);}} style={{marginBottom:0}}/></div><div style={{flex:1,minWidth:140}}><div style={lbl}>Observação do item</div><input className="inp" value={e.obs} onChange={function(ev){setCampo(i.id,'obs',ev.target.value);}} style={{marginBottom:0}}/></div></div>}
       </div>);})}
     {(aberta||modo)&&<div style={{marginTop:10}}><div style={lbl}>Observação para o Satélite (obrigatória para devolver ou cancelar)</div><textarea className="inp" data-fc="repo-obs" value={obs} onChange={function(e){setObs(e.target.value);}} style={{minHeight:60}}/></div>}
@@ -13959,6 +13965,8 @@ var localAtivo=!acessoLocal?null:(acessoLocal==='ambos'?(lcSel==='satelite'?'sat
 _fcLocalAtivo=localAtivo;
 function trocarLocal(l){try{localStorage.setItem('fc_local',l);}catch(e){}setLcSel(l);}
 var ehSat=localAtivo==='satelite';
+// No Satélite não existe "usuário SUS": toda saída é Emergência. Ao trocar de local volta ao padrão do CAF.
+useEffect(function(){if(ehSat)setDestinoSaida('emergencia');else if(localAtivo==='caf')setDestinoSaida(function(d){return d==='emergencia'?'sus':d;});},[ehSat,localAtivo]);
 // No Satélite: sem a categoria Leite e só os produtos que já tiveram movimento lá (cadastro segue único; o resto aparece quando chega por transferência/recebimento).
 var satIds=useMemo(function(){if(!ehSat)return null;var s={};entriesTodas.forEach(function(e){if(e.local==='satelite'&&e.medicamentoId)s[e.medicamentoId]=1;});medsTodos.forEach(function(m){if(m.estoqueLocal&&m.estoqueLocal.satelite!==undefined)s[m.id]=1;});return s;},[ehSat,entriesTodas,medsTodos]);
 var meds=useMemo(function(){if(!ehSat)return medsTodos;return medsTodos.filter(function(m){return m.categoria!=='leite'&&satIds&&satIds[m.id];});},[ehSat,medsTodos,satIds]);
@@ -14071,7 +14079,7 @@ if(pendingInvite)return <InviteScreen invite={pendingInvite} onConfirm={handleCo
 var isManagerRole=(user.role==='gestor'||user.role==='tecnico');
 var ro=somenteLeitura(user); // conta só de consulta (ex.: farmacêutica em Itaquitinga): vê o estoque, não movimenta
 var podePedidos=isManagerRole||(user.role==='farmaceutico'&&temLocais(user)); // aba Previsão/Pedido e atas
-var TABS_SAT_OCULTAS=['leites','saidasreg','ubs'];
+var TABS_SAT_OCULTAS=['leites','saidasreg','ubs','pedidosjudiciais'];
 var ocultaSat=ehSat&&TABS_SAT_OCULTAS.indexOf(tab)>=0;
 var TABS_MOVIMENTO=['transferencia','saida','recebimento','conferencia','saidasreg','leites','antibiotico','pacientes','pedidosjudiciais','ubs'];
 var temaItaq=true;// identidade visual v2 agora é o padrão pra todos os municípios (Itaquitinga + Vicência)
@@ -14092,7 +14100,7 @@ function menuIconName(id){
 // Vicência" no texto). Vicência, e os outros papéis em Itaquitinga (que nunca tiveram acesso a
 // Pedidos Judiciais — só aparecia no menu lateral, restrito a gestor/técnico), continuam vendo ATB
 // nesse slot exatamente como antes.
-var navPrincipal=ro?[{id:'dashboard',icon:'🏠',label:'Início'},{id:'estoque',icon:'📦',label:'Estoque'},{id:'previsao',icon:'📋',label:'Pedido'}]:[{id:'dashboard',icon:'🏠',label:'Início'},{id:'saida',icon:'💊',label:'Saída'},{id:'recebimento',icon:'🚚',label:'Recebimento'},
+var navPrincipal=ro?[{id:'dashboard',icon:'🏠',label:'Início'},{id:'estoque',icon:'📦',label:'Estoque'},{id:'previsao',icon:'📋',label:'Pedido'}]:ehSat?[{id:'dashboard',icon:'🏠',label:'Início'},{id:'saida',icon:'💊',label:'Saída'},{id:'recebimento',icon:'🚚',label:'Recebimento'},{id:'transferencia',icon:'🔁',label:'Solicitação'}]:[{id:'dashboard',icon:'🏠',label:'Início'},{id:'saida',icon:'💊',label:'Saída'},{id:'recebimento',icon:'🚚',label:'Recebimento'},
   (temModulo(user,'judicial')&&isManagerRole?{id:'pedidosjudiciais',icon:'⚖️',label:'Judicial'}:{id:'antibiotico',icon:'🧬',label:'ATB'})];
 return(
 <div style={{minHeight:'100vh',background:'#EEF2F7',position:'relative',overflow:'hidden'}}>
@@ -14176,7 +14184,7 @@ return(
         {tab==='dashboard'&&<TabDashboard entries={entries} medications={meds} stock={stock} user={user} plantao={plantao} isGuest={isGuest} onSolicitar={abrirSolicitarStable} onEncerrar={encerrarPlantaoStable} onSair={sairDoPlantaoStable} onSolicitarEntrada={solicitarEntradaPlantaoStable} shiftId={shiftId} onIniciar={abrirIniciarTurnoStable} allUsers={allUsers}/>}
         {tab==='visaogeral'&&isManagerRole&&<TabVisaoGeral entries={entries} medications={meds} stock={stock} user={user}/>}
         {tab==='comparapedido'&&isManagerRole&&temModulo(user,'comparaPedido')&&<ErrBoundary><TabComparacaoPedido/></ErrBoundary>}
-        {!ro&&tab==='saida'&&<TabSaida destino={destinoSaida} onDestino={setDestinoSaida} destinos={destinosTodos.filter(function(d){return d.ativo;})} destinosTodos={destinosTodos} ubsLista={ubsTodas.filter(function(u){return u.ativo;})} ubsTodas={ubsTodas} ubs={ubsSaida} onUbs={setUbsSaida} podeEditarDest={temModulo(user,'destinos')&&(user.role==='gestor'||user.role==='tecnico')} user={user} medications={meds} stock={stock} entries={entries} onSave={addEntryStable} onSolicitar={addSolicitacaoStable} latest={latest} isGuest={isGuest} canMove={canMove} confirm2={confirm2} alert2={alert2}/>}
+        {!ro&&tab==='saida'&&<TabSaida destino={destinoSaida} onDestino={setDestinoSaida} destinos={destinosTodos.filter(function(d){return d.ativo&&(!ehSat||d.id==='emergencia');})} destinosTodos={destinosTodos} ubsLista={ubsTodas.filter(function(u){return u.ativo;})} ubsTodas={ubsTodas} ubs={ubsSaida} onUbs={setUbsSaida} podeEditarDest={temModulo(user,'destinos')&&(user.role==='gestor'||user.role==='tecnico')} user={user} medications={meds} stock={stock} entries={entries} onSave={addEntryStable} onSolicitar={addSolicitacaoStable} latest={latest} isGuest={isGuest} canMove={canMove} confirm2={confirm2} alert2={alert2}/>}
         {tab==='estoque'&&<TabEstoque user={user} medications={meds} entries={entries} stock={stock} estoqueBruto={estoqueBruto} onSave={addEntryStable} confirm2={confirm2} alert2={alert2}/>}
         {!ro&&tab==='conferencia'&&<ErrBoundary><TabConferencia user={user} medications={meds} entries={entries} stock={stock} estoqueBruto={estoqueBruto} histPronto={histPronto}/></ErrBoundary>}
         {!ro&&!ocultaSat&&tab==='saidasreg'&&<ErrBoundary><TabSaidasRegistradas user={user} entries={entries} medications={meds} destinos={destinosTodos} ubsTodas={ubsTodas}/></ErrBoundary>}
@@ -14187,13 +14195,13 @@ return(
         {tab==='previsao'&&podePedidos&&<ErrBoundary><TabPrevisao user={user} entries={entries} medications={meds} stock={stock} db={db} confirm2={confirm2}/></ErrBoundary>}
         {tab==='histcontas'&&can(user.role,'log')&&<TabHistContas user={user}/>}
         {!ro&&tab==='antibiotico'&&<TabAntibiotico user={user} medications={meds} stock={stock} allUsers={allUsers}/>}
-        {tab==='pedidosjudiciais'&&!ro&&temModulo(user,'judicial')&&isManagerRole&&<ErrBoundary><TabPedidosJudiciais user={user} medications={meds} stock={stock} entries={entries} onSave={addEntryStable} confirm2={confirm2} alert2={alert2} allUsers={allUsers}/></ErrBoundary>}
+        {tab==='pedidosjudiciais'&&!ro&&!ehSat&&temModulo(user,'judicial')&&isManagerRole&&<ErrBoundary><TabPedidosJudiciais user={user} medications={meds} stock={stock} entries={entries} onSave={addEntryStable} confirm2={confirm2} alert2={alert2} allUsers={allUsers}/></ErrBoundary>}
         {!ro&&tab==='recebimento'&&<ErrBoundary><TabRecebimento user={user} medications={ehSat?medsSemLeite:meds} onSave={addEntry} stock={stock} entries={entries} localAtivo={localAtivo}/></ErrBoundary>}
         {tab==='pacientes'&&!ro&&temModulo(user,'controlados')&&<ErrBoundary><TabPacientes user={user} entries={entries} onSave={addEntryStable} confirm2={confirm2} alert2={alert2}/></ErrBoundary>}
         {!ro&&!ocultaSat&&tab==='leites'&&<ErrBoundary><TabLeites user={user} medications={meds} stock={stock} onSave={addEntry} confirm2={confirm2} alert2={alert2}/></ErrBoundary>}
         {tab==='ubs'&&!ro&&!ocultaSat&&temModulo(user,'ubsSolicitacoes')&&<ErrBoundary><TabUbs user={user} entries={entries} medications={meds}/></ErrBoundary>}
-        {ocultaSat&&<div style={{maxWidth:520,margin:'40px auto',padding:'0 16px',textAlign:'center',color:'#64748B'}}><div style={{fontSize:16,fontWeight:800,color:'#1E293B',marginBottom:6}}>Não existe no Satélite</div>Esta aba é só do CAF.</div>}
-        {ro&&TABS_MOVIMENTO.indexOf(tab)>=0&&<div style={{maxWidth:520,margin:'40px auto',padding:'0 16px',textAlign:'center',color:'#64748B'}}><div style={{fontSize:16,fontWeight:800,color:'#1E293B',marginBottom:6}}>Acesso somente consulta</div>Sua conta pode ver o estoque do CAF e fazer pedidos, mas não movimenta o estoque.</div>}
+        {ocultaSat&&<div style={{maxWidth:520,margin:'40px auto',padding:'0 16px',textAlign:'center',color:'#64748B'}}><div style={{fontSize:16,fontWeight:800,color:'#1E293B',marginBottom:6}}>Não existe no Satélite</div>Esta aba é só da CAF.</div>}
+        {ro&&TABS_MOVIMENTO.indexOf(tab)>=0&&<div style={{maxWidth:520,margin:'40px auto',padding:'0 16px',textAlign:'center',color:'#64748B'}}><div style={{fontSize:16,fontWeight:800,color:'#1E293B',marginBottom:6}}>Acesso somente consulta</div>Sua conta pode ver o estoque da CAF e fazer pedidos, mas não movimenta o estoque.</div>}
         {tab==='ubsmed'&&!ro&&temModulo(user,'destinos')&&<ErrBoundary><TabUbsValidades user={user} entries={entries} medications={meds}/></ErrBoundary>}
         {tab==='transferencia'&&!ro&&localAtivo&&<ErrBoundary><TabTransferencia user={user} entries={entries} medications={meds} medsCaf={medsSemLeite} localAtivo={localAtivo}/></ErrBoundary>}
         {tab==='ajuda'&&<ErrBoundary><TabAjuda user={user} onIr={function(t){setTab(t);}}/></ErrBoundary>}
@@ -14260,7 +14268,7 @@ return(
               {id:'leites',icon:'🍼',label:'Leites',show:!ro&&!ehSat},
               {id:'saidasreg',icon:'🧾',label:'Saídas registradas',show:!ro&&!ehSat},
               {id:'ubsmed',icon:'📅',label:'UBS: validades',show:!ro&&temModulo(user,'destinos')},
-              {id:'transferencia',icon:'🔁',label:'Transferência CAF ⇄ Satélite'+(repoNovos>0&&localAtivo==='caf'?' ('+repoNovos+')':''),show:!ro&&!!localAtivo},
+              {id:'transferencia',icon:'🔁',label:(ehSat?'Solicitação':'Transferência CAF ⇄ Satélite')+(repoNovos>0&&localAtivo==='caf'?' ('+repoNovos+')':''),show:!ro&&!!localAtivo},
               {id:'ubs',icon:'🏥',label:'Solicitações das UBS',show:!ro&&!ehSat&&temModulo(user,'ubsSolicitacoes')&&['gestor','tecnico','farmaceutico','auxiliar'].indexOf(user.role)>=0},
               {id:'relatorio',icon:'📊',label:'Relatório',show:true},
               {id:'gestao',icon:'👥',label:'Gestão',badge:badge,show:can(user.role,'gestao')},
@@ -14309,7 +14317,7 @@ return(
             <div style={{fontSize:11,color:temaItaq?'var(--itq-faint)':'rgba(255,255,255,0.5)',marginTop:2}}>{ROLES[user.role]||user.role}</div>
           </div>
           <div style={{flex:1,overflowY:'auto',padding:'8px 0'}}>
-            {[{id:'estoque',icon:'📦',label:'Estoque'},{id:'recebimento',icon:'🚚',label:'Recebimento'},{id:'pacientes',icon:'🔒',label:'Pacientes (Controlados)'},{id:'conferencia',icon:'🧾',label:'Conferência'},{id:'leites',icon:'🍼',label:'Leites'},{id:'saidasreg',icon:'🧾',label:'Saídas registradas'},{id:'ubsmed',icon:'📅',label:'UBS: validades'},{id:'transferencia',icon:'🔁',label:'Transferência CAF ⇄ Satélite'+(repoNovos>0&&localAtivo==='caf'?' ('+repoNovos+')':'')},{id:'ubs',icon:'🏥',label:'Solicitações das UBS'},{id:'relatorio',icon:'📊',label:'Relatório'},{id:'previsao',icon:'📋',label:'Previsão / Pedido'},{id:'ajuda',icon:'❓',label:'Ajuda'}].filter(function(t){return t.id!=='pacientes'||temModulo(user,'controlados');}).filter(function(t){if(t.id==='ubsmed')return !ro&&temModulo(user,'destinos');if(t.id==='transferencia')return !ro&&!!localAtivo;if(t.id==='ubs')return !ro&&!ehSat&&temModulo(user,'ubsSolicitacoes');if(ehSat&&TABS_SAT_OCULTAS.indexOf(t.id)>=0)return false;if(t.id==='previsao')return podePedidos;return !(ro&&TABS_MOVIMENTO.indexOf(t.id)>=0);}).map(function(t){return(
+            {[{id:'estoque',icon:'📦',label:'Estoque'},{id:'recebimento',icon:'🚚',label:'Recebimento'},{id:'pacientes',icon:'🔒',label:'Pacientes (Controlados)'},{id:'conferencia',icon:'🧾',label:'Conferência'},{id:'leites',icon:'🍼',label:'Leites'},{id:'saidasreg',icon:'🧾',label:'Saídas registradas'},{id:'ubsmed',icon:'📅',label:'UBS: validades'},{id:'transferencia',icon:'🔁',label:(ehSat?'Solicitação':'Transferência CAF ⇄ Satélite')+(repoNovos>0&&localAtivo==='caf'?' ('+repoNovos+')':'')},{id:'antibiotico',icon:'🧬',label:'ATB'},{id:'ubs',icon:'🏥',label:'Solicitações das UBS'},{id:'relatorio',icon:'📊',label:'Relatório'},{id:'previsao',icon:'📋',label:'Previsão / Pedido'},{id:'ajuda',icon:'❓',label:'Ajuda'}].filter(function(t){return t.id!=='pacientes'||temModulo(user,'controlados');}).filter(function(t){if(t.id==='ubsmed')return !ro&&temModulo(user,'destinos');if(t.id==='antibiotico')return ehSat&&!ro;if(t.id==='transferencia')return !ro&&!!localAtivo;if(t.id==='ubs')return !ro&&!ehSat&&temModulo(user,'ubsSolicitacoes');if(ehSat&&TABS_SAT_OCULTAS.indexOf(t.id)>=0)return false;if(t.id==='previsao')return podePedidos;return !(ro&&TABS_MOVIMENTO.indexOf(t.id)>=0);}).map(function(t){return(
               <button key={t.id} data-tour={'nav-'+t.id} className={temaItaq?'menu-drawer-item'+(tab===t.id?' on':''):''} onClick={function(){setTab(t.id);setMenuAberto(false);}} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'13px 20px',border:'none',background:temaItaq?undefined:(tab===t.id?'#EFF6FF':'transparent'),cursor:'pointer',borderLeft:temaItaq?undefined:(tab===t.id?'3px solid #1351B4':'3px solid transparent')}}>
                 <span className={temaItaq?'menu-drawer-ic':''} style={{fontSize:20}}>{temaItaq?<Icon name={menuIconName(t.id)} size={18}/>:t.icon}</span>
                 <span className={temaItaq?'menu-drawer-lbl':''} style={{fontSize:14,fontWeight:tab===t.id?700:500,color:temaItaq?undefined:(tab===t.id?'#1351B4':'#1E293B')}}>{t.label}</span>
