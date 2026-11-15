@@ -131,10 +131,10 @@ function telaForm(corrigindo){
   });
  }
  function sugerir(){
-  var t=busca.value.trim().toLowerCase();sug.replaceChildren();
+  var t=busca.value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');sug.replaceChildren();
   if(!t)return;
   var ja={};S.itens.forEach(function(i){if(i.medId)ja[i.medId]=1;});
-  var achados=u.materiais.filter(function(m){return !ja[m.id]&&m.nome.toLowerCase().indexOf(t)>=0;}).slice(0,30);
+  var achados=u.materiais.filter(function(m){return !ja[m.id]&&m.nome.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').indexOf(t)>=0;}).slice(0,30);
   var box=el('div',{class:'sug'},achados.map(function(m){return el('button',{text:m.nome+(m.unidade?' ('+m.unidade+')':''),onclick:function(){S.itens.push({medId:m.id,nome:m.nome,qtd:1});busca.value='';sug.replaceChildren();desenharLista();}});}));
   if(!achados.length)box.appendChild(el('button',{text:'Nenhum resultado. Toque aqui para pedir um material fora da lista.',onclick:function(){S.fora=true;foraBox();foraNome.value=busca.value.trim();busca.value='';sug.replaceChildren();}}));
   sug.appendChild(box);

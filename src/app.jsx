@@ -1051,7 +1051,7 @@ function ShiftCard(props){
 }
 
 function BarChart(props){var data=props.data||[];var max=1;for(var i=0;i<data.length;i++){if(data[i].v>max)max=data[i].v;}return(<div style={{display:'flex',alignItems:'flex-end',gap:6,height:80,padding:'0 4px'}}>{data.map(function(d,i){var h=Math.round((d.v/max)*58);var isToday=i===data.length-1;return(<div key={i} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:3}}><div style={{fontSize:10,color:isToday?B:'#94A3B8',fontWeight:isToday?700:500}}>{d.v||''}</div><div style={{width:'100%',background:isToday?B:'#BFDBFE',borderRadius:'5px 5px 0 0',height:h+'px',minHeight:d.v?4:0,transition:'height .3s ease'}}/><div style={{fontSize:9,color:isToday?B:'#94A3B8',fontWeight:isToday?700:400}}>{d.l}</div></div>);})}</div>);}
-function TabDashboard(props){var entries=props.entries;var medications=props.medications;var stock=props.stock;var user=props.user;var plantao=props.plantao;var isGuest=props.isGuest;var onSolicitar=props.onSolicitar;var onEncerrar=props.onEncerrar;var onSair=props.onSair;var onSolicitarEntrada=props.onSolicitarEntrada;var shiftId=props.shiftId;var onIniciar=props.onIniciar;var allUsers=props.allUsers||[];var _aviso=useState('');var aviso=_aviso[0];var setAviso=_aviso[1];var _avisos=useState([]);var avisos=_avisos[0];var setAvisos=_avisos[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];
+function TabDashboard(props){var entries=props.entries;var medications=props.medications;var stock=props.stock;var user=props.user;var plantao=props.plantao;var isGuest=props.isGuest;var onSolicitar=props.onSolicitar;var onEncerrar=props.onEncerrar;var onSair=props.onSair;var onSolicitarEntrada=props.onSolicitarEntrada;var onIr=props.onIr;var shiftId=props.shiftId;var onIniciar=props.onIniciar;var allUsers=props.allUsers||[];var _aviso=useState('');var aviso=_aviso[0];var setAviso=_aviso[1];var _avisos=useState([]);var avisos=_avisos[0];var setAvisos=_avisos[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];
 useEffect(function(){var u=db.collection('avisos').where('tenant_id','==',tenantDe(user)).limit(20).onSnapshot(function(s){var list=s.docs.map(function(d){var o={id:d.id};var data=d.data();for(var k in data)o[k]=data[k];return o;});var agora=new Date().toISOString();list=list.filter(function(a){return !a.expiraEm||a.expiraEm>agora;});list.sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});setAvisos(list);});return u;},[]);
 var _fotoMural=useState('');var fotoMural=_fotoMural[0];var setFotoMural=_fotoMural[1];
 function handleFotoMural(e){var f=e.target.files[0];if(!f||!f.type.startsWith('image/'))return;compressPhoto(f,function(b64){setFotoMural(b64);});e.target.value='';}
@@ -1070,17 +1070,17 @@ var temaItaq=true;// identidade visual v2 agora é o padrão pra todos os munic�
 var vencendoDestaque=temaItaq?vencData.vencidos.concat(vencData.venc30).sort(function(a,b){return a.dias-b.dias;}).slice(0,5):[];
 // (Destaque do Mês e Ranking do Mês foram removidos da home a pedido — 20/10/2026.)
 var stats=[
-  {icon:'💊',iconName:'pill',label:'Saídas hoje',val:ts,sub:te.filter(function(e){return e.tipo==='saida';}).length+' registros',color:'#DC2626',bg:'#FEE2E2'},
-  {icon:'📥',iconName:'inbox',label:'Entradas hoje',val:tin,sub:te.filter(function(e){return e.tipo==='entrada';}).length+' registros',color:'#0C6B3E',bg:'#DCFCE7'},
-  {icon:'⏳',iconName:'hourglass',label:'Vencimento',val:vencendo,sub:'produtos',color:vencendo>0?'#DC2626':'#0C6B3E',bg:vencendo>0?'#FEE2E2':'#DCFCE7'},
-  {icon:'📉',iconName:'trendDown',label:'Estoque baixo',val:low.length,sub:'produtos',color:low.length>0?'#B45309':'#0C6B3E',bg:low.length>0?'#FEF3C7':'#DCFCE7'},
+  {icon:'💊',iconName:'pill',irPara:'saidas',label:'Saídas hoje',val:ts,sub:te.filter(function(e){return e.tipo==='saida';}).length+' registros',color:'#DC2626',bg:'#FEE2E2'},
+  {icon:'📥',iconName:'inbox',irPara:'entradas',label:'Entradas hoje',val:tin,sub:te.filter(function(e){return e.tipo==='entrada';}).length+' registros',color:'#0C6B3E',bg:'#DCFCE7'},
+  {icon:'⏳',iconName:'hourglass',irPara:'vencimento',label:'Vencimento',val:vencendo,sub:'produtos',color:vencendo>0?'#DC2626':'#0C6B3E',bg:vencendo>0?'#FEE2E2':'#DCFCE7'},
+  {icon:'📉',iconName:'trendDown',irPara:'baixo',label:'Estoque baixo',val:low.length,sub:'produtos',color:low.length>0?'#B45309':'#0C6B3E',bg:low.length>0?'#FEF3C7':'#DCFCE7'},
 ];
 return(<div style={{maxWidth:700,margin:'0 auto',padding:'16px 14px'}}>
   {temPlantao(user)&&<ShiftCard plantao={plantao} isGuest={isGuest} user={user} onEncerrar={onEncerrar} shiftId={shiftId} onIniciar={onIniciar} onSolicitarEntrada={onSolicitarEntrada} onSair={onSair} db={db}/>}
   {isGuest&&(user.role==='farmaceutico'||user.role==='auxiliar'||user.role==='diarista')&&onSolicitar&&(<button onClick={onSolicitar} style={{width:'100%',marginBottom:14,padding:'13px',background:B,border:'none',borderRadius:14,color:'#fff',fontSize:14,fontWeight:700,cursor:'pointer',boxShadow:'0 4px 14px rgba(19,81,180,.3)'}}>📋 Solicitar Movimentacao</button>)}
   <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:10,marginBottom:14}}>
-    {stats.map(function(s){return(
-      <div key={s.label} className="stat-card" style={{color:s.color}}>
+    {stats.map(function(s){var clicavel=!!(onIr&&s.irPara);return(
+      <div key={s.label} className="stat-card" data-fc={'stat-'+s.irPara} role={clicavel?'button':undefined} tabIndex={clicavel?0:undefined} onClick={clicavel?function(){onIr(s.irPara);}:undefined} onKeyDown={clicavel?function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();onIr(s.irPara);}}:undefined} style={{color:s.color,cursor:clicavel?'pointer':undefined}}>
         <div className="stat-icon" style={{background:s.bg}}>{temaItaq?<Icon name={s.iconName} size={18}/>:s.icon}</div>
         <div className="stat-val">{s.val}</div>
         <div className="stat-label">{s.label}</div>
@@ -1829,6 +1829,7 @@ function ModalSaidaControlada(props){
   var _novoPacSaving=useState(false);var novoPacSaving=_novoPacSaving[0];var setNovoPacSaving=_novoPacSaving[1];
   var _medico=useState('');var medico=_medico[0];var setMedico=_medico[1];
   var _crm=useState('');var crm=_crm[0];var setCrm=_crm[1];
+  var medicosCrm=useMedicosCrm(user);
   var _obs=useState('');var obs=_obs[0];var setObs=_obs[1];
   var _dataSaida=useState(todayStr());var dataSaida=_dataSaida[0];var setDataSaida=_dataSaida[1];
   var _obsObrigatoria=useState(false);var obsObrigatoria=_obsObrigatoria[0];var setObsObrigatoria=_obsObrigatoria[1];
@@ -1854,7 +1855,7 @@ function ModalSaidaControlada(props){
   },[pacSel,data.medicamentoId,dataSaida]);
 
   var buscaTrim=busca.trim();
-  var sugestoes=(!pacSel&&buscaTrim)?pacientes.filter(function(p){return (p.nome||'').toLowerCase().indexOf(buscaTrim.toLowerCase())>=0;}).slice(0,8):[];
+  var sugestoes=(!pacSel&&buscaTrim)?pacientes.filter(function(p){return _norm((p.nome||'')).indexOf(_norm(buscaTrim))>=0;}).slice(0,8):[];
   var jaExisteExato=pacientes.some(function(p){return (p.nome||'').trim().toLowerCase()===buscaTrim.toLowerCase();});
 
   function cadastrarNovoPaciente(){
@@ -1897,10 +1898,8 @@ function ModalSaidaControlada(props){
           </div>}
         </div>}
 
-      <Lbl c="Nome do médico *"/>
-      <input value={medico} onChange={function(e){setMedico(e.target.value);}} placeholder="Nome do médico responsável" className="inp"/>
-      <Lbl c="CRM do médico *"/>
-      <input value={crm} onChange={function(e){setCrm(e.target.value);}} placeholder="Ex: 12345-PE" className="inp"/>
+      <MedicoCrmCampos medicos={medicosCrm} obrigatorio nome={medico} crm={crm} onNome={setMedico} onCrm={setCrm}/>
+      <div style={{height:10}}/>
       <Lbl c="Data da saída *"/>
       <input type="date" value={dataSaida} max={todayStr()} onChange={function(e){setDataSaida(e.target.value);}} className="inp"/>
       {dataSaida&&dataSaida<todayStr()&&<div style={{fontSize:11,color:'#B45309',marginTop:-6,marginBottom:10}}>📅 Retroativa — use quando a receita/retirada foi encontrada de um dia anterior.</div>}
@@ -1928,7 +1927,7 @@ var _showDestCfg=useState(false);var showDestCfg=_showDestCfg[0];var setShowDest
 var _showControlado=useState(false);var showControlado=_showControlado[0];var setShowControlado=_showControlado[1];
 var _controladoData=useState(null);var controladoData=_controladoData[0];var setControladoData=_controladoData[1];
 var _demoControlado=useState(false);var demoControlado=_demoControlado[0];var setDemoControlado=_demoControlado[1];
-var inStock=medications.filter(function(m){return (stock[m.id]||0)>0;});var filtered=[];if(search.trim()){var s=search.toLowerCase();filtered=inStock.filter(function(m){return m.nome.toLowerCase().indexOf(s)>=0;}).slice(0,8);}var cur=sel?(stock[sel.id]||0):0;
+var inStock=medications.filter(function(m){return (stock[m.id]||0)>0;});var filtered=[];if(search.trim()){var s=_norm(search);filtered=inStock.filter(function(m){return _norm(m.nome).indexOf(s)>=0;}).slice(0,8);}var cur=sel?(stock[sel.id]||0):0;
 var temaItaq=true;// identidade visual v2 agora é o padrão pra todos os municípios (Itaquitinga + Vicência)
 // Divide a saída pelos lotes que TÊM saldo (FEFO; o lote escolhido na tela vai primeiro). Nunca cria saída de lote sem
   // saldo/sem entrada ("órfã"): o que passar do saldo dos lotes vai como "sem lote".
@@ -2431,7 +2430,7 @@ function HistModal(props){
       </div>);})}
     </div>}
   </Modal>);}
-function TabEstoque(props){var user=props.user;var ro=somenteLeitura(user);function bloqueadoRO(){if(!ro)return false;alert('Seu acesso é somente consulta: não é possível alterar o estoque.');return true;}var medications=props.medications;var entries=props.entries;var stock=props.stock;var estoqueBruto=props.estoqueBruto||{};var onSave=props.onSave;var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};var alert2=props.alert2||function(m){window.alert(m);};var _search=useState('');var search=_search[0];var setSearch=_search[1];var _sub=useState('estoque');var sub=_sub[0];var setSub=_sub[1];var _showAdd=useState(false);var showAdd=_showAdd[0];var setShowAdd=_showAdd[1];var _hist=useState(null);var hist=_hist[0];var setHist=_hist[1];var _editId=useState(null);var editId=_editId[0];var setEditId=_editId[1];var _editNome=useState('');var editNome=_editNome[0];var setEditNome=_editNome[1];var _editMin=useState('');var editMin=_editMin[0];var setEditMin=_editMin[1];var _editTipo=useState('medicamento');var editTipo=_editTipo[0];var setEditTipo=_editTipo[1];var _newNome=useState('');var newNome=_newNome[0];var setNewNome=_newNome[1];var _newEan=useState('');var newEan=_newEan[0];var setNewEan=_newEan[1];var _newMin=useState('');var newMin=_newMin[0];var setNewMin=_newMin[1];var _newTipo=useState('medicamento');var newTipo=_newTipo[0];var setNewTipo=_newTipo[1];
+function TabEstoque(props){var user=props.user;var ro=somenteLeitura(user);function bloqueadoRO(){if(!ro)return false;alert('Seu acesso é somente consulta: não é possível alterar o estoque.');return true;}var medications=props.medications;var entries=props.entries;var stock=props.stock;var estoqueBruto=props.estoqueBruto||{};var onSave=props.onSave;var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};var alert2=props.alert2||function(m){window.alert(m);};var _search=useState('');var search=_search[0];var setSearch=_search[1];var _sub=useState(props.subInicial||'estoque');var sub=_sub[0];var setSub=_sub[1];var _showAdd=useState(false);var showAdd=_showAdd[0];var setShowAdd=_showAdd[1];var _hist=useState(null);var hist=_hist[0];var setHist=_hist[1];var _editId=useState(null);var editId=_editId[0];var setEditId=_editId[1];var _editNome=useState('');var editNome=_editNome[0];var setEditNome=_editNome[1];var _editMin=useState('');var editMin=_editMin[0];var setEditMin=_editMin[1];var _editTipo=useState('medicamento');var editTipo=_editTipo[0];var setEditTipo=_editTipo[1];var _newNome=useState('');var newNome=_newNome[0];var setNewNome=_newNome[1];var _newEan=useState('');var newEan=_newEan[0];var setNewEan=_newEan[1];var _newMin=useState('');var newMin=_newMin[0];var setNewMin=_newMin[1];var _newTipo=useState('medicamento');var newTipo=_newTipo[0];var setNewTipo=_newTipo[1];
 // Perf: a lista de ~350 itens era montada de uma vez (~2s travado no celular). Agora entram 40 já na abertura e o resto em lotes pequenos logo em seguida.
 var _limEst=useState(40);var limEst=_limEst[0];var setLimEst=_limEst[1];
   var _showBaixa=useState(null);var showBaixa=_showBaixa[0];var setShowBaixa=_showBaixa[1];
@@ -2469,7 +2468,7 @@ var medListBase=useMemo(function(){
   });
 },[entries,medications,stock,estoqueBruto]);
 var medList=medListBase;
-if(search.trim())medList=medList.filter(function(m){return m.nome.toLowerCase().indexOf(search.toLowerCase())>=0;});
+if(search.trim())medList=medList.filter(function(m){return _norm(m.nome).indexOf(_norm(search))>=0;});
 if(filtCat&&filtCat!=='todos')medList=medList.filter(function(m){return m.cat===filtCat;});
 medList=medList.slice().sort(function(a,b){return a.est-b.est;});
 useEffect(function(){if(limEst<medList.length){var _t=setTimeout(function(){setLimEst(function(l){return l+60;});},30);return function(){clearTimeout(_t);};}});
@@ -3448,9 +3447,9 @@ return(<div style={{maxWidth:900,margin:'0 auto',padding:'16px 14px'}}>
         <button onClick={function(){setFiltMeds([]);}} style={{background:'none',border:'none',color:'#DC2626',fontSize:11,fontWeight:700,cursor:'pointer'}}>Limpar tudo</button>
       </div>}
       {(function(){
-        var q=filtBusca.toLowerCase().trim();
+        var q=_norm(filtBusca).trim();
         if(!q&&filtBuscaCat==='todos')return null;
-        var nomesSet={};(medications||[]).forEach(function(m){var cat=(m.categoria||'medicamento');if(filtBuscaCat!=='todos'&&cat!==filtBuscaCat)return;if(q&&m.nome.toLowerCase().indexOf(q)===-1)return;nomesSet[m.nome]=true;});
+        var nomesSet={};(medications||[]).forEach(function(m){var cat=(m.categoria||'medicamento');if(filtBuscaCat!=='todos'&&cat!==filtBuscaCat)return;if(q&&_norm(m.nome).indexOf(q)===-1)return;nomesSet[m.nome]=true;});
         var nomes=Object.keys(nomesSet).sort(function(a,b){return a.localeCompare(b);}).slice(0,30);
         if(nomes.length===0)return(<div style={{fontSize:12,color:'#94A3B8',padding:'8px 0'}}>Nenhum medicamento encontrado.</div>);
         return(<div style={{marginTop:8,maxHeight:180,overflowY:'auto',border:'1px solid #F1F5F9',borderRadius:10}}>
@@ -3889,10 +3888,10 @@ function TabAdmin({user,entries,medications,db}){
   var subItems=[['entradas','📥 Entradas'],['saidas','💊 Saídas'],['medicamentos','💉 Medicamentos'],['atb','🧬 ATB'],['histcontas','📋 Hist. Contas'],['log','🔐 Log Acesso']];
 
   function diaOk(e){if(!dia)return true;var d=e.date||(e.criadoEm||'').slice(0,10);return d===dia;}
-  var entradasFilt=logs.filter(function(e){return e.tipo==='entrada'&&diaOk(e)&&(!busca||(e.medicamentoNome||'').toLowerCase().includes(busca.toLowerCase()));});
-  var saidasFilt=logs.filter(function(e){return e.tipo==='saida'&&diaOk(e)&&(!busca||(e.medicamentoNome||'').toLowerCase().includes(busca.toLowerCase()));});
-  var medsFilt=medications.filter(function(m){return !busca||(m.nome||'').toLowerCase().includes(busca.toLowerCase());});
-  var atbFilt=tratamentos.filter(function(t){return !busca||(t.pacienteNome||'').toLowerCase().includes(busca.toLowerCase());});
+  var entradasFilt=logs.filter(function(e){return e.tipo==='entrada'&&diaOk(e)&&(!busca||_norm((e.medicamentoNome||'')).includes(_norm(busca)));});
+  var saidasFilt=logs.filter(function(e){return e.tipo==='saida'&&diaOk(e)&&(!busca||_norm((e.medicamentoNome||'')).includes(_norm(busca)));});
+  var medsFilt=medications.filter(function(m){return !busca||_norm((m.nome||'')).includes(_norm(busca));});
+  var atbFilt=tratamentos.filter(function(t){return !busca||_norm((t.pacienteNome||'')).includes(_norm(busca));});
 
   function BtnDel({col,id,nome}){
     var conf=confirmId===id;
@@ -3977,7 +3976,7 @@ function TabAdmin({user,entries,medications,db}){
 
       {sub==='histcontas'&&<div style={{display:'flex',flexDirection:'column',gap:8}}>
         {histcontas.length===0&&<div style={{textAlign:'center',color:'#94A3B8',padding:20}}>Nenhum registro encontrado</div>}
-        {histcontas.filter(function(h){return !busca||(h.nome||'').toLowerCase().includes(busca.toLowerCase());}).map(function(h){return(
+        {histcontas.filter(function(h){return !busca||_norm((h.nome||'')).includes(_norm(busca));}).map(function(h){return(
           <div key={h.id} style={{background:'#fff',borderRadius:12,padding:'12px 14px',boxShadow:'0 1px 6px rgba(0,0,0,0.06)',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>{h.nome||'--'}</div>
@@ -3990,7 +3989,7 @@ function TabAdmin({user,entries,medications,db}){
 
       {sub==='log'&&<div style={{display:'flex',flexDirection:'column',gap:8}}>
         {logAcesso.length===0&&<div style={{textAlign:'center',color:'#94A3B8',padding:20}}>Nenhum log encontrado</div>}
-        {logAcesso.filter(function(l){return !busca||(l.nome||l.userName||'').toLowerCase().includes(busca.toLowerCase());}).map(function(l){return(
+        {logAcesso.filter(function(l){return !busca||_norm((l.nome||l.userName||'')).includes(_norm(busca));}).map(function(l){return(
           <div key={l.id} style={{background:'#fff',borderRadius:12,padding:'12px 14px',boxShadow:'0 1px 6px rgba(0,0,0,0.06)',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontWeight:700,fontSize:13,color:'#1E293B'}}>{l.nome||l.userName||'--'}</div>
@@ -4349,18 +4348,18 @@ function TabLeites(props){
   function addAvulsaBaixa(){setBLeites(bLeites.concat([{leiteId:'',nome:'',qtdPrescrita:0,qtdEntregue:'',usarAlt:false,avulsa:true}]));}
   function delLeiteBaixa(i){setBLeites(bLeites.filter(function(_,j){return j!==i;}));}
 
-  var q=search.toLowerCase().trim();
+  var q=_norm(search).trim();
   var filtrarPor=function(status){
     return pacientes.filter(function(p){
       if(p.status!==status&&status!=='todos')return false;
-      if(q){var alvo=(p.nome+' '+(p.responsavel||'')+' '+(p.leiteNome||'')).toLowerCase();if(alvo.indexOf(q)===-1)return false;}
+      if(q){var alvo=_norm((p.nome+' '+(p.responsavel||'')+' '+(p.leiteNome||'')));if(alvo.indexOf(q)===-1)return false;}
       return true;
     });
   };
   var cFalta=filtrarPor('falta').length;
   var cAguard=filtrarPor('aguardando').length;
   var cSep=filtrarPor('separado').length;
-  var cCad=pacientes.filter(function(p){if(!q)return true;var alvo=(p.nome+' '+(p.responsavel||'')+' '+(p.leiteNome||'')).toLowerCase();return alvo.indexOf(q)!==-1;}).length;
+  var cCad=pacientes.filter(function(p){if(!q)return true;var alvo=_norm((p.nome+' '+(p.responsavel||'')+' '+(p.leiteNome||'')));return alvo.indexOf(q)!==-1;}).length;
 
   var subs=[
     {id:'falta',label:'Falta Separar'+(cFalta>0?' ('+cFalta+')':''),cor:'#B45309'},
@@ -4835,7 +4834,7 @@ return(
   {(user.role==='gestor'||user.role==='tecnico')&&<div style={{textAlign:'center',fontSize:10,color:'#CBD5E1',marginBottom:12}}>Cache: {(typeof window!=='undefined'&&window.__fcPersist)||'verificando…'}</div>}
 </div>);}
 
-function BuscaGlobal(props){var entries=props.entries;var medications=props.medications;var onClose=props.onClose;var _q=useState('');var q=_q[0];var setQ=_q[1];var results=[];if(q&&q.length>=2){var s=q.toLowerCase();var meds=medications.filter(function(m){return m.nome.toLowerCase().indexOf(s)>=0||(m.ean&&m.ean.indexOf(s)>=0);}).slice(0,5).map(function(m){var o={};for(var k in m)o[k]=m[k];o._t='med';return o;});var ents=entries.filter(function(e){return (e.medicamentoNome||'').toLowerCase().indexOf(s)>=0||(e.autorNome||'').toLowerCase().indexOf(s)>=0;}).sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');}).slice(0,12).map(function(e){var o={};for(var k in e)o[k]=e[k];o._t='entry';return o;});results=meds.concat(ents);}
+function BuscaGlobal(props){var entries=props.entries;var medications=props.medications;var onClose=props.onClose;var _q=useState('');var q=_q[0];var setQ=_q[1];var results=[];if(q&&q.length>=2){var s=_norm(q);var meds=medications.filter(function(m){return _norm(m.nome).indexOf(s)>=0||(m.ean&&m.ean.indexOf(s)>=0);}).slice(0,5).map(function(m){var o={};for(var k in m)o[k]=m[k];o._t='med';return o;});var ents=entries.filter(function(e){return _norm((e.medicamentoNome||'')).indexOf(s)>=0||_norm((e.autorNome||'')).indexOf(s)>=0;}).sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');}).slice(0,12).map(function(e){var o={};for(var k in e)o[k]=e[k];o._t='entry';return o;});results=meds.concat(ents);}
 return(
       <div onClick={onClose} style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(15,23,42,.65)',zIndex:400,padding:'50px 14px 14px',display:'flex',alignItems:'flex-start',justifyContent:'center',backdropFilter:'blur(3px)'}}><div onClick={function(e){e.stopPropagation();}} style={{background:'#fff',borderRadius:20,maxWidth:560,width:'100%',overflow:'hidden',boxShadow:'0 24px 64px rgba(0,0,0,.2)'}}><div style={{padding:'14px 16px',borderBottom:'1px solid #F1F5F9',display:'flex',gap:10,alignItems:'center',background:'#F8FAFC'}}><span style={{fontSize:18}}>🔍</span><input value={q} onChange={function(e){setQ(e.target.value);}} placeholder="Buscar medicamentos, registros, responsaveis..." style={{flex:1,border:'none',outline:'none',fontSize:14,color:'#1E293B',background:'transparent',fontFamily:'inherit'}} autoFocus/><button onClick={onClose} style={{background:'#E2E8F0',border:'none',borderRadius:'50%',width:28,height:28,cursor:'pointer',fontSize:16,color:'#64748B',display:'flex',alignItems:'center',justifyContent:'center'}}>×</button></div><div style={{maxHeight:'60vh',overflowY:'auto'}}>{q.length<2?<div style={{padding:40,textAlign:'center',color:'#94A3B8',fontSize:13}}>Digite ao menos 2 letras para buscar</div>:results.length===0?<div style={{padding:40,textAlign:'center',color:'#94A3B8',fontSize:13}}>Nenhum resultado encontrado</div>:results.map(function(r,i){return(<div key={i} style={{padding:'12px 16px',borderBottom:'1px solid #F8FAFC',display:'flex',gap:10,alignItems:'center',transition:'background .1s'}} onMouseEnter={function(e){e.currentTarget.style.background='#EFF6FF';}} onMouseLeave={function(e){e.currentTarget.style.background='';}}><div style={{width:36,height:36,borderRadius:10,background:r._t==='med'?'#EFF6FF':r.tipo==='saida'?'#FEE2E2':'#DCFCE7',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0}}>{r._t==='med'?'💊':r.tipo==='saida'?'📤':'📥'}</div><div style={{flex:1,minWidth:0}}>{r._t==='med'?<div style={{fontWeight:600,color:B,fontSize:14}}>{r.nome}</div>:(<div><div style={{fontWeight:600,color:'#1E293B',fontSize:13,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.medicamentoNome}</div><div style={{fontSize:11,color:'#94A3B8',marginTop:2}}>{fmtD(r.criadoEm)} · {r.autorNome} · {r.tipo}: {r.quantidade}</div></div>)}</div><span className={'badge '+(r._t==='med'?'badge-blue':r.tipo==='saida'?'badge-red':'badge-green')}>{r._t==='med'?'Medicamento':r.tipo==='saida'?'Saida':'Entrada'}</span></div>);}  )}</div></div></div>);}
 
@@ -5077,7 +5076,7 @@ function TabNotas({user,medications}){
   var totalSemV=itemsEdit.filter(function(i){return i.incluir&&!i.medId;}).length;
   var uniqueForns=[];notas.forEach(function(n){if(n.fornecedorNome&&uniqueForns.indexOf(n.fornecedorNome)===-1)uniqueForns.push(n.fornecedorNome);});
   var notasFiltradas=notas.filter(function(n){
-    var okB=!filtroBusca||(n.nNF||'').includes(filtroBusca)||(n.fornecedorNome||'').toLowerCase().includes(filtroBusca.toLowerCase());
+    var okB=!filtroBusca||(n.nNF||'').includes(filtroBusca)||_norm((n.fornecedorNome||'')).includes(_norm(filtroBusca));
     var okF=!filtroForns||n.fornecedorNome===filtroForns;
     var okDe=!filtroDataDe||n.dataEmissao>=filtroDataDe;
     var okAt=!filtroDataAte||n.dataEmissao<=filtroDataAte;
@@ -5884,14 +5883,14 @@ function TabPedidosJudiciais(props){
   }
 
   // ===== Listagem / filtros =====
-  var q=busca.toLowerCase().trim();
+  var q=_norm(busca).trim();
   function filtrarPorCategoria(abaKey,status){
     var cats=(PJ_ABAS.filter(function(a){return a.key===abaKey;})[0]||PJ_ABAS[0]).cats;
     return pacientes.filter(function(p){
       if(filtTipo!=='todos'&&pjTipoDe(p)!==filtTipo)return false;
       if(!(p.itens||[]).some(function(it){return cats.indexOf(it.categoria)>=0;}))return false;
       if((p.status||'pendente')!==status)return false;
-      if(q&&(p.nome+' '+(p.responsavel||'')+' '+(p.processoNumero||'')).toLowerCase().indexOf(q)<0)return false;
+      if(q&&_norm((p.nome+' '+(p.responsavel||'')+' '+(p.processoNumero||''))).indexOf(q)<0)return false;
       return true;
     });
   }
@@ -6200,6 +6199,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
   var _ms=sl('');var medSel=_ms[0];var setMedSel=_ms[1];
   var _nm=sl('');var nomeMed=_nm[0];var setNomeMed=_nm[1];
   var _cm=sl('');var crmMed=_cm[0];var setCrmMed=_cm[1];
+  var medicosCrm=useMedicosCrm(user);
   var _si=sl('ativo');var statusIni=_si[0];var setStatusIni=_si[1];
   var _tel=sl('');var telefone=_tel[0];var setTelefone=_tel[1];// WhatsApp p/ lembretes (opcional)
   var _tdo=sl('paciente');var telDono=_tdo[0];var setTelDono=_tdo[1];// 'paciente' | 'responsavel'
@@ -6323,7 +6323,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
   function waMsg(t,tipo){var nome=waNome(t);var pac=t.pacienteNome||'';var atb=t.medicamentoNome||'antibiótico';var X=parseInt(t.diasTratamento)||0;
     if(tipo==='inicio')return'Olá '+nome+'! Aqui é a '+((tcfg(user).nomeFarmacia)||'Farmácia')+'. O(a) paciente '+pac+' iniciou tratamento com '+atb+' hoje. É muito importante tomar todas as doses nos horários corretos, mesmo se sentir melhora. O tratamento dura '+X+' dias. Qualquer dúvida, entre em contato conosco.';
     if(tipo==='dose')return'Olá '+nome+'! Lembrete da Farmácia: o(a) paciente '+pac+' ainda não tomou a dose de '+atb+' hoje. Não pule doses! Se já tomou a dose hoje, desconsidere essa mensagem.';
-    return'Olá '+nome+'! Hoje é o último dia do tratamento com '+atb+' do(a) paciente '+pac+'. Falta pouco! Tome a dose de hoje pra completar o tratamento com sucesso. A Farmácia do Hospital de Vicência agradece por seguir o tratamento até o fim!';}
+    return'Olá '+nome+'! Hoje é o último dia do tratamento com '+atb+' do(a) paciente '+pac+'. Falta pouco! Tome a dose de hoje pra completar o tratamento com sucesso. A '+((tcfg(user).nomeFarmacia)||'Farmácia')+' agradece por seguir o tratamento até o fim!';}
   function waLink(t,tipo){var fone=telDigitos(t);if(fone.slice(0,2)!=='55')fone='55'+fone;return'https://wa.me/'+fone+'?text='+encodeURIComponent(waMsg(t,tipo));}
   function abrirWhats(t,tipo){try{window.open(waLink(t,tipo),'_blank');}catch(_){}}
   // Visibilidade dos botões (por data): início=1º dia, dose=qualquer dia do tratamento, finalizar=último dia.
@@ -6405,7 +6405,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
     var s=cSt(t);
     var interr=isInterrompido(t);
     var okF=filtro==='todos'||s===filtro||(filtro==='ativos'&&s==='ativo'&&!interr)||(filtro==='interrompido'&&interr)||(filtro==='concluido'&&(s==='concluido'||s==='finalizado'));
-    var okB=!busca||(t.pacienteNome||'').toLowerCase().includes(busca.toLowerCase())||(t.nomeMedico||'').toLowerCase().includes(busca.toLowerCase());
+    var okB=!busca||_norm((t.pacienteNome||'')).includes(_norm(busca))||_norm((t.nomeMedico||'')).includes(_norm(busca));
     return okF&&okB;
   });
   var totalInterrompidos=tratamentos.filter(function(t){return isInterrompido(t);}).length;
@@ -6588,16 +6588,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
               <label style={{fontSize:12,fontWeight:700,color:'#475569',display:'block',marginBottom:5}}>Nome do Paciente *</label>
               <input value={nomePac} onChange={function(e){setNomePac(e.target.value);}} placeholder="Nome completo" className="inp"/>
             </div>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 90px',gap:10}}>
-              <div>
-                <label style={{fontSize:12,fontWeight:700,color:'#475569',display:'block',marginBottom:5}}>Medico(a)</label>
-                <input value={nomeMed} onChange={function(e){setNomeMed(e.target.value);}} placeholder="Dr(a). Nome" className="inp"/>
-              </div>
-              <div>
-                <label style={{fontSize:12,fontWeight:700,color:'#475569',display:'block',marginBottom:5}}>CRM</label>
-                <input value={crmMed} onChange={function(e){setCrmMed(e.target.value);}} placeholder="00000" className="inp"/>
-              </div>
-            </div>
+            <MedicoCrmCampos medicos={medicosCrm} nome={nomeMed} crm={crmMed} onNome={setNomeMed} onCrm={setCrmMed}/>
             <div style={{background:'#F0FDF4',borderRadius:14,padding:14,border:'1.5px solid #BBF7D0'}}>
               <div style={{fontSize:12,fontWeight:800,color:'#059669',marginBottom:2,display:'flex',alignItems:'center',gap:5}}><Icon name="bell" size={12}/> Lembretes por WhatsApp <span style={{fontWeight:600,color:'#94A3B8'}}>(opcional)</span></div>
               <div style={{fontSize:11,color:'#64748B',marginBottom:10}}>Preencha se quiser enviar lembretes de dose ao paciente ou responsável.</div>
@@ -6855,16 +6846,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
               <label style={{fontSize:12,fontWeight:700,color:'#475569',display:'block',marginBottom:5}}>Nome</label>
               <input value={editNome} onChange={function(e){setEditNome(e.target.value);}} className="inp"/>
             </div>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 90px',gap:10}}>
-              <div>
-                <label style={{fontSize:12,fontWeight:700,color:'#475569',display:'block',marginBottom:5}}>Medico(a)</label>
-                <input value={editMed} onChange={function(e){setEditMed(e.target.value);}} placeholder="Dr(a). Nome" className="inp"/>
-              </div>
-              <div>
-                <label style={{fontSize:12,fontWeight:700,color:'#475569',display:'block',marginBottom:5}}>CRM</label>
-                <input value={editCrm} onChange={function(e){setEditCrm(e.target.value);}} placeholder="00000" className="inp"/>
-              </div>
-            </div>
+            <MedicoCrmCampos medicos={medicosCrm} nome={editMed} crm={editCrm} onNome={setEditMed} onCrm={setEditCrm}/>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
               <div>
                 <label style={{fontSize:12,fontWeight:700,color:'#475569',display:'block',marginBottom:5}}>Total de Dias *</label>
@@ -7912,6 +7894,89 @@ function EntradaEspecial(props){
 // ajusta, devolve, cancela ou atende (a transferência acontece na hora, com lote/validade, e fica ligada ao pedido).
 var REPO_STATUS={pendente:{l:'Aguardando a CAF',c:'#1351B4',bg:'#EEF3FB'},parcial:{l:'Atendido em parte',c:'#B26A00',bg:'#FFF3DC'},atendida:{l:'Atendido',c:'#0B7A5F',bg:'#E2F6EF'},devolvida:{l:'Devolvido p/ ajuste',c:'#B26A00',bg:'#FFF3DC'},cancelada:{l:'Cancelado',c:'#C2362D',bg:'#FDECEA'}};
 function RepoChip(props){var s=REPO_STATUS[props.st]||{l:props.st,c:'#475569',bg:'#F1F5F9'};return <span style={{background:s.bg,color:s.c,fontWeight:700,fontSize:11.5,borderRadius:99,padding:'3px 10px',whiteSpace:'nowrap'}}>{s.l}</span>;}
+// ===== Cadastro de médicos (nome + CRM), um por prefeitura =====
+// Coleção medicos_crm, separada por tenant_id (Vicência e Itaquitinga não compartilham nada). Serve só para
+// ajudar a preencher: nos formulários que pedem médico/CRM aparecem sugestões; dá para digitar um médico novo.
+function useMedicosCrm(user){
+  var _l=useState([]);var lista=_l[0],setLista=_l[1];
+  useEffect(function(){return db.collection('medicos_crm').where('tenant_id','==',tenantDe(user)).limit(1000).onSnapshot(function(sn){var a=sn.docs.map(function(d){return Object.assign({id:d.id},d.data());});a.sort(function(x,y){return String(x.nome||'').localeCompare(String(y.nome||''),'pt-BR');});setLista(a);},function(){});},[tenantDe(user)]);
+  return lista;
+}
+function MedicoCrmCampos(props){
+  var medicos=props.medicos||[];
+  var _f=useState('');var foco=_f[0],setFoco=_f[1];
+  var termo=foco==='crm'?props.crm:props.nome;
+  var nt=_norm(termo||'').trim();
+  var achados=(foco&&nt.length>=1)?medicos.filter(function(m){return _norm(foco==='crm'?m.crm:m.nome).indexOf(nt)>=0&&!(m.nome===props.nome&&m.crm===props.crm);}).slice(0,6):[];
+  var lbl={fontSize:12,fontWeight:700,color:'#475569',display:'block',marginBottom:5};
+  var ast=props.obrigatorio?' *':'';
+  // CRM completo igual a um cadastrado -> preenche o nome; nome completo igual a um cadastrado -> preenche o CRM. Parcial: sugestões.
+  function limpaCrm(s){return _norm(s).replace(/[^a-z0-9]/g,'');}
+  function mudouCrm(v){props.onCrm(v);var k=limpaCrm(v);if(k.length<3)return;var m=medicos.filter(function(x){return limpaCrm(x.crm)===k;})[0];if(m)props.onNome(m.nome);}
+  function mudouNome(v){props.onNome(v);var k=_norm(v).trim();if(k.length<3)return;var m=medicos.filter(function(x){return _norm(x.nome).trim()===k;})[0];if(m)props.onCrm(m.crm);}
+  return(<div data-fc="medico-campos">
+    <div style={{display:'grid',gridTemplateColumns:'1fr 110px',gap:10}}>
+      <div><label style={lbl}>Médico(a){ast}</label><input data-fc="medico-nome" value={props.nome} onFocus={function(){setFoco('nome');}} onBlur={function(){setTimeout(function(){setFoco('');},180);}} onChange={function(e){mudouNome(e.target.value);}} placeholder="Dr(a). Nome" className="inp" style={{marginBottom:0}}/></div>
+      <div><label style={lbl}>CRM{ast}</label><input data-fc="medico-crm" value={props.crm} onFocus={function(){setFoco('crm');}} onBlur={function(){setTimeout(function(){setFoco('');},180);}} onChange={function(e){mudouCrm(e.target.value);}} placeholder="00000" className="inp" style={{marginBottom:0}}/></div>
+    </div>
+    {achados.length>0&&<div data-fc="medico-sugestoes" style={{border:'1px solid #E2E8F0',borderRadius:10,background:'#fff',marginTop:4,overflow:'hidden'}}>
+      {achados.map(function(m){return <button type="button" key={m.id} data-fc="medico-pick" onMouseDown={function(e){e.preventDefault();}} onClick={function(){props.onNome(m.nome);props.onCrm(m.crm);setFoco('');}} style={{display:'block',width:'100%',textAlign:'left',padding:'9px 12px',border:'none',borderTop:'1px solid #F1F5F9',background:'#fff',cursor:'pointer',fontSize:13.5}}><b>{m.nome}</b> <span style={{color:'#64748B'}}>· CRM {m.crm}</span></button>;})}
+    </div>}
+  </div>);
+}
+function TabMedicos(props){
+  var user=props.user;var medicos=useMedicosCrm(user);
+  var podeApagar=user.role==='gestor'||user.role==='tecnico';
+  var _n=useState('');var nome=_n[0],setNome=_n[1];
+  var _c=useState('');var crm=_c[0],setCrm=_c[1];
+  var _ed=useState(null);var edId=_ed[0],setEdId=_ed[1];
+  var _q=useState('');var q=_q[0],setQ=_q[1];
+  var _er=useState('');var err=_er[0],setErr=_er[1];
+  var _ok=useState('');var ok=_ok[0],setOk=_ok[1];
+  var _bu=useState(false);var busy=_bu[0],setBusy=_bu[1];
+  function limpar(){setNome('');setCrm('');setEdId(null);}
+  function salvar(){
+    setErr('');setOk('');
+    var n=nome.trim(),c=crm.trim().toUpperCase();
+    if(n.length<3){setErr('Informe o nome do médico.');return;}
+    if(c.length<3){setErr('Informe o CRM.');return;}
+    var dup=medicos.filter(function(m){return m.id!==edId&&_norm(m.crm).replace(/[^a-z0-9]/g,'')===_norm(c).replace(/[^a-z0-9]/g,'');})[0];
+    if(dup){setErr('Esse CRM já está cadastrado em nome de '+dup.nome+'.');return;}
+    setBusy(true);
+    var dados={nome:n,crm:c,tenant_id:tenantDe(user)};
+    var pr=edId?db.collection('medicos_crm').doc(edId).update(Object.assign({},dados,{editadoPor:user.name||'',editadoEm:new Date().toISOString()}))
+      :db.collection('medicos_crm').add(Object.assign({},dados,{criadoPor:user.name||'',criadoEm:new Date().toISOString()}));
+    pr.then(function(){setBusy(false);setOk(edId?'Médico atualizado.':'Médico cadastrado.');limpar();}).catch(function(e){setBusy(false);setErr('Não foi possível salvar: '+((e&&e.message)||'erro'));});
+  }
+  function apagar(m){if(!window.confirm('Remover '+m.nome+' (CRM '+m.crm+') do cadastro? Registros antigos não mudam.'))return;db.collection('medicos_crm').doc(m.id).delete().catch(function(e){setErr('Não foi possível remover: '+((e&&e.message)||'erro'));});}
+  var nq=_norm(q).trim();
+  var vis=medicos.filter(function(m){return !nq||_norm(m.nome).indexOf(nq)>=0||_norm(m.crm).indexOf(nq)>=0;});
+  return(<div data-fc="tab-medicos" style={{padding:'16px 16px 90px',maxWidth:640,margin:'0 auto'}}>
+    <div style={{fontSize:20,fontWeight:800,color:'#1E293B'}}>Médicos (CRM)</div>
+    <div style={{fontSize:12.5,color:'#64748B',margin:'4px 0 14px'}}>Cadastro simples de nome e CRM, só desta prefeitura. Quando um formulário pedir médico e CRM, é só começar a digitar e escolher.</div>
+    <div style={{background:'#fff',border:'1px solid #E2E8F0',borderRadius:14,padding:14,marginBottom:14}}>
+      <div style={{fontWeight:800,fontSize:14,marginBottom:8}}>{edId?'Editar médico':'Novo médico'}</div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 120px',gap:10}}>
+        <input className="inp" data-fc="med-nome" placeholder="Nome do médico" value={nome} onChange={function(e){setNome(e.target.value);}} style={{marginBottom:0}}/>
+        <input className="inp" data-fc="med-crm" placeholder="CRM (ex.: 12345-PE)" value={crm} onChange={function(e){setCrm(e.target.value);}} style={{marginBottom:0}}/>
+      </div>
+      {err&&<div data-fc="med-erro" style={{background:'#FDECEA',color:'#C2362D',borderRadius:10,padding:'8px 12px',fontSize:13,marginTop:8}}>{err}</div>}
+      {ok&&<div data-fc="med-ok" style={{background:'#E2F6EF',color:'#0B7A5F',borderRadius:10,padding:'8px 12px',fontSize:13,marginTop:8}}>{ok}</div>}
+      <div style={{display:'flex',gap:8,marginTop:10}}>
+        <button type="button" data-fc="med-salvar" disabled={busy} onClick={salvar} style={{flex:1,padding:'11px',borderRadius:10,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,cursor:'pointer'}}>{busy?'Salvando…':(edId?'Salvar alterações':'Cadastrar')}</button>
+        {edId&&<button type="button" onClick={limpar} style={{padding:'11px 14px',borderRadius:10,border:'1px solid #CBD5E1',background:'#fff',cursor:'pointer'}}>Cancelar</button>}
+      </div>
+    </div>
+    <input className="inp" data-fc="med-busca" placeholder="Buscar por nome ou CRM…" value={q} onChange={function(e){setQ(e.target.value);}}/>
+    <div style={{fontSize:12,color:'#94A3B8',margin:'2px 0 6px'}}>{medicos.length} médico(s) cadastrado(s)</div>
+    {vis.map(function(m){return(<div key={m.id} data-fc="med-linha" style={{display:'flex',alignItems:'center',gap:8,padding:'10px 0',borderTop:'1px solid #F1F5F9'}}>
+      <div style={{flex:1,fontSize:14}}><b>{m.nome}</b><div style={{fontSize:12,color:'#64748B'}}>CRM {m.crm}</div></div>
+      <button type="button" data-fc="med-editar" onClick={function(){setEdId(m.id);setNome(m.nome);setCrm(m.crm);setErr('');setOk('');}} style={{padding:'6px 12px',borderRadius:8,border:'1px solid #CBD5E1',background:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>Editar</button>
+      {podeApagar&&<button type="button" data-fc="med-apagar" onClick={function(){apagar(m);}} style={{padding:'6px 12px',borderRadius:8,border:'none',background:'#FDECEA',color:'#C2362D',fontWeight:700,fontSize:12,cursor:'pointer'}}>Remover</button>}
+    </div>);})}
+    {vis.length===0&&<div style={{color:'#94A3B8',fontSize:13,padding:'10px 0'}}>{medicos.length?'Nenhum médico encontrado.':'Nenhum médico cadastrado ainda.'}</div>}
+  </div>);
+}
 function useReposicoes(user){
   var _l=useState([]);var lista=_l[0],setLista=_l[1];
   useEffect(function(){return db.collection('reposicoes').where('tenant_id','==',tenantDe(user)).limit(500).onSnapshot(function(sn){var a=sn.docs.map(function(d){return Object.assign({id:d.id},d.data());});a.sort(function(x,y){return String(y.criadoEm||'').localeCompare(String(x.criadoEm||''));});setLista(a);},function(){});},[tenantDe(user)]);
@@ -8411,9 +8476,9 @@ function TabHistoricoNotas(props){
   });
   var lista=Object.values(gmap).sort(function(a,b){return (b.dt||'').localeCompare(a.dt||'');});
   if(search.trim()){
-    var sl=search.toLowerCase();
+    var sl=_norm(search);
     lista=lista.filter(function(g){
-      return (g.nf&&g.nf.toLowerCase().indexOf(sl)>=0)||(g.forn&&g.forn.toLowerCase().indexOf(sl)>=0)||g.itens.some(function(i){return i.medicamentoNome&&i.medicamentoNome.toLowerCase().indexOf(sl)>=0;});
+      return (g.nf&&_norm(g.nf).indexOf(sl)>=0)||(g.forn&&_norm(g.forn).indexOf(sl)>=0)||g.itens.some(function(i){return i.medicamentoNome&&_norm(i.medicamentoNome).indexOf(sl)>=0;});
     });
   }
   function salvarGrupo(){
@@ -9999,7 +10064,7 @@ function TabPrevisao(props){
 
         {/* Lista de medicamentos por categoria */}
         {(function(){
-          var buscaL=(ajBusca||'').toLowerCase().trim();
+          var buscaL=_norm((ajBusca||'')).trim();
           var categorias=Object.keys(LBL);
           var algumaMostrada=false;
           var secoes=categorias.map(function(catKey){
@@ -10013,7 +10078,7 @@ function TabPrevisao(props){
               var vinculadoAta=!!m.ataId||!!medVinculadosViaItens[m.id];
               var temConfig=(Number(m.consumoEstimado||0)>0||Number(m.minEstoque||m.estoqueMin||0)>0);
               var matchCat=(m.categoria||'medicamento')===catKey;
-              var matchBusca=!buscaL||m.nome.toLowerCase().indexOf(buscaL)>=0;
+              var matchBusca=!buscaL||_norm(m.nome).indexOf(buscaL)>=0;
               return (vinculadoAta||temConfig)&&matchCat&&matchBusca;
             });
             // Filtro "só urgentes" (ruptura em ≤30d) e ordenação por urgência (acaba antes primeiro; sem previsão por último)
@@ -10304,7 +10369,7 @@ function TabPrevisao(props){
           <input value={buscaVinc} onChange={function(e){setBuscaVinc(e.target.value);}} placeholder="🔍 Buscar medicamento..." className="inp"/>
           <select value={vincMed} onChange={function(e){setVincMed(e.target.value);}} className="inp">
             <option value="">Selecione o medicamento...</option>
-            {medications.filter(function(m){return !buscaVinc.trim()||m.nome.toLowerCase().indexOf(buscaVinc.toLowerCase())>=0;}).slice(0,50).map(function(m){
+            {medications.filter(function(m){return !buscaVinc.trim()||_norm(m.nome).indexOf(_norm(buscaVinc))>=0;}).slice(0,50).map(function(m){
               var ataAtual=m.ataId?atas.find(function(a){return a.id===m.ataId;}):null;
               return(<option key={m.id} value={m.id}>{m.nome}{ataAtual?(' ['+ataAtual.nome+']'):''}</option>);
             })}
@@ -10687,7 +10752,7 @@ function TabPrevisao(props){
                         <div>
                           <input value={busca} onChange={function(e){var v=e.target.value;setBuscaItemMed(function(p){var n=Object.assign({},p);n[ata.id+'.'+idxIt]=v;return n;});}} placeholder="🔍 Vincular a medicamento do estoque..." className="inp" style={{marginBottom:4,fontSize:12,padding:'6px 10px'}}/>
                           {busca.trim()&&<div style={{maxHeight:110,overflowY:'auto',border:'1px solid #E2E8F0',borderRadius:8,background:'#fff'}}>
-                            {medications.filter(function(m){return m.nome.toLowerCase().indexOf(busca.toLowerCase())>=0;}).slice(0,8).map(function(m){
+                            {medications.filter(function(m){return _norm(m.nome).indexOf(_norm(busca))>=0;}).slice(0,8).map(function(m){
                               return(<div key={m.id} onClick={function(){
                                 atualizarItemAta(ata.id,ata.itens,{medicamentoId:m.id},idxIt).then(function(){setBuscaItemMed(function(p){var n=Object.assign({},p);n[ata.id+'.'+idxIt]='';return n;});}).catch(function(){});
                               }} style={{padding:'7px 12px',fontSize:12,cursor:'pointer',borderBottom:'1px solid #F1F5F9'}}>{m.nome}</div>);
@@ -10728,7 +10793,7 @@ function TabPrevisao(props){
           <div style={{width:70,textAlign:'center'}}>Consumo/mês</div>
         </div>
         {medications.filter(function(m){
-          var okB=!buscaLote.trim()||m.nome.toLowerCase().indexOf(buscaLote.toLowerCase())>=0;
+          var okB=!buscaLote.trim()||_norm(m.nome).indexOf(_norm(buscaLote))>=0;
           var okC=filtCatLote==='todos'||(m.categoria||'medicamento')===filtCatLote;
           return okB&&okC;
         }).slice(0,200).map(function(m){
@@ -11377,10 +11442,10 @@ function TabConferencia(props){
     }catch(e){falhou(e);}
   }
 
-  var buscaLc=busca.trim().toLowerCase();
+  var buscaLc=_norm(busca.trim());
   // Na conferência por categoria, só entram os medicamentos da categoria ativa (vazio na tela de seleção).
   var medListVis=catAtiva?medList.filter(function(m){return (m.cat||'medicamento')===catAtiva;}):[];
-  var filtradaBase=buscaLc?medListVis.filter(function(m){return m.nome.toLowerCase().indexOf(buscaLc)>=0;}):medListVis;
+  var filtradaBase=buscaLc?medListVis.filter(function(m){return _norm(m.nome).indexOf(buscaLc)>=0;}):medListVis;
   var filtrada=soFaltam?filtradaBase.filter(function(m){return !medVerde(m);}):filtradaBase;
   var totalItens=filtradaBase.length;
   var conferidos=filtradaBase.filter(medVerde).length;
@@ -12666,7 +12731,7 @@ function ImportarNotas(props){
                 var jaVinculado=it.status==='conciliado'||it.status==='divergencia';
                 var cancelado=it.status==='cancelado';
                 var buscaTxt=(buscaVinculo[key]||'').trim();
-                var candsBusca=(!jaVinculado&&!cancelado&&buscaTxt)?candidatosVinculo.filter(function(c){return (c.nome||'').toLowerCase().indexOf(buscaTxt.toLowerCase())>=0;}).slice(0,8):[];
+                var candsBusca=(!jaVinculado&&!cancelado&&buscaTxt)?candidatosVinculo.filter(function(c){return _norm((c.nome||'')).indexOf(_norm(buscaTxt))>=0;}).slice(0,8):[];
                 return(<div key={idx} style={{background:cancelado?'#F8FAFC':'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:8,padding:'8px 10px',opacity:cancelado?0.6:1}}>
                   <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
                     <div style={{fontSize:12,fontWeight:700,color:'#1E293B'}}>{it.descricao}</div>
@@ -13184,7 +13249,7 @@ function TabRecebimento(props){
   var listaFiltrada=recs.filter(function(r){
     if(fDe&&(r.data||'')<fDe)return false;
     if(fAte&&(r.data||'')>fAte)return false;
-    if(fForn&&!(r.fornecedor||'').toLowerCase().includes(fForn.toLowerCase()))return false;
+    if(fForn&&!_norm((r.fornecedor||'')).includes(_norm(fForn)))return false;
     if(fStatus!=='todos'&&(r.status||'pendente')!==fStatus)return false;
     return true;
   });
@@ -13596,10 +13661,10 @@ function TabPacientes(props){
 
   // Mostra TODOS os pacientes cadastrados — com histórico de saída primeiro (mais recente primeiro),
   // depois os sem nenhuma saída ainda (ordem alfabética).
-  var q=busca.trim().toLowerCase();
+  var q=_norm(busca.trim());
   var listaPacientes=pacientes
     .map(function(p){return{p:p,hist:saidasDe(p.id)};})
-    .filter(function(x){return !q||(x.p.nome||'').toLowerCase().indexOf(q)>=0;})
+    .filter(function(x){return !q||_norm((x.p.nome||'')).indexOf(q)>=0;})
     .sort(function(a,b){
       if(a.hist.length&&!b.hist.length)return -1;
       if(!a.hist.length&&b.hist.length)return 1;
@@ -14103,6 +14168,7 @@ var localAtivo=!acessoLocal?null:(acessoLocal==='ambos'?(lcSel==='satelite'?'sat
 _fcLocalAtivo=localAtivo;
 function trocarLocal(l){try{localStorage.setItem('fc_local',l);}catch(e){}setLcSel(l);}
 var ehSat=localAtivo==='satelite';
+var _estSub=useState('estoque');var estoqueSub=_estSub[0],setEstoqueSub=_estSub[1];
 // No Satélite não existe "usuário SUS": toda saída é Emergência. Ao trocar de local volta ao padrão do CAF.
 useEffect(function(){if(ehSat)setDestinoSaida('emergencia');else if(localAtivo==='caf')setDestinoSaida(function(d){return d==='emergencia'?'sus':d;});},[ehSat,localAtivo]);
 // No Satélite: sem a categoria Leite e só os produtos que já tiveram movimento lá (cadastro segue único; o resto aparece quando chega por transferência/recebimento).
@@ -14229,7 +14295,7 @@ function menuIconName(id){
   var m={dashboard:'home',saida:'pill',recebimento:'truck',antibiotico:'vial',pedidosjudiciais:'scale',
     visaogeral:'trendUp',comparapedido:'search',estoque:'package',pacientes:'lock',conferencia:'clipboard',
     leites:'droplet',saidasreg:'edit',relatorio:'barChart',gestao:'users',log:'lock',histnotas:'folder',previsao:'clipboard',
-    histcontas:'clipboard',admin:'gear',superadmin:'gear',perfil:'users',ajuda:'help',ubs:'package',transferencia:'truck',ubsmed:'calendar'};
+    histcontas:'clipboard',admin:'gear',superadmin:'gear',perfil:'users',ajuda:'help',ubs:'package',transferencia:'truck',ubsmed:'calendar',medicos:'users'};
   return m[id]||'folder';
 }
 // Para gestor/técnico em Itaquitinga, o slot de maior destaque da navegação (sempre visível) troca
@@ -14238,6 +14304,13 @@ function menuIconName(id){
 // Vicência" no texto). Vicência, e os outros papéis em Itaquitinga (que nunca tiveram acesso a
 // Pedidos Judiciais — só aparecia no menu lateral, restrito a gestor/técnico), continuam vendo ATB
 // nesse slot exatamente como antes.
+// Quadrados da tela inicial: levam direto para a aba relacionada (ro/Satélite não têm "Saídas registradas": vão para o Relatório)
+function irDoInicio(alvo){
+  if(alvo==='vencimento'){setEstoqueSub('vencimento');setTab('estoque');}
+  else if(alvo==='baixo'){setEstoqueSub('faltas');setTab('estoque');}
+  else if(alvo==='saidas'){setTab(!ro&&!ehSat?'saidasreg':'relatorio');}
+  else if(alvo==='entradas'){setTab(!ro?'recebimento':'relatorio');}
+}
 var navPrincipal=ro?[{id:'dashboard',icon:'🏠',label:'Início'},{id:'estoque',icon:'📦',label:'Estoque'},{id:'previsao',icon:'📋',label:'Pedido'}]:ehSat?[{id:'dashboard',icon:'🏠',label:'Início'},{id:'saida',icon:'💊',label:'Saída'},{id:'recebimento',icon:'🚚',label:'Recebimento'},{id:'transferencia',icon:'🔁',label:'Solicitação'}]:[{id:'dashboard',icon:'🏠',label:'Início'},{id:'saida',icon:'💊',label:'Saída'},{id:'recebimento',icon:'🚚',label:'Recebimento'},
   (temModulo(user,'judicial')&&isManagerRole?{id:'pedidosjudiciais',icon:'⚖️',label:'Judicial'}:{id:'antibiotico',icon:'🧬',label:'ATB'})];
 return(
@@ -14319,11 +14392,11 @@ return(
       </div>
     ):(
       <div>
-        {tab==='dashboard'&&<TabDashboard entries={entries} medications={meds} stock={stock} user={user} plantao={plantao} isGuest={isGuest} onSolicitar={abrirSolicitarStable} onEncerrar={encerrarPlantaoStable} onSair={sairDoPlantaoStable} onSolicitarEntrada={solicitarEntradaPlantaoStable} shiftId={shiftId} onIniciar={abrirIniciarTurnoStable} allUsers={allUsers}/>}
+        {tab==='dashboard'&&<TabDashboard onIr={irDoInicio} entries={entries} medications={meds} stock={stock} user={user} plantao={plantao} isGuest={isGuest} onSolicitar={abrirSolicitarStable} onEncerrar={encerrarPlantaoStable} onSair={sairDoPlantaoStable} onSolicitarEntrada={solicitarEntradaPlantaoStable} shiftId={shiftId} onIniciar={abrirIniciarTurnoStable} allUsers={allUsers}/>}
         {tab==='visaogeral'&&isManagerRole&&<TabVisaoGeral entries={entries} medications={meds} stock={stock} user={user}/>}
         {tab==='comparapedido'&&isManagerRole&&temModulo(user,'comparaPedido')&&<ErrBoundary><TabComparacaoPedido/></ErrBoundary>}
         {!ro&&tab==='saida'&&<TabSaida destino={destinoSaida} onDestino={setDestinoSaida} destinos={destinosTodos.filter(function(d){return d.ativo&&(!ehSat||d.id==='emergencia');})} destinosTodos={destinosTodos} ubsLista={ubsTodas.filter(function(u){return u.ativo;})} ubsTodas={ubsTodas} ubs={ubsSaida} onUbs={setUbsSaida} podeEditarDest={temModulo(user,'destinos')&&(user.role==='gestor'||user.role==='tecnico')} user={user} medications={meds} stock={stock} entries={entries} onSave={addEntryStable} onSolicitar={addSolicitacaoStable} latest={latest} isGuest={isGuest} canMove={canMove} confirm2={confirm2} alert2={alert2}/>}
-        {tab==='estoque'&&<TabEstoque user={user} medications={meds} entries={entries} stock={stock} estoqueBruto={estoqueBruto} onSave={addEntryStable} confirm2={confirm2} alert2={alert2}/>}
+        {tab==='estoque'&&<TabEstoque key={estoqueSub} subInicial={estoqueSub} user={user} medications={meds} entries={entries} stock={stock} estoqueBruto={estoqueBruto} onSave={addEntryStable} confirm2={confirm2} alert2={alert2}/>}
         {!ro&&tab==='conferencia'&&<ErrBoundary><TabConferencia user={user} medications={meds} entries={entries} stock={stock} estoqueBruto={estoqueBruto} histPronto={histPronto}/></ErrBoundary>}
         {!ro&&!ocultaSat&&tab==='saidasreg'&&<ErrBoundary><TabSaidasRegistradas user={user} entries={entries} medications={meds} destinos={destinosTodos} ubsTodas={ubsTodas}/></ErrBoundary>}
         {tab==='relatorio'&&<TabRelatorio destinos={destinosTodos} ubsTodas={ubsTodas} entries={entries} medications={meds} db={db} user={user}/>}
@@ -14340,6 +14413,7 @@ return(
         {tab==='ubs'&&!ro&&!ocultaSat&&temModulo(user,'ubsSolicitacoes')&&<ErrBoundary><TabUbs user={user} entries={entries} medications={meds}/></ErrBoundary>}
         {ocultaSat&&<div style={{maxWidth:520,margin:'40px auto',padding:'0 16px',textAlign:'center',color:'#64748B'}}><div style={{fontSize:16,fontWeight:800,color:'#1E293B',marginBottom:6}}>Não existe no Satélite</div>Esta aba é só da CAF.</div>}
         {ro&&TABS_MOVIMENTO.indexOf(tab)>=0&&<div style={{maxWidth:520,margin:'40px auto',padding:'0 16px',textAlign:'center',color:'#64748B'}}><div style={{fontSize:16,fontWeight:800,color:'#1E293B',marginBottom:6}}>Acesso somente consulta</div>Sua conta pode ver o estoque da CAF e fazer pedidos, mas não movimenta o estoque.</div>}
+        {tab==='medicos'&&!ro&&<ErrBoundary><TabMedicos user={user}/></ErrBoundary>}
         {tab==='ubsmed'&&!ro&&temModulo(user,'destinos')&&<ErrBoundary><TabUbsValidades user={user} entries={entries} medications={meds}/></ErrBoundary>}
         {tab==='transferencia'&&!ro&&localAtivo&&<ErrBoundary><TabTransferencia user={user} entries={entries} medications={meds} medsCaf={medsSemLeite} localAtivo={localAtivo}/></ErrBoundary>}
         {tab==='ajuda'&&<ErrBoundary><TabAjuda user={user} onIr={function(t){setTab(t);}}/></ErrBoundary>}
@@ -14405,6 +14479,8 @@ return(
               {id:'conferencia',icon:'🧾',label:'Conferência',show:!ro},
               {id:'leites',icon:'🍼',label:'Leites',show:!ro&&!ehSat},
               {id:'saidasreg',icon:'🧾',label:'Saídas registradas',show:!ro&&!ehSat},
+              {id:'antibiotico',icon:'🧬',label:'ATB',show:!ro&&temModulo(user,'atb')&&ehSat},
+              {id:'medicos',icon:'🩺',label:'Médicos (CRM)',show:!ro},
               {id:'ubsmed',icon:'📅',label:'UBS: validades',show:!ro&&temModulo(user,'destinos')},
               {id:'transferencia',icon:'🔁',label:(ehSat?'Solicitação':'Transferência CAF ⇄ Satélite')+(repoNovos>0&&localAtivo==='caf'?' ('+repoNovos+')':''),show:!ro&&!!localAtivo},
               {id:'ubs',icon:'🏥',label:'Solicitações das UBS',show:!ro&&!ehSat&&temModulo(user,'ubsSolicitacoes')&&['gestor','tecnico','farmaceutico','auxiliar'].indexOf(user.role)>=0},
@@ -14455,7 +14531,7 @@ return(
             <div style={{fontSize:11,color:temaItaq?'var(--itq-faint)':'rgba(255,255,255,0.5)',marginTop:2}}>{ROLES[user.role]||user.role}</div>
           </div>
           <div style={{flex:1,overflowY:'auto',padding:'8px 0'}}>
-            {[{id:'estoque',icon:'📦',label:'Estoque'},{id:'recebimento',icon:'🚚',label:'Recebimento'},{id:'pacientes',icon:'🔒',label:'Pacientes (Controlados)'},{id:'conferencia',icon:'🧾',label:'Conferência'},{id:'leites',icon:'🍼',label:'Leites'},{id:'saidasreg',icon:'🧾',label:'Saídas registradas'},{id:'ubsmed',icon:'📅',label:'UBS: validades'},{id:'transferencia',icon:'🔁',label:(ehSat?'Solicitação':'Transferência CAF ⇄ Satélite')+(repoNovos>0&&localAtivo==='caf'?' ('+repoNovos+')':'')},{id:'antibiotico',icon:'🧬',label:'ATB'},{id:'ubs',icon:'🏥',label:'Solicitações das UBS'},{id:'relatorio',icon:'📊',label:'Relatório'},{id:'previsao',icon:'📋',label:'Previsão / Pedido'},{id:'ajuda',icon:'❓',label:'Ajuda'}].filter(function(t){return t.id!=='pacientes'||temModulo(user,'controlados');}).filter(function(t){if(t.id==='ubsmed')return !ro&&temModulo(user,'destinos');if(t.id==='antibiotico')return ehSat&&!ro;if(t.id==='transferencia')return !ro&&!!localAtivo;if(t.id==='ubs')return !ro&&!ehSat&&temModulo(user,'ubsSolicitacoes');if(ehSat&&TABS_SAT_OCULTAS.indexOf(t.id)>=0)return false;if(t.id==='previsao')return podePedidos;return !(ro&&TABS_MOVIMENTO.indexOf(t.id)>=0);}).map(function(t){return(
+            {[{id:'estoque',icon:'📦',label:'Estoque'},{id:'recebimento',icon:'🚚',label:'Recebimento'},{id:'pacientes',icon:'🔒',label:'Pacientes (Controlados)'},{id:'conferencia',icon:'🧾',label:'Conferência'},{id:'leites',icon:'🍼',label:'Leites'},{id:'saidasreg',icon:'🧾',label:'Saídas registradas'},{id:'ubsmed',icon:'📅',label:'UBS: validades'},{id:'transferencia',icon:'🔁',label:(ehSat?'Solicitação':'Transferência CAF ⇄ Satélite')+(repoNovos>0&&localAtivo==='caf'?' ('+repoNovos+')':'')},{id:'antibiotico',icon:'🧬',label:'ATB'},{id:'medicos',icon:'🩺',label:'Médicos (CRM)'},{id:'ubs',icon:'🏥',label:'Solicitações das UBS'},{id:'relatorio',icon:'📊',label:'Relatório'},{id:'previsao',icon:'📋',label:'Previsão / Pedido'},{id:'ajuda',icon:'❓',label:'Ajuda'}].filter(function(t){return t.id!=='pacientes'||temModulo(user,'controlados');}).filter(function(t){if(t.id==='ubsmed')return !ro&&temModulo(user,'destinos');if(t.id==='medicos')return !ro;if(t.id==='antibiotico')return ehSat&&!ro;if(t.id==='transferencia')return !ro&&!!localAtivo;if(t.id==='ubs')return !ro&&!ehSat&&temModulo(user,'ubsSolicitacoes');if(ehSat&&TABS_SAT_OCULTAS.indexOf(t.id)>=0)return false;if(t.id==='previsao')return podePedidos;return !(ro&&TABS_MOVIMENTO.indexOf(t.id)>=0);}).map(function(t){return(
               <button key={t.id} data-tour={'nav-'+t.id} className={temaItaq?'menu-drawer-item'+(tab===t.id?' on':''):''} onClick={function(){setTab(t.id);setMenuAberto(false);}} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'13px 20px',border:'none',background:temaItaq?undefined:(tab===t.id?'#EFF6FF':'transparent'),cursor:'pointer',borderLeft:temaItaq?undefined:(tab===t.id?'3px solid #1351B4':'3px solid transparent')}}>
                 <span className={temaItaq?'menu-drawer-ic':''} style={{fontSize:20}}>{temaItaq?<Icon name={menuIconName(t.id)} size={18}/>:t.icon}</span>
                 <span className={temaItaq?'menu-drawer-lbl':''} style={{fontSize:14,fontWeight:tab===t.id?700:500,color:temaItaq?undefined:(tab===t.id?'#1351B4':'#1E293B')}}>{t.label}</span>
