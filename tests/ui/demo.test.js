@@ -110,7 +110,7 @@ const txt = (pg) => pg.evaluate(() => document.body.innerText);
   await pg.click('[data-tour="nav-transferencia"]'); await pg.waitForTimeout(400);
   await pg.click('[data-fc="sub-pedir"]'); await pg.waitForTimeout(300);
   t = await txt(pg);
-  ok(t.includes('Meus pedidos') && t.includes('Aguardando o CAF'), 'satelite ve os pedidos de reposicao ja feitos');
+  ok(t.includes('Meus pedidos') && t.includes('Aguardando a CAF'), 'satelite ve os pedidos de reposicao ja feitos');
   ok(errs.length === 0, 'satelite: sem erros JS ' + errs.join('|'));
   await ctx.close();
 

@@ -68,14 +68,14 @@
     var S = store, ks = Object.keys(S.medicamentos).filter(function (k) { return S.medicamentos[k].categoria === 'medicamento'; });
     var agora = new Date().toISOString();
     var itens = [ks[3], ks[8]].map(function (k, i) { var m = S.medicamentos[k]; return { id: 's' + i + k, medId: k, nome: m.nome, qtdSolicitada: [150, 100][i], qtdTransferida: 0, obsCaf: '' }; });
-    window.__fakeDb.collection('reposicoes').add({ tenant_id: dados.tenant, status: 'pendente', itens: itens, obs: '', solicitanteId: 'demo-sat', solicitanteNome: 'Auxiliar do Satélite (demonstração)', historico: [{ em: agora, acao: 'enviado', por: 'Satélite', obs: '' }], criadoEm: agora, atualizadoEm: agora, obsCaf: '' }).then(function () { toast('O Satélite pediu reposição ao CAF. Veja em Transferência.'); });
+    window.__fakeDb.collection('reposicoes').add({ tenant_id: dados.tenant, status: 'pendente', itens: itens, obs: '', solicitanteId: 'demo-sat', solicitanteNome: 'Auxiliar do Satélite (demonstração)', historico: [{ em: agora, acao: 'enviado', por: 'Satélite', obs: '' }], criadoEm: agora, atualizadoEm: agora, obsCaf: '' }).then(function () { toast('O Satélite pediu reposição à CAF. Veja em Transferência.'); });
   }
   function abrirPainel() {
     if (aberto) { fecharPainel(); return; }
     aberto = true;
     var itens = [el('h4', { text: 'Menu da demonstração' }),
       el('button', { type: 'button', 'data-demo': 'sim-ubs', text: '📨 Simular: enfermeira de UBS envia um pedido', onclick: function () { fecharPainel(); simularUbs(); } }),
-      el('button', { type: 'button', 'data-demo': 'sim-repo', text: '🔁 Simular: Satélite pede reposição ao CAF', onclick: function () { fecharPainel(); simularRepo(); } }),
+      el('button', { type: 'button', 'data-demo': 'sim-repo', text: '🔁 Simular: Satélite pede reposição à CAF', onclick: function () { fecharPainel(); simularRepo(); } }),
       el('hr')];
     Object.keys(PERFIS).filter(function (k) { return k !== perfilId; }).forEach(function (k) { itens.push(el('button', { type: 'button', class: 'sec', 'data-demo': 'perfil-' + k, text: 'Entrar como ' + PERFIS[k].rotulo, onclick: function () { guardar('perfil', k); location.reload(); } })); });
     itens.push(el('hr'));
