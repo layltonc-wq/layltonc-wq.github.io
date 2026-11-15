@@ -48,10 +48,15 @@ const txt = (pg) => pg.evaluate(() => document.body.innerText);
 
   // 3) ATB no menu do Itaquitinga
   await pg.click('[data-tour="nav-menu"]');
-  ok(await pg.evaluate(() => !!document.querySelector('.menu-drawer-item[data-tour="nav-antibiotico"]')), 'Itaquitinga: ATB aparece no menu');
+  ok(await pg.evaluate(() => !document.querySelector('.menu-drawer-item[data-tour="nav-antibiotico"]')), 'Itaquitinga CAF: sem ATB (usa Judicial)');
+  await pg.evaluate(() => { document.querySelectorAll('.itaq-backdrop').forEach((x) => x.click()); });
+  await pg.click('[data-fc="local-satelite"]'); await pg.waitForTimeout(300);
+  await pg.click('[data-tour="nav-menu"]');
+  ok(await pg.evaluate(() => !!document.querySelector('.menu-drawer-item[data-tour="nav-antibiotico"]') && !document.querySelector('.menu-drawer-item[data-tour="nav-pedidosjudiciais"]')), 'Itaquitinga Satélite: ATB no menu e sem Judicial');
   await pg.click('.menu-drawer-item[data-tour="nav-antibiotico"]'); await pg.waitForTimeout(500);
   ok(/ATB|antibi|Tratamento/i.test(await txt(pg)), 'Itaquitinga: a aba ATB abre');
 
+  await pg.click('[data-fc="local-caf"]'); await pg.waitForTimeout(300);
   // 4) cadastro de médicos, só desta prefeitura
   await pg.click('[data-tour="nav-menu"]');
   await pg.click('.menu-drawer-item[data-tour="nav-medicos"]'); await pg.waitForTimeout(400);
@@ -68,6 +73,8 @@ const txt = (pg) => pg.evaluate(() => document.body.innerText);
   ok((await pg.$$('[data-fc="med-linha"]')).length === 1, 'busca de médico ignora acento (joao -> João)');
 
   // 5) sugestão de médico no ATB
+  await pg.evaluate(() => { document.querySelectorAll('.itaq-backdrop').forEach((y) => y.click()); });
+  await pg.click('[data-fc="local-satelite"]'); await pg.waitForTimeout(300);
   await pg.click('[data-tour="nav-menu"]');
   await pg.click('.menu-drawer-item[data-tour="nav-antibiotico"]'); await pg.waitForTimeout(400);
   const novo = await pg.$('button:has-text("Novo")');
@@ -78,6 +85,11 @@ const txt = (pg) => pg.evaluate(() => document.body.innerText);
   ok((await pg.inputValue('[data-fc="medico-crm"]')) === '12345-PE' && (await pg.inputValue('[data-fc="medico-nome"]')) === 'Dra. Ana Paula', 'escolher a sugestão preenche nome e CRM');
   await pg.fill('[data-fc="medico-crm"]', '9999'); await pg.waitForTimeout(250);
   ok(!(await pg.$('[data-fc="medico-pick"]')), 'CRM de Vicência (99999) não aparece como sugestão aqui');
+  await pg.fill('[data-fc="medico-nome"]', ''); await pg.fill('[data-fc="medico-crm"]', '');
+  await pg.fill('[data-fc="medico-crm"]', '12345-PE'); await pg.waitForTimeout(250);
+  ok((await pg.inputValue('[data-fc="medico-nome"]')) === 'Dra. Ana Paula', 'digitar o CRM completo preenche o nome sozinho');
+  await pg.fill('[data-fc="medico-crm"]', ''); await pg.fill('[data-fc="medico-nome"]', ''); await pg.fill('[data-fc="medico-nome"]', 'Dra. Ana Paula'); await pg.waitForTimeout(250);
+  ok((await pg.inputValue('[data-fc="medico-crm"]')) === '12345-PE', 'digitar o nome completo preenche o CRM sozinho');
   ok(errs.filter((e) => !e.includes('ERR_FAILED')).length === 0, 'sem erros JS ' + errs.join('|'));
   await pg.context().close();
   await fim(br);
