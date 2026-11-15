@@ -4579,7 +4579,7 @@ function InstalarApp(){
   if(!ios&&!android&&!evt)return null; // computador sem suporte: não mostra
   var box={background:'#EFF6FF',border:'1px solid #BFDBFE',borderRadius:16,padding:'14px 16px',marginBottom:14,display:'flex',gap:12,alignItems:'center',flexWrap:'wrap'};
   return(<div data-fc="instalar-app" style={box}>
-    <div style={{width:42,height:42,borderRadius:12,background:'linear-gradient(135deg,#0A2D6E,#1351B4)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'Georgia,serif',fontWeight:900,fontSize:16,flex:'none'}}>FC</div>
+    <div style={{width:42,height:42,borderRadius:12,background:'linear-gradient(135deg,#0A2D6E,#1351B4)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'IBM Plex Sans','Segoe UI',system-ui,sans-serif",fontWeight:800,letterSpacing:'-.03em',fontSize:16,flex:'none'}}>FC</div>
     <div style={{flex:'1 1 180px',minWidth:0}}>
       <div style={{fontWeight:800,fontSize:14,color:'#1E293B'}}>Instalar o FarmaControl no celular</div>
       {evt&&<div style={{fontSize:12.5,color:'#475569'}}>Vira um ícone na tela inicial e abre em tela cheia, como um aplicativo.</div>}
