@@ -1,0 +1,22 @@
+{
+  "name": "fc-testes",
+  "private": true,
+  "description": "Testes automaticos do FarmaControl (regras do banco, funcoes, paginas publicas e o app inteiro com banco simulado).",
+  "scripts": {
+    "test": "node run.js",
+    "test:estatico": "node run.js --so-estatico",
+    "test:ui": "node run.js --so-ui"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "3.0.4",
+    "esbuild": "0.28.2",
+    "firebase": "10.14.1",
+    "firebase-admin": "12.7.0",
+    "firebase-functions": "5.1.1",
+    "firebase-tools": "13.29.1",
+    "playwright": "1.63.0",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "xlsx": "0.18.5"
+  }
+}
