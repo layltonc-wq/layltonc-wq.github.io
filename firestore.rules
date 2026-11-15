@@ -346,6 +346,13 @@ service cloud.firestore {
       allow update: if membro() && !leituraSo() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
       allow delete: if ehAdmin() && resource.data.tenant_id == userTenant();
     }
+    // ===== CADASTRO DE MÉDICOS (nome + CRM), um por prefeitura =====
+    match /medicos_crm/{id} {
+      allow read: if membro() && resource.data.tenant_id == userTenant();
+      allow create: if membro() && !leituraSo() && tenantOk(request.resource.data);
+      allow update: if membro() && !leituraSo() && resource.data.tenant_id == userTenant() && tenantOk(request.resource.data);
+      allow delete: if ehAdmin() && resource.data.tenant_id == userTenant();
+    }
     // ===== CONFERÊNCIA DAS UBS (validades nas UBS) =====
     // Só a função ubsApi grava (as enfermeiras não têm login); a equipe lê do próprio município; só gestor/técnico apaga (limpar testes).
     match /ubs_conferencias/{id} {
