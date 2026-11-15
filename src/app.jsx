@@ -1922,7 +1922,7 @@ var ubsSel=ubsAtivas.some(function(u){return u.nome===props.ubs;})?props.ubs:'';
 var infoD=DESTINOS[destino]||DESTINOS.sus;
 // campos de destino gravados em cada saída (sem undefined: o Firestore rejeita)
 function dadosDestino(){var o={destino:destino,destinoNome:infoD.label};if(pedeUbs&&ubsSel)o.ubsNome=ubsSel;return o;}
-var user=props.user;var medications=props.medications;var stock=props.stock;var entries=props.entries;var onSave=props.onSave;var latest=props.latest||{};var isGuest=props.isGuest||false;var canMove=props.canMove!==false;var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};var alert2=props.alert2||function(m){window.alert(m);};var _search=useState('');var search=_search[0];var setSearch=_search[1];var _sel=useState(null);var sel=_sel[0];var setSel=_sel[1];var _qty=useState('');var qty=_qty[0];var setQty=_qty[1];var _lote=useState('');var lote=_lote[0];var setLote=_lote[1];var _val=useState('');var val=_val[0];var setVal=_val[1];var _obs=useState('');var obs=_obs[0];var setObs=_obs[1];var _err=useState('');var err=_err[0];var setErr=_err[1];var _warn=useState('');var warn=_warn[0];var setWarn=_warn[1];var _ok=useState('');var ok=_ok[0];var setOk=_ok[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];var _carrinho=useState([]);var carrinho=_carrinho[0];var setCarrinho=_carrinho[1];var _showCarrinho=useState(false);var showCarrinho=_showCarrinho[0];var setShowCarrinho=_showCarrinho[1];
+var user=props.user;var medications=props.medications;var stock=props.stock;var entries=props.entries;var onSave=props.onSave;var latest=props.latest||{};var isGuest=props.isGuest||false;var canMove=props.canMove!==false;var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};var alert2=props.alert2||function(m){window.alert(m);};var _search=useState('');var search=_search[0];var setSearch=_search[1];var _sel=useState(null);var sel=_sel[0];var setSel=_sel[1];var _qty=useState('');var qty=_qty[0];var setQty=_qty[1];var _lote=useState('');var lote=_lote[0];var setLote=_lote[1];var _escLote=useState('');var escLote=_escLote[0];var setEscLote=_escLote[1];var _val=useState('');var val=_val[0];var setVal=_val[1];var _obs=useState('');var obs=_obs[0];var setObs=_obs[1];var _err=useState('');var err=_err[0];var setErr=_err[1];var _warn=useState('');var warn=_warn[0];var setWarn=_warn[1];var _ok=useState('');var ok=_ok[0];var setOk=_ok[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];var _carrinho=useState([]);var carrinho=_carrinho[0];var setCarrinho=_carrinho[1];var _showCarrinho=useState(false);var showCarrinho=_showCarrinho[0];var setShowCarrinho=_showCarrinho[1];
 var _showDestCfg=useState(false);var showDestCfg=_showDestCfg[0];var setShowDestCfg=_showDestCfg[1];var _novoDest=useState('');var novoDest=_novoDest[0];var setNovoDest=_novoDest[1];var _novaUbs=useState('');var novaUbs=_novaUbs[0];var setNovaUbs=_novaUbs[1];var _msgCfg=useState('');var msgCfg=_msgCfg[0];var setMsgCfg=_msgCfg[1];
 var _showControlado=useState(false);var showControlado=_showControlado[0];var setShowControlado=_showControlado[1];
 var _controladoData=useState(null);var controladoData=_controladoData[0];var setControladoData=_controladoData[1];
@@ -2152,6 +2152,23 @@ return(
         <div><Lbl c="Lote"/><input value={lote} onChange={function(e){setLote(e.target.value);}} placeholder="Ex: ABC1234" className="inp"/></div>
         <div><Lbl c="Validade"/><input value={val} onChange={function(e){setVal(e.target.value);}} placeholder="MM/AAAA" className="inp"/></div>
       </div>
+      {sel&&(function(){
+        var lotesSel=lotesDisponiveis(entriesPorMed(entries||[])[sel.id]||[]);
+        if(!lotesSel.length)return null;
+        var aberto=escLote===sel.id;
+        return(<div data-fc="escolher-lote" style={{marginBottom:10}}>
+          <button type="button" data-fc="escolher-lote-btn" onClick={function(){setEscLote(aberto?'':sel.id);}} style={{border:'none',background:'none',color:'#1351B4',fontWeight:700,fontSize:13,cursor:'pointer',padding:0}}>{aberto?'▲ Fechar lotes':'▼ Escolher o lote (opcional)'}</button>
+          {!aberto&&<span style={{fontSize:11.5,color:'#64748B',marginLeft:8}}>Sem escolher, sai o que vence primeiro.</span>}
+          {aberto&&<div style={{marginTop:6}}>
+            {lotesSel.map(function(l,i){var on=loteKey(l.lote)===loteKey(lote);var dv=getDiasVal(l.validade);var venc=dv!==null&&dv<0;
+              return(<button type="button" key={(l.lote||'sem')+'|'+l.validade} data-fc="lote-op" onClick={function(){setLote(l.lote||'');setVal(l.validade||'');setWarn('');}} style={{display:'flex',width:'100%',alignItems:'center',gap:8,textAlign:'left',padding:'10px 12px',marginBottom:6,borderRadius:10,border:'1.5px solid '+(on?'#1351B4':'#E2E8F0'),background:on?'#EFF6FF':'#fff',cursor:'pointer'}}>
+                <span style={{flex:1}}><b style={{fontSize:13.5}}>{l.lote||'Sem lote'}</b><span style={{display:'block',fontSize:11.5,color:venc?'#C2362D':'#64748B'}}>Validade {l.validade||'—'}{venc?' · VENCIDO':''}{i===0?' · vence primeiro':''}</span></span>
+                <span style={{fontSize:12,fontWeight:800,color:'#0C6B3E',background:'#DCFCE7',padding:'3px 10px',borderRadius:20}}>{l.qty} un.</span>
+              </button>);})}
+            <div style={{fontSize:11.5,color:'#64748B'}}>Se a quantidade passar do saldo do lote escolhido, o restante sai dos próximos lotes que vencem primeiro.</div>
+          </div>}
+        </div>);
+      })()}
       {parseInt(qty)>=500
         ?<div style={{fontSize:12,fontWeight:800,color:'#B91C1C',marginBottom:6,marginTop:8}}>⚠️ Justificativa obrigatória (saída de 500+ un.)</div>
         :<Lbl c="Observação (opcional)"/>
