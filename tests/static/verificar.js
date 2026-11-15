@@ -45,6 +45,13 @@ try {
   ok(true, 'demo/index.html esta em dia com o index.html');
 } catch (e) { ok(false, 'demo/index.html desatualizado: rode "bash scripts/build.sh" e faca commit. ' + String(e.stdout || '').trim()); }
 
+// 2c) scripts de seguranca do banco (shell) e arquivos de publicacao
+['scripts/seguranca_banco.sh', 'scripts/testar_restauracao.sh', 'scripts/build.sh'].forEach((f) => {
+  try { execFileSync('bash', ['-n', path.join(ROOT, f)], { stdio: 'pipe' }); ok(true, 'sintaxe de ' + f); }
+  catch (e) { ok(false, 'sintaxe de ' + f + ': ' + String(e.stderr).slice(0, 200)); }
+});
+try { JSON.parse(fs.readFileSync(path.join(ROOT, 'firebase.hosting.json'), 'utf8')); ok(true, 'firebase.hosting.json valido'); } catch (e) { ok(false, 'firebase.hosting.json: ' + e.message); }
+
 // 3) configuracao
 try {
   const mf = JSON.parse(fs.readFileSync(path.join(ROOT, 'manifest.webmanifest'), 'utf8'));

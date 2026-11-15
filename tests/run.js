@@ -43,6 +43,18 @@ if (!arg) {
   emuOk = r.status === 0;
   resultados.push({ rotulo: 'emulador (todos)', passou: emuOk });
 }
+if (!arg) {
+  console.log('\n== Publicacao do site (cabecalhos de seguranca e o que NAO pode ficar publico)');
+  spawnSync('python3', [path.join(TESTES, '..', 'scripts', 'montar_site.py')], { stdio: 'inherit' });
+  const bin = path.join(TESTES, 'node_modules', '.bin', 'firebase');
+  const rh = spawnSync(bin, ['emulators:exec', '--config', path.join(TESTES, '..', 'firebase.hosting.json'), '--only', 'hosting', '--project', 'demo-fc', 'node tests/hosting/cabecalhos.js'], { cwd: path.join(TESTES, '..'), env, encoding: 'utf8', timeout: 300000 });
+  const sh = (rh.stdout || '') + (rh.stderr || '');
+  const bonsH = (sh.match(/^OK  /gm) || []).length, falhasH = (sh.match(/^FALHA /gm) || []).length;
+  const passouH = rh.status === 0 && falhasH === 0;
+  resultados.push({ rotulo: 'hosting/cabecalhos', passou: passouH });
+  console.log((passouH ? '✔ ' : '✘ ') + 'hosting/cabecalhos  (' + bonsH + ' verificacoes)');
+  if (!passouH) console.log(sh.split('\n').filter((l) => /^FALHA|rror/.test(l)).join('\n').slice(-2000));
+}
 if (arg !== '--so-estatico') {
   console.log('\n== App inteiro no navegador (banco simulado)');
   listar('ui').forEach((f) => rodar(f, f));
