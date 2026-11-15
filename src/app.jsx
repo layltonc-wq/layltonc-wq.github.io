@@ -781,6 +781,7 @@ function rotuloDestino(e){var id=destinoDe(e);var r=(DESTINOS[id]||DESTINOS.nc).
 function _ehSaidaNaoReal(e){
   if(e.ficticioDiv)return true;
   if(e.entradaEspecial==='permuta')return true; // permuta: troca de itens, não é consumo
+  if(e.entradaEspecial==='emprestimo')return true; // empréstimo/devolução: vai e volta, não é consumo
   if(e.divergenciaTipo==='real')return true;
   if(e.descarte)return true;
   if(e.isAjuste)return true;
@@ -7637,6 +7638,143 @@ function TabTransferencia(props){
     </div>}
   </div>);
 }
+// ===== Empréstimos (Itaquitinga): o que EMPRESTAMOS (nos devem) e o que RECEBEMOS emprestado (devemos) =====
+// Tudo fica nas próprias movimentações (entries) com entradaEspecial:'emprestimo' e um emprestimoId comum:
+// o empréstimo (saída se emprestamos, entrada se recebemos) + cada devolução (emprestimoDev:true). O saldo pendente
+// é calculado (total - devolvido); ao chegar a zero o empréstimo aparece como "Acertado". Não conta como consumo.
+function _emprestimosDe(entries){
+  var mp={};
+  (entries||[]).forEach(function(e){
+    if(e.entradaEspecial!=='emprestimo'||!e.emprestimoId)return;
+    var L=mp[e.emprestimoId]||(mp[e.emprestimoId]={id:e.emprestimoId,tipo:'',medId:e.medicamentoId,nome:e.medicamentoNome,parceiro:e.parceiro||'',total:0,devolvido:0,criadoEm:'',obs:'',devs:[]});
+    var q=parseInt(e.quantidade,10)||0;
+    if(e.emprestimoDev){L.devolvido+=q;L.devs.push(e);}
+    else{L.total+=q;L.tipo=e.emprestimoTipo||(e.tipo==='saida'?'cedido':'recebido');if(!L.criadoEm||String(e.criadoEm||'')<L.criadoEm)L.criadoEm=String(e.criadoEm||'');L.parceiro=e.parceiro||L.parceiro;}
+  });
+  return Object.keys(mp).map(function(k){var L=mp[k];L.pendente=Math.max(0,L.total-L.devolvido);return L;}).filter(function(L){return L.tipo&&L.total>0;})
+    .sort(function(x,y){return String(y.criadoEm).localeCompare(String(x.criadoEm));});
+}
+function Emprestimos(props){
+  var user=props.user,meds=props.medications,entries=props.entries||[];
+  var _tp=useState('cedido');var tipo=_tp[0],setTipo=_tp[1];
+  var _par=useState('');var parceiro=_par[0],setParceiro=_par[1];
+  var _med=useState(null);var med=_med[0],setMed=_med[1];
+  var _qtd=useState('');var qtd=_qtd[0],setQtd=_qtd[1];
+  var _lv=useState({lote:'',validade:'',sl:false});var lv=_lv[0],setLv=_lv[1];
+  var _pe=useState(false);var pend=_pe[0],setPend=_pe[1];
+  var _data=useState(todayStr());var data=_data[0],setData=_data[1];
+  var _obs=useState('');var obs=_obs[0],setObs=_obs[1];
+  var _err=useState('');var err=_err[0],setErr=_err[1];
+  var _ok=useState('');var ok=_ok[0],setOk=_ok[1];
+  var _bu=useState(false);var busy=_bu[0],setBusy=_bu[1];
+  var _dev=useState(null);var dev=_dev[0],setDev=_dev[1]; // devolução em andamento {id,qtd,lv,pend,err}
+  var lista=_emprestimosDe(entries);
+  var nosDevem=lista.filter(function(L){return L.tipo==='cedido'&&L.pendente>0;});
+  var devemos=lista.filter(function(L){return L.tipo==='recebido'&&L.pendente>0;});
+  var acertados=lista.filter(function(L){return L.pendente<=0;});
+  var disp=med&&tipo==='cedido'?_ubsDisp(entries,med.id):null;
+  function base(){return {criadoEm:new Date().toISOString(),date:data||todayStr(),autorId:user.uid,autorNome:user.name||user.email,autorCargo:user.role||'',tenant_id:tenantDe(user)};}
+  function novoId(){return 'em'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);}
+  function registrar(){
+    setErr('');setOk('');
+    if(parceiro.trim().length<2){setErr(tipo==='cedido'?'Informe para quem emprestamos.':'Informe de quem recebemos emprestado.');return;}
+    if(!med){setErr('Escolha o medicamento.');return;}
+    var n=parseInt(qtd,10);if(!(n>=1)){setErr('Informe a quantidade.');return;}
+    var b=db.batch(),id=novoId();var resumo=(tipo==='cedido'?'Empréstimo a ':'Empréstimo recebido de ')+parceiro.trim()+(obs.trim()?' · '+obs.trim():'');
+    if(tipo==='cedido'){
+      if(n>disp.total){setErr('Quantidade maior que o disponível ('+disp.total+').');return;}
+      var pl=_ubsPlano(disp,n,'');if(pl.falta>0){setErr('Os lotes dentro da validade não cobrem essa quantidade.');return;}
+      if(!window.confirm('Emprestar '+n+'x '+med.nome+' a '+parceiro.trim()+'? Sai do estoque e fica como pendência até devolverem.'))return;
+      pl.partes.forEach(function(pt){b.set(db.collection('entries').doc(),Object.assign({},base(),{medicamentoId:med.id,medicamentoNome:med.nome,tipo:'saida',quantidade:pt.qty,lote:pt.lote,validade:pt.validade,destino:'emprestimo',destinoNome:'Empréstimo',entradaEspecial:'emprestimo',emprestimoId:id,emprestimoTipo:'cedido',parceiro:parceiro.trim(),observacao:resumo}));});
+    }else{
+      var lote='',validade='';
+      if(!pend){var e=_validarLoteVal(lv);if(e){setErr(e+' Ou marque "Lote e validade pendentes".');return;}lote=lv.sl?_loteSL(lv.validade):lv.lote.trim();validade=_normValidade(lv.validade);}
+      b.set(db.collection('entries').doc(),Object.assign({},base(),{medicamentoId:med.id,medicamentoNome:med.nome,tipo:'entrada',quantidade:n,lote:lote,validade:validade,lotePendente:!!pend,entradaEspecial:'emprestimo',emprestimoId:id,emprestimoTipo:'recebido',parceiro:parceiro.trim(),observacao:resumo+(pend?' · lote/validade PENDENTES':'')}));
+    }
+    setBusy(true);
+    b.commit().then(function(){setBusy(false);setOk(tipo==='cedido'?'Empréstimo registrado. Ficou em "Nos devem" até devolverem.':'Empréstimo registrado. Ficou em "Devemos" até devolvermos.');setMed(null);setQtd('');setLv({lote:'',validade:'',sl:false});setPend(false);setParceiro('');setObs('');}).catch(function(e){setBusy(false);setErr('Não foi possível registrar: '+((e&&e.message)||'erro'));});
+  }
+  function devolver(L){
+    var n=parseInt(dev.qtd,10);
+    function falha(m){setDev(Object.assign({},dev,{err:m}));}
+    if(!(n>=1)){falha('Informe a quantidade.');return;}
+    if(n>L.pendente){falha('Só falta acertar '+L.pendente+'.');return;}
+    var b=db.batch();var resumo=(L.tipo==='cedido'?'Devolução recebida de ':'Devolução feita a ')+L.parceiro;
+    var comum={entradaEspecial:'emprestimo',emprestimoId:L.id,emprestimoTipo:L.tipo,emprestimoDev:true,parceiro:L.parceiro,medicamentoId:L.medId,medicamentoNome:L.nome,observacao:resumo};
+    if(L.tipo==='cedido'){ // eles devolvem: entra no estoque
+      var lote='',validade='';
+      if(!dev.pend){var e=_validarLoteVal(dev.lv);if(e){falha(e+' Ou marque "Lote e validade pendentes".');return;}lote=dev.lv.sl?_loteSL(dev.lv.validade):dev.lv.lote.trim();validade=_normValidade(dev.lv.validade);}
+      b.set(db.collection('entries').doc(),Object.assign({},base(),comum,{tipo:'entrada',quantidade:n,lote:lote,validade:validade,lotePendente:!!dev.pend}));
+    }else{ // nós devolvemos: sai do estoque (FEFO)
+      var d=_ubsDisp(entries,L.medId);
+      if(n>d.total){falha('Só há '+d.total+' disponível no estoque.');return;}
+      var pl=_ubsPlano(d,n,'');if(pl.falta>0){falha('Os lotes dentro da validade não cobrem essa quantidade.');return;}
+      if(!window.confirm('Devolver '+n+'x '+L.nome+' a '+L.parceiro+'?'))return;
+      pl.partes.forEach(function(pt){b.set(db.collection('entries').doc(),Object.assign({},base(),comum,{tipo:'saida',quantidade:pt.qty,lote:pt.lote,validade:pt.validade,destino:'emprestimo',destinoNome:'Empréstimo'}));});
+    }
+    setBusy(true);
+    b.commit().then(function(){setBusy(false);setDev(null);}).catch(function(er){setBusy(false);falha('Não foi possível registrar: '+((er&&er.message)||'erro'));});
+  }
+  var card={background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:12,padding:'12px',marginBottom:10};
+  var lbl={fontSize:11.5,fontWeight:700,color:'#64748B',marginBottom:3};
+  function linha(L){
+    var cedido=L.tipo==='cedido';var aberto=dev&&dev.id===L.id;var feito=L.pendente<=0;
+    return(<div key={L.id} data-fc={'emp-'+L.id} style={{borderTop:'1px solid #E2E8F0',padding:'9px 0'}}>
+      <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+        <div style={{flex:1,minWidth:150,fontSize:13}}><b>{feito?L.total:L.pendente}x {L.nome}</b>
+          <div style={{fontSize:11.5,color:'#64748B'}}>{cedido?'Emprestado a ':'Recebido de '}{L.parceiro} · {fmtD(L.criadoEm)}{!feito&&L.devolvido>0?' · já acertado '+L.devolvido+' de '+L.total:''}</div></div>
+        {feito?<span style={{background:'#E2F6EF',color:'#0B7A5F',fontWeight:800,fontSize:12,padding:'4px 10px',borderRadius:99}}>✓ Acertado</span>
+          :(!aberto&&<button type="button" data-fc={'emp-acertar-'+L.id} onClick={function(){setDev({id:L.id,qtd:String(L.pendente),lv:{lote:'',validade:'',sl:false},pend:false,err:''});}} style={{padding:'8px 12px',borderRadius:8,border:'none',background:cedido?'#0B7A5F':'#B45309',color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>{cedido?'Receber de volta':'Devolver'}</button>)}
+      </div>
+      {aberto&&<div style={{marginTop:8}}>
+        <div style={{width:130,marginBottom:8}}><div style={lbl}>Quantidade *</div><input className="inp" type="number" min="1" data-fc="emp-dev-qtd" value={dev.qtd} onChange={function(e){setDev(Object.assign({},dev,{qtd:e.target.value}));}} style={{marginBottom:0}}/></div>
+        {cedido&&<div>
+          <label style={{display:'flex',alignItems:'center',gap:8,fontSize:13,marginBottom:8,cursor:'pointer'}}><input type="checkbox" data-fc="emp-dev-pend" checked={dev.pend} onChange={function(e){setDev(Object.assign({},dev,{pend:e.target.checked}));}}/> Lote e validade <b>pendentes</b></label>
+          {!dev.pend&&<LoteValidadeCampos dataFc="emp-dev" valor={dev.lv} permiteSL obrigatorio onChange={function(v){setDev(Object.assign({},dev,{lv:v}));}}/>}
+        </div>}
+        {!cedido&&<div style={{fontSize:12,color:'#64748B'}}>Sai do nosso estoque, pelos lotes que vencem primeiro.</div>}
+        {dev.err&&<div data-fc="emp-dev-erro" style={{background:'#FDECEA',color:'#C2362D',borderRadius:10,padding:'8px 12px',fontSize:13,margin:'8px 0'}}>{dev.err}</div>}
+        <div style={{display:'flex',gap:8,marginTop:8}}><button type="button" data-fc="emp-dev-ok" disabled={busy} onClick={function(){devolver(L);}} style={{padding:'9px 14px',borderRadius:8,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,cursor:'pointer'}}>{cedido?'Registrar o que voltou':'Registrar devolução'}</button><button type="button" onClick={function(){setDev(null);}} style={{padding:'9px 12px',borderRadius:8,border:'1px solid #CBD5E1',background:'#fff',cursor:'pointer'}}>Cancelar</button></div>
+      </div>}
+    </div>);
+  }
+  function bloco(titulo,cor,fundo,itens,vazio,fc){
+    return(<div data-fc={fc} style={{background:fundo,border:'1px solid '+cor+'55',borderRadius:12,padding:'10px 12px',marginBottom:12}}>
+      <div style={{fontWeight:800,fontSize:13,color:cor,marginBottom:2}}>{titulo} ({itens.length})</div>
+      {itens.length===0&&<div style={{fontSize:12.5,color:'#64748B',padding:'6px 0'}}>{vazio}</div>}
+      {itens.map(linha)}
+    </div>);
+  }
+  return(<div data-fc="ent-emprestimo">
+    {bloco('Nos devem','#0B7A5F','#F0FDF9',nosDevem,'Ninguém está devendo para nós.','emp-nosdevem')}
+    {bloco('Devemos','#B45309','#FFFBEB',devemos,'Não estamos devendo nada.','emp-devemos')}
+    <div style={{fontWeight:800,fontSize:14,color:'#1E293B',margin:'16px 0 8px'}}>Registrar novo empréstimo</div>
+    <div style={{display:'flex',gap:8,marginBottom:10}}>
+      {[['cedido','📤 Emprestamos'],['recebido','📥 Recebemos emprestado']].map(function(o){return <button key={o[0]} type="button" data-fc={'emp-tipo-'+o[0]} onClick={function(){setTipo(o[0]);setErr('');setOk('');}} style={{flex:1,padding:'10px',borderRadius:10,border:'1.5px solid '+(tipo===o[0]?'#1351B4':'#E2E8F0'),background:tipo===o[0]?'#EFF6FF':'#fff',color:tipo===o[0]?'#1351B4':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>{o[1]}</button>;})}
+    </div>
+    <div style={{fontSize:12,color:'#64748B',marginBottom:10}}>{tipo==='cedido'?'O produto sai do estoque agora e fica em "Nos devem" até devolverem.':'O produto entra no estoque agora e fica em "Devemos" até devolvermos.'}</div>
+    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
+      <div><div style={lbl}>Data</div><input className="inp" type="date" value={data} max={todayStr()} onChange={function(e){setData(e.target.value);}} style={{marginBottom:0}}/></div>
+      <div><div style={lbl}>{tipo==='cedido'?'Emprestado a *':'Recebido de *'}</div><input className="inp" data-fc="emp-parceiro" value={parceiro} onChange={function(e){setParceiro(e.target.value);}} placeholder="Ex.: Hospital / outro município" style={{marginBottom:0}}/></div>
+    </div>
+    <div style={card}>
+      <MedPickerSimples meds={meds} value={med} dataFc="emp-busca" onChange={function(m){setMed(m);}}/>
+      {med&&<div style={{marginTop:8}}>
+        {tipo==='cedido'&&<div style={{fontSize:12.5,color:'#475569',marginBottom:6}}>Disponível aqui: <b>{disp.total}</b></div>}
+        <div style={{width:130,marginBottom:8}}><div style={lbl}>Quantidade *</div><input className="inp" type="number" min="1" data-fc="emp-qtd" value={qtd} onChange={function(e){setQtd(e.target.value);}} style={{marginBottom:0}}/></div>
+        {tipo==='recebido'&&<div>
+          <label style={{display:'flex',alignItems:'center',gap:8,fontSize:13,marginBottom:8,cursor:'pointer'}}><input type="checkbox" data-fc="emp-pend" checked={pend} onChange={function(e){setPend(e.target.checked);}}/> Lote e validade <b>pendentes</b> (ainda não chegou / não sei)</label>
+          {!pend&&<LoteValidadeCampos dataFc="emp-ent" valor={lv} permiteSL obrigatorio onChange={setLv}/>}
+        </div>}
+      </div>}
+    </div>
+    <input className="inp" placeholder="Observação (opcional)" value={obs} onChange={function(e){setObs(e.target.value);}}/>
+    {err&&<div data-fc="ent-erro" style={{background:'#FDECEA',color:'#C2362D',borderRadius:10,padding:'9px 12px',fontSize:13,marginBottom:8}}>{err}</div>}
+    {ok&&<div data-fc="ent-ok" style={{background:'#E2F6EF',color:'#0B7A5F',borderRadius:10,padding:'9px 12px',fontSize:13,marginBottom:8}}>{ok}</div>}
+    <button type="button" data-fc="emp-salvar" disabled={busy} onClick={registrar} style={{width:'100%',padding:'13px',borderRadius:10,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,cursor:'pointer'}}>{busy?'Salvando…':'Registrar empréstimo'}</button>
+    {acertados.length>0&&<div data-fc="emp-acertados" style={{marginTop:16}}><div style={{fontWeight:800,fontSize:13,marginBottom:2}}>Acertados</div>{acertados.slice(0,15).map(linha)}</div>}
+  </div>);
+}
 // ===== Entradas especiais (Itaquitinga): PERMUTA (troca de um item por outro) e DOAÇÃO =====
 // Doação: lote e validade obrigatórios (lote pode ser "SL" = sem lote; vira "SL MM/AAAA" para a validade continuar valendo).
 // Permuta: sai um item (FEFO, lote vencido nunca sai) e entra outro; lote/validade do que chegou podem ficar PENDENTES
@@ -7727,7 +7865,7 @@ function EntradaEspecial(props){
     {pendentes.length>0&&<div data-fc="pendencias" style={{background:'#FFF3DC',border:'1px solid #FCD34D',borderRadius:12,padding:'10px 12px',marginBottom:12}}>
       <div style={{fontWeight:800,fontSize:13,color:'#92400E',marginBottom:6}}>Lote e validade pendentes ({pendentes.length})</div>
       {pendentes.map(function(e){return(<div key={e.id} style={{borderTop:'1px solid #FDE68A',paddingTop:6,marginTop:6}}>
-        <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}><div style={{flex:1,fontSize:13}}><b>{e.quantidade}x {e.medicamentoNome}</b><div style={{fontSize:11.5,color:'#92400E'}}>Permuta com {e.parceiro||'—'} · {fmtD(e.criadoEm)}</div></div>
+        <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}><div style={{flex:1,fontSize:13}}><b>{e.quantidade}x {e.medicamentoNome}</b><div style={{fontSize:11.5,color:'#92400E'}}>{e.entradaEspecial==='emprestimo'?'Empréstimo — ':'Permuta com '}{e.parceiro||'—'} · {fmtD(e.criadoEm)}</div></div>
           {!edP||edP.id!==e.id?<button type="button" data-fc={'pend-'+e.id} onClick={function(){setEdP({id:e.id,lv:{lote:'',validade:'',sl:false}});}} style={{padding:'7px 12px',borderRadius:8,border:'none',background:'#B45309',color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>Informar</button>:null}</div>
         {edP&&edP.id===e.id&&<div style={{marginTop:8}}><LoteValidadeCampos dataFc="pend" valor={edP.lv} permiteSL obrigatorio onChange={function(v){setEdP({id:edP.id,lv:v});}}/>
           <div style={{display:'flex',gap:8,marginTop:8}}><button type="button" data-fc="pend-salvar" onClick={salvarPendencia} style={{padding:'9px 14px',borderRadius:8,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,cursor:'pointer'}}>Salvar lote/validade</button><button type="button" onClick={function(){setEdP(null);}} style={{padding:'9px 12px',borderRadius:8,border:'1px solid #CBD5E1',background:'#fff',cursor:'pointer'}}>Cancelar</button></div></div>}
@@ -7765,8 +7903,8 @@ function EntradaEspecial(props){
     {err&&<div data-fc="ent-erro" style={{background:'#FDECEA',color:'#C2362D',borderRadius:10,padding:'9px 12px',fontSize:13,marginBottom:8}}>{err}</div>}
     {ok&&<div data-fc="ent-ok" style={{background:'#E2F6EF',color:'#0B7A5F',borderRadius:10,padding:'9px 12px',fontSize:13,marginBottom:8}}>{ok}</div>}
     <button type="button" data-fc="ent-salvar" disabled={busy} onClick={modo==='doacao'?salvarDoacao:salvarPermuta} style={{width:'100%',padding:'13px',borderRadius:10,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,cursor:'pointer'}}>{busy?'Salvando…':(modo==='doacao'?'Registrar doação':'Registrar permuta')}</button>
-    {lista.length>0&&<div style={{marginTop:16}}><div style={{fontWeight:800,fontSize:13,marginBottom:6}}>Últimas permutas e doações</div>
-      {lista.slice(0,15).map(function(e){return <div key={e.id} style={{display:'flex',gap:8,fontSize:12.5,padding:'6px 0',borderTop:'1px solid #F1F5F9'}}><span style={{width:62,fontWeight:700,color:e.entradaEspecial==='doacao'?'#0B7A5F':'#7C3AED'}}>{e.entradaEspecial==='doacao'?'Doação':'Permuta'}</span><span style={{flex:1}}>{e.tipo==='saida'?'Saiu ':'Entrou '}{e.quantidade}x {e.medicamentoNome}{e.lote?' · '+e.lote:''}{e.lotePendente?' · PENDENTE':''}</span><span style={{color:'#94A3B8'}}>{fmtD(e.criadoEm)}</span></div>;})}</div>}
+    {lista.length>0&&<div style={{marginTop:16}}><div style={{fontWeight:800,fontSize:13,marginBottom:6}}>Últimas permutas, doações e empréstimos</div>
+      {lista.slice(0,15).map(function(e){return <div key={e.id} style={{display:'flex',gap:8,fontSize:12.5,padding:'6px 0',borderTop:'1px solid #F1F5F9'}}><span style={{width:62,fontWeight:700,color:e.entradaEspecial==='doacao'?'#0B7A5F':'#7C3AED'}}>{e.entradaEspecial==='doacao'?'Doação':e.entradaEspecial==='emprestimo'?'Empréstimo':'Permuta'}</span><span style={{flex:1}}>{e.tipo==='saida'?'Saiu ':'Entrou '}{e.quantidade}x {e.medicamentoNome}{e.lote?' · '+e.lote:''}{e.lotePendente?' · PENDENTE':''}</span><span style={{color:'#94A3B8'}}>{fmtD(e.criadoEm)}</span></div>;})}</div>}
   </div>);
 }
 // ===== Pedidos de reposição do Satélite à CAF =====
@@ -13086,9 +13224,9 @@ function TabRecebimento(props){
         <div style={{display:'flex',gap:8,marginBottom:14}}>
           {!temLocais(user)&&<button type="button" onClick={function(){setModoRec('simples');}} style={{flex:1,padding:'11px',borderRadius:10,border:'1.5px solid '+(modoRec==='simples'?B:'#E2E8F0'),background:modoRec==='simples'?'#EFF6FF':'#fff',color:modoRec==='simples'?B:'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>{_semEmoji('📦 Recebimento simples')}</button>}
           <button type="button" onClick={function(){setModoRec('nota');}} style={{flex:1,padding:'11px',borderRadius:10,border:'1.5px solid '+(modoRec==='nota'?B:'#E2E8F0'),background:modoRec==='nota'?'#EFF6FF':'#fff',color:modoRec==='nota'?B:'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>{_semEmoji('📄 Já tenho a Nota Fiscal')}</button>
-          {temLocais(user)&&['permuta','doacao'].map(function(m){return <button key={m} type="button" data-fc={'modo-'+m} onClick={function(){setModoRec(m);}} style={{flex:1,padding:'11px',borderRadius:10,border:'1.5px solid '+(modoRec===m?B:'#E2E8F0'),background:modoRec===m?'#EFF6FF':'#fff',color:modoRec===m?B:'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>{m==='permuta'?'🔁 Permuta':'🎁 Doação'}</button>;})}
+          {temLocais(user)&&['permuta','doacao','emprestimo'].map(function(m){return <button key={m} type="button" data-fc={'modo-'+m} onClick={function(){setModoRec(m);}} style={{flex:1,padding:'11px',borderRadius:10,border:'1.5px solid '+(modoRec===m?B:'#E2E8F0'),background:modoRec===m?'#EFF6FF':'#fff',color:modoRec===m?B:'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>{m==='permuta'?'🔁 Permuta':m==='doacao'?'🎁 Doação':'🤝 Empréstimos'}</button>;})}
         </div>
-        {(modoRec==='permuta'||modoRec==='doacao')?<EntradaEspecial user={user} modo={modoRec} medications={medications} entries={props.entries||[]}/>:<React.Fragment>
+        {modoRec==='emprestimo'?<Emprestimos user={user} medications={medications} entries={props.entries||[]}/>:(modoRec==='permuta'||modoRec==='doacao')?<EntradaEspecial user={user} modo={modoRec} medications={medications} entries={props.entries||[]}/>:<React.Fragment>
         {modoRec==='nota'&&<div style={temaItaq?{background:'var(--itq-tint)',border:'1px solid var(--itq-tint-line)',borderRadius:10,padding:'10px 12px',marginBottom:12,fontSize:11,color:'var(--blue-700)'}:{background:'#F0FDF4',border:'1px solid #86EFAC',borderRadius:10,padding:'10px 12px',marginBottom:12,fontSize:11,color:'#0C6B3E'}}>Tudo que chegou bate com a nota — esse recebimento já entra conciliado, sem precisar passar por Importar Notas depois.</div>}
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:12}}>
           <div><label style={lbl}>📅 Data do recebimento</label><input type="date" value={data} max={todayStr()} onChange={function(e){setData(e.target.value);}} style={inp}/></div>
