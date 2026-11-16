@@ -42,7 +42,7 @@ const txt = (pg) => pg.evaluate(() => document.body.innerText);
   await pg.click('[data-fc="cf-extra-add"]'); await pg.waitForTimeout(150);
   await pg.fill('[data-fc="cf-extra-qtd"]', '30');
   await (await pg.$('[data-fc="cf-qtd"]')).fill('100'); await pg.waitForTimeout(100);
-  await pg.click('[data-fc="cf-registrar"]'); await pg.waitForTimeout(500);
+  await pg.click('[data-fc="cf-registrar"]'); await pg.waitForTimeout(500); await (async()=>{await pg.waitForTimeout(250);await pg.locator('button:has-text("Abater do saldo")').last().click();await pg.waitForTimeout(400);})();
   const a = await pg.evaluate(() => window.__store.atas.a1);
   const ch = a.historicoPedidos[0].conf.chegadas[0];
   ok(ch.extras && ch.extras[1] === 30 && a.itens[1].pedidoAcumulado === 30 && a.historicoPedidos[0].conf.extrasAbatidos[1] === 30, 'item extra (Soro, 30) registrado e abatido do saldo da ata (0 -> 30)');

@@ -63,7 +63,7 @@ async function abrir(br,user,mod){
  await pick('[data-fc="perm-ent-busca"]','amox');
  await pg.fill('[data-fc="perm-ent-qtd"]','5');
  await pg.click('[data-fc="perm-pend"]');
- await pg.click('[data-fc="ent-salvar"]');await pg.waitForTimeout(400);
+ await pg.click('[data-fc="ent-salvar"]');await pg.waitForTimeout(400); await (async()=>{await pg.waitForTimeout(250);await pg.locator('button:has-text("Registrar")').last().click();await pg.waitForTimeout(400);})();
  r=await pg.evaluate(()=>({e:Object.values(window.__store.entries).filter(x=>x.entradaEspecial==='permuta'),m1:window.__store.medicamentos.m1,m2:window.__store.medicamentos.m2}));
  const sa=r.e.find(x=>x.tipo==='saida'),en=r.e.find(x=>x.tipo==='entrada');
  ok(r.e.length===2&&sa.medicamentoNome==='Dipirona'&&sa.quantidade===10&&sa.lote==='L1'&&en.medicamentoNome==='Amoxicilina'&&en.quantidade===5&&en.lotePendente===true&&sa.permutaId===en.permutaId,'permuta: sai 10 Dipirona (FEFO) e entra 5 Amoxicilina com lote pendente, ligadas');
