@@ -45,7 +45,7 @@ async function abrir(br,user,mod){
  await pg.fill('[data-fc="emp-parceiro"]','Hospital Y');
  await pick('[data-fc="emp-busca"]','dipi');
  await pg.fill('[data-fc="emp-qtd"]','20');
- await pg.click('[data-fc="emp-salvar"]');await pg.waitForTimeout(500);
+ await pg.click('[data-fc="emp-salvar"]');await pg.waitForTimeout(500); await (async()=>{await pg.waitForTimeout(250);await pg.locator('button:has-text("Emprestar")').last().click();await pg.waitForTimeout(400);})();
  let r=await pg.evaluate(()=>Object.values(window.__store.entries).filter(x=>x.entradaEspecial==='emprestimo'));
  ok(r.length===1&&r[0].tipo==='saida'&&r[0].quantidade===20&&r[0].emprestimoTipo==='cedido'&&r[0].parceiro==='Hospital Y'&&r[0].local==='caf','emprestar grava saída de 20 ligada ao empréstimo, no CAF');
  ok(await qtdEst('m1')===110,'saiu do estoque (130 -> 110)');
@@ -86,7 +86,7 @@ async function abrir(br,user,mod){
  await pg.fill('[data-fc="emp-dev-qtd"]','45');await pg.click('[data-fc="emp-dev-ok"]');
  ok((await pg.textContent('[data-fc="emp-dev-erro"]')).includes('40'),'não deixa devolver mais do que devemos');
  await pg.fill('[data-fc="emp-dev-qtd"]','40');
- await pg.click('[data-fc="emp-dev-ok"]');await pg.waitForTimeout(500);
+ await pg.click('[data-fc="emp-dev-ok"]');await pg.waitForTimeout(500); await (async()=>{await pg.waitForTimeout(250);await pg.locator('button:has-text("Devolver")').last().click();await pg.waitForTimeout(400);})();
  t=await body(pg);
  ok(await qtdEst('m2')===50&&/Devemos \(0\)/.test(t),'devolver sai do estoque (90 -> 50) e zera "Devemos"');
  const cons=await pg.evaluate(()=>Object.values(window.__store.entries).filter(x=>x.entradaEspecial==='emprestimo'&&x.tipo==='saida').every(x=>x.destino==='emprestimo'));

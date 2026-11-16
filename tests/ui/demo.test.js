@@ -47,6 +47,13 @@ const txt = (pg) => pg.evaluate(() => document.body.innerText);
   await pg.waitForSelector('[data-fc="seletor-local"]', { timeout: 15000 });
   let t = await txt(pg);
   ok(t.includes('DEMONSTRAÇÃO — dados fictícios'), 'tarja "DEMONSTRAÇÃO — dados fictícios" aparece');
+  // cabeçalho em tela estreita (celular): nada pode ser cortado pela borda
+  for (const w of [360, 390, 430]) {
+    await pg.setViewportSize({ width: w, height: 800 }); await pg.waitForTimeout(200);
+    const cab = await pg.evaluate(() => { const nav = document.querySelector('[data-fc="seletor-local"]').closest('div[style*="sticky"]'); const filhos = Array.from(nav.querySelectorAll(':scope > div')); const dir = filhos[filhos.length - 1]; const r = dir.getBoundingClientRect(); return { dir: r.right, sw: document.documentElement.scrollWidth, w: window.innerWidth }; });
+    ok(cab.dir <= cab.w + 0.5 && cab.sw <= cab.w, 'cabeçalho não é cortado em ' + w + 'px (direita ' + Math.round(cab.dir) + ', rolagem ' + cab.sw + ')');
+  }
+  await pg.setViewportSize({ width: 420, height: 900 });
   // 2) isolamento do armazenamento
   const chaves = await pg.evaluate(() => { const f = document.createElement('iframe'); document.body.appendChild(f); const real = f.contentWindow.localStorage; const ks = Object.keys(real); const ss = Object.keys(f.contentWindow.sessionStorage); f.remove(); return { ks, ss }; });
   ok(chaves.ks.length > 0 && chaves.ks.every((k) => k.indexOf('demo:') === 0) && chaves.ss.every((k) => k.indexOf('demo:') === 0), 'tudo que a demonstracao guarda no navegador tem o prefixo "demo:" (nao mistura com o sistema real): ' + chaves.ks.join(','));

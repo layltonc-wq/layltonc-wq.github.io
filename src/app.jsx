@@ -6903,7 +6903,7 @@ function ModalConfirm({titulo,msg,onConfirm,onCancel,tipo,confirmTxt,cancelTxt})
         <div style={{textAlign:'center',marginBottom:16}}>
           <div style={{width:56,height:56,borderRadius:16,background:bg,display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,margin:'0 auto 12px'}}>{icon}</div>
           <div style={{fontWeight:800,fontSize:17,color:'#1E293B',marginBottom:6}}>{titulo}</div>
-          <div style={{fontSize:13,color:'#64748B',lineHeight:1.5}}>{msg}</div>
+          <div style={{fontSize:13,color:'#64748B',lineHeight:1.5,whiteSpace:'pre-line'}}>{msg}</div>
         </div>
         <div style={{display:'flex',gap:10,marginTop:20}}>
           {onCancel&&<button onClick={onCancel} style={{flex:1,padding:'12px',background:'#F1F5F9',border:'none',borderRadius:12,fontWeight:700,fontSize:14,color:'#64748B',cursor:'pointer'}}>{cancelTxt||'Cancelar'}</button>}
@@ -6944,8 +6944,8 @@ function useStableFn(fn){
 }
 function useModal(){
   var _modal=React.useState(null);var modal=_modal[0];var setModal=_modal[1];
-  var confirm2=React.useCallback(function(titulo,msg,onConfirm,tipo,confirmTxt){
-    setModal({type:'confirm',titulo:titulo,msg:msg,onConfirm:function(){setModal(null);onConfirm();},onCancel:function(){setModal(null);},tipo:tipo,confirmTxt:confirmTxt});
+  var confirm2=React.useCallback(function(titulo,msg,onConfirm,tipo,confirmTxt,opts){
+    setModal({type:'confirm',titulo:titulo,msg:msg,onConfirm:function(){setModal(null);onConfirm();},onCancel:function(){setModal(null);if(opts&&opts.onNo)opts.onNo();},tipo:tipo,confirmTxt:confirmTxt,cancelTxt:opts&&opts.cancelTxt});
   },[]);
   var alert2=React.useCallback(function(msg,titulo,tipo){
     setModal({type:'alert',titulo:titulo||'Atenção',msg:msg,onClose:function(){setModal(null);},tipo:tipo||'warning'});
@@ -7654,6 +7654,7 @@ function _emprestimosDe(entries){
 }
 function Emprestimos(props){
   var user=props.user,meds=props.medications,entries=props.entries||[];
+  var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};
   var _tp=useState('cedido');var tipo=_tp[0],setTipo=_tp[1];
   var _par=useState('');var parceiro=_par[0],setParceiro=_par[1];
   var _med=useState(null);var med=_med[0],setMed=_med[1];
@@ -7673,7 +7674,7 @@ function Emprestimos(props){
   var disp=med&&tipo==='cedido'?_ubsDisp(entries,med.id):null;
   function base(){return {criadoEm:new Date().toISOString(),date:data||todayStr(),autorId:user.uid,autorNome:user.name||user.email,autorCargo:user.role||'',tenant_id:tenantDe(user)};}
   function novoId(){return 'em'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);}
-  function registrar(){
+  function registrar(sim){
     setErr('');setOk('');
     if(parceiro.trim().length<2){setErr(tipo==='cedido'?'Informe para quem emprestamos.':'Informe de quem recebemos emprestado.');return;}
     if(!med){setErr('Escolha o medicamento.');return;}
@@ -7682,7 +7683,7 @@ function Emprestimos(props){
     if(tipo==='cedido'){
       if(n>disp.total){setErr('Quantidade maior que o disponível ('+disp.total+').');return;}
       var pl=_ubsPlano(disp,n,'');if(pl.falta>0){setErr('Os lotes dentro da validade não cobrem essa quantidade.');return;}
-      if(!window.confirm('Emprestar '+n+'x '+med.nome+' a '+parceiro.trim()+'? Sai do estoque e fica como pendência até devolverem.'))return;
+      if(!sim){confirm2('Emprestar','Emprestar '+n+'x '+med.nome+' a '+parceiro.trim()+'? Sai do estoque e fica como pendência até devolverem.',function(){registrar(true);},'warning','Emprestar');return;}
       pl.partes.forEach(function(pt){b.set(db.collection('entries').doc(),Object.assign({},base(),{medicamentoId:med.id,medicamentoNome:med.nome,tipo:'saida',quantidade:pt.qty,lote:pt.lote,validade:pt.validade,destino:'emprestimo',destinoNome:'Empréstimo',entradaEspecial:'emprestimo',emprestimoId:id,emprestimoTipo:'cedido',parceiro:parceiro.trim(),observacao:resumo}));});
     }else{
       var lote='',validade='';
@@ -7692,7 +7693,7 @@ function Emprestimos(props){
     setBusy(true);
     b.commit().then(function(){setBusy(false);setOk(tipo==='cedido'?'Empréstimo registrado. Ficou em "Nos devem" até devolverem.':'Empréstimo registrado. Ficou em "Devemos" até devolvermos.');setMed(null);setQtd('');setLv({lote:'',validade:'',sl:false});setPend(false);setParceiro('');setObs('');}).catch(function(e){setBusy(false);setErr('Não foi possível registrar: '+((e&&e.message)||'erro'));});
   }
-  function devolver(L){
+  function devolver(L,sim){
     var n=parseInt(dev.qtd,10);
     function falha(m){setDev(Object.assign({},dev,{err:m}));}
     if(!(n>=1)){falha('Informe a quantidade.');return;}
@@ -7707,7 +7708,7 @@ function Emprestimos(props){
       var d=_ubsDisp(entries,L.medId);
       if(n>d.total){falha('Só há '+d.total+' disponível no estoque.');return;}
       var pl=_ubsPlano(d,n,'');if(pl.falta>0){falha('Os lotes dentro da validade não cobrem essa quantidade.');return;}
-      if(!window.confirm('Devolver '+n+'x '+L.nome+' a '+L.parceiro+'?'))return;
+      if(!sim){confirm2('Devolver','Devolver '+n+'x '+L.nome+' a '+L.parceiro+'?',function(){devolver(L,true);},'warning','Devolver');return;}
       pl.partes.forEach(function(pt){b.set(db.collection('entries').doc(),Object.assign({},base(),comum,{tipo:'saida',quantidade:pt.qty,lote:pt.lote,validade:pt.validade,destino:'emprestimo',destinoNome:'Empréstimo'}));});
     }
     setBusy(true);
@@ -7769,7 +7770,7 @@ function Emprestimos(props){
     <input className="inp" placeholder="Observação (opcional)" value={obs} onChange={function(e){setObs(e.target.value);}}/>
     {err&&<div data-fc="ent-erro" className="er">{err}</div>}
     {ok&&<div data-fc="ent-ok" className="ok">{ok}</div>}
-    <button type="button" data-fc="emp-salvar" disabled={busy} onClick={registrar} style={{width:'100%',padding:'13px',borderRadius:10,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,cursor:'pointer'}}>{busy?'Salvando…':'Registrar empréstimo'}</button>
+    <button type="button" data-fc="emp-salvar" disabled={busy} onClick={function(){registrar();}} style={{width:'100%',padding:'13px',borderRadius:10,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,cursor:'pointer'}}>{busy?'Salvando…':'Registrar empréstimo'}</button>
     {acertados.length>0&&<div data-fc="emp-acertados" style={{marginTop:16}}><div style={{fontWeight:800,fontSize:13,marginBottom:2}}>Acertados</div>{acertados.slice(0,15).map(linha)}</div>}
   </div>);
 }
@@ -7822,6 +7823,7 @@ function _validarLoteVal(v,ehSL){
 }
 function EntradaEspecial(props){
   var user=props.user,modo=props.modo,meds=props.medications,entries=props.entries||[];
+  var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};
   var _data=useState(todayStr());var data=_data[0],setData=_data[1];
   var _orig=useState('');var origem=_orig[0],setOrigem=_orig[1];
   var _obs=useState('');var obs=_obs[0],setObs=_obs[1];
@@ -7852,7 +7854,7 @@ function EntradaEspecial(props){
     b.commit().then(function(){setBusy(false);setOk('Doação registrada: '+itD.length+' item(ns) entraram no estoque.');setItD([{key:Date.now(),med:null,qtd:'',lv:{lote:'',validade:'',sl:false}}]);setOrigem('');setObs('');}).catch(function(e){setBusy(false);setErr('Não foi possível registrar: '+((e&&e.message)||'erro'));});
   }
   var disp=sai.med?_ubsDisp(entries,sai.med.id):null;
-  function salvarPermuta(){
+  function salvarPermuta(sim){
     setErr('');setOk('');
     if(origem.trim().length<2){setErr('Informe com quem foi a permuta.');return;}
     if(!sai.med||!(parseInt(sai.qtd,10)>=1)){setErr('Escolha o item que saiu e a quantidade.');return;}
@@ -7862,7 +7864,7 @@ function EntradaEspecial(props){
     if(!ent.med||!(parseInt(ent.qtd,10)>=1)){setErr('Escolha o item que chegou e a quantidade.');return;}
     var lote='',validade='';
     if(!ent.pend){var e=_validarLoteVal(ent.lv);if(e){setErr('Item que chegou: '+e+' Ou marque "Lote e validade pendentes".');return;}lote=ent.lv.sl?_loteSL(ent.lv.validade):ent.lv.lote.trim();validade=_normValidade(ent.lv.validade);}
-    if(!window.confirm('Registrar a permuta? Sai '+nq+'x '+sai.med.nome+' e entra '+ent.qtd+'x '+ent.med.nome+'.'))return;
+    if(!sim){confirm2('Registrar permuta','Registrar a permuta? Sai '+nq+'x '+sai.med.nome+' e entra '+ent.qtd+'x '+ent.med.nome+'.',function(){salvarPermuta(true);},'warning','Registrar');return;}
     setBusy(true);var pid='pm'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);var b=db.batch();
     var resumo='Permuta com '+origem.trim()+': sai '+nq+'x '+sai.med.nome+' / entra '+parseInt(ent.qtd,10)+'x '+ent.med.nome;
     pl.partes.forEach(function(pt){b.set(db.collection('entries').doc(),Object.assign({},base(),{medicamentoId:sai.med.id,medicamentoNome:sai.med.nome,tipo:'saida',quantidade:pt.qty,lote:pt.lote,validade:pt.validade,destino:'permuta',destinoNome:'Permuta',entradaEspecial:'permuta',permutaId:pid,parceiro:origem.trim(),observacao:resumo+(obs.trim()?' · '+obs.trim():'')}));});
@@ -7919,7 +7921,7 @@ function EntradaEspecial(props){
     <input className="inp" placeholder="Observação (opcional)" value={obs} onChange={function(e){setObs(e.target.value);}}/>
     {err&&<div data-fc="ent-erro" className="er">{err}</div>}
     {ok&&<div data-fc="ent-ok" className="ok">{ok}</div>}
-    <button type="button" data-fc="ent-salvar" disabled={busy} onClick={modo==='doacao'?salvarDoacao:salvarPermuta} style={{width:'100%',padding:'13px',borderRadius:10,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,cursor:'pointer'}}>{busy?'Salvando…':(modo==='doacao'?'Registrar doação':'Registrar permuta')}</button>
+    <button type="button" data-fc="ent-salvar" disabled={busy} onClick={modo==='doacao'?salvarDoacao:function(){salvarPermuta();}} style={{width:'100%',padding:'13px',borderRadius:10,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,cursor:'pointer'}}>{busy?'Salvando…':(modo==='doacao'?'Registrar doação':'Registrar permuta')}</button>
     {lista.length>0&&<div style={{marginTop:16}}><div style={{fontWeight:800,fontSize:13,marginBottom:6}}>Últimas permutas, doações e empréstimos</div>
       {lista.slice(0,15).map(function(e){return <div key={e.id} style={{display:'flex',gap:8,fontSize:12.5,padding:'6px 0',borderTop:'1px solid #F1F5F9'}}><span style={{width:62,fontWeight:700,color:e.entradaEspecial==='doacao'?'#0B7A5F':'#7C3AED'}}>{e.entradaEspecial==='doacao'?'Doação':e.entradaEspecial==='emprestimo'?'Empréstimo':'Permuta'}</span><span style={{flex:1}}>{e.tipo==='saida'?'Saiu ':'Entrou '}{e.quantidade}x {e.medicamentoNome}{e.lote?' · '+e.lote:''}{e.lotePendente?' · PENDENTE':''}</span><span style={{color:'#94A3B8'}}>{fmtD(e.criadoEm)}</span></div>;})}</div>}
   </div>);
@@ -7961,6 +7963,7 @@ function MedicoCrmCampos(props){
 }
 function TabMedicos(props){
   var user=props.user;var medicos=useMedicosCrm(user);
+  var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};
   var podeApagar=user.role==='gestor'||user.role==='tecnico';
   var _n=useState('');var nome=_n[0],setNome=_n[1];
   var _c=useState('');var crm=_c[0],setCrm=_c[1];
@@ -7983,7 +7986,7 @@ function TabMedicos(props){
       :db.collection('medicos_crm').add(Object.assign({},dados,{criadoPor:user.name||'',criadoEm:new Date().toISOString()}));
     pr.then(function(){setBusy(false);setOk(edId?'Médico atualizado.':'Médico cadastrado.');limpar();}).catch(function(e){setBusy(false);setErr('Não foi possível salvar: '+((e&&e.message)||'erro'));});
   }
-  function apagar(m){if(!window.confirm('Remover '+m.nome+' (CRM '+m.crm+') do cadastro? Registros antigos não mudam.'))return;db.collection('medicos_crm').doc(m.id).delete().catch(function(e){setErr('Não foi possível remover: '+((e&&e.message)||'erro'));});}
+  function apagar(m){confirm2('Remover médico','Remover '+m.nome+' (CRM '+m.crm+') do cadastro? Registros antigos não mudam.',function(){db.collection('medicos_crm').doc(m.id).delete().catch(function(e){setErr('Não foi possível remover: '+((e&&e.message)||'erro'));});},'danger','Remover');}
   var nq=_norm(q).trim();
   var vis=medicos.filter(function(m){return !nq||_norm(m.nome).indexOf(nq)>=0||_norm(m.crm).indexOf(nq)>=0;});
   return(<div data-fc="tab-medicos" style={{padding:'16px 16px 90px',maxWidth:640,margin:'0 auto'}}>
@@ -10102,24 +10105,36 @@ function TabPrevisao(props){
   }
   function cfNomeItem(ata,idx){var it=(ata.itens||[])[idx];return (it&&it.descricao)||('Item '+(idx+1));}
   function cfCopiaConf(r){var c=r.conf||{};return {chegadas:(c.chegadas||[]).slice(),devolvidos:Object.assign({},c.devolvidos||{}),excessos:Object.assign({},c.excessos||{}),status:c.status||'',encerradoEm:c.encerradoEm||'',encerradoPor:c.encerradoPor||'',extrasAbatidos:Object.assign({},c.extrasAbatidos||{})};}
-  function cfRegistrar(ata,r){
+  function cfRegistrar(ata,r,resp){
+    resp=resp||{ex:{},extra:{}};
     var ent=(cfAberto&&cfAberto.inputs)||{};var itens={},excesso={},algum=false;
     var conf=cfCopiaConf(r);
+    // perguntas (uma de cada vez, no modal do sistema): "chegou a mais" e "item fora do pedido" -> abater do saldo?
+    for(var di=0;di<r.deltas.length;di++){
+      var d=r.deltas[di];var v=_parseQtdInput(ent[d.idx]||'');if(v<=0)continue;
+      var resta=cfResta(r,d);
+      if(v>resta&&resp.ex[d.idx]===undefined){
+        var ex=v-resta;
+        (function(d,ex){confirm2('Chegou a mais','Chegou '+ex+' a mais de "'+cfNomeItem(ata,d.idx)+'" (pedido: '+d.qtd+').\n\nAbater esses '+ex+' também do saldo da ata?',function(){var r2={ex:Object.assign({},resp.ex),extra:resp.extra};r2.ex[d.idx]=true;cfRegistrar(ata,r,r2);},'warning','Abater do saldo',{cancelTxt:'Só registrar',onNo:function(){var r2={ex:Object.assign({},resp.ex),extra:resp.extra};r2.ex[d.idx]=false;cfRegistrar(ata,r,r2);}});})(d,ex);
+        return;
+      }
+    }
+    var extrasIn0=(cfAberto&&cfAberto.extras)||{};var ks0=Object.keys(extrasIn0);
+    for(var ki=0;ki<ks0.length;ki++){
+      var k0=ks0[ki];var v0=_parseQtdInput(extrasIn0[k0]||'');if(v0<=0)continue;
+      if(resp.extra[k0]===undefined){
+        (function(k0,v0){confirm2('Item fora do pedido','Chegou "'+cfNomeItem(ata,Number(k0))+'" ('+v0+'), que não estava no pedido.\n\nAbater essa quantidade do saldo da ata?',function(){var r2={ex:resp.ex,extra:Object.assign({},resp.extra)};r2.extra[k0]=true;cfRegistrar(ata,r,r2);},'warning','Abater do saldo',{cancelTxt:'Só registrar',onNo:function(){var r2={ex:resp.ex,extra:Object.assign({},resp.extra)};r2.extra[k0]=false;cfRegistrar(ata,r,r2);}});})(k0,v0);
+        return;
+      }
+    }
     r.deltas.forEach(function(d){
       var v=_parseQtdInput(ent[d.idx]||'');if(v<=0)return;algum=true;
       var resta=cfResta(r,d);
-      if(v>resta){
-        var ex=v-resta;
-        if(window.confirm('Chegou '+ex+' a mais de "'+cfNomeItem(ata,d.idx)+'" (pedido: '+d.qtd+').\n\nAbater esses '+ex+' também do saldo da ata?\n\nOK = abater do saldo   ·   Cancelar = só registrar a chegada')){excesso[d.idx]=ex;}
-      }
+      if(v>resta&&resp.ex[d.idx])excesso[d.idx]=v-resta;
       itens[d.idx]=v;
     });
-    // itens que chegaram FORA do pedido (escolhidos entre os itens da própria ata)
-    var extrasIn=(cfAberto&&cfAberto.extras)||{};var extras={},extraAbate={};
-    Object.keys(extrasIn).forEach(function(k){
-      var v=_parseQtdInput(extrasIn[k]||'');if(v<=0)return;algum=true;extras[k]=v;
-      if(window.confirm('Chegou "'+cfNomeItem(ata,Number(k))+'" ('+v+'), que não estava no pedido.\n\nAbater essa quantidade do saldo da ata?\n\nOK = abater do saldo   ·   Cancelar = só registrar a chegada'))extraAbate[k]=v;
-    });
+    var extrasIn=extrasIn0;var extras={},extraAbate={};
+    ks0.forEach(function(k){var v=_parseQtdInput(extrasIn[k]||'');if(v<=0)return;algum=true;extras[k]=v;if(resp.extra[k])extraAbate[k]=v;});
     if(!algum){setMsg('e:Digite quanto chegou em pelo menos um item.');return;}
     var agora=new Date().toISOString();
     conf.chegadas.push({em:agora,por:user.name||'',itens:itens,extras:extras});
@@ -10132,11 +10147,11 @@ function TabPrevisao(props){
     if(tudo){conf.status='encerrado';conf.encerradoEm=agora;conf.encerradoPor=user.name||'';}
     cfGravar(ata,r,conf,novos,tudo?'Chegada registrada — pedido conferido por completo.':'Chegada registrada. O pedido segue em andamento até chegar o resto ou você encerrar.');
   }
-  function cfEncerrar(ata,r){
+  function cfEncerrar(ata,r,sim){
     var dev={},tot=0;
     r.deltas.forEach(function(d){var rs=cfResta(r,d);if(rs>0){dev[d.idx]=rs;tot+=rs;}});
     var texto=tot>0?'Encerrar este pedido? '+tot+' unidade(s) que não chegaram voltam para o saldo da ata:\n\n'+Object.keys(dev).map(function(k){return '• '+cfNomeItem(ata,Number(k))+': '+dev[k];}).join('\n'):'Encerrar este pedido? Tudo o que foi pedido já chegou.';
-    if(!window.confirm(texto))return;
+    if(!sim){confirm2('Encerrar pedido',texto,function(){cfEncerrar(ata,r,true);},'warning','Encerrar');return;}
     var conf=cfCopiaConf(r);var agora=new Date().toISOString();
     var novos=(ata.itens||[]).map(function(it){return Object.assign({},it);});
     Object.keys(dev).forEach(function(k){conf.devolvidos[k]=(Number(conf.devolvidos[k])||0)+dev[k];if(novos[k])novos[k].pedidoAcumulado=Math.max(0,(Number(novos[k].pedidoAcumulado)||0)-dev[k]);});
@@ -10319,7 +10334,7 @@ function TabPrevisao(props){
         {revisar&&<button type="button" data-fc="lp-pdf-todos" onClick={function(){exportarPDF(comPedido);}} style={Object.assign({},btn,{background:'#EFF6FF',color:Bz})}>PDF de todas</button>}
         {revisar&&<button type="button" data-fc="lp-fechar-todos" onClick={function(){lpFechar(comPedido);}} style={Object.assign({},btn,{background:Bz,color:'#fff'})}>Fechar todos</button>}
       </div>}
-      {lp.itens.length>0&&<button type="button" data-fc="lp-limpar" onClick={function(){if(window.confirm('Limpar todas as quantidades digitadas?')){setLp({itens:[],pend:[]});setPedModo('montar');}}} style={{marginTop:12,border:'none',background:'none',color:'#94A3B8',fontSize:12,cursor:'pointer'}}>Limpar quantidades</button>}
+      {lp.itens.length>0&&<button type="button" data-fc="lp-limpar" onClick={function(){confirm2('Limpar quantidades','Limpar todas as quantidades digitadas?',function(){setLp({itens:[],pend:[]});setPedModo('montar');},'warning','Limpar');}} style={{marginTop:12,border:'none',background:'none',color:'#94A3B8',fontSize:12,cursor:'pointer'}}>Limpar quantidades</button>}
     </div>);
   }
 
@@ -13624,7 +13639,7 @@ function TabRecebimento(props){
           <button type="button" onClick={function(){setModoRec('nota');}} style={{flex:1,padding:'11px',borderRadius:10,border:'1.5px solid '+(modoRec==='nota'?B:'#E2E8F0'),background:modoRec==='nota'?'#EFF6FF':'#fff',color:modoRec==='nota'?B:'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>{_semEmoji('📄 Nota Fiscal')}</button>
           {['permuta','doacao','emprestimo'].map(function(m){return <button key={m} type="button" data-fc={'modo-'+m} onClick={function(){setModoRec(m);}} style={{flex:1,padding:'11px',borderRadius:10,border:'1.5px solid '+(modoRec===m?B:'#E2E8F0'),background:modoRec===m?'#EFF6FF':'#fff',color:modoRec===m?B:'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>{_semEmoji(m==='permuta'?'🔁 Permuta':m==='doacao'?'🎁 Doação':'🤝 Empréstimos')}</button>;})}
         </div>
-        {modoRec==='emprestimo'?<Emprestimos user={user} medications={medications} entries={props.entries||[]}/>:(modoRec==='permuta'||modoRec==='doacao')?<EntradaEspecial user={user} modo={modoRec} medications={medications} entries={props.entries||[]}/>:<React.Fragment>
+        {modoRec==='emprestimo'?<Emprestimos user={user} confirm2={props.confirm2} medications={medications} entries={props.entries||[]}/>:(modoRec==='permuta'||modoRec==='doacao')?<EntradaEspecial user={user} confirm2={props.confirm2} modo={modoRec} medications={medications} entries={props.entries||[]}/>:<React.Fragment>
         {modoRec==='nota'&&<div style={temaItaq?{background:'var(--itq-tint)',border:'1px solid var(--itq-tint-line)',borderRadius:10,padding:'10px 12px',marginBottom:12,fontSize:11,color:'var(--blue-700)'}:{background:'#F0FDF4',border:'1px solid #86EFAC',borderRadius:10,padding:'10px 12px',marginBottom:12,fontSize:11,color:'#0C6B3E'}}>Tudo que chegou bate com a nota — esse recebimento já entra conciliado, sem precisar passar por Importar Notas depois.</div>}
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:12}}>
           <div><label style={lbl}>📅 Data do recebimento</label><input type="date" value={data} max={todayStr()} onChange={function(e){setData(e.target.value);}} style={inp}/></div>
@@ -14673,7 +14688,7 @@ return(
       <div className={temaItaq?'fc-badge':''} style={{width:34,height:34,borderRadius:10,background:temaItaq?'linear-gradient(135deg,var(--blue-900),var(--blue-700))':'rgba(255,255,255,0.18)',border:temaItaq?'none':'1.5px solid rgba(255,255,255,0.3)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
           <span className="fc-mark" style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:15,fontWeight:900,color:'#fff',letterSpacing:'-1px'}}>FC</span>
         </div>
-      <div><div style={{fontWeight:800,fontSize:15,color:temaItaq?'var(--itq-ink)':'#fff',letterSpacing:'-.01em'}}>FarmaControl</div><div style={{fontSize:9,color:temaItaq?'var(--itq-faint)':'rgba(255,255,255,.5)',letterSpacing:'.02em'}}>{new Date().toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'short'}).toUpperCase()}</div></div>
+      <div className="fc-nav-title"><div style={{fontWeight:800,fontSize:15,color:temaItaq?'var(--itq-ink)':'#fff',letterSpacing:'-.01em'}}>FarmaControl</div><div className="fc-nav-sub" style={{fontSize:9,color:temaItaq?'var(--itq-faint)':'rgba(255,255,255,.5)',letterSpacing:'.02em'}}>{new Date().toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'short'}).toUpperCase()}</div></div>
     </div>
     <div style={{display:'flex',alignItems:'center',gap:8}}>
       {localAtivo&&(acessoLocal==='ambos'?
@@ -14689,7 +14704,7 @@ return(
           </span>
         </div>}
         {user.photoURL?<img src={user.photoURL} style={{width:26,height:26,borderRadius:'50%',objectFit:'cover',border:temaItaq?'1.5px solid var(--itq-line)':'1.5px solid rgba(255,255,255,.5)',flexShrink:0}}/>:<div className="av" style={{width:26,height:26,background:user.color||(temaItaq?'var(--blue-700)':'rgba(255,255,255,.25)'),fontSize:11,fontWeight:700}}>{user.name?user.name.charAt(0):'?'}</div>}
-        <div><div style={{fontSize:12,fontWeight:700,color:temaItaq?'var(--itq-ink)':'#fff',lineHeight:1.2}}>{(user.name||'').split(' ')[0]}</div><div style={{fontSize:9,color:temaItaq?'var(--itq-faint)':'rgba(255,255,255,.5)',lineHeight:1.2}}>{isGuest?'Convidado':(ROLES[user.role]||user.role)}</div></div>
+        <div className="fc-nav-user-txt"><div style={{fontSize:12,fontWeight:700,color:temaItaq?'var(--itq-ink)':'#fff',lineHeight:1.2}}>{(user.name||'').split(' ')[0]}</div><div style={{fontSize:9,color:temaItaq?'var(--itq-faint)':'rgba(255,255,255,.5)',lineHeight:1.2}}>{isGuest?'Convidado':(ROLES[user.role]||user.role)}</div></div>
       </div>
     </div>
   </div>
@@ -14740,13 +14755,13 @@ return(
         {tab==='histcontas'&&can(user.role,'log')&&<TabHistContas user={user}/>}
         {!ro&&tab==='antibiotico'&&<TabAntibiotico user={user} medications={meds} stock={stock} allUsers={allUsers}/>}
         {tab==='pedidosjudiciais'&&!ro&&!ehSat&&temModulo(user,'judicial')&&isManagerRole&&<ErrBoundary><TabPedidosJudiciais user={user} medications={meds} stock={stock} entries={entries} onSave={addEntryStable} confirm2={confirm2} alert2={alert2} allUsers={allUsers}/></ErrBoundary>}
-        {!ro&&tab==='recebimento'&&<ErrBoundary><TabRecebimento user={user} medications={ehSat?medsSemLeite:meds} onSave={addEntry} stock={stock} entries={entries} localAtivo={localAtivo}/></ErrBoundary>}
+        {!ro&&tab==='recebimento'&&<ErrBoundary><TabRecebimento user={user} confirm2={confirm2} medications={ehSat?medsSemLeite:meds} onSave={addEntry} stock={stock} entries={entries} localAtivo={localAtivo}/></ErrBoundary>}
         {tab==='pacientes'&&!ro&&temModulo(user,'controlados')&&<ErrBoundary><TabPacientes user={user} entries={entries} onSave={addEntryStable} confirm2={confirm2} alert2={alert2}/></ErrBoundary>}
         {!ro&&!ocultaSat&&tab==='leites'&&<ErrBoundary><TabLeites user={user} medications={meds} stock={stock} onSave={addEntry} confirm2={confirm2} alert2={alert2}/></ErrBoundary>}
         {tab==='ubs'&&!ro&&!ocultaSat&&temModulo(user,'ubsSolicitacoes')&&<ErrBoundary><TabUbs user={user} entries={entries} medications={meds}/></ErrBoundary>}
         {ocultaSat&&<div style={{maxWidth:520,margin:'40px auto',padding:'0 16px',textAlign:'center',color:'#64748B'}}><div style={{fontSize:16,fontWeight:800,color:'#1E293B',marginBottom:6}}>Não existe no Satélite</div>Esta aba é só da CAF.</div>}
         {ro&&TABS_MOVIMENTO.indexOf(tab)>=0&&<div style={{maxWidth:520,margin:'40px auto',padding:'0 16px',textAlign:'center',color:'#64748B'}}><div style={{fontSize:16,fontWeight:800,color:'#1E293B',marginBottom:6}}>Acesso somente consulta</div>Sua conta pode ver o estoque da CAF e fazer pedidos, mas não movimenta o estoque.</div>}
-        {tab==='medicos'&&!ro&&<ErrBoundary><TabMedicos user={user}/></ErrBoundary>}
+        {tab==='medicos'&&!ro&&<ErrBoundary><TabMedicos user={user} confirm2={confirm2}/></ErrBoundary>}
         {tab==='ubsmed'&&!ro&&temModulo(user,'destinos')&&<ErrBoundary><TabUbsValidades user={user} entries={entries} medications={meds}/></ErrBoundary>}
         {tab==='transferencia'&&!ro&&localAtivo&&<ErrBoundary><TabTransferencia user={user} entries={entries} medications={meds} medsCaf={medsSemLeite} localAtivo={localAtivo}/></ErrBoundary>}
         {tab==='ajuda'&&<ErrBoundary><TabAjuda user={user} onIr={function(t){setTab(t);}}/></ErrBoundary>}
