@@ -154,12 +154,11 @@ var TOURS=[
   ]},
   {id:'tour_recebimento',titulo:'Novo módulo: Recebimento e Conciliação',passos:[
     {acao:{tipo:'aba',aba:'recebimento'},seletor:'[data-tour="tab-content"]',texto:'Nova aba! Aqui você registra a mercadoria que chegou e depois concilia com a nota fiscal.',posicao:'abaixo'},
-    {seletor:'[data-tour="receb-subabas"]',texto:'3 seções: Recebimento (entrada rápida), Importar Notas e Divergências.',posicao:'abaixo'},
+    {seletor:'[data-tour="receb-subabas"]',texto:'2 seções: Recebimento (entrada rápida) e Importar Notas.',posicao:'abaixo'},
     {seletor:'[data-tour="receb-form"]',texto:'Entrada rápida: escolha o medicamento e a quantidade recebida.',posicao:'abaixo'},
     {seletor:'[data-tour="receb-finalizar"]',texto:'Ao finalizar, o estoque já atualiza na hora e o recebimento fica pendente de conciliação — aguardando a nota chegar.',posicao:'acima'},
     {acao:{tipo:'clicar',seletor:'[data-tour="receb-sub-notas"]'},seletor:'[data-tour="notas-import"]',texto:'Quando as notas chegarem, importe uma ou várias de uma vez aqui — o app lê os medicamentos do PDF sozinho.',posicao:'abaixo'},
     {seletor:'[data-tour="notas-matching-btn"]',texto:'Depois de importar, o sistema já casa automaticamente cada medicamento recebido × faturado. Só o que não bater vira divergência — o resto é conciliado sozinho.',posicao:'acima'},
-    {acao:{tipo:'clicar',seletor:'[data-tour="receb-sub-divergencias"]'},seletor:'[data-tour="div-painel"]',texto:'Só os problemas aparecem aqui: quantidade diferente ou item da nota sem recebimento. Confirme manualmente, ou dá saída normal do medicamento — quando o estoque zerar, a divergência some sozinha.',posicao:'abaixo'}
   ]},
   {id:'tour_destino_saidas',titulo:'Novidade: Saídas para SUS ou Emergência',passos:[
     {acao:{tipo:'aba',aba:'saida'},seletor:'[data-tour="saida-destino"]',texto:'Antes de dar saída, escolha o destino: SUS (usuário) ou Emergência. Tudo que você registrar depois fica com o destino que estiver marcado aqui.',posicao:'abaixo'},
@@ -7000,7 +6999,7 @@ var HELP_TOPICS=[
     passos:['Busque o medicamento pelo nome e confira o saldo.','Escolha o destino da saída (SUS, Emergência, CAPS, UBS e outros).','Informe a quantidade. O sistema sugere o lote que vence primeiro e divide entre lotes se um só não bastar.','Para vários itens de uma vez, adicione ao carrinho e confirme no final.','Toque em confirmar. A saída aparece no histórico logo abaixo.'],
     dicas:['O botão de saída mostra o destino escolhido, confira antes de tocar.','Errou o destino? Corrija em "Saídas registradas".','Se a internet estiver ruim, não repita o registro: espere voltar e confira o histórico.']},
   {id:'recebimento',tab:'recebimento',titulo:'Recebimento e notas fiscais',resumo:'Entrada de mercadoria no estoque, com ou sem nota fiscal em mãos.',
-    passos:['Escolha "Recebimento simples" (sem a nota) ou "Já tenho a Nota Fiscal".','Informe a data e o fornecedor (obrigatório). Com a nota, informe também o número e o valor total.','Busque o medicamento e preencha quantidade, lote e validade. Os três são obrigatórios.','Se o produto realmente veio sem lote, marque "Este produto veio sem lote" e explique em Observações.','Com a nota, se um item chegou diferente do escrito (outra quantidade ou outro produto), toque no nome do medicamento e informe o que chegou.','Toque em "Finalizar Recebimento". O estoque atualiza na hora.'],
+    passos:['Escolha "Recebimento simples" (sem a nota) ou "Nota Fiscal".','Informe a data e o fornecedor (obrigatório). Com a nota, informe também o número e o valor total.','Busque o medicamento e preencha quantidade, lote e validade. Os três são obrigatórios.','Se o produto realmente veio sem lote, marque "Este produto veio sem lote" e explique em Observações.','Com a nota, se um item chegou diferente do escrito (outra quantidade ou outro produto), toque no nome do medicamento e informe o que chegou.','Toque em "Finalizar Recebimento". O estoque atualiza na hora.'],
     dicas:['Sem a nota, o recebimento fica pendente até ser conciliado. O painel no topo mostra quantos estão pendentes e há quantos dias.','"Marcar como conferido" pede o motivo, e fica registrado.','Ao cancelar um recebimento, o app avisa se parte já foi usada e pede a justificativa.']},
   {id:'estoque',tab:'estoque',titulo:'Estoque',resumo:'Saldo atual de cada medicamento, com lote, validade e alertas.',
     passos:['Use as abas para ver o Estoque, as Faltas, os Vencimentos e os Descartes.','Busque pelo nome ou filtre por categoria (Farm. Básica, Controlado, Injetável, Leite, Penso/Material).','Toque nos ícones de cada linha para editar, ajustar o lote e a validade ou descartar.','Use PDF ou Excel para exportar a lista.'],
@@ -7749,7 +7748,7 @@ function Emprestimos(props){
     {bloco('Devemos','#B45309','#FFFBEB',devemos,'Não estamos devendo nada.','emp-devemos')}
     <div style={{fontWeight:800,fontSize:14,color:'#1E293B',margin:'16px 0 8px'}}>Registrar novo empréstimo</div>
     <div style={{display:'flex',gap:8,marginBottom:10}}>
-      {[['cedido','📤 Emprestamos'],['recebido','📥 Recebemos emprestado']].map(function(o){return <button key={o[0]} type="button" data-fc={'emp-tipo-'+o[0]} onClick={function(){setTipo(o[0]);setErr('');setOk('');}} style={{flex:1,padding:'10px',borderRadius:10,border:'1.5px solid '+(tipo===o[0]?'#1351B4':'#E2E8F0'),background:tipo===o[0]?'#EFF6FF':'#fff',color:tipo===o[0]?'#1351B4':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>{o[1]}</button>;})}
+      {[['cedido','📤 Emprestamos'],['recebido','📥 Recebemos emprestado']].map(function(o){return <button key={o[0]} type="button" data-fc={'emp-tipo-'+o[0]} onClick={function(){setTipo(o[0]);setErr('');setOk('');}} style={{flex:1,padding:'10px',borderRadius:10,border:'1.5px solid '+(tipo===o[0]?'#1351B4':'#E2E8F0'),background:tipo===o[0]?'#EFF6FF':'#fff',color:tipo===o[0]?'#1351B4':'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>{_semEmoji(o[1])}</button>;})}
     </div>
     <div style={{fontSize:12,color:'#64748B',marginBottom:10}}>{tipo==='cedido'?'O produto sai do estoque agora e fica em "Nos devem" até devolverem.':'O produto entra no estoque agora e fica em "Devemos" até devolvermos.'}</div>
     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
@@ -7757,7 +7756,7 @@ function Emprestimos(props){
       <div><div style={lbl}>{tipo==='cedido'?'Emprestado a *':'Recebido de *'}</div><input className="inp" data-fc="emp-parceiro" value={parceiro} onChange={function(e){setParceiro(e.target.value);}} placeholder="Ex.: Hospital / outro município" style={{marginBottom:0}}/></div>
     </div>
     <div style={card}>
-      <MedPickerSimples meds={meds} value={med} dataFc="emp-busca" onChange={function(m){setMed(m);}}/>
+      <MedPickerSimples user={user} meds={meds} value={med} dataFc="emp-busca" onChange={function(m){setMed(m);}}/>
       {med&&<div style={{marginTop:8}}>
         {tipo==='cedido'&&<div style={{fontSize:12.5,color:'#475569',marginBottom:6}}>Disponível aqui: <b>{disp.total}</b></div>}
         <div style={{width:130,marginBottom:8}}><div style={lbl}>Quantidade *</div><input className="inp" type="number" min="1" data-fc="emp-qtd" value={qtd} onChange={function(e){setQtd(e.target.value);}} style={{marginBottom:0}}/></div>
@@ -7768,8 +7767,8 @@ function Emprestimos(props){
       </div>}
     </div>
     <input className="inp" placeholder="Observação (opcional)" value={obs} onChange={function(e){setObs(e.target.value);}}/>
-    {err&&<div data-fc="ent-erro" style={{background:'#FDECEA',color:'#C2362D',borderRadius:10,padding:'9px 12px',fontSize:13,marginBottom:8}}>{err}</div>}
-    {ok&&<div data-fc="ent-ok" style={{background:'#E2F6EF',color:'#0B7A5F',borderRadius:10,padding:'9px 12px',fontSize:13,marginBottom:8}}>{ok}</div>}
+    {err&&<div data-fc="ent-erro" className="er">{err}</div>}
+    {ok&&<div data-fc="ent-ok" className="ok">{ok}</div>}
     <button type="button" data-fc="emp-salvar" disabled={busy} onClick={registrar} style={{width:'100%',padding:'13px',borderRadius:10,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,cursor:'pointer'}}>{busy?'Salvando…':'Registrar empréstimo'}</button>
     {acertados.length>0&&<div data-fc="emp-acertados" style={{marginTop:16}}><div style={{fontWeight:800,fontSize:13,marginBottom:2}}>Acertados</div>{acertados.slice(0,15).map(linha)}</div>}
   </div>);
@@ -7781,10 +7780,29 @@ function Emprestimos(props){
 function _loteSL(validade){return 'SL '+_normValidade(validade);}
 function MedPickerSimples(props){
   var _q=useState('');var q=_q[0],setQ=_q[1];
+  var _nv=useState(null);var novo=_nv[0],setNovo=_nv[1];// {nome,categoria,busy,err} ao cadastrar um medicamento que não existe
+  function cadastrar(){
+    var n=String(novo.nome||'').trim();if(n.length<3){setNovo(Object.assign({},novo,{err:'Informe o nome do medicamento.'}));return;}
+    var ja=props.meds.filter(function(m){return _semAcento(m.nome)===_semAcento(n);})[0];
+    if(ja){props.onChange(ja);setNovo(null);setQ('');return;}
+    setNovo(Object.assign({},novo,{busy:true,err:''}));
+    var u=props.user;
+    db.collection('medicamentos').add({nome:n,categoria:novo.categoria||'medicamento',ean:'',minEstoque:0,criadoEm:new Date().toISOString(),criadoPor:(u&&u.name)||'',tenant_id:tenantDe(u)})
+      .then(function(ref){props.onChange({id:ref.id,nome:n,categoria:novo.categoria||'medicamento'});setNovo(null);setQ('');})
+      .catch(function(e){setNovo(Object.assign({},novo,{busy:false,err:'Não foi possível cadastrar: '+((e&&e.message)||'erro')}));});
+  }
   var nq=_semAcento(q);
   var achados=nq.length<2?[]:props.meds.filter(function(m){return !m.inativo&&_semAcento(m.nome).indexOf(nq)>=0;}).slice(0,10);
   if(props.value)return(<div style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',background:'#EFF6FF',border:'1px solid #BFDBFE',borderRadius:10}}><div style={{flex:1,fontWeight:700,fontSize:13}}>{props.value.nome}</div><button type="button" onClick={function(){props.onChange(null);}} style={{border:'none',background:'none',color:'#1351B4',fontWeight:700,cursor:'pointer',fontSize:12}}>Trocar</button></div>);
   return(<div><input className="inp" data-fc={props.dataFc} placeholder={props.placeholder||'Buscar medicamento…'} value={q} onChange={function(e){setQ(e.target.value);}} style={{marginBottom:4}}/>
+    {props.user&&q.trim().length>=2&&!novo&&<button type="button" data-fc="cadastrar-med" onClick={function(){setNovo({nome:q.trim(),categoria:'medicamento'});}} style={{display:'block',width:'100%',textAlign:'left',padding:'9px 12px',border:'none',borderTop:'1px solid #F1F5F9',background:'#EFF6FF',color:'#1351B4',fontWeight:700,cursor:'pointer',fontSize:13}}>+ Cadastrar "{q.trim()}" como novo medicamento</button>}
+    {novo&&<div data-fc="novo-med" style={{border:'1px solid #BFDBFE',background:'#F8FAFC',borderRadius:12,padding:'10px 12px',marginTop:4}}>
+      <div style={{fontWeight:700,fontSize:12.5,color:'#334155',marginBottom:6}}>Cadastrar novo medicamento</div>
+      <input className="inp" data-fc="novo-med-nome" value={novo.nome} onChange={function(e){setNovo(Object.assign({},novo,{nome:e.target.value}));}} placeholder="Nome (ex.: Dipirona 500mg comprimido)"/>
+      <select className="inp" data-fc="novo-med-cat" value={novo.categoria} onChange={function(e){setNovo(Object.assign({},novo,{categoria:e.target.value}));}}><option value="medicamento">Farm. Básica</option><option value="controlado">Controlado</option><option value="injetavel">Injetável</option><option value="leite">Leite</option><option value="penso">Penso / Material</option></select>
+      {novo.err&&<div className="er">{novo.err}</div>}
+      <div style={{display:'flex',gap:8}}><button type="button" data-fc="novo-med-salvar" disabled={novo.busy} onClick={cadastrar} style={{flex:1,padding:'10px',borderRadius:10,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,cursor:'pointer'}}>{novo.busy?'Cadastrando…':'Cadastrar e usar'}</button><button type="button" onClick={function(){setNovo(null);}} style={{padding:'10px 14px',borderRadius:10,border:'1px solid #CBD5E1',background:'#fff',cursor:'pointer'}}>Cancelar</button></div>
+    </div>}
     {achados.map(function(m){return <button type="button" key={m.id} data-fc="pick" onClick={function(){props.onChange(m);setQ('');}} style={{display:'block',width:'100%',textAlign:'left',padding:'9px 12px',border:'none',borderTop:'1px solid #F1F5F9',background:'#fff',cursor:'pointer',fontSize:13.5}}>{m.nome}</button>;})}</div>);
 }
 function LoteValidadeCampos(props){
@@ -7877,7 +7895,7 @@ function EntradaEspecial(props){
     {modo==='doacao'&&<div>
       {itD.map(function(it,idx){return(<div key={it.key} style={card}>
         <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}><div style={{fontSize:11,fontWeight:700,color:'#94A3B8'}}>Item {idx+1}</div>{itD.length>1&&<button type="button" onClick={function(){setItD(itD.filter(function(x){return x.key!==it.key;}));}} style={{border:'none',background:'none',color:'#C2362D',fontWeight:700,fontSize:12,cursor:'pointer'}}>Remover</button>}</div>
-        <MedPickerSimples meds={meds} value={it.med} dataFc={'doa-busca-'+idx} onChange={function(m){setItem(it.key,{med:m});}}/>
+        <MedPickerSimples user={user} meds={meds} value={it.med} dataFc={'doa-busca-'+idx} onChange={function(m){setItem(it.key,{med:m});}}/>
         <div style={{display:'flex',gap:8,margin:'8px 0'}}><div style={{width:110}}><div style={lbl}>Quantidade *</div><input className="inp" type="number" min="1" data-fc={'doa-qtd-'+idx} value={it.qtd} onChange={function(e){setItem(it.key,{qtd:e.target.value});}} style={{marginBottom:0}}/></div></div>
         <LoteValidadeCampos dataFc={'doa-'+idx} valor={it.lv} permiteSL obrigatorio onChange={function(v){setItem(it.key,{lv:v});}}/>
       </div>);})}
@@ -7885,11 +7903,11 @@ function EntradaEspecial(props){
     </div>}
     {modo==='permuta'&&<div>
       <div style={card}><div style={{fontWeight:800,fontSize:13,color:'#B91C1C',marginBottom:6}}>Item que SAIU</div>
-        <MedPickerSimples meds={meds} value={sai.med} dataFc="perm-sai-busca" onChange={function(m){setSai(Object.assign({},sai,{med:m}));}}/>
+        <MedPickerSimples user={user} meds={meds} value={sai.med} dataFc="perm-sai-busca" onChange={function(m){setSai(Object.assign({},sai,{med:m}));}}/>
         {sai.med&&<div style={{marginTop:8}}><div style={{fontSize:12.5,color:'#475569',marginBottom:6}}>Disponível aqui: <b>{disp.total}</b></div><div style={{width:130}}><div style={lbl}>Quantidade *</div><input className="inp" type="number" min="1" data-fc="perm-sai-qtd" value={sai.qtd} onChange={function(e){setSai(Object.assign({},sai,{qtd:e.target.value}));}} style={{marginBottom:0}}/></div></div>}
       </div>
       <div style={card}><div style={{fontWeight:800,fontSize:13,color:'#0B7A5F',marginBottom:6}}>Item que CHEGOU em troca</div>
-        <MedPickerSimples meds={meds} value={ent.med} dataFc="perm-ent-busca" onChange={function(m){setEnt(Object.assign({},ent,{med:m}));}}/>
+        <MedPickerSimples user={user} meds={meds} value={ent.med} dataFc="perm-ent-busca" onChange={function(m){setEnt(Object.assign({},ent,{med:m}));}}/>
         {ent.med&&<div style={{marginTop:8}}>
           <div style={{width:130,marginBottom:8}}><div style={lbl}>Quantidade *</div><input className="inp" type="number" min="1" data-fc="perm-ent-qtd" value={ent.qtd} onChange={function(e){setEnt(Object.assign({},ent,{qtd:e.target.value}));}} style={{marginBottom:0}}/></div>
           <label style={{display:'flex',alignItems:'center',gap:8,fontSize:13,marginBottom:8,cursor:'pointer'}}><input type="checkbox" data-fc="perm-pend" checked={ent.pend} onChange={function(e){setEnt(Object.assign({},ent,{pend:e.target.checked}));}}/> Lote e validade <b>pendentes</b> (ainda não chegou / não sei)</label>
@@ -7899,8 +7917,8 @@ function EntradaEspecial(props){
       </div>
     </div>}
     <input className="inp" placeholder="Observação (opcional)" value={obs} onChange={function(e){setObs(e.target.value);}}/>
-    {err&&<div data-fc="ent-erro" style={{background:'#FDECEA',color:'#C2362D',borderRadius:10,padding:'9px 12px',fontSize:13,marginBottom:8}}>{err}</div>}
-    {ok&&<div data-fc="ent-ok" style={{background:'#E2F6EF',color:'#0B7A5F',borderRadius:10,padding:'9px 12px',fontSize:13,marginBottom:8}}>{ok}</div>}
+    {err&&<div data-fc="ent-erro" className="er">{err}</div>}
+    {ok&&<div data-fc="ent-ok" className="ok">{ok}</div>}
     <button type="button" data-fc="ent-salvar" disabled={busy} onClick={modo==='doacao'?salvarDoacao:salvarPermuta} style={{width:'100%',padding:'13px',borderRadius:10,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,cursor:'pointer'}}>{busy?'Salvando…':(modo==='doacao'?'Registrar doação':'Registrar permuta')}</button>
     {lista.length>0&&<div style={{marginTop:16}}><div style={{fontWeight:800,fontSize:13,marginBottom:6}}>Últimas permutas, doações e empréstimos</div>
       {lista.slice(0,15).map(function(e){return <div key={e.id} style={{display:'flex',gap:8,fontSize:12.5,padding:'6px 0',borderTop:'1px solid #F1F5F9'}}><span style={{width:62,fontWeight:700,color:e.entradaEspecial==='doacao'?'#0B7A5F':'#7C3AED'}}>{e.entradaEspecial==='doacao'?'Doação':e.entradaEspecial==='emprestimo'?'Empréstimo':'Permuta'}</span><span style={{flex:1}}>{e.tipo==='saida'?'Saiu ':'Entrou '}{e.quantidade}x {e.medicamentoNome}{e.lote?' · '+e.lote:''}{e.lotePendente?' · PENDENTE':''}</span><span style={{color:'#94A3B8'}}>{fmtD(e.criadoEm)}</span></div>;})}</div>}
@@ -8669,7 +8687,7 @@ function TabPrevisao(props){
   var _lpMais=useState({});var lpMais=_lpMais[0];var setLpMais=_lpMais[1];// ata -> {aberto,busca}
   var _cfgAtas=useState(false);var cfgAtas=_cfgAtas[0];var setCfgAtas=_cfgAtas[1];
   var _cfFiltro=useState('pend');var cfFiltro=_cfFiltro[0];var setCfFiltro=_cfFiltro[1];
-  var _cfAberto=useState(null);var cfAberto=_cfAberto[0];var setCfAberto=_cfAberto[1];// {ataId,regId,inputs:{idx:'qtd'}}
+  var _cfAberto=useState(null);var cfAberto=_cfAberto[0];var setCfAberto=_cfAberto[1];// {ataId,regId,inputs:{idx:'qtd'},extras:{idx:'qtd'},busca:''}
   var _diasPrev=useState(30);var diasPrev=_diasPrev[0];var setDiasPrev=_diasPrev[1];
   var _ajustes=useState({});var ajustes=_ajustes[0];var setAjustes=_ajustes[1];
   var _precos=useState({});var precos=_precos[0];var setPrecos=_precos[1];// valor unitário manual por medicamento (string)
@@ -9059,6 +9077,8 @@ function TabPrevisao(props){
           var cf=registro.conf||{};var jaDev=Number(cf.devolvidos&&cf.devolvidos[d.idx])||0;var exAb=Number(cf.excessos&&cf.excessos[d.idx])||0;
           novos[d.idx].pedidoAcumulado=Math.max(0,(Number(novos[d.idx].pedidoAcumulado)||0)-(d.qtd-jaDev+exAb));
         });
+        var exs=(registro.conf&&registro.conf.extrasAbatidos)||{};
+        Object.keys(exs).forEach(function(k){if(novos[k])novos[k].pedidoAcumulado=Math.max(0,(Number(novos[k].pedidoAcumulado)||0)-(Number(exs[k])||0));});
         var novoHistorico=historicoPedidosDaAta(ata).filter(function(r){return r.id!==registro.id;});
         db.collection('atas').doc(ata.id).update({itens:_semUndefined(novos),historicoPedidos:_semUndefined(novoHistorico),ultimoPedido:firebase.firestore.FieldValue.delete()}).then(function(){
           setMsg('ok:Pedido desfeito — saldo restante voltou ao que estava antes.');setTimeout(function(){setMsg('');},3500);
@@ -10060,7 +10080,7 @@ function TabPrevisao(props){
       }).catch(function(e){setMsg('e:Não foi possível fechar tudo: '+((e&&e.message)||e)+'. Confira o saldo de cada ata antes de tentar de novo.');});
     },'warning','Fechar pedido');
   }
-  // ---------- Conferir chegada (Itaquitinga): compara o que chegou com o que foi pedido, por pedido fechado ----------
+  // ---------- Conferir pedidos (Itaquitinga): compara o que chegou com o que foi pedido, por pedido fechado ----------
   // Cada pedido fechado é um registro em ata.historicoPedidos ({id,deltas:[{idx,qtd}],em}); a conferência fica em registro.conf:
   // {chegadas:[{em,por,itens:{idx:qtd}}], devolvidos:{idx:qtd}, excessos:{idx:qtd}, status:'encerrado'?}. O que não chegou e é
   // encerrado volta ao saldo da ata (pedidoAcumulado diminui); o que chegou a mais só abate do saldo se a pessoa disser que sim.
@@ -10081,7 +10101,7 @@ function TabPrevisao(props){
     }).catch(function(e){setMsg('e:Não foi possível salvar a conferência: '+((e&&e.message)||e));});
   }
   function cfNomeItem(ata,idx){var it=(ata.itens||[])[idx];return (it&&it.descricao)||('Item '+(idx+1));}
-  function cfCopiaConf(r){var c=r.conf||{};return {chegadas:(c.chegadas||[]).slice(),devolvidos:Object.assign({},c.devolvidos||{}),excessos:Object.assign({},c.excessos||{}),status:c.status||'',encerradoEm:c.encerradoEm||'',encerradoPor:c.encerradoPor||''};}
+  function cfCopiaConf(r){var c=r.conf||{};return {chegadas:(c.chegadas||[]).slice(),devolvidos:Object.assign({},c.devolvidos||{}),excessos:Object.assign({},c.excessos||{}),status:c.status||'',encerradoEm:c.encerradoEm||'',encerradoPor:c.encerradoPor||'',extrasAbatidos:Object.assign({},c.extrasAbatidos||{})};}
   function cfRegistrar(ata,r){
     var ent=(cfAberto&&cfAberto.inputs)||{};var itens={},excesso={},algum=false;
     var conf=cfCopiaConf(r);
@@ -10094,11 +10114,19 @@ function TabPrevisao(props){
       }
       itens[d.idx]=v;
     });
+    // itens que chegaram FORA do pedido (escolhidos entre os itens da própria ata)
+    var extrasIn=(cfAberto&&cfAberto.extras)||{};var extras={},extraAbate={};
+    Object.keys(extrasIn).forEach(function(k){
+      var v=_parseQtdInput(extrasIn[k]||'');if(v<=0)return;algum=true;extras[k]=v;
+      if(window.confirm('Chegou "'+cfNomeItem(ata,Number(k))+'" ('+v+'), que não estava no pedido.\n\nAbater essa quantidade do saldo da ata?\n\nOK = abater do saldo   ·   Cancelar = só registrar a chegada'))extraAbate[k]=v;
+    });
     if(!algum){setMsg('e:Digite quanto chegou em pelo menos um item.');return;}
     var agora=new Date().toISOString();
-    conf.chegadas.push({em:agora,por:user.name||'',itens:itens});
+    conf.chegadas.push({em:agora,por:user.name||'',itens:itens,extras:extras});
+    conf.extrasAbatidos=Object.assign({},conf.extrasAbatidos||{});
     var novos=(ata.itens||[]).map(function(it){return Object.assign({},it);});
     Object.keys(excesso).forEach(function(k){conf.excessos[k]=(Number(conf.excessos[k])||0)+excesso[k];if(novos[k])novos[k].pedidoAcumulado=(Number(novos[k].pedidoAcumulado)||0)+excesso[k];});
+    Object.keys(extraAbate).forEach(function(k){conf.extrasAbatidos[k]=(Number(conf.extrasAbatidos[k])||0)+extraAbate[k];if(novos[k])novos[k].pedidoAcumulado=(Number(novos[k].pedidoAcumulado)||0)+extraAbate[k];});
     var tmp=Object.assign({},r,{conf:conf});
     var tudo=r.deltas.every(function(d){return cfResta(tmp,d)<=0;});
     if(tudo){conf.status='encerrado';conf.encerradoEm=agora;conf.encerradoPor=user.name||'';}
@@ -10129,7 +10157,7 @@ function TabPrevisao(props){
         <button type="button" data-fc="cf-f-pend" onClick={function(){setCfFiltro('pend');setCfAberto(null);}} className={'pill'+(cfFiltro==='pend'?' act':'')} style={cfFiltro==='pend'?{background:Bz,color:'#fff',borderColor:Bz}:{}}>Pendentes ({pend.length})</button>
         <button type="button" data-fc="cf-f-feitos" onClick={function(){setCfFiltro('feitos');setCfAberto(null);}} className={'pill'+(cfFiltro==='feitos'?' act':'')} style={cfFiltro==='feitos'?{background:Bz,color:'#fff',borderColor:Bz}:{}}>Conferidos ({feitos.length})</button>
       </div>
-      {vis.length===0&&<div style={{textAlign:'center',color:'#94A3B8',fontSize:13,padding:'24px 0'}}>{cfFiltro==='pend'?'Nenhum pedido esperando conferência. Os pedidos fechados em "Pedido por lista" aparecem aqui.':'Nenhum pedido conferido ainda.'}</div>}
+      {vis.length===0&&<div style={{textAlign:'center',color:'#94A3B8',fontSize:13,padding:'24px 0'}}>{cfFiltro==='pend'?'Nenhum pedido esperando conferência. Os pedidos fechados em "Pedidos" aparecem aqui.':'Nenhum pedido conferido ainda.'}</div>}
       {vis.map(function(x){
         var r=x.r,ata=x.ata,st=cfStatus(r),bc=badgeCor[st];
         var totPed=r.deltas.reduce(function(s,d){return s+d.qtd;},0);
@@ -10155,7 +10183,29 @@ function TabPrevisao(props){
                 {st!=='feito'&&dig>0&&<div style={{fontSize:11.5,marginTop:3,fontWeight:700,color:dif===0?'#166534':(dif<0?'#B45309':'#1E40AF')}}>{dif===0?'✓ bate com o pedido':(dif<0?'faltam '+(-dif)+' (ainda pode chegar)':'chegou '+dif+' a mais')}</div>}
               </div>);
             })}
-            {(((r.conf&&r.conf.chegadas)||[]).length>0)&&<div style={{fontSize:11.5,color:'#64748B',marginTop:8}}>Chegadas: {r.conf.chegadas.map(function(c){return fmtD(c.em)+(c.por?' ('+c.por+')':'');}).join(' · ')}{r.conf.status==='encerrado'?' · encerrado em '+fmtD(r.conf.encerradoEm):''}</div>}
+            {st!=='feito'&&(function(){
+              var noPedido={};r.deltas.forEach(function(d){noPedido[d.idx]=true;});
+              var ex=cfAberto.extras||{};var q=_norm(cfAberto.busca||'').trim();
+              var cand=(ata.itens||[]).map(function(it,idx){return {it:it,idx:idx};}).filter(function(o){return !noPedido[o.idx]&&ex[o.idx]===undefined&&(!q||_norm(o.it.descricao||'').indexOf(q)>=0);});
+              return(<div data-fc="cf-extra" style={{marginTop:10,padding:'10px 12px',background:'#F8FAFC',border:'1px dashed #CBD5E1',borderRadius:12}}>
+                <div style={{fontWeight:700,fontSize:12.5,color:'#334155',marginBottom:6}}>Chegou algum item que não estava no pedido?</div>
+                {Object.keys(ex).map(function(k){return(<div key={k} data-fc="cf-extra-item" style={{display:'flex',alignItems:'center',gap:8,padding:'6px 0'}}>
+                  <div style={{flex:1,fontSize:13,fontWeight:700}}>{cfNomeItem(ata,Number(k))}</div>
+                  <input data-fc="cf-extra-qtd" inputMode="numeric" placeholder="Chegou" value={ex[k]} onChange={function(ev){var v=ev.target.value.replace(/[^0-9]/g,'');setCfAberto(function(c){var e2=Object.assign({},c.extras);e2[k]=v;return Object.assign({},c,{extras:e2});});}} style={{width:90,padding:'8px',borderRadius:8,border:'1.5px solid #CBD5E1',fontSize:15,fontWeight:700,textAlign:'center'}}/>
+                  <button type="button" onClick={function(){setCfAberto(function(c){var e2=Object.assign({},c.extras);delete e2[k];return Object.assign({},c,{extras:e2});});}} style={Object.assign({},btn,{background:'#FDECEA',color:'#C2362D',padding:'8px 10px'})}>✕</button>
+                </div>);})}
+                <div style={{display:'flex',alignItems:'center',gap:6}}>
+                  <span style={{display:'flex',color:'#64748B'}}><Icon name="search" size={17}/></span>
+                  <input className="inp" data-fc="cf-extra-busca" placeholder="Buscar item desta ata…" value={cfAberto.busca||''} onChange={function(ev){var v=ev.target.value;setCfAberto(function(c){return Object.assign({},c,{busca:v});});}} style={{marginBottom:0}}/>
+                </div>
+                {(q||cand.length<=8)&&cand.slice(0,8).map(function(o){return(<div key={o.idx} data-fc="cf-extra-cand" style={{display:'flex',alignItems:'center',gap:8,padding:'7px 0',borderTop:'1px solid #E2E8F0'}}>
+                  <div style={{flex:1,fontSize:13}}>{o.it.descricao||'(sem descrição)'}</div>
+                  <button type="button" data-fc="cf-extra-add" onClick={function(){setCfAberto(function(c){var e2=Object.assign({},c.extras);e2[o.idx]='';return Object.assign({},c,{extras:e2,busca:''});});}} style={Object.assign({},btn,{background:'#EFF6FF',color:Bz})}>+ adicionar</button>
+                </div>);})}
+                {!q&&cand.length>8&&<div style={{fontSize:11.5,color:'#64748B',paddingTop:6}}>Digite o nome para achar o item entre os {cand.length} da ata.</div>}
+              </div>);
+            })()}
+            {(((r.conf&&r.conf.chegadas)||[]).length>0)&&<div style={{fontSize:11.5,color:'#64748B',marginTop:8}}>Chegadas: {r.conf.chegadas.map(function(c){var ex=Object.keys(c.extras||{}).map(function(k){return '+'+c.extras[k]+' '+cfNomeItem(ata,Number(k));});return fmtD(c.em)+(c.por?' ('+c.por+')':'')+(ex.length?' · extras: '+ex.join(', '):'');}).join(' · ')}{r.conf.status==='encerrado'?' · encerrado em '+fmtD(r.conf.encerradoEm):''}</div>}
             {st!=='feito'&&<div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:10}}>
               <button type="button" data-fc="cf-tudo" onClick={function(){var i={};r.deltas.forEach(function(d){var rs=cfResta(r,d);if(rs>0)i[d.idx]=String(rs);});setCfAberto(function(c){return Object.assign({},c,{inputs:i});});}} style={Object.assign({},btn,{background:'#F1F5F9',color:'#334155'})}>Chegou tudo</button>
               <button type="button" data-fc="cf-registrar" onClick={function(){cfRegistrar(ata,r);}} style={Object.assign({},btn,{background:Bz,color:'#fff',flex:1})}>Registrar chegada</button>
@@ -10203,15 +10253,15 @@ function TabPrevisao(props){
       return(<div key={ata.id} data-fc="lp-ata" style={{background:'#fff',border:'1.5px solid '+(temPedido?Bz:'#E2E8F0'),borderRadius:14,padding:'12px 14px',marginBottom:12}}>
         <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
           <div data-fc="lp-ata-cab" onClick={revisar?undefined:function(){setUi(ata,{aberto:!u.aberto});}} style={{flex:1,minWidth:150,cursor:revisar?'default':'pointer'}}>
-            <div style={{fontWeight:800,fontSize:14,color:Bz}}>{revisar?'':(aberto?'▼ ':'▶ ')}📋 {ata.nome}</div>
+            <div style={{fontWeight:800,fontSize:14,color:Bz}}>{revisar?'':(aberto?'▼ ':'▶ ')}{ata.nome}</div>
             <div style={{fontSize:11.5,color:'#64748B'}}>{itensAta.length} item(ns) na ata{temPedido?' · '+escolhidos.length+' escolhido(s) · R$ '+_fmtNumBR(totAta):''}</div>
           </div>
-          <button type="button" data-fc="lp-pdf" disabled={!temPedido} onClick={function(){exportarPDF([ata]);}} style={Object.assign({},btn,{background:'#EFF6FF',color:Bz,opacity:temPedido?1:.45})}>📄 PDF</button>
-          <button type="button" data-fc="lp-fechar" disabled={!temPedido} onClick={function(){lpFechar([ata]);}} style={Object.assign({},btn,{background:Bz,color:'#fff',opacity:temPedido?1:.45})}>🔒 Fechar pedido</button>
+          <button type="button" data-fc="lp-pdf" disabled={!temPedido} onClick={function(){exportarPDF([ata]);}} style={Object.assign({},btn,{background:'#EFF6FF',color:Bz,opacity:temPedido?1:.45})}>PDF</button>
+          <button type="button" data-fc="lp-fechar" disabled={!temPedido} onClick={function(){lpFechar([ata]);}} style={Object.assign({},btn,{background:Bz,color:'#fff',opacity:temPedido?1:.45})}>Fechar pedido</button>
         </div>
         {aberto&&<div style={{marginTop:8}}>
           <div style={{display:'flex',gap:6,alignItems:'center',marginBottom:6}}>
-            <span style={{fontSize:16}}>🔍</span>
+            <span style={{display:'flex',color:'#64748B'}}><Icon name="search" size={17}/></span>
             <input className="inp" data-fc="lp-busca-ata" placeholder="Pesquisar item nesta ata…" value={u.busca||''} onChange={function(ev){setUi(ata,{busca:ev.target.value});}} style={{marginBottom:0}}/>
           </div>
           {lista.length===0&&<div style={{fontSize:12.5,color:'#94A3B8',padding:'8px 0'}}>{revisar&&!mostrarTodos?'Nenhum item escolhido.':'Nenhum item encontrado.'}</div>}
@@ -10236,7 +10286,7 @@ function TabPrevisao(props){
       {!revisar&&<div>
         <div style={{background:'#EFF6FF',border:'1px solid #BFDBFE',borderRadius:12,padding:'10px 12px',marginBottom:12,fontSize:12.5,color:'#1E3A8A'}}>Abra a ata, digite a <b>quantidade</b> de cada item que quer pedir e, no fim, toque em <b>Finalizar pedido</b>. O valor unitário vem da ata e não pode ser alterado aqui.</div>
         <div style={{display:'flex',gap:6,alignItems:'center',marginBottom:12}}>
-          <span style={{fontSize:16}}>🔍</span>
+          <span style={{display:'flex',color:'#64748B'}}><Icon name="search" size={17}/></span>
           <input className="inp" data-fc="lp-busca" placeholder="Pesquisar item em todas as atas…" value={lpBuscaG} onChange={function(ev){setLpBuscaG(ev.target.value);}} style={{marginBottom:0}}/>
         </div>
       </div>}
@@ -10245,12 +10295,29 @@ function TabPrevisao(props){
         <div style={{fontSize:13,fontWeight:700,color:'#1E293B'}}>Revisão do pedido · {comPedido.length} ata(s) · {nItens} item(ns) · R$ {_fmtNumBR(totalGeral)}</div>
       </div>}
       {visiveis.length===0&&<div style={{textAlign:'center',color:'#94A3B8',fontSize:13,padding:'22px 0'}}>{atas.length===0?'Nenhuma ata cadastrada. Cadastre em Gerenciar Atas.':(revisar?'Nenhum item escolhido.':'Nada encontrado.')}</div>}
-      {visiveis.map(cartaoAta)}
+      {(function(){
+        var cats=Object.keys(LBL);
+        visiveis.forEach(function(at){var c=at.categoria||'medicamento';if(cats.indexOf(c)<0)cats.push(c);});
+        return cats.map(function(catKey){
+          var daCat=visiveis.filter(function(at){return (at.categoria||'medicamento')===catKey;});
+          if(daCat.length===0)return null;
+          var chave='ped_'+catKey;var pastaAberta=(revisar||!!nG)?true:pastasAbertas[chave]===true;
+          var corCat=COR[catKey]||'#1351B4';
+          var nEsc=daCat.filter(function(at){return comPedido.indexOf(at)>=0;}).length;
+          return(<div key={catKey} data-fc="lp-cat" style={{marginBottom:12}}>
+            <button type="button" data-fc="lp-cat-cab" onClick={function(){if(revisar)return;setPastasAbertas(function(p){var n=Object.assign({},p);n[chave]=!pastaAberta;return n;});}} style={{width:'100%',background:corCat,border:'none',borderRadius:pastaAberta?'12px 12px 0 0':12,padding:'11px 14px',display:'flex',alignItems:'center',gap:10,cursor:revisar?'default':'pointer',textAlign:'left'}}>
+              <div style={{flex:1}}><div style={{fontWeight:700,fontSize:14,color:'#fff'}}>{LBL[catKey]||catKey}</div><div style={{fontSize:11,color:'rgba(255,255,255,0.8)'}}>{daCat.length} ata(s){nEsc>0?' · '+nEsc+' com itens escolhidos':''}</div></div>
+              {!revisar&&<span style={{fontSize:14,color:'rgba(255,255,255,0.85)'}}>{pastaAberta?'▲':'▼'}</span>}
+            </button>
+            {pastaAberta&&<div style={{border:'1.5px solid '+corCat,borderTop:'none',borderRadius:'0 0 12px 12px',padding:'10px 10px 2px',background:'#F8FAFC'}}>{daCat.map(cartaoAta)}</div>}
+          </div>);
+        });
+      })()}
       {comPedido.length>0&&<div style={{position:'sticky',bottom:70,background:'#fff',border:'1.5px solid #BFDBFE',borderRadius:14,padding:'10px 12px',boxShadow:'0 6px 20px rgba(0,0,0,.12)',display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
         <div style={{flex:1,minWidth:130,fontSize:12.5,color:'#334155'}}><b>{comPedido.length}</b> ata(s) · <b>{nItens}</b> item(ns) · R$ {_fmtNumBR(totalGeral)}</div>
         {!revisar&&<button type="button" data-fc="lp-finalizar" onClick={function(){setPedModo('revisar');}} style={Object.assign({},btn,{background:Bz,color:'#fff',padding:'10px 16px'})}>Finalizar pedido</button>}
-        {revisar&&<button type="button" data-fc="lp-pdf-todos" onClick={function(){exportarPDF(comPedido);}} style={Object.assign({},btn,{background:'#EFF6FF',color:Bz})}>📄 PDF de todas</button>}
-        {revisar&&<button type="button" data-fc="lp-fechar-todos" onClick={function(){lpFechar(comPedido);}} style={Object.assign({},btn,{background:Bz,color:'#fff'})}>🔒 Fechar todos</button>}
+        {revisar&&<button type="button" data-fc="lp-pdf-todos" onClick={function(){exportarPDF(comPedido);}} style={Object.assign({},btn,{background:'#EFF6FF',color:Bz})}>PDF de todas</button>}
+        {revisar&&<button type="button" data-fc="lp-fechar-todos" onClick={function(){lpFechar(comPedido);}} style={Object.assign({},btn,{background:Bz,color:'#fff'})}>Fechar todos</button>}
       </div>}
       {lp.itens.length>0&&<button type="button" data-fc="lp-limpar" onClick={function(){if(window.confirm('Limpar todas as quantidades digitadas?')){setLp({itens:[],pend:[]});setPedModo('montar');}}} style={{marginTop:12,border:'none',background:'none',color:'#94A3B8',fontSize:12,cursor:'pointer'}}>Limpar quantidades</button>}
     </div>);
@@ -10269,7 +10336,7 @@ function TabPrevisao(props){
       {/* Sub-abas */}
       <div style={{display:'flex',gap:6,marginBottom:16,flexWrap:'wrap'}}>
         {temModulo(user,'pedidoLista')&&<button data-fc="sub-lista" onClick={function(){setSub('lista');}} className={'pill'+(sub==='lista'?' act':'')} style={sub==='lista'?{background:'#1351B4',color:'#fff',borderColor:'#1351B4'}:{}}>{_semEmoji('🧾 Pedidos')}</button>}
-        {temModulo(user,'pedidoLista')&&<button data-fc="sub-chegada" onClick={function(){setSub('chegada');}} className={'pill'+(sub==='chegada'?' act':'')} style={sub==='chegada'?{background:'#1351B4',color:'#fff',borderColor:'#1351B4'}:{}}>{_semEmoji('📦 Conferir chegada')}</button>}
+        {temModulo(user,'pedidoLista')&&<button data-fc="sub-chegada" onClick={function(){setSub('chegada');}} className={'pill'+(sub==='chegada'?' act':'')} style={sub==='chegada'?{background:'#1351B4',color:'#fff',borderColor:'#1351B4'}:{}}>{_semEmoji('📦 Conferir pedidos')}</button>}
         <button onClick={function(){setSub('previsao');}} className={'pill'+(sub==='previsao'?' act':'')} style={sub==='previsao'?{background:'#1351B4',color:'#fff',borderColor:'#1351B4'}:{}}>{_semEmoji('📊 Previsão')}</button>
         <button onClick={function(){setSub('atas');}} className={'pill'+(sub==='atas'?' act':'')} style={sub==='atas'?{background:'#1351B4',color:'#fff',borderColor:'#1351B4'}:{}}>{_semEmoji('🗂️ Gerenciar Atas')}</button>
         <button onClick={function(){setSub('config');}} className={'pill'+(sub==='config'?' act':'')} style={sub==='config'?{background:'#1351B4',color:'#fff',borderColor:'#1351B4'}:{}}>{_semEmoji('⚙️ Mín. e Consumo')}</button>
@@ -13540,7 +13607,7 @@ function TabRecebimento(props){
 
       {/* SUB-ABAS */}
       <div data-tour="receb-subabas" style={{display:'flex',gap:8,marginBottom:16,overflowX:'auto'}}>
-        {[['fisico','📦 Recebimento'],['notas','📥 Importar Notas'],['divergencias','🚨 Divergências']].map(function(t){return(
+        {[['fisico','📦 Recebimento'],['notas','📥 Importar Notas']].map(function(t){return(
           <button key={t[0]} data-tour={'receb-sub-'+t[0]} onClick={function(){setAba(t[0]);}} style={{flexShrink:0,padding:'11px 14px',borderRadius:12,border:'none',background:aba===t[0]?B:'#F1F5F9',color:aba===t[0]?'#fff':'#64748B',fontWeight:700,fontSize:13,cursor:'pointer',whiteSpace:'nowrap'}}>{_semEmoji(t[1])}</button>
         );})}
       </div>
@@ -13552,10 +13619,10 @@ function TabRecebimento(props){
       {/* FORMULÁRIO */}
       <div data-tour="receb-form" style={{background:'#fff',borderRadius:16,padding:16,boxShadow:'0 2px 12px rgba(0,0,0,.06)',border:'1px solid #F1F5F9',marginBottom:16}}>
         <div style={{fontWeight:800,fontSize:15,color:'#1E293B',marginBottom:12}}>Novo recebimento</div>
-        <div style={{display:'flex',gap:8,marginBottom:14}}>
+        <div style={{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap'}}>
           {!temLocais(user)&&<button type="button" onClick={function(){setModoRec('simples');}} style={{flex:1,padding:'11px',borderRadius:10,border:'1.5px solid '+(modoRec==='simples'?B:'#E2E8F0'),background:modoRec==='simples'?'#EFF6FF':'#fff',color:modoRec==='simples'?B:'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>{_semEmoji('📦 Recebimento simples')}</button>}
-          <button type="button" onClick={function(){setModoRec('nota');}} style={{flex:1,padding:'11px',borderRadius:10,border:'1.5px solid '+(modoRec==='nota'?B:'#E2E8F0'),background:modoRec==='nota'?'#EFF6FF':'#fff',color:modoRec==='nota'?B:'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>{_semEmoji('📄 Já tenho a Nota Fiscal')}</button>
-          {temLocais(user)&&['permuta','doacao','emprestimo'].map(function(m){return <button key={m} type="button" data-fc={'modo-'+m} onClick={function(){setModoRec(m);}} style={{flex:1,padding:'11px',borderRadius:10,border:'1.5px solid '+(modoRec===m?B:'#E2E8F0'),background:modoRec===m?'#EFF6FF':'#fff',color:modoRec===m?B:'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>{m==='permuta'?'🔁 Permuta':m==='doacao'?'🎁 Doação':'🤝 Empréstimos'}</button>;})}
+          <button type="button" onClick={function(){setModoRec('nota');}} style={{flex:1,padding:'11px',borderRadius:10,border:'1.5px solid '+(modoRec==='nota'?B:'#E2E8F0'),background:modoRec==='nota'?'#EFF6FF':'#fff',color:modoRec==='nota'?B:'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>{_semEmoji('📄 Nota Fiscal')}</button>
+          {['permuta','doacao','emprestimo'].map(function(m){return <button key={m} type="button" data-fc={'modo-'+m} onClick={function(){setModoRec(m);}} style={{flex:1,padding:'11px',borderRadius:10,border:'1.5px solid '+(modoRec===m?B:'#E2E8F0'),background:modoRec===m?'#EFF6FF':'#fff',color:modoRec===m?B:'#64748B',fontWeight:700,fontSize:12,cursor:'pointer'}}>{_semEmoji(m==='permuta'?'🔁 Permuta':m==='doacao'?'🎁 Doação':'🤝 Empréstimos')}</button>;})}
         </div>
         {modoRec==='emprestimo'?<Emprestimos user={user} medications={medications} entries={props.entries||[]}/>:(modoRec==='permuta'||modoRec==='doacao')?<EntradaEspecial user={user} modo={modoRec} medications={medications} entries={props.entries||[]}/>:<React.Fragment>
         {modoRec==='nota'&&<div style={temaItaq?{background:'var(--itq-tint)',border:'1px solid var(--itq-tint-line)',borderRadius:10,padding:'10px 12px',marginBottom:12,fontSize:11,color:'var(--blue-700)'}:{background:'#F0FDF4',border:'1px solid #86EFAC',borderRadius:10,padding:'10px 12px',marginBottom:12,fontSize:11,color:'#0C6B3E'}}>Tudo que chegou bate com a nota — esse recebimento já entra conciliado, sem precisar passar por Importar Notas depois.</div>}
