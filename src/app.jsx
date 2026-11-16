@@ -8697,6 +8697,8 @@ function TabPrevisao(props){
   var _lpBusca=useState('');var lpBusca=_lpBusca[0];var setLpBusca=_lpBusca[1];
   var _lpMais=useState({});var lpMais=_lpMais[0];var setLpMais=_lpMais[1];// ata -> {aberto,busca}
   var _cfgAtas=useState(false);var cfgAtas=_cfgAtas[0];var setCfgAtas=_cfgAtas[1];
+  var _cfFiltro=useState('pend');var cfFiltro=_cfFiltro[0];var setCfFiltro=_cfFiltro[1];
+  var _cfAberto=useState(null);var cfAberto=_cfAberto[0];var setCfAberto=_cfAberto[1];// {ataId,regId,inputs:{idx:'qtd'}}
   var _diasPrev=useState(30);var diasPrev=_diasPrev[0];var setDiasPrev=_diasPrev[1];
   var _ajustes=useState({});var ajustes=_ajustes[0];var setAjustes=_ajustes[1];
   var _precos=useState({});var precos=_precos[0];var setPrecos=_precos[1];// valor unitário manual por medicamento (string)
@@ -9082,7 +9084,9 @@ function TabPrevisao(props){
         var novos=ata.itens.map(function(it){return Object.assign({},it);});
         registro.deltas.forEach(function(d){
           if(!novos[d.idx])return;
-          novos[d.idx].pedidoAcumulado=Math.max(0,(Number(novos[d.idx].pedidoAcumulado)||0)-d.qtd);
+          // se o pedido já foi conferido: o que voltou ao saldo na conferência não volta de novo; o excesso abatido sai também
+          var cf=registro.conf||{};var jaDev=Number(cf.devolvidos&&cf.devolvidos[d.idx])||0;var exAb=Number(cf.excessos&&cf.excessos[d.idx])||0;
+          novos[d.idx].pedidoAcumulado=Math.max(0,(Number(novos[d.idx].pedidoAcumulado)||0)-(d.qtd-jaDev+exAb));
         });
         var novoHistorico=historicoPedidosDaAta(ata).filter(function(r){return r.id!==registro.id;});
         db.collection('atas').doc(ata.id).update({itens:_semUndefined(novos),historicoPedidos:_semUndefined(novoHistorico),ultimoPedido:firebase.firestore.FieldValue.delete()}).then(function(){
@@ -10120,6 +10124,113 @@ function TabPrevisao(props){
       }).catch(function(e){setMsg('e:Não foi possível fechar tudo: '+((e&&e.message)||e)+'. Confira o saldo de cada ata antes de tentar de novo.');});
     },'warning','Fechar pedido');
   }
+  // ---------- Conferir chegada (Itaquitinga): compara o que chegou com o que foi pedido, por pedido fechado ----------
+  // Cada pedido fechado é um registro em ata.historicoPedidos ({id,deltas:[{idx,qtd}],em}); a conferência fica em registro.conf:
+  // {chegadas:[{em,por,itens:{idx:qtd}}], devolvidos:{idx:qtd}, excessos:{idx:qtd}, status:'encerrado'?}. O que não chegou e é
+  // encerrado volta ao saldo da ata (pedidoAcumulado diminui); o que chegou a mais só abate do saldo se a pessoa disser que sim.
+  function cfChegou(r,idx){return ((r.conf&&r.conf.chegadas)||[]).reduce(function(s,c){return s+(Number(c.itens&&c.itens[idx])||0);},0);}
+  function cfResta(r,d){var dev=Number(r.conf&&r.conf.devolvidos&&r.conf.devolvidos[d.idx])||0;return Math.max(0,d.qtd-cfChegou(r,d.idx)-dev);}
+  function cfStatus(r){if(r.conf&&r.conf.status==='encerrado')return 'feito';return r.deltas.some(function(d){return cfChegou(r,d.idx)>0;})?'andamento':'aguardando';}
+  function cfLista(){
+    var out=[];
+    atas.forEach(function(at){historicoPedidosDaAta(at).forEach(function(r){if(r.id==='legacy'||!r.deltas||!r.deltas.length)return;out.push({ata:at,r:r});});});
+    out.sort(function(x,y){return String(y.r.em).localeCompare(String(x.r.em));});
+    return out;
+  }
+  function cfGravar(ata,r,conf,novosItens,okMsg){
+    var novoReg=Object.assign({},r,{conf:conf});
+    var hist=historicoPedidosDaAta(ata).map(function(x){return x.id===r.id?novoReg:x;});
+    return db.collection('atas').doc(ata.id).update({itens:_semUndefined(novosItens),historicoPedidos:_semUndefined(hist)}).then(function(){
+      setCfAberto(null);setMsg('ok:'+okMsg);setTimeout(function(){setMsg('');},4000);
+    }).catch(function(e){setMsg('e:Não foi possível salvar a conferência: '+((e&&e.message)||e));});
+  }
+  function cfNomeItem(ata,idx){var it=(ata.itens||[])[idx];return (it&&it.descricao)||('Item '+(idx+1));}
+  function cfCopiaConf(r){var c=r.conf||{};return {chegadas:(c.chegadas||[]).slice(),devolvidos:Object.assign({},c.devolvidos||{}),excessos:Object.assign({},c.excessos||{}),status:c.status||'',encerradoEm:c.encerradoEm||'',encerradoPor:c.encerradoPor||''};}
+  function cfRegistrar(ata,r){
+    var ent=(cfAberto&&cfAberto.inputs)||{};var itens={},excesso={},algum=false;
+    var conf=cfCopiaConf(r);
+    r.deltas.forEach(function(d){
+      var v=_parseQtdInput(ent[d.idx]||'');if(v<=0)return;algum=true;
+      var resta=cfResta(r,d);
+      if(v>resta){
+        var ex=v-resta;
+        if(window.confirm('Chegou '+ex+' a mais de "'+cfNomeItem(ata,d.idx)+'" (pedido: '+d.qtd+').\n\nAbater esses '+ex+' também do saldo da ata?\n\nOK = abater do saldo   ·   Cancelar = só registrar a chegada')){excesso[d.idx]=ex;}
+      }
+      itens[d.idx]=v;
+    });
+    if(!algum){setMsg('e:Digite quanto chegou em pelo menos um item.');return;}
+    var agora=new Date().toISOString();
+    conf.chegadas.push({em:agora,por:user.name||'',itens:itens});
+    var novos=(ata.itens||[]).map(function(it){return Object.assign({},it);});
+    Object.keys(excesso).forEach(function(k){conf.excessos[k]=(Number(conf.excessos[k])||0)+excesso[k];if(novos[k])novos[k].pedidoAcumulado=(Number(novos[k].pedidoAcumulado)||0)+excesso[k];});
+    var tmp=Object.assign({},r,{conf:conf});
+    var tudo=r.deltas.every(function(d){return cfResta(tmp,d)<=0;});
+    if(tudo){conf.status='encerrado';conf.encerradoEm=agora;conf.encerradoPor=user.name||'';}
+    cfGravar(ata,r,conf,novos,tudo?'Chegada registrada — pedido conferido por completo.':'Chegada registrada. O pedido segue em andamento até chegar o resto ou você encerrar.');
+  }
+  function cfEncerrar(ata,r){
+    var dev={},tot=0;
+    r.deltas.forEach(function(d){var rs=cfResta(r,d);if(rs>0){dev[d.idx]=rs;tot+=rs;}});
+    var texto=tot>0?'Encerrar este pedido? '+tot+' unidade(s) que não chegaram voltam para o saldo da ata:\n\n'+Object.keys(dev).map(function(k){return '• '+cfNomeItem(ata,Number(k))+': '+dev[k];}).join('\n'):'Encerrar este pedido? Tudo o que foi pedido já chegou.';
+    if(!window.confirm(texto))return;
+    var conf=cfCopiaConf(r);var agora=new Date().toISOString();
+    var novos=(ata.itens||[]).map(function(it){return Object.assign({},it);});
+    Object.keys(dev).forEach(function(k){conf.devolvidos[k]=(Number(conf.devolvidos[k])||0)+dev[k];if(novos[k])novos[k].pedidoAcumulado=Math.max(0,(Number(novos[k].pedidoAcumulado)||0)-dev[k]);});
+    conf.status='encerrado';conf.encerradoEm=agora;conf.encerradoPor=user.name||'';
+    cfGravar(ata,r,conf,novos,tot>0?'Pedido encerrado — '+tot+' un. voltaram para o saldo da ata.':'Pedido encerrado.');
+  }
+  function chegadaTela(){
+    var Bz='#1351B4';
+    var lista=cfLista();
+    var pend=lista.filter(function(x){return cfStatus(x.r)!=='feito';});
+    var feitos=lista.filter(function(x){return cfStatus(x.r)==='feito';});
+    var vis=cfFiltro==='pend'?pend:feitos;
+    var btn={padding:'9px 12px',borderRadius:8,border:'none',fontWeight:700,fontSize:12,cursor:'pointer'};
+    var badgeCor={aguardando:['#FEF3C7','#92400E','Aguardando chegada'],andamento:['#DBEAFE','#1E40AF','Em andamento'],feito:['#DCFCE7','#166534','Conferido']};
+    return(<div data-fc="cf-tela">
+      <div style={{background:'#EFF6FF',border:'1px solid #BFDBFE',borderRadius:12,padding:'10px 12px',marginBottom:12,fontSize:12.5,color:'#1E3A8A'}}>Confira o que <b>chegou</b> contra o que foi <b>pedido</b>. O que não chegar e for encerrado <b>volta para o saldo da ata</b>.</div>
+      <div style={{display:'flex',gap:6,marginBottom:12}}>
+        <button type="button" data-fc="cf-f-pend" onClick={function(){setCfFiltro('pend');setCfAberto(null);}} className={'pill'+(cfFiltro==='pend'?' act':'')} style={cfFiltro==='pend'?{background:Bz,color:'#fff',borderColor:Bz}:{}}>Pendentes ({pend.length})</button>
+        <button type="button" data-fc="cf-f-feitos" onClick={function(){setCfFiltro('feitos');setCfAberto(null);}} className={'pill'+(cfFiltro==='feitos'?' act':'')} style={cfFiltro==='feitos'?{background:Bz,color:'#fff',borderColor:Bz}:{}}>Conferidos ({feitos.length})</button>
+      </div>
+      {vis.length===0&&<div style={{textAlign:'center',color:'#94A3B8',fontSize:13,padding:'24px 0'}}>{cfFiltro==='pend'?'Nenhum pedido esperando conferência. Os pedidos fechados em "Pedido por lista" aparecem aqui.':'Nenhum pedido conferido ainda.'}</div>}
+      {vis.map(function(x){
+        var r=x.r,ata=x.ata,st=cfStatus(r),bc=badgeCor[st];
+        var totPed=r.deltas.reduce(function(s,d){return s+d.qtd;},0);
+        var totCh=r.deltas.reduce(function(s,d){return s+cfChegou(r,d.idx);},0);
+        var aberto=cfAberto&&cfAberto.regId===r.id&&cfAberto.ataId===ata.id;
+        return(<div key={ata.id+r.id} data-fc="cf-pedido" style={{background:'#fff',border:'1.5px solid '+(aberto?Bz:'#E2E8F0'),borderRadius:14,padding:'12px 14px',marginBottom:10}}>
+          <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+            <div style={{flex:1,minWidth:150}}><div style={{fontWeight:800,fontSize:14,color:'#1E293B'}}>{ata.nome}</div><div style={{fontSize:11.5,color:'#64748B'}}>Pedido de {fmtD(r.em)} · {r.deltas.length} item(ns) · chegaram {totCh} de {totPed} un.</div></div>
+            <span style={{background:bc[0],color:bc[1],fontWeight:800,fontSize:11.5,padding:'4px 10px',borderRadius:99}}>{bc[2]}</span>
+            <button type="button" data-fc="cf-abrir" onClick={function(){setCfAberto(aberto?null:{ataId:ata.id,regId:r.id,inputs:{}});}} style={Object.assign({},btn,{background:'#EFF6FF',color:Bz})}>{aberto?'Fechar':(st==='feito'?'Ver':'Conferir')}</button>
+          </div>
+          {aberto&&<div style={{marginTop:10}}>
+            {r.deltas.map(function(d){
+              var ch=cfChegou(r,d.idx),rs=cfResta(r,d),dev=Number(r.conf&&r.conf.devolvidos&&r.conf.devolvidos[d.idx])||0,ex=Number(r.conf&&r.conf.excessos&&r.conf.excessos[d.idx])||0;
+              var dig=_parseQtdInput((cfAberto.inputs||{})[d.idx]||'');
+              var dif=dig>0?(dig-rs):0;
+              return(<div key={d.idx} data-fc="cf-item" style={{padding:'9px 0',borderTop:'1px solid #F1F5F9'}}>
+                <div style={{display:'flex',alignItems:'center',gap:8}}>
+                  <div style={{flex:1,minWidth:0}}><div style={{fontWeight:700,fontSize:13}}>{cfNomeItem(ata,d.idx)}</div>
+                    <div style={{fontSize:11.5,color:'#64748B'}}>Pedido {d.qtd} · chegou {ch}{dev>0?' · voltou ao saldo '+dev:''}{ex>0?' · excesso abatido '+ex:''}{st!=='feito'?' · falta '+rs:''}</div></div>
+                  {st!=='feito'&&<input data-fc="cf-qtd" inputMode="numeric" placeholder="Chegou" value={(cfAberto.inputs||{})[d.idx]||''} onChange={function(ev){var v=ev.target.value.replace(/[^0-9]/g,'');setCfAberto(function(c){var i=Object.assign({},c.inputs);i[d.idx]=v;return Object.assign({},c,{inputs:i});});}} style={{width:90,padding:'8px',borderRadius:8,border:'1.5px solid #CBD5E1',fontSize:15,fontWeight:700,textAlign:'center'}}/>}
+                </div>
+                {st!=='feito'&&dig>0&&<div style={{fontSize:11.5,marginTop:3,fontWeight:700,color:dif===0?'#166534':(dif<0?'#B45309':'#1E40AF')}}>{dif===0?'✓ bate com o pedido':(dif<0?'faltam '+(-dif)+' (ainda pode chegar)':'chegou '+dif+' a mais')}</div>}
+              </div>);
+            })}
+            {(((r.conf&&r.conf.chegadas)||[]).length>0)&&<div style={{fontSize:11.5,color:'#64748B',marginTop:8}}>Chegadas: {r.conf.chegadas.map(function(c){return fmtD(c.em)+(c.por?' ('+c.por+')':'');}).join(' · ')}{r.conf.status==='encerrado'?' · encerrado em '+fmtD(r.conf.encerradoEm):''}</div>}
+            {st!=='feito'&&<div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:10}}>
+              <button type="button" data-fc="cf-tudo" onClick={function(){var i={};r.deltas.forEach(function(d){var rs=cfResta(r,d);if(rs>0)i[d.idx]=String(rs);});setCfAberto(function(c){return Object.assign({},c,{inputs:i});});}} style={Object.assign({},btn,{background:'#F1F5F9',color:'#334155'})}>Chegou tudo</button>
+              <button type="button" data-fc="cf-registrar" onClick={function(){cfRegistrar(ata,r);}} style={Object.assign({},btn,{background:Bz,color:'#fff',flex:1})}>Registrar chegada</button>
+              <button type="button" data-fc="cf-encerrar" onClick={function(){cfEncerrar(ata,r);}} style={Object.assign({},btn,{background:'#FEF3C7',color:'#92400E'})}>Encerrar (o que faltar volta ao saldo)</button>
+            </div>}
+          </div>}
+        </div>);
+      })}
+    </div>);
+  }
+
   function lpTela(){
     var Bz='#1351B4';
     var semAta=lp.itens.filter(function(e){return !e.ataId||!atas.some(function(at){return at.id===e.ataId;});});
@@ -10217,12 +10328,14 @@ function TabPrevisao(props){
       {/* Sub-abas */}
       <div style={{display:'flex',gap:6,marginBottom:16,flexWrap:'wrap'}}>
         {temModulo(user,'pedidoLista')&&<button data-fc="sub-lista" onClick={function(){setSub('lista');}} className={'pill'+(sub==='lista'?' act':'')} style={sub==='lista'?{background:'#1351B4',color:'#fff',borderColor:'#1351B4'}:{}}>{_semEmoji('🧾 Pedido por lista')}</button>}
+        {temModulo(user,'pedidoLista')&&<button data-fc="sub-chegada" onClick={function(){setSub('chegada');}} className={'pill'+(sub==='chegada'?' act':'')} style={sub==='chegada'?{background:'#1351B4',color:'#fff',borderColor:'#1351B4'}:{}}>{_semEmoji('📦 Conferir chegada')}</button>}
         <button onClick={function(){setSub('previsao');}} className={'pill'+(sub==='previsao'?' act':'')} style={sub==='previsao'?{background:'#1351B4',color:'#fff',borderColor:'#1351B4'}:{}}>{_semEmoji('📊 Previsão')}</button>
         <button onClick={function(){setSub('atas');}} className={'pill'+(sub==='atas'?' act':'')} style={sub==='atas'?{background:'#1351B4',color:'#fff',borderColor:'#1351B4'}:{}}>{_semEmoji('🗂️ Gerenciar Atas')}</button>
         <button onClick={function(){setSub('config');}} className={'pill'+(sub==='config'?' act':'')} style={sub==='config'?{background:'#1351B4',color:'#fff',borderColor:'#1351B4'}:{}}>{_semEmoji('⚙️ Mín. e Consumo')}</button>
       </div>
 
       {sub==='lista'&&lpTela()}
+      {sub==='chegada'&&temModulo(user,'pedidoLista')&&chegadaTela()}
 
       {sub==='previsao'&&<div>
         {/* Indicador de fase */}
