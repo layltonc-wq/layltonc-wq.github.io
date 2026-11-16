@@ -39,7 +39,7 @@ async function abrir(br,user){
   ok(/Dipirona\s+Farm\. Básica\s+100/.test(t)&&t.includes('Leite Formula'),'Vicência/'+role+': estoque 100 e produto Leite aparecem');
   ok(await pg.evaluate(()=>Array.from(document.querySelectorAll('.pill')).some(x=>/Leite/.test(x.innerText))),'Vicência/'+role+': filtro Leite continua');
   await go('recebimento');t=await body(pg);
-  ok(t.includes('Recebimento simples')&&t.includes('Já tenho a Nota Fiscal')&&!t.includes('Permuta')&&!t.includes('Doação'),'Vicência/'+role+': Recebimento com os 2 modos de sempre, sem Permuta/Doação');
+  ok(t.includes('Recebimento simples')&&t.includes('Nota Fiscal')&&!t.includes('Já tenho')&&t.includes('Permuta')&&t.includes('Doação')&&t.includes('Empréstimos')&&!t.includes('Divergências'),'Vicência/'+role+': Recebimento simples + Nota Fiscal, agora com Permuta/Doação/Empréstimos e sem aba Divergências (pedido da usuária)');
   // lançamentos novos não ganham campo local
   await pg.evaluate(()=>{db.collection('entries').add({medicamentoId:'m1',medicamentoNome:'Dipirona',tipo:'saida',quantidade:5,tenant_id:'vicencia-pe',criadoEm:new Date().toISOString(),date:'2026-11-12'});const b=db.batch();b.set(db.collection('entries').doc(),{medicamentoId:'m1',tipo:'saida',quantidade:1,tenant_id:'vicencia-pe',criadoEm:new Date().toISOString()});b.commit();});
   await pg.waitForTimeout(300);

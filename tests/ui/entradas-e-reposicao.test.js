@@ -39,7 +39,7 @@ async function abrir(br,user,mod){
  // ---- Recebimento: modos
  await go('recebimento');
  let t=await body(pg);
- ok(!t.includes('Recebimento simples')&&t.includes('Já tenho a Nota Fiscal')&&t.includes('Permuta')&&t.includes('Doação'),'Recebimento: só nota fiscal + Permuta + Doação');
+ ok(!t.includes('Recebimento simples')&&t.includes('Nota Fiscal')&&!t.includes('Já tenho')&&t.includes('Permuta')&&t.includes('Doação')&&t.includes('Empréstimos')&&!t.includes('Divergências'),'Recebimento: Nota Fiscal + Permuta + Doação + Empréstimos, sem aba Divergências');
  // ---- Doação
  await pg.click('[data-fc="modo-doacao"]');
  await pg.fill('[data-fc="origem"]','Secretaria X');
