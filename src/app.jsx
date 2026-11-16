@@ -8651,37 +8651,8 @@ function TabHistoricoNotas(props){
   );
 }
 
-// ===== Pedido por lista (Itaquitinga) =====
-// Entra uma lista de faltas (digitada, colada do WhatsApp ou buscada item a item); cada item é ligado à(s) ata(s) onde existe,
-// o pedido aparece separado por ata e fecha por ata (ou todos). Ver TabPrevisao > sub-aba 'lista'.
-function _lpPartes(nome){return _norm(nome).replace(/[^a-z0-9% ]/g,' ').split(/\s+/).filter(function(t){return t.length>=2||/^\d$/.test(t);});}
-// "Dipirona 500mg - 200", "2x paracetamol", "• amoxicilina 50 cx" -> {nome, qtd}
-function _lpLerLinha(raw){
-  var s=String(raw||'').replace(/^\s*(?:[-•*·]+|\d+\s*[.)](?=\s))\s*/,'').replace(/\s+/g,' ').trim();
-  if(!s)return null;
-  var qtd='';
-  var m=s.match(/^(\d{1,5})\s*(?:x|un\.?|unid\w*|cx|caixas?)?\s+(?=\D)/i);
-  var fim=s.match(/(?:^|[\s\-–:;,=x×])(\d{1,5})\s*(?:un\.?|unid\w*|cx|caixas?|comp\w*|cp|amp\w*|fr\w*|tubos?|bisnagas?)?\.?\s*$/i);
-  if(fim){qtd=fim[1];s=s.slice(0,fim.index).trim();}
-  else if(m){qtd=m[1];s=s.slice(m[0].length).trim();}
-  s=s.replace(/[\-–:;,=]+\s*$/,'').trim();
-  if(s.length<2)return null;
-  return {nome:s,qtd:qtd};
-}
-// candidatos para um nome digitado: todos os termos dentro do nome do medicamento (mais certeiros primeiro)
-function _lpAcharMeds(nome,meds){
-  var ts=_lpPartes(nome);if(!ts.length)return [];
-  var out=[];
-  meds.forEach(function(m){
-    if(m.inativo)return;var nm=_norm(m.nome);var ac=0;ts.forEach(function(t){if(nm.indexOf(t)>=0)ac++;});
-    if(ac===0)return;
-    if(ac<ts.length&&ac<Math.ceil(ts.length*0.6))return;
-    out.push({med:m,tudo:ac===ts.length,ac:ac,ini:nm.indexOf(ts[0])===0?1:0,len:nm.length});
-  });
-  out.sort(function(x,y){return (y.tudo-x.tudo)||(y.ac-x.ac)||(y.ini-x.ini)||(x.len-y.len);});
-  return out.slice(0,6);
-}
-function _lpId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
+// ===== Pedidos (Itaquitinga): todas as atas com seus itens; digita-se a quantidade em cada ata, depois "Finalizar pedido" =====
+// Ver TabPrevisao > sub-aba 'lista'. Quantidades ficam em lp.itens ({id,key,medId,itemIdx,nome,qtd,ataId}), guardadas no aparelho.
 function TabPrevisao(props){
   var user=props.user;var entries=props.entries;var medications=props.medications;var stock=props.stock;var db=props.db;
   var temaItaq=true;// identidade visual v2 agora é o padrão pra todos os municípios (Itaquitinga + Vicência)
@@ -8693,8 +8664,8 @@ function TabPrevisao(props){
   var _lpKey='fc_lista_pedido_'+tenantDe(user);
   var _lp=useState(function(){try{var j=JSON.parse(localStorage.getItem(_lpKey)||'null');if(j&&Array.isArray(j.itens))return {itens:j.itens,pend:Array.isArray(j.pend)?j.pend:[]};}catch(e){}return {itens:[],pend:[]};});var lp=_lp[0];var setLp=_lp[1];
   useEffect(function(){try{localStorage.setItem(_lpKey,JSON.stringify(lp));}catch(e){}},[lp]);
-  var _lpTxt=useState('');var lpTxt=_lpTxt[0];var setLpTxt=_lpTxt[1];
-  var _lpBusca=useState('');var lpBusca=_lpBusca[0];var setLpBusca=_lpBusca[1];
+  var _lpBG=useState('');var lpBuscaG=_lpBG[0];var setLpBuscaG=_lpBG[1];
+  var _pedModo=useState('montar');var pedModo=_pedModo[0];var setPedModo=_pedModo[1];// 'montar' (todas as atas) | 'revisar' (só as atas com itens escolhidos)
   var _lpMais=useState({});var lpMais=_lpMais[0];var setLpMais=_lpMais[1];// ata -> {aberto,busca}
   var _cfgAtas=useState(false);var cfgAtas=_cfgAtas[0];var setCfgAtas=_cfgAtas[1];
   var _cfFiltro=useState('pend');var cfFiltro=_cfFiltro[0];var setCfFiltro=_cfFiltro[1];
@@ -8976,7 +8947,7 @@ function TabPrevisao(props){
     var linhas=medsDaAta(ata.id).map(function(med){
       var item=itensPorMed[med.id]||null;
       var qtd=sub==='lista'?_lpQtd(med.id,ata.id):valorPedido(med);
-      var vU=valorUnit(med.id,item);
+      var vU=sub==='lista'?(item?(Number(item.vUnit)||0):0):valorUnit(med.id,item);
       return {med:med,item:item,qtd:qtd,vUnit:vU,vTotal:qtd*vU,
               desc:(item&&item.descricao)||med.nome,unidade:(item&&item.unidade)||'UN',num:(item&&item.num)||'',marca:(item&&item.marca)||'',naoVinculado:false};
     }).filter(function(x){return x.qtd>0;});
@@ -8989,7 +8960,7 @@ function TabPrevisao(props){
       var aj=ajustes[uKey];
       var qtd=sub==='lista'?_lpQtd(uKey,ata.id):(aj!==undefined?_parseQtdInput(aj):0);
       if(qtd<=0)return;
-      var pm=precos[uKey];var vU=(pm!==undefined&&pm!=='')?(_parseValorInput(pm)||0):(Number(it.vUnit)||0);
+      var pm=precos[uKey];var vU=(sub!=='lista'&&pm!==undefined&&pm!=='')?(_parseValorInput(pm)||0):(Number(it.vUnit)||0);
       linhas.push({med:null,item:it,qtd:qtd,vUnit:vU,vTotal:qtd*vU,
         desc:it.descricao||'(sem descrição)',unidade:it.unidade||'UN',num:it.num||'',marca:it.marca||'',naoVinculado:true});
     });
@@ -10061,54 +10032,19 @@ function TabPrevisao(props){
   var faseGlobal=dias<25?1:(dias<55?2:3);
   var faseInfo={1:{txt:'Baseado no estoque mínimo',cor:'#D97706',ico:'📊'},2:{txt:'Baseado no consumo médio',cor:'#1351B4',ico:'📉'},3:{txt:'Baseado em tendência de consumo',cor:'#0C6B3E',ico:'📈'}};
   // ---------- Pedido por lista ----------
-  function lpAtasDaMed(med){
-    var out=[];var vistos={};
-    atas.forEach(function(at){(at.itens||[]).forEach(function(it,idx){if(it.medicamentoId===med.id&&!vistos[at.id]){vistos[at.id]=true;out.push({ata:at,item:it,idx:idx});}});});
-    atas.forEach(function(at){if(med.ataId===at.id&&!vistos[at.id]){vistos[at.id]=true;out.push({ata:at,item:null,idx:-1});}});
-    out.sort(function(x,y){var sx=x.item?(Number(x.item.qtdTeto)||0)-(Number(x.item.pedidoAcumulado)||0):-1;var sy=y.item?(Number(y.item.qtdTeto)||0)-(Number(y.item.pedidoAcumulado)||0):-1;return sy-sx;});
-    return out;
-  }
-  function lpAdicionar(med,ataId,qtd){
+  // chave de um item de ata na lista: id do medicamento (se existir no cadastro) ou chave sintética do item
+  function lpChave(ata,idx){var it=(ata.itens||[])[idx];var m=it&&it.medicamentoId?medications.filter(function(x){return x.id===it.medicamentoId;})[0]:null;return m?m.id:itemAtaKey(ata.id,idx);}
+  function lpQtdItem(ata,idx){var k=lpChave(ata,idx);var e=lp.itens.filter(function(x){return x.key===k&&x.ataId===ata.id;})[0];return e?e.qtd:'';}
+  function lpSetQtdItem(ata,idx,v){
+    var k=lpChave(ata,idx);var it=(ata.itens||[])[idx];var med=it&&it.medicamentoId?medications.filter(function(x){return x.id===it.medicamentoId;})[0]:null;
+    var val=String(v||'').replace(/[^0-9]/g,'');
     setLp(function(s){
-      var existe=s.itens.filter(function(x){return x.key===med.id&&x.ataId===ataId;})[0];
-      if(existe){return Object.assign({},s,{itens:s.itens.map(function(x){return x===existe?Object.assign({},x,{qtd:qtd!==undefined&&qtd!==''?String(qtd):x.qtd}):x;})});}
-      return Object.assign({},s,{itens:s.itens.concat([{id:_lpId(),key:med.id,medId:med.id,itemIdx:-1,nome:med.nome,qtd:qtd!==undefined?String(qtd):'',ataId:ataId||''}])});
+      var rest=s.itens.filter(function(x){return !(x.key===k&&x.ataId===ata.id);});
+      if(!val)return Object.assign({},s,{itens:rest});
+      return Object.assign({},s,{itens:rest.concat([{id:k+'|'+ata.id,key:k,medId:med?med.id:'',itemIdx:idx,nome:(it&&it.descricao)||'',qtd:val,ataId:ata.id}])});
     });
   }
-  function lpAdicionarItemAta(ata,idx){
-    var it=(ata.itens||[])[idx];if(!it)return;
-    if(it.medicamentoId){var m=medications.filter(function(x){return x.id===it.medicamentoId;})[0];if(m){lpAdicionar(m,ata.id,'');return;}}
-    var k=itemAtaKey(ata.id,idx);
-    setLp(function(s){if(s.itens.some(function(x){return x.key===k;}))return s;return Object.assign({},s,{itens:s.itens.concat([{id:_lpId(),key:k,medId:'',itemIdx:idx,nome:it.descricao||'(sem descrição)',qtd:'',ataId:ata.id}])});});
-  }
-  function lpSetQtd(id,v){setLp(function(s){return Object.assign({},s,{itens:s.itens.map(function(x){return x.id===id?Object.assign({},x,{qtd:v.replace(/[^0-9.]/g,'')}):x;})});});}
-  function lpRemover(id){setLp(function(s){return Object.assign({},s,{itens:s.itens.filter(function(x){return x.id!==id;})});});}
-  function lpMoverAta(e,ataId){setLp(function(s){return Object.assign({},s,{itens:s.itens.map(function(x){return x.id===e.id?Object.assign({},x,{ataId:ataId}):x;})});});}
-  function lpLer(){
-    var linhas=String(lpTxt||'').split(/\r?\n/);var novos=[],pend=[];
-    linhas.forEach(function(l){
-      var r=_lpLerLinha(l);if(!r)return;
-      var c=_lpAcharMeds(r.nome,medications);
-      if(c.length&&c[0].tudo&&(c.length===1||!c[1].tudo)){
-        var m=c[0].med;var ats=lpAtasDaMed(m);
-        novos.push({med:m,ataId:ats.length?ats[0].ata.id:'',qtd:r.qtd});
-      }else pend.push({id:_lpId(),raw:l.trim(),nome:r.nome,qtd:r.qtd,cands:c.map(function(x){return x.med.id;})});
-    });
-    novos.forEach(function(n){lpAdicionar(n.med,n.ataId,n.qtd);});
-    setLp(function(s){return Object.assign({},s,{pend:s.pend.concat(pend)});});
-    setLpTxt('');
-    setMsg((novos.length||pend.length)?'ok:'+novos.length+' item(ns) reconhecido(s)'+(pend.length?' e '+pend.length+' para você conferir':'')+'.':'e:Não encontrei itens nessa lista. Escreva um por linha, com a quantidade.');
-    setTimeout(function(){setMsg('');},3500);
-  }
-  function lpResolver(p,med){
-    var ats=lpAtasDaMed(med);lpAdicionar(med,ats.length?ats[0].ata.id:'',p.qtd);
-    setLp(function(s){return Object.assign({},s,{pend:s.pend.filter(function(x){return x.id!==p.id;})});});
-  }
-  function lpDescartarPend(id){setLp(function(s){return Object.assign({},s,{pend:s.pend.filter(function(x){return x.id!==id;})});});}
-  function lpVincularSemAta(e,ataId){
-    if(!ataId)return;
-    db.collection('medicamentos').doc(e.medId).update({ataId:ataId}).then(function(){lpMoverAta(e,ataId);}).catch(function(er){setMsg('e:'+er.message);});
-  }
+
   // atas que têm algo na lista (com quantidade > 0)
   function lpAtasComPedido(){return atas.filter(function(at){return lp.itens.some(function(x){return x.ataId===at.id&&_parseQtdInput(x.qtd)>0;});});}
   function lpFechar(listaAtas){
@@ -10120,7 +10056,7 @@ function TabPrevisao(props){
       prontos.forEach(function(x){cadeia=cadeia.then(function(){return descontarPedidoDaAta(x.ata,x.linhas).then(function(){feitos.push(x.ata.id);});});});
       cadeia.then(function(){
         setLp(function(s){return Object.assign({},s,{itens:s.itens.filter(function(e){return feitos.indexOf(e.ataId)<0;})});});
-        setMsg('ok:'+feitos.length+' pedido(s) fechado(s) — saldo das atas atualizado.');setTimeout(function(){setMsg('');},4000);
+        setPedModo('montar');setMsg('ok:'+feitos.length+' pedido(s) fechado(s) — saldo das atas atualizado.');setTimeout(function(){setMsg('');},4000);
       }).catch(function(e){setMsg('e:Não foi possível fechar tudo: '+((e&&e.message)||e)+'. Confira o saldo de cada ata antes de tentar de novo.');});
     },'warning','Fechar pedido');
   }
@@ -10233,85 +10169,90 @@ function TabPrevisao(props){
 
   function lpTela(){
     var Bz='#1351B4';
-    var semAta=lp.itens.filter(function(e){return !e.ataId||!atas.some(function(at){return at.id===e.ataId;});});
+    var revisar=pedModo==='revisar';
     var comPedido=lpAtasComPedido();
-    var porAta=atas.filter(function(at){return lp.itens.some(function(x){return x.ataId===at.id;});});
-    var nq=_norm(lpBusca).trim();
-    var achados=nq.length>=2?medications.filter(function(m){return !m.inativo&&_norm(m.nome).indexOf(nq)>=0;}).slice(0,8):[];
+    var nG=_norm(lpBuscaG).trim();
+    var atasOrd=atas.slice().sort(function(x,y){return String(x.nome||'').localeCompare(String(y.nome||''),'pt-BR');});
+    var visiveis=revisar?atasOrd.filter(function(at){return comPedido.indexOf(at)>=0;}):atasOrd.filter(function(at){
+      if(!nG)return true;
+      return _norm(at.nome||'').indexOf(nG)>=0||(at.itens||[]).some(function(it){return _norm(it.descricao||'').indexOf(nG)>=0;});
+    });
+    var totalGeral=0,nItens=0;
+    comPedido.forEach(function(at){linhasPedidoAta(at).forEach(function(l){totalGeral+=l.vTotal;nItens++;});});
     var btn={padding:'8px 12px',borderRadius:8,border:'none',fontWeight:700,fontSize:12,cursor:'pointer'};
-    var inp={width:90,padding:'8px',borderRadius:8,border:'1.5px solid #CBD5E1',fontSize:15,fontWeight:700,textAlign:'center'};
-    function linhaItem(e,ata){
-      var med=e.medId?medications.filter(function(m){return m.id===e.medId;})[0]:null;
-      var item=null;
-      if(ata){if(med){item=(ata.itens||[]).filter(function(it){return it.medicamentoId===med.id;})[0]||null;}else if(e.itemIdx>=0){item=(ata.itens||[])[e.itemIdx]||null;}}
-      var q=_parseQtdInput(e.qtd);var saldo=item?(Number(item.qtdTeto)||0)-(Number(item.pedidoAcumulado)||0):null;var passa=saldo!==null&&q>saldo;
-      var outras=med?lpAtasDaMed(med).filter(function(o){return !ata||o.ata.id!==ata.id;}):[];
-      var est=med?(stock&&stock[med.id]):null;
-      return(<div key={e.id} data-fc="lp-item" style={{padding:'10px 0',borderTop:'1px solid #F1F5F9'}}>
-        <div style={{display:'flex',gap:8,alignItems:'center'}}>
-          <div style={{flex:1,minWidth:0}}><div style={{fontWeight:700,fontSize:13.5,color:'#1E293B'}}>{(item&&item.descricao)||e.nome}</div>
-            <div style={{fontSize:11.5,color:passa?'#C2362D':'#64748B',marginTop:2}}>{item?('Teto '+(Number(item.qtdTeto)||0)+' · já pedido '+(Number(item.pedidoAcumulado)||0)+' · saldo '+saldo+(item.unidade?' '+item.unidade:'')):(ata?'Sem teto cadastrado nesta ata':'')}{est!=null&&est!==undefined?' · estoque '+est:''}{passa?' ⚠ passa do saldo':''}</div></div>
-          <input data-fc="lp-qtd" inputMode="numeric" value={e.qtd} placeholder="Qtd" onChange={function(ev){lpSetQtd(e.id,ev.target.value);}} style={Object.assign({},inp,passa?{borderColor:'#C2362D'}:{})}/>
-          <button type="button" data-fc="lp-remover" onClick={function(){lpRemover(e.id);}} style={Object.assign({},btn,{background:'#FDECEA',color:'#C2362D',padding:'8px 10px'})}>✕</button>
-        </div>
-        {outras.length>0&&<div style={{fontSize:11.5,color:'#475569',marginTop:6}}>Também está em: {outras.map(function(o){var sd=o.item?(Number(o.item.qtdTeto)||0)-(Number(o.item.pedidoAcumulado)||0):null;return <button key={o.ata.id} type="button" data-fc="lp-mover" onClick={function(){lpMoverAta(e,o.ata.id);}} style={{border:'1px solid #CBD5E1',background:'#fff',borderRadius:99,padding:'3px 9px',margin:'2px 4px 2px 0',fontSize:11.5,cursor:'pointer'}}>{o.ata.nome}{sd!==null?' · saldo '+sd:''}</button>;})}</div>}
-      </div>);
-    }
+    var inp={width:92,padding:'8px',borderRadius:8,border:'1.5px solid #CBD5E1',fontSize:15,fontWeight:700,textAlign:'center'};
+    function ui(ata){return lpMais[ata.id]||{aberto:false,busca:'',todos:false};}
+    function setUi(ata,patch){setLpMais(function(m){var o=Object.assign({},m);o[ata.id]=Object.assign({aberto:false,busca:'',todos:false},m[ata.id]||{},patch);return o;});}
     function cartaoAta(ata){
-      var itens=lp.itens.filter(function(x){return x.ataId===ata.id;});
-      var total=itens.reduce(function(s,e){var med=e.medId?medications.filter(function(m){return m.id===e.medId;})[0]:null;var it=med?(ata.itens||[]).filter(function(i){return i.medicamentoId===med.id;})[0]:(ata.itens||[])[e.itemIdx];return s+_parseQtdInput(e.qtd)*(it?(Number(it.vUnit)||0):0);},0);
-      var mais=lpMais[ata.id]||{aberto:false,busca:''};
-      var jaKeys={};itens.forEach(function(e){jaKeys[e.key]=true;});
-      var restantes=(ata.itens||[]).map(function(it,idx){return {it:it,idx:idx};}).filter(function(o){var k=o.it.medicamentoId||itemAtaKey(ata.id,o.idx);return !jaKeys[k]&&(!mais.busca||_norm(o.it.descricao||'').indexOf(_norm(mais.busca))>=0);});
-      var temPedido=itens.some(function(x){return _parseQtdInput(x.qtd)>0;});
-      return(<div key={ata.id} data-fc="lp-ata" style={{background:'#fff',border:'1.5px solid #BFDBFE',borderRadius:14,padding:'12px 14px',marginBottom:12}}>
+      var u=ui(ata);
+      var itensAta=(ata.itens||[]).map(function(it,idx){return {it:it,idx:idx,q:_parseQtdInput(lpQtdItem(ata,idx))};});
+      var escolhidos=itensAta.filter(function(x){return x.q>0;});
+      var totAta=escolhidos.reduce(function(s,x){return s+x.q*(Number(x.it.vUnit)||0);},0);
+      var nAta=_norm(ata.nome||'');
+      var termo=_norm(u.busca||'').trim();var termoG=revisar?'':nG;
+      var aberto=revisar?true:(u.aberto||!!nG);
+      var mostrarTodos=!revisar||u.todos;
+      var lista=itensAta.filter(function(x){
+        if(!mostrarTodos&&!(x.q>0))return false;
+        var d=_norm(x.it.descricao||'');
+        if(termo&&d.indexOf(termo)<0)return false;
+        if(termoG&&nAta.indexOf(termoG)<0&&d.indexOf(termoG)<0)return false;
+        return true;
+      });
+      var temPedido=escolhidos.length>0;
+      return(<div key={ata.id} data-fc="lp-ata" style={{background:'#fff',border:'1.5px solid '+(temPedido?Bz:'#E2E8F0'),borderRadius:14,padding:'12px 14px',marginBottom:12}}>
         <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
-          <div style={{flex:1,minWidth:160}}><div style={{fontWeight:800,fontSize:14,color:Bz}}>📋 {ata.nome}</div><div style={{fontSize:11.5,color:'#64748B'}}>{itens.length} item(ns){total>0?' · R$ '+_fmtNumBR(total):''}</div></div>
+          <div data-fc="lp-ata-cab" onClick={revisar?undefined:function(){setUi(ata,{aberto:!u.aberto});}} style={{flex:1,minWidth:150,cursor:revisar?'default':'pointer'}}>
+            <div style={{fontWeight:800,fontSize:14,color:Bz}}>{revisar?'':(aberto?'▼ ':'▶ ')}📋 {ata.nome}</div>
+            <div style={{fontSize:11.5,color:'#64748B'}}>{itensAta.length} item(ns) na ata{temPedido?' · '+escolhidos.length+' escolhido(s) · R$ '+_fmtNumBR(totAta):''}</div>
+          </div>
           <button type="button" data-fc="lp-pdf" disabled={!temPedido} onClick={function(){exportarPDF([ata]);}} style={Object.assign({},btn,{background:'#EFF6FF',color:Bz,opacity:temPedido?1:.45})}>📄 PDF</button>
-          <button type="button" data-fc="lp-fechar" disabled={!temPedido} onClick={function(){lpFechar([ata]);}} style={Object.assign({},btn,{background:Bz,color:'#fff',opacity:temPedido?1:.45})}>🔒 Fechar</button>
+          <button type="button" data-fc="lp-fechar" disabled={!temPedido} onClick={function(){lpFechar([ata]);}} style={Object.assign({},btn,{background:Bz,color:'#fff',opacity:temPedido?1:.45})}>🔒 Fechar pedido</button>
         </div>
-        {itens.map(function(e){return linhaItem(e,ata);})}
-        <button type="button" data-fc="lp-mais" onClick={function(){setLpMais(function(m){var o=Object.assign({},m);o[ata.id]={aberto:!mais.aberto,busca:mais.busca};return o;});}} style={{marginTop:8,border:'none',background:'none',color:Bz,fontWeight:700,fontSize:12.5,cursor:'pointer',padding:0}}>{mais.aberto?'▲ Esconder itens da ata':'▼ Ver mais itens desta ata ('+restantes.length+')'}</button>
-        {mais.aberto&&<div style={{marginTop:6}}>
-          <input className="inp" placeholder="Buscar nesta ata…" value={mais.busca} onChange={function(ev){var v=ev.target.value;setLpMais(function(m){var o=Object.assign({},m);o[ata.id]={aberto:true,busca:v};return o;});}} style={{marginBottom:6}}/>
-          {restantes.slice(0,40).map(function(o){var sd=(Number(o.it.qtdTeto)||0)-(Number(o.it.pedidoAcumulado)||0);return(<div key={o.idx} data-fc="lp-resto" style={{display:'flex',alignItems:'center',gap:8,padding:'7px 0',borderTop:'1px solid #F1F5F9'}}><div style={{flex:1,fontSize:13}}>{o.it.descricao||'(sem descrição)'}<div style={{fontSize:11,color:'#94A3B8'}}>saldo {sd}{o.it.unidade?' '+o.it.unidade:''}</div></div><button type="button" onClick={function(){lpAdicionarItemAta(ata,o.idx);}} style={Object.assign({},btn,{background:'#EFF6FF',color:Bz})}>+ pedir</button></div>);})}
-          {restantes.length===0&&<div style={{fontSize:12,color:'#94A3B8'}}>Nada mais por aqui.</div>}
+        {aberto&&<div style={{marginTop:8}}>
+          <div style={{display:'flex',gap:6,alignItems:'center',marginBottom:6}}>
+            <span style={{fontSize:16}}>🔍</span>
+            <input className="inp" data-fc="lp-busca-ata" placeholder="Pesquisar item nesta ata…" value={u.busca||''} onChange={function(ev){setUi(ata,{busca:ev.target.value});}} style={{marginBottom:0}}/>
+          </div>
+          {lista.length===0&&<div style={{fontSize:12.5,color:'#94A3B8',padding:'8px 0'}}>{revisar&&!mostrarTodos?'Nenhum item escolhido.':'Nenhum item encontrado.'}</div>}
+          {lista.slice(0,80).map(function(x){
+            var it=x.it;var saldo=(Number(it.qtdTeto)||0)-(Number(it.pedidoAcumulado)||0);var passa=x.q>saldo;
+            var med=it.medicamentoId?medications.filter(function(m){return m.id===it.medicamentoId;})[0]:null;
+            var est=med&&stock?stock[med.id]:null;
+            return(<div key={x.idx} data-fc="lp-item" style={{display:'flex',alignItems:'center',gap:8,padding:'9px 0',borderTop:'1px solid #F1F5F9'}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontWeight:700,fontSize:13.5,color:'#1E293B'}}>{it.descricao||'(sem descrição)'}{it.marca?<span style={{fontWeight:400,color:'#64748B'}}> · {it.marca}</span>:null}</div>
+                <div style={{fontSize:11.5,color:passa?'#C2362D':'#64748B',marginTop:2}}>Saldo {saldo}{it.unidade?' '+it.unidade:''} · <span data-fc="lp-vunit">V. unit. R$ {_fmtNumBR(Number(it.vUnit)||0)}</span>{est!=null&&est!==undefined?' · estoque '+est:''}{passa?' ⚠ passa do saldo':''}</div>
+              </div>
+              <input data-fc="lp-qtd" inputMode="numeric" placeholder="Qtd" value={lpQtdItem(ata,x.idx)} onChange={function(ev){lpSetQtdItem(ata,x.idx,ev.target.value);}} style={Object.assign({},inp,passa?{borderColor:'#C2362D'}:{})}/>
+            </div>);
+          })}
+          {lista.length>80&&<div style={{fontSize:11.5,color:'#64748B',padding:'6px 0'}}>Mostrando 80 de {lista.length}. Use a pesquisa para achar o item.</div>}
+          {revisar&&<button type="button" data-fc="lp-todos" onClick={function(){setUi(ata,{todos:!u.todos});}} style={{marginTop:8,border:'none',background:'none',color:Bz,fontWeight:700,fontSize:12.5,cursor:'pointer',padding:0}}>{u.todos?'▲ Mostrar só os escolhidos':'▼ Ver todos os itens da ata ('+itensAta.length+')'}</button>}
         </div>}
       </div>);
     }
     return(<div data-fc="lp-tela">
-      <div style={{background:'#EFF6FF',border:'1px solid #BFDBFE',borderRadius:12,padding:'10px 12px',marginBottom:12,fontSize:12.5,color:'#1E3A8A'}}>Monte o pedido de uma vez: <b>cole ou digite a lista de faltas</b> (um item por linha, com a quantidade) ou <b>busque o medicamento</b>. O sistema separa por ata; você revisa e fecha.</div>
-      <textarea className="inp" data-fc="lp-texto" rows={4} placeholder={'Ex.:\nDipirona 500mg 200\nAmoxicilina 250mg - 50\n100 paracetamol'} value={lpTxt} onChange={function(ev){setLpTxt(ev.target.value);}} style={{marginBottom:6,resize:'vertical'}}/>
-      <button type="button" data-fc="lp-ler" disabled={!lpTxt.trim()} onClick={lpLer} style={Object.assign({},btn,{background:Bz,color:'#fff',width:'100%',padding:'11px',opacity:lpTxt.trim()?1:.45,marginBottom:12})}>Ler lista</button>
-      <input className="inp" data-fc="lp-busca" placeholder="🔎 Buscar medicamento para adicionar…" value={lpBusca} onChange={function(ev){setLpBusca(ev.target.value);}} style={{marginBottom:4}}/>
-      {achados.map(function(m){var ats=lpAtasDaMed(m);return(<div key={m.id} data-fc="lp-achado" style={{padding:'8px 4px',borderTop:'1px solid #F1F5F9'}}><div style={{fontWeight:700,fontSize:13}}>{m.nome}</div>
-        <div style={{marginTop:4}}>{ats.length===0?<button type="button" data-fc="lp-add-semata" onClick={function(){lpAdicionar(m,'');setLpBusca('');}} style={Object.assign({},btn,{background:'#FEF3C7',color:'#92400E'})}>+ adicionar (sem ata)</button>
-          :ats.map(function(o){var sd=o.item?(Number(o.item.qtdTeto)||0)-(Number(o.item.pedidoAcumulado)||0):null;return <button key={o.ata.id} type="button" data-fc="lp-add" onClick={function(){lpAdicionar(m,o.ata.id);setLpBusca('');}} style={{border:'1px solid #BFDBFE',background:'#EFF6FF',color:Bz,borderRadius:99,padding:'5px 11px',margin:'2px 6px 2px 0',fontSize:12,fontWeight:700,cursor:'pointer'}}>+ {o.ata.nome}{sd!==null?' · saldo '+sd:''}</button>;})}</div></div>);})}
-      {lp.pend.length>0&&<div data-fc="lp-pend" style={{background:'#FFF7ED',border:'1px solid #FDBA74',borderRadius:12,padding:'10px 12px',margin:'12px 0'}}>
-        <div style={{fontWeight:800,fontSize:13,color:'#9A3412',marginBottom:4}}>Confira estes itens ({lp.pend.length})</div>
-        {lp.pend.map(function(p){return(<div key={p.id} style={{borderTop:'1px solid #FED7AA',padding:'8px 0'}}>
-          <div style={{fontSize:13}}><b>{p.raw}</b>{p.qtd?<span style={{color:'#64748B'}}> · qtd {p.qtd}</span>:null}</div>
-          <div style={{marginTop:4}}>{p.cands.length===0&&<span style={{fontSize:12,color:'#9A3412'}}>Não achei no cadastro. Use a busca acima. </span>}
-            {p.cands.map(function(id){var m=medications.filter(function(x){return x.id===id;})[0];return m?<button key={id} type="button" data-fc="lp-cand" onClick={function(){lpResolver(p,m);}} style={{border:'1px solid #FDBA74',background:'#fff',borderRadius:99,padding:'4px 10px',margin:'2px 6px 2px 0',fontSize:12,cursor:'pointer'}}>{m.nome}</button>:null;})}
-            <button type="button" onClick={function(){lpDescartarPend(p.id);}} style={{border:'none',background:'none',color:'#C2362D',fontWeight:700,fontSize:12,cursor:'pointer'}}>descartar</button></div>
-        </div>);})}
+      {!revisar&&<div>
+        <div style={{background:'#EFF6FF',border:'1px solid #BFDBFE',borderRadius:12,padding:'10px 12px',marginBottom:12,fontSize:12.5,color:'#1E3A8A'}}>Abra a ata, digite a <b>quantidade</b> de cada item que quer pedir e, no fim, toque em <b>Finalizar pedido</b>. O valor unitário vem da ata e não pode ser alterado aqui.</div>
+        <div style={{display:'flex',gap:6,alignItems:'center',marginBottom:12}}>
+          <span style={{fontSize:16}}>🔍</span>
+          <input className="inp" data-fc="lp-busca" placeholder="Pesquisar item em todas as atas…" value={lpBuscaG} onChange={function(ev){setLpBuscaG(ev.target.value);}} style={{marginBottom:0}}/>
+        </div>
       </div>}
-      {lp.itens.length===0&&lp.pend.length===0&&<div style={{textAlign:'center',color:'#94A3B8',fontSize:13,padding:'22px 0'}}>Nenhum item na lista ainda.</div>}
-      {porAta.map(cartaoAta)}
-      {semAta.length>0&&<div data-fc="lp-semata" style={{background:'#FFFBEB',border:'1.5px solid #FCD34D',borderRadius:14,padding:'12px 14px',marginBottom:12}}>
-        <div style={{fontWeight:800,fontSize:14,color:'#92400E'}}>Sem ata ({semAta.length})</div>
-        <div style={{fontSize:11.5,color:'#92400E',marginBottom:4}}>Estes não estão em nenhuma ata. Vincule a uma ata para pedir, ou remova.</div>
-        {semAta.map(function(e){return(<div key={e.id} style={{padding:'8px 0',borderTop:'1px solid #FDE68A'}}>
-          <div style={{display:'flex',alignItems:'center',gap:8}}><div style={{flex:1,fontWeight:700,fontSize:13}}>{e.nome}{e.qtd?<span style={{color:'#64748B',fontWeight:400}}> · qtd {e.qtd}</span>:null}</div><button type="button" onClick={function(){lpRemover(e.id);}} style={Object.assign({},btn,{background:'#FDECEA',color:'#C2362D',padding:'8px 10px'})}>✕</button></div>
-          <select className="inp" data-fc="lp-vincular" value="" onChange={function(ev){lpVincularSemAta(e,ev.target.value);}} style={{marginTop:6,marginBottom:0}}><option value="">Vincular a uma ata…</option>{atas.map(function(at){return <option key={at.id} value={at.id}>{at.nome}</option>;})}</select>
-        </div>);})}
+      {revisar&&<div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12,flexWrap:'wrap'}}>
+        <button type="button" data-fc="lp-voltar" onClick={function(){setPedModo('montar');}} style={Object.assign({},btn,{background:'#F1F5F9',color:'#334155'})}>← Voltar para todas as atas</button>
+        <div style={{fontSize:13,fontWeight:700,color:'#1E293B'}}>Revisão do pedido · {comPedido.length} ata(s) · {nItens} item(ns) · R$ {_fmtNumBR(totalGeral)}</div>
       </div>}
+      {visiveis.length===0&&<div style={{textAlign:'center',color:'#94A3B8',fontSize:13,padding:'22px 0'}}>{atas.length===0?'Nenhuma ata cadastrada. Cadastre em Gerenciar Atas.':(revisar?'Nenhum item escolhido.':'Nada encontrado.')}</div>}
+      {visiveis.map(cartaoAta)}
       {comPedido.length>0&&<div style={{position:'sticky',bottom:70,background:'#fff',border:'1.5px solid #BFDBFE',borderRadius:14,padding:'10px 12px',boxShadow:'0 6px 20px rgba(0,0,0,.12)',display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
-        <div style={{flex:1,minWidth:130,fontSize:12.5,color:'#334155'}}><b>{comPedido.length}</b> ata(s) com pedido</div>
-        <button type="button" data-fc="lp-pdf-todos" onClick={function(){exportarPDF(comPedido);}} style={Object.assign({},btn,{background:'#EFF6FF',color:Bz})}>📄 PDF de todas</button>
-        <button type="button" data-fc="lp-fechar-todos" onClick={function(){lpFechar(comPedido);}} style={Object.assign({},btn,{background:Bz,color:'#fff'})}>🔒 Fechar todos</button>
+        <div style={{flex:1,minWidth:130,fontSize:12.5,color:'#334155'}}><b>{comPedido.length}</b> ata(s) · <b>{nItens}</b> item(ns) · R$ {_fmtNumBR(totalGeral)}</div>
+        {!revisar&&<button type="button" data-fc="lp-finalizar" onClick={function(){setPedModo('revisar');}} style={Object.assign({},btn,{background:Bz,color:'#fff',padding:'10px 16px'})}>Finalizar pedido</button>}
+        {revisar&&<button type="button" data-fc="lp-pdf-todos" onClick={function(){exportarPDF(comPedido);}} style={Object.assign({},btn,{background:'#EFF6FF',color:Bz})}>📄 PDF de todas</button>}
+        {revisar&&<button type="button" data-fc="lp-fechar-todos" onClick={function(){lpFechar(comPedido);}} style={Object.assign({},btn,{background:Bz,color:'#fff'})}>🔒 Fechar todos</button>}
       </div>}
-      {lp.itens.length>0&&<button type="button" data-fc="lp-limpar" onClick={function(){if(window.confirm('Limpar toda a lista?'))setLp({itens:[],pend:[]});}} style={{marginTop:12,border:'none',background:'none',color:'#94A3B8',fontSize:12,cursor:'pointer'}}>Limpar lista</button>}
+      {lp.itens.length>0&&<button type="button" data-fc="lp-limpar" onClick={function(){if(window.confirm('Limpar todas as quantidades digitadas?')){setLp({itens:[],pend:[]});setPedModo('montar');}}} style={{marginTop:12,border:'none',background:'none',color:'#94A3B8',fontSize:12,cursor:'pointer'}}>Limpar quantidades</button>}
     </div>);
   }
 
@@ -10327,7 +10268,7 @@ function TabPrevisao(props){
 
       {/* Sub-abas */}
       <div style={{display:'flex',gap:6,marginBottom:16,flexWrap:'wrap'}}>
-        {temModulo(user,'pedidoLista')&&<button data-fc="sub-lista" onClick={function(){setSub('lista');}} className={'pill'+(sub==='lista'?' act':'')} style={sub==='lista'?{background:'#1351B4',color:'#fff',borderColor:'#1351B4'}:{}}>{_semEmoji('🧾 Pedido por lista')}</button>}
+        {temModulo(user,'pedidoLista')&&<button data-fc="sub-lista" onClick={function(){setSub('lista');}} className={'pill'+(sub==='lista'?' act':'')} style={sub==='lista'?{background:'#1351B4',color:'#fff',borderColor:'#1351B4'}:{}}>{_semEmoji('🧾 Pedidos')}</button>}
         {temModulo(user,'pedidoLista')&&<button data-fc="sub-chegada" onClick={function(){setSub('chegada');}} className={'pill'+(sub==='chegada'?' act':'')} style={sub==='chegada'?{background:'#1351B4',color:'#fff',borderColor:'#1351B4'}:{}}>{_semEmoji('📦 Conferir chegada')}</button>}
         <button onClick={function(){setSub('previsao');}} className={'pill'+(sub==='previsao'?' act':'')} style={sub==='previsao'?{background:'#1351B4',color:'#fff',borderColor:'#1351B4'}:{}}>{_semEmoji('📊 Previsão')}</button>
         <button onClick={function(){setSub('atas');}} className={'pill'+(sub==='atas'?' act':'')} style={sub==='atas'?{background:'#1351B4',color:'#fff',borderColor:'#1351B4'}:{}}>{_semEmoji('🗂️ Gerenciar Atas')}</button>
