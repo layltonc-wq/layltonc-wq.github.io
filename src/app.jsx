@@ -2526,6 +2526,9 @@ var _limEst=useState(40);var limEst=_limEst[0];var setLimEst=_limEst[1];
   var _verifDescartes=useState(null);var verifDescartes=_verifDescartes[0];var setVerifDescartes=_verifDescartes[1];
   var _descarteLoteSel=useState(null);var descarteLoteSel=_descarteLoteSel[0];var setDescarteLoteSel=_descarteLoteSel[1];
   var _salvandoBaixa=useState(false);var salvandoBaixa=_salvandoBaixa[0];var setSalvandoBaixa=_salvandoBaixa[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];var _importStatus=useState('');var importStatus=_importStatus[0];var setImportStatus=_importStatus[1];var _importing=useState(false);var importing=_importing[0];var setImporting=_importing[1];var _filtCat=useState('todos');var filtCat=_filtCat[0];var setFiltCat=_filtCat[1];var _ajusteId=useState(null);var ajusteId=_ajusteId[0];var setAjusteId=_ajusteId[1];var _ajusteQty=useState('');var ajusteQty=_ajusteQty[0];var setAjusteQty=_ajusteQty[1];var _ajusteMotivo=useState('');var ajusteMotivo=_ajusteMotivo[0];var setAjusteMotivo=_ajusteMotivo[1];var _ajusteMed=useState(null);var ajusteMed=_ajusteMed[0];var setAjusteMed=_ajusteMed[1];var _loteSel=useState(null);var loteSel=_loteSel[0];var setLoteSel=_loteSel[1];var _editLote=useState(null);var editLote=_editLote[0];var setEditLote=_editLote[1];var _editLoteVal=useState('');var editLoteVal=_editLoteVal[0];var setEditLoteVal=_editLoteVal[1];var _editLoteData=useState('');var editLoteData=_editLoteData[0];var setEditLoteData=_editLoteData[1];
+  var _ajNovo=useState(false);var ajNovo=_ajNovo[0];var setAjNovo=_ajNovo[1];// balanço de LOTE NOVO (lote e validade obrigatórios)
+  var _ajNovoLv=useState({lote:'',validade:'',sl:false});var ajNovoLv=_ajNovoLv[0];var setAjNovoLv=_ajNovoLv[1];
+  useEffect(function(){setAjNovo(false);setAjNovoLv({lote:'',validade:'',sl:false});},[ajusteId]);
 var isManager=(user.role==='gestor'||user.role==='tecnico');var hoje=new Date();
 function getDiasVal(val){var d=_dataValidade(val);if(!d)return null;return Math.ceil((d-hoje)/86400000);}
 // PERF: índice de lotes por medicamento em UMA passada (2 varreduras de entries), memoizado.
@@ -2675,6 +2678,17 @@ function delMed(id){if(!confirm('Excluir medicamento?'))return;db.collection('me
 // os lançamentos de entrada daquele lote, igual já faz o editor de lote do histórico (HistModal).
 function salvarEditLote(){if(bloqueadoRO())return;if(!editLote)return;setSaving(true);var ps=[];if(editLote.medId)ps.push(db.collection('medicamentos').doc(editLote.medId).update({loteAtual:editLoteVal.trim(),validadeAtual:_normValidade(editLoteData)}));var _kEd=loteKey(editLote.lote);var entsDoLote=(editLote.medId&&_kEd)?entries.filter(function(e){return e.medicamentoId===editLote.medId&&(e.tipo==='entrada'||e.tipo==='saida')&&loteKey(e.lote)===_kEd;}):[];/* entradas E saídas: senão as saídas viram órfãs */entsDoLote.forEach(function(e){ps.push(db.collection('entries').doc(e.id).update({lote:editLoteVal.trim(),validade:_normValidade(editLoteData)}));});Promise.all(ps).then(function(){if(entsDoLote.length>0)_bumpEntriesVersion(user,entsDoLote.map(function(e){return e.id;}));setEditLote(null);setSaving(false);}).catch(function(e){alert('Erro: '+e.message);setSaving(false);});}
 function salvarAjuste(){if(bloqueadoRO())return;if(!ajusteMed)return;var nq=parseInt(ajusteQty);if(isNaN(nq)||nq<0){alert('Quantidade inválida.');return;}if(!ajusteMotivo.trim()){alert('Informe o motivo.');return;}
+  // O balanço SEMPRE precisa de um lote: ou um lote que já existe (escolhido na lista) ou um lote novo (lote e validade
+  // obrigatórios). Sem isso a quantidade virava "sem lote" e gerava saídas fantasmas.
+  var _lotesEx=lotesDisponiveis(entriesPorMed(entries)[ajusteMed.id]||[]);var _novo=ajNovo||_lotesEx.length===0;
+  if(_novo){
+    if(!(nq>=1)){alert('Informe a quantidade do lote novo.');return;}
+    var _e=_validarLoteVal(ajNovoLv);if(_e){alert(_e);return;}
+    var _lt=ajNovoLv.sl?_loteSL(ajNovoLv.validade):ajNovoLv.lote.trim();
+    if(_lotesEx.some(function(l){return loteKey(l.lote)===loteKey(_lt);})){alert('O lote '+_lt+' já existe neste medicamento. Selecione-o na lista de lotes para fazer o balanço dele.');return;}
+    setSaving(true);db.collection('entries').add({medicamentoId:ajusteMed.id,medicamentoNome:ajusteMed.nome,ean:ajusteMed.ean||'',tipo:'entrada',quantidade:nq,lote:_lt,validade:_normValidade(ajNovoLv.validade),observacao:'Balanço (lote novo): '+ajusteMotivo.trim()+' (era 0, passou a '+nq+')',criadoEm:new Date().toISOString(),date:todayStr(),autorId:user.uid,autorNome:user.name,autorCargo:user.role,autorColor:user.color||B,isAjuste:true,tenant_id:tenantDe(user)}).then(function(){setAjusteId(null);setAjusteMed(null);setAjusteQty('');setAjusteMotivo('');setLoteSel(null);setSaving(false);}).catch(function(e){alert(e.message);setSaving(false);});
+    return;}
+  if(!loteSel){alert('Selecione qual lote está sendo ajustado (ou escolha "Lote novo").');return;}
   // Usa o saldo BRUTO (sem zerar negativo) como base do ajuste — se não usasse, um medicamento com saída
   // registrada a mais que entrada (saldo real negativo, mas exibido como "0") nunca fecharia o balanço:
   // o ajuste calcularia a diferença a partir do "0" fictício, e o déficit escondido continuaria por baixo.
@@ -2754,27 +2768,28 @@ function darBaixaVencido(){if(bloqueadoRO())return;
 {editLote&&(<Modal onClose={function(){setEditLote(null);}} title="Editar Lote e Validade"><div className="inf" style={{marginBottom:12}}>Medicamento: <strong>{editLote.nome}</strong></div><Lbl c="Lote"/><input value={editLoteVal} onChange={function(e){setEditLoteVal(e.target.value);}} placeholder="Ex: ABC1234" className="inp" autoFocus/><Lbl c="Validade (MM/AAAA)"/><input value={editLoteData} onChange={function(e){setEditLoteData(e.target.value);}} placeholder="Ex: 03/2027" className="inp"/><div style={{display:'flex',gap:10}}><button onClick={function(){setEditLote(null);}} className="bs" style={{flex:1}}>Cancelar</button><button onClick={salvarEditLote} disabled={saving} className="bp" style={{flex:2,opacity:saving?0.7:1}}>{saving?'Salvando...':'Salvar'}</button></div></Modal>)}
 {ajusteId&&ajusteMed&&(function(){
   var lotesAjuste=lotesDisponiveis(entriesPorMed(entries)[ajusteMed.id]||[]);
-  var qAtual=loteSel?loteSel.qty:(stock[ajusteMed.id]||0);
+  var _modoNovo=ajNovo||lotesAjuste.length===0;var _semLote=!_modoNovo&&!loteSel;
+  var qAtual=_modoNovo?0:(loteSel?loteSel.qty:0);
   return <Modal onClose={function(){setAjusteId(null);setAjusteMed(null);setLoteSel(null);setAjusteQty('');setAjusteMotivo('');}} title="Balanço de Estoque">
     <div style={{fontWeight:700,color:B,fontSize:15,marginBottom:12}}>{ajusteMed.nome}</div>
-    {lotesAjuste.length>0&&<div style={{marginBottom:14}}>
-      <Lbl c="Selecione o lote (opcional)"/>
+    {(function(){var modoNovo=ajNovo||lotesAjuste.length===0;var sel=function(on){return {padding:'10px 12px',borderRadius:10,border:'1.5px solid '+(on?B:'#E2E8F0'),background:on?'#EFF6FF':'#F8FAFC',fontWeight:on?700:500,fontSize:12,cursor:'pointer',textAlign:'left',color:on?B:'#1E293B',display:'flex',justifyContent:'space-between',alignItems:'center'};};
+      return <div style={{marginBottom:14}} data-fc="balanco-lotes">
+      <Lbl c={lotesAjuste.length>0?'Qual lote está sendo ajustado? *':'Este medicamento ainda não tem lote com saldo *'}/>
       <div style={{display:'flex',flexDirection:'column',gap:6}}>
-        <button onClick={function(){setLoteSel(null);setAjusteQty('');}} style={{padding:'10px 12px',borderRadius:10,border:'1.5px solid '+(loteSel===null?B:'#E2E8F0'),background:loteSel===null?'#EFF6FF':'#F8FAFC',fontWeight:loteSel===null?700:500,fontSize:12,cursor:'pointer',textAlign:'left',color:loteSel===null?B:'#64748B'}}>
-          🗂 Todos os lotes (estoque geral: {stock[ajusteMed.id]||0} un.)
-        </button>
-        {lotesAjuste.map(function(l,i){return <button key={i} onClick={function(){setLoteSel(l);setAjusteQty('');}} style={{padding:'10px 12px',borderRadius:10,border:'1.5px solid '+(loteSel&&loteSel.lote===l.lote?B:'#E2E8F0'),background:loteSel&&loteSel.lote===l.lote?'#EFF6FF':'#F8FAFC',fontWeight:loteSel&&loteSel.lote===l.lote?700:500,fontSize:12,cursor:'pointer',textAlign:'left',color:loteSel&&loteSel.lote===l.lote?B:'#1E293B',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-          <span>📦 Lote {l.lote}{l.validade?' · Val: '+l.validade:''}</span>
-          <span style={{fontWeight:800,color:loteSel&&loteSel.lote===l.lote?B:'#059669'}}>{l.qty} un.</span>
+        {lotesAjuste.map(function(l,i){var on=!modoNovo&&loteSel&&loteSel.lote===l.lote;return <button key={i} data-fc="balanco-lote" onClick={function(){setAjNovo(false);setLoteSel(l);setAjusteQty('');}} style={sel(on)}>
+          <span>📦 {l.lote?'Lote '+l.lote:'Sem lote (corrigir)'}{l.validade?' · Val: '+l.validade:''}</span>
+          <span style={{fontWeight:800,color:on?B:'#059669'}}>{l.qty} un.</span>
         </button>;})}
+        {lotesAjuste.length>0&&<button data-fc="balanco-lote-novo" onClick={function(){setAjNovo(true);setLoteSel(null);setAjusteQty('');}} style={sel(modoNovo)}><span>➕ Lote novo (não está na lista)</span></button>}
       </div>
-    </div>}
+      {modoNovo&&<div style={{marginTop:10,background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:10,padding:'10px 12px'}}><div style={{fontSize:12,color:'#64748B',marginBottom:6}}>Lote novo: informe o lote e a validade (obrigatórios).</div><LoteValidadeCampos dataFc="balanco-novo" valor={ajNovoLv} permiteSL obrigatorio onChange={setAjNovoLv}/></div>}
+    </div>;})()}
     <div style={{background:'#EFF6FF',borderRadius:10,padding:'10px 14px',marginBottom:12,display:'flex',justifyContent:'space-between',alignItems:'center',border:'1px solid #BFDBFE'}}>
-      <span style={{fontSize:12,color:'#64748B'}}>{loteSel?'Lote '+loteSel.lote+':':'Estoque atual:'}</span>
+      <span style={{fontSize:12,color:'#64748B'}}>{_modoNovo?'Lote novo — saldo atual:':(loteSel?(loteSel.lote?'Lote '+loteSel.lote+':':'Sem lote:'):'Escolha o lote acima')}</span>
       <span style={{fontSize:28,fontWeight:900,color:B}}>{qAtual}</span>
     </div>
-    <Lbl c="Quantidade real na prateleira"/>
-    <input value={ajusteQty} onChange={function(e){setAjusteQty(e.target.value.replace(/[^0-9]/g,''));}} placeholder="Digite a quantidade correta" className="inp" style={{fontSize:24,fontWeight:800,textAlign:'center'}} autoFocus/>
+    <Lbl c={_modoNovo?'Quantidade do lote novo (na prateleira)':'Quantidade real na prateleira'}/>
+    <input value={ajusteQty} disabled={_semLote} onChange={function(e){setAjusteQty(e.target.value.replace(/[^0-9]/g,''));}} placeholder={_semLote?'Escolha o lote primeiro':'Digite a quantidade correta'} className="inp" style={{fontSize:24,fontWeight:800,textAlign:'center'}}/>
     {ajusteQty!==''&&parseInt(ajusteQty)!==qAtual&&<div style={{textAlign:'center',marginBottom:8,fontWeight:800,color:parseInt(ajusteQty)>qAtual?'#059669':'#DC2626',fontSize:15}}>
       Diferença: {parseInt(ajusteQty)>qAtual?'+':''}{parseInt(ajusteQty)-qAtual}
     </div>}
@@ -2782,7 +2797,7 @@ function darBaixaVencido(){if(bloqueadoRO())return;
     <textarea value={ajusteMotivo} onChange={function(e){setAjusteMotivo(e.target.value);}} rows={2} className="inp" placeholder="Ex: Contagem física divergente" style={{resize:'none'}}/>
     <div style={{display:'flex',gap:10}}>
       <button onClick={function(){setAjusteId(null);setAjusteMed(null);setLoteSel(null);setAjusteQty('');setAjusteMotivo('');}} className="bs" style={{flex:1}}>Cancelar</button>
-      <button onClick={salvarAjuste} disabled={saving||!ajusteMotivo.trim()||ajusteQty===''} className="br" style={{flex:2,opacity:(saving||!ajusteMotivo.trim()||ajusteQty==='')?0.45:1}}>{saving?'Ajustando...':'Confirmar Balanço'}</button>
+      <button onClick={salvarAjuste} disabled={saving||_semLote||!ajusteMotivo.trim()||ajusteQty===''} className="br" style={{flex:2,opacity:(saving||_semLote||!ajusteMotivo.trim()||ajusteQty==='')?0.45:1}}>{saving?'Ajustando...':'Confirmar Balanço'}</button>
     </div>
   </Modal>;})()}
 <div className="tab-sw">{subTabs.map(function(t){return <button key={t.id} onClick={function(){setSub(t.id);}} className={sub===t.id?'on':''}>{t.label}</button>;})}</div>
@@ -2798,7 +2813,7 @@ function darBaixaVencido(){if(bloqueadoRO())return;
   var acoes=[
     can(user.role,'editar')&&{ic:'edit',cor:'#1351B4',bg:'#EFF6FF',title:'Editar',fn:function(){setEditId(m.id);setEditNome(m.nome);setEditMin(m.minEstoque||'');setEditTipo(m.cat||'medicamento');}},
     can(user.role,'editar')&&{ic:'trash',cor:'#DC2626',bg:'#FEE2E2',title:'Excluir',fn:function(){delMed(m.id);}},
-    !ro&&{ic:'scale',cor:'#B45309',bg:'#FEF3C7',title:'Balanço',fn:function(){setAjusteId(m.id);setAjusteMed(m);setAjusteQty(String(m.est));}},
+    !ro&&{ic:'scale',cor:'#B45309',bg:'#FEF3C7',title:'Balanço',fn:function(){setAjusteId(m.id);setAjusteMed(m);setAjusteQty('');setLoteSel(null);}},
     !ro&&{ic:'recycle',cor:'#DC2626',bg:'#FEE2E2',title:'Descarte por vencimento',fn:function(){setDescarteMed(m);setDescarteLoteSel(m.lotes&&m.lotes.length===1?m.lotes[0]:null);var loteInicial=m.lotes&&m.lotes.length===1?m.lotes[0]:null;setShowBaixa({id:m.id,medId:m.id,nome:m.nome,lote:loteInicial?loteInicial.lote:(m.info.lote||''),validade:loteInicial?loteInicial.validade:(m.info.validade||''),est:loteInicial?loteInicial.qty:m.est});setQtdBaixa('');}},
     !ro&&{ic:'calendar',cor:'#0C6B3E',bg:'#F0FDF4',title:'Lote/validade',fn:function(){var li=m.lotes&&m.lotes.length>0?m.lotes[0]:{lote:m.info.lote||'',validade:m.info.validade||''};setEditLote({medId:m.id,nome:m.nome,lote:li.lote||''});setEditLoteVal(li.lote||'');setEditLoteData(li.validade||'');}}
   ].filter(Boolean);
