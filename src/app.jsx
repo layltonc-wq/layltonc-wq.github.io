@@ -31,7 +31,7 @@ function _padraoTenant(id){
     logoPrint:VIC_LOGO_B64,logoPedidoPath:'/assets/vicencia-brasao.png',
     pedido:{orgLinha1:'SECRETARIA DE SAÚDE E DEPARTAMENTO DE COMPRAS',orgLinha2:'Fundo Municipal de Saúde — CAF-Unidade Hospitalar',mostrarBoxEmpresa:true,autoDescontarAta:true,mostrarColunaMarca:false},
     ordemDados:'',
-    modulos:{atb:true,judicial:false,controlados:true,comparaPedido:true,ordemFornecimento:false,destinos:true}
+    modulos:{atb:true,judicial:false,controlados:true,comparaPedido:true,ordemFornecimento:false,destinos:true,pedidoLista:true}
   };
   if(id==='itaquitinga-pe')return {
     nome:'Prefeitura Municipal de Itaquitinga',cidadeUf:'Itaquitinga/PE',cor:'#15803D',assinatura:'COORDENADOR DA FARMÁCIA',nomeFarmacia:'Farmácia Municipal',
@@ -780,6 +780,7 @@ function rotuloDestino(e){var id=destinoDe(e);var r=(DESTINOS[id]||DESTINOS.nc).
 function _ehSaidaNaoReal(e){
   if(e.ficticioDiv)return true;
   if(e.entradaEspecial==='permuta')return true; // permuta: troca de itens, não é consumo
+  if(e.entradaEspecial==='doacao'&&e.tipo==='saida')return true; // doação feita: não é consumo
   if(e.entradaEspecial==='emprestimo')return true; // empréstimo/devolução: vai e volta, não é consumo
   if(e.divergenciaTipo==='real')return true;
   if(e.descarte)return true;
@@ -7017,6 +7018,24 @@ var HELP_TOPICS=[
   {id:'previsao',tab:'previsao',titulo:'Previsão e pedido por ata',resumo:'Calcula quanto pedir de cada medicamento pelo consumo real e monta o pedido.',
     passos:['Escolha o período e veja a sugestão de pedido por medicamento.','Ajuste a quantidade onde precisar. O valor total é calculado pela ata.','Preencha os dados do pedido oficial e gere o PDF ou o Excel.','Ao "Fechar Pedido", o saldo das atas é descontado.','Em "Gerenciar Atas", importe a ata (Word ou Excel) e confira marca, fornecedor e CNPJ.'],
     dicas:['Pedido e atas são para gestor e técnico.']},
+  {id:'transferencia',tab:'transferencia',titulo:'CAF, Satélite, transferência e solicitação',req:function(u){return temLocais(u);},resumo:'Dois estoques separados, transferência entre eles e os pedidos do Satélite à CAF.',
+    passos:['Quem tem acesso aos dois locais escolhe CAF ou Satélite no topo da tela. Cada local tem o seu próprio estoque, e tudo o que você registrar vale para o local escolhido.','Na CAF, abra "Transferência CAF ⇄ Satélite": escolha o produto e a quantidade e envie. O estoque sai de um local e entra no outro, com o mesmo lote e validade.','No Satélite, a aba "Solicitação" tem "Pedir à CAF" (para pedir reposição) e "Devolver à CAF" (para devolver o que não vai usar).','Na CAF, os pedidos do Satélite aparecem em "Pedidos do Satélite": confira, informe o que será enviado e conclua.'],
+    dicas:['Conta só de consulta vê o estoque, mas não movimenta.','O histórico de cada transferência e de cada pedido fica logo abaixo.','No Satélite, toda saída é registrada como Emergência.']},
+  {id:'permuta',tab:'recebimento',titulo:'Permuta, Doação e Empréstimos',resumo:'Entradas e saídas que não são compra: troca com outro serviço, doação recebida e medicamento emprestado.',
+    passos:['Em Recebimento, escolha Permuta, Doação ou Empréstimos.','Permuta: informe com quem foi, o item que saiu (sai pelo lote que vence primeiro) e o que chegou em troca. Se lote e validade ainda não chegaram, marque "pendentes" e informe depois.','Doação: informe quem doou e, para cada item, a quantidade, o lote e a validade. Produto sem lote? Toque em SL.','Empréstimos: escolha "Emprestamos" (o produto sai e fica em "Nos devem") ou "Recebemos emprestado" (entra e fica em "Devemos").','Quando devolverem, ou quando devolvermos, toque em "Receber de volta" ou "Devolver". Dá para acertar em partes; ao zerar, vira "Acertado".','Se o medicamento não estiver cadastrado, toque em "+ Cadastrar … como novo medicamento" na busca.'],
+    dicas:['Permuta, doação e empréstimo não contam como consumo nos relatórios.','O que ainda não foi acertado fica à vista em "Nos devem" e "Devemos".']},
+  {id:'ubs',tab:'ubs',titulo:'Solicitações das UBS',req:function(u){return temModulo(u,'ubsSolicitacoes')&&!somenteLeitura(u)&&['gestor','tecnico','farmaceutico','auxiliar'].indexOf(u.role)>=0;},resumo:'Pedidos de materiais feitos pelas enfermeiras por um link único, com análise, separação e baixa no estoque.',
+    passos:['Envie às enfermeiras o link único das UBS (ele aparece na própria tela).','A enfermeira escolhe a UBS e o período, marca os materiais e envia. Cada UBS faz um envio por período, e cada pedido recebe um protocolo.','Abra o pedido, analise, ajuste a quantidade aprovada de cada item e separe.','Ao separar, o estoque baixa sozinho pelo lote que vence primeiro.','Use os relatórios para acompanhar e a aba Limpeza para apagar testes.'],
+    dicas:['Quem separa vê só o que foi aprovado.','Os pedidos antigos ficam guardados para consulta.']},
+  {id:'ubsmed',tab:'ubsmed',titulo:'UBS: validades',req:function(u){return temModulo(u,'destinos')&&!somenteLeitura(u);},resumo:'Mostra a validade dos medicamentos em cada UBS, para recolher o que vai vencer.',
+    passos:['Veja os cartões por faixa: vencidos, até 30, 60 e 90 dias. Filtre por UBS e por categoria.','Ao enviar para uma UBS um lote que vence em até 90 dias, a Saída avisa antes de confirmar.','As enfermeiras informam as validades pelo link de conferência, com um código de acesso definido nesta tela.','Exporte a lista em PDF ou Excel.'],
+    dicas:['Só gestor e técnico ativam ou desativam o link das enfermeiras.']},
+  {id:'pedidos',tab:'previsao',titulo:'Pedidos por ata e Conferir pedidos',req:function(u){return temModulo(u,'pedidoLista')&&(['gestor','tecnico'].indexOf(u.role)>=0||(u.role==='farmaceutico'&&temLocais(u)));},resumo:'Monta o pedido de várias atas de uma vez e confere o que chegou, com valores e a nota fiscal.',
+    passos:['Em Previsão/Pedido, abra "Pedidos". As atas aparecem por categoria: abra a ata e digite a quantidade de cada item (o valor unitário vem da ata e não pode ser mudado).','Use a lupa para achar itens dentro de uma ata ou em todas.','Toque em "Finalizar pedido" para ver só as atas e os itens escolhidos. "Ver todos os itens da ata" deixa acrescentar mais.','Use "PDF" para a Ordem de Fornecimento. "Fechar pedido" (ou "Fechar todos") desconta do saldo das atas.','Quando a mercadoria chegar, abra "Conferir pedidos": digite o que chegou de cada item e veja os valores e os totais.','Se tiver a nota fiscal, toque em "Importar nota (XML ou PDF)": o sistema compara quantidade e preço da nota com o pedido, com a ata e com o que chegou.','Chegou um item que não estava no pedido? Adicione em "extras" (a busca é na própria ata). O que não chegar e for encerrado volta para o saldo da ata.'],
+    dicas:['Entrega parcial: registre cada chegada e só encerre quando não vier mais nada.','Errou um pedido fechado? "Desfazer pedido" em Gerenciar Atas devolve o saldo.','O XML da nota é mais exato que o PDF.']},
+  {id:'medicos',tab:'medicos',titulo:'Médicos (CRM)',req:function(u){return !somenteLeitura(u);},resumo:'Cadastro simples de nome e CRM, só da sua prefeitura, para preencher mais rápido.',
+    passos:['No menu, abra "Médicos (CRM)" e cadastre o nome e o CRM.','Onde o app pede médico e CRM (ATB e saídas de controlados), digite o CRM completo ou o nome completo e o outro campo se completa sozinho. Com só o começo, toque na sugestão.','Para corrigir um cadastro, toque em Editar.'],
+    dicas:['O mesmo CRM não pode ser cadastrado duas vezes.','Só gestor e técnico removem médicos.']},
   {id:'relatorio',tab:'relatorio',titulo:'Relatórios',resumo:'Movimentações, resumos e saídas do dia, em PDF e Excel.',
     passos:['Escolha o período e o tipo (entradas, saídas ou todos).','Filtre por destino, categoria, responsável ou medicamento.','Veja o Resumo e as "Saídas do Dia". Exporte em PDF ou Excel.'],dicas:['Em "Saídas do Dia", o app mostra a última vez que o relatório foi puxado.']},
   {id:'saidasreg',tab:'saidasreg',titulo:'Saídas registradas',resumo:'Corrige o destino de várias saídas de uma vez.',
@@ -7029,8 +7048,36 @@ var HELP_FAQ=[
   {q:'Meu cadastro ainda não entrou.',a:'O gestor da sua farmácia precisa aprovar a conta. Peça a ele para abrir Gestão e aprovar o seu nome.'},
   {q:'O estoque não bate com o que tem na prateleira.',a:'Peça uma Conferência da categoria: a contagem física corrige o saldo e o lote.'},
   {q:'Registrei uma saída com o destino errado.',a:'Abra "Saídas registradas", marque a saída e troque o destino.'},
+  {q:'Quero escolher o lote da saída.',a:'Na Saída, depois de escolher o medicamento, toque em "Escolher o lote (opcional)" e toque no lote desejado. Sem escolher, sai o lote que vence primeiro.'},
+  {q:'Como cadastro um médico?',a:'No menu, abra "Médicos (CRM)", informe nome e CRM e toque em Cadastrar. Depois, nos formulários, é só digitar o CRM ou o começo do nome.'},
+  {q:'O medicamento da permuta, doação ou empréstimo não está cadastrado.',a:'Na busca do medicamento, toque em "+ Cadastrar … como novo medicamento", confirme o nome e a categoria e já pode usar.'},
+  {q:'Emprestei um medicamento. Como acompanho a devolução?',a:'Em Recebimento, abra Empréstimos: ele fica em "Nos devem" até você tocar em "Receber de volta". Se foi emprestado para nós, fica em "Devemos" até devolvermos.'},
+  {q:'Como peço produtos do Satélite à CAF?',req:function(u){return temLocais(u);},a:'No Satélite, abra "Solicitação" e toque em "Pedir à CAF". A CAF analisa e envia, e você acompanha em "Meus pedidos".'},
+  {q:'A mercadoria chegou diferente do pedido.',req:function(u){return temModulo(u,'pedidoLista');},a:'Em Previsão/Pedido, abra "Conferir pedidos", digite o que chegou e, se tiver a nota, importe o XML ou PDF para o sistema comparar. O que não chegar volta ao saldo da ata ao encerrar.'},
   {q:'A tela travou ou apareceu uma mensagem de erro.',a:'Feche e abra o app. Se continuar, use "Reportar um problema" aqui na Ajuda. O app também avisa o suporte dos erros automaticamente.'}
 ];
+// Ajusta o texto de alguns tópicos conforme a prefeitura (sem plantão em Itaquitinga, locais, pedidos por lista...).
+function _ajudaAjustar(t,u){
+  var c=Object.assign({},t,{passos:t.passos.slice(),dicas:t.dicas.slice()});
+  if(t.id==='inicio'){
+    if(!temPlantao(u)){c.passos=c.passos.filter(function(x){return x.indexOf('Plantão')<0;});c.dicas=c.dicas.filter(function(x){return x.indexOf('plantão')<0;});c.resumo='Visão do dia: saídas, entradas, vencimentos e estoque baixo.';}
+    c.passos.splice(c.passos.length>2?2:c.passos.length,0,'Toque em um quadrado (Saídas, Entradas, Vencimento ou Estoque baixo) para abrir direto a tela relacionada.');
+  }
+  if(t.id==='saida'){
+    c.passos.splice(3,0,'Se quiser escolher o lote (por exemplo, um mais antigo), toque em "Escolher o lote (opcional)" e escolha na lista. Se a quantidade passar do saldo desse lote, o resto sai dos próximos que vencem primeiro.');
+    if(temLocais(u))c.dicas.push('No Satélite, toda saída é registrada como Emergência.');
+  }
+  if(t.id==='recebimento')c.dicas.push('Em Recebimento também ficam Permuta, Doação e Empréstimos (veja o tópico "Permuta, Doação e Empréstimos").');
+  if(t.id==='atb'){
+    c.dicas.push('Em médico e CRM, digite o CRM completo ou o nome: se o médico já estiver em "Médicos (CRM)", o campo se completa.');
+    if(temLocais(u))c.dicas.push('Em Itaquitinga, o ATB fica disponível no Satélite.');
+  }
+  if(t.id==='previsao'){
+    if(temModulo(u,'pedidoLista'))c.passos.unshift('O pedido é montado na aba "Pedidos", dentro desta tela (veja o tópico "Pedidos por ata e Conferir pedidos").');
+    if(temLocais(u))c.dicas=c.dicas.map(function(d){return d==='Pedido e atas são para gestor e técnico.'?'Pedido e atas são para gestor, técnico e farmacêutica.':d;});
+  }
+  return c;
+}
 function _semAcento(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');}
 
 function ReportarProblemaModal(props){
@@ -7652,15 +7699,25 @@ function _emprestimosDe(entries){
   return Object.keys(mp).map(function(k){var L=mp[k];L.pendente=Math.max(0,L.total-L.devolvido);return L;}).filter(function(L){return L.tipo&&L.total>0;})
     .sort(function(x,y){return String(y.criadoEm).localeCompare(String(x.criadoEm));});
 }
+function _itemVazio(){return {key:Date.now()+Math.random(),med:null,qtd:'',lv:{lote:'',validade:'',sl:false},pend:false};}
+function _fcIdx(base,i){return i?base+'-'+i:base;}
+// Soma as quantidades por medicamento e confere com o estoque (FEFO). Devolve {erro} ou {planos:{medId:[partes]}}.
+function _planoSaidas(entries,itens){
+  var need={},nomes={};itens.forEach(function(it){need[it.med.id]=(need[it.med.id]||0)+parseInt(it.qtd,10);nomes[it.med.id]=it.med.nome;});
+  var planos={};
+  for(var id in need){var d=_ubsDisp(entries,id);
+    if(need[id]>d.total)return {erro:nomes[id]+': quantidade maior que o disponível ('+d.total+').'};
+    var pl=_ubsPlano(d,need[id],'');if(pl.falta>0)return {erro:nomes[id]+': os lotes dentro da validade não cobrem essa quantidade.'};
+    planos[id]=pl.partes;}
+  return {planos:planos};
+}
 function Emprestimos(props){
   var user=props.user,meds=props.medications,entries=props.entries||[];
   var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};
   var _tp=useState('cedido');var tipo=_tp[0],setTipo=_tp[1];
   var _par=useState('');var parceiro=_par[0],setParceiro=_par[1];
-  var _med=useState(null);var med=_med[0],setMed=_med[1];
-  var _qtd=useState('');var qtd=_qtd[0],setQtd=_qtd[1];
-  var _lv=useState({lote:'',validade:'',sl:false});var lv=_lv[0],setLv=_lv[1];
-  var _pe=useState(false);var pend=_pe[0],setPend=_pe[1];
+  var _its=useState([_itemVazio()]);var its=_its[0],setIts=_its[1];
+  function setIt(k,patch){setIts(its.map(function(i){return i.key===k?Object.assign({},i,patch):i;}));}
   var _data=useState(todayStr());var data=_data[0],setData=_data[1];
   var _obs=useState('');var obs=_obs[0],setObs=_obs[1];
   var _err=useState('');var err=_err[0],setErr=_err[1];
@@ -7671,27 +7728,34 @@ function Emprestimos(props){
   var nosDevem=lista.filter(function(L){return L.tipo==='cedido'&&L.pendente>0;});
   var devemos=lista.filter(function(L){return L.tipo==='recebido'&&L.pendente>0;});
   var acertados=lista.filter(function(L){return L.pendente<=0;});
-  var disp=med&&tipo==='cedido'?_ubsDisp(entries,med.id):null;
   function base(){return {criadoEm:new Date().toISOString(),date:data||todayStr(),autorId:user.uid,autorNome:user.name||user.email,autorCargo:user.role||'',tenant_id:tenantDe(user)};}
   function novoId(){return 'em'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);}
   function registrar(sim){
     setErr('');setOk('');
     if(parceiro.trim().length<2){setErr(tipo==='cedido'?'Informe para quem emprestamos.':'Informe de quem recebemos emprestado.');return;}
-    if(!med){setErr('Escolha o medicamento.');return;}
-    var n=parseInt(qtd,10);if(!(n>=1)){setErr('Informe a quantidade.');return;}
-    var b=db.batch(),id=novoId();var resumo=(tipo==='cedido'?'Empréstimo a ':'Empréstimo recebido de ')+parceiro.trim()+(obs.trim()?' · '+obs.trim():'');
+    for(var i=0;i<its.length;i++){var it=its[i];
+      if(!it.med){setErr('Escolha o medicamento do item '+(i+1)+'.');return;}
+      if(!(parseInt(it.qtd,10)>=1)){setErr('Informe a quantidade do item '+(i+1)+'.');return;}
+      if(tipo==='recebido'&&!it.pend){var e=_validarLoteVal(it.lv);if(e){setErr('Item '+(i+1)+': '+e+' Ou marque "Lote e validade pendentes".');return;}}
+    }
+    var b=db.batch();var resumo=(tipo==='cedido'?'Empréstimo a ':'Empréstimo recebido de ')+parceiro.trim()+(obs.trim()?' · '+obs.trim():'');
     if(tipo==='cedido'){
-      if(n>disp.total){setErr('Quantidade maior que o disponível ('+disp.total+').');return;}
-      var pl=_ubsPlano(disp,n,'');if(pl.falta>0){setErr('Os lotes dentro da validade não cobrem essa quantidade.');return;}
-      if(!sim){confirm2('Emprestar','Emprestar '+n+'x '+med.nome+' a '+parceiro.trim()+'? Sai do estoque e fica como pendência até devolverem.',function(){registrar(true);},'warning','Emprestar');return;}
-      pl.partes.forEach(function(pt){b.set(db.collection('entries').doc(),Object.assign({},base(),{medicamentoId:med.id,medicamentoNome:med.nome,tipo:'saida',quantidade:pt.qty,lote:pt.lote,validade:pt.validade,destino:'emprestimo',destinoNome:'Empréstimo',entradaEspecial:'emprestimo',emprestimoId:id,emprestimoTipo:'cedido',parceiro:parceiro.trim(),observacao:resumo}));});
+      var pn=_planoSaidas(entries,its);if(pn.erro){setErr(pn.erro);return;}
+      if(!sim){confirm2('Emprestar','Emprestar a '+parceiro.trim()+':\n'+its.map(function(x){return '• '+x.qtd+'x '+x.med.nome;}).join('\n')+'\nSai do estoque e fica como pendência até devolverem.',function(){registrar(true);},'warning','Emprestar');return;}
+      its.forEach(function(it,ix){var id=novoId()+ix;var q=parseInt(it.qtd,10);
+        // cada item tem o seu empréstimo, para acertar separadamente; a parte de cada lote vem do plano somado
+        var partes=[],rest=q,pl=pn.planos[it.med.id];
+        for(var k=0;k<pl.length&&rest>0;k++){var t=Math.min(pl[k].qty,rest);if(t>0){partes.push({qty:t,lote:pl[k].lote,validade:pl[k].validade});pl[k]=Object.assign({},pl[k],{qty:pl[k].qty-t});rest-=t;}}
+        partes.forEach(function(pt){b.set(db.collection('entries').doc(),Object.assign({},base(),{medicamentoId:it.med.id,medicamentoNome:it.med.nome,tipo:'saida',quantidade:pt.qty,lote:pt.lote,validade:pt.validade,destino:'emprestimo',destinoNome:'Empréstimo',entradaEspecial:'emprestimo',emprestimoId:id,emprestimoTipo:'cedido',parceiro:parceiro.trim(),observacao:resumo}));});
+      });
     }else{
-      var lote='',validade='';
-      if(!pend){var e=_validarLoteVal(lv);if(e){setErr(e+' Ou marque "Lote e validade pendentes".');return;}lote=lv.sl?_loteSL(lv.validade):lv.lote.trim();validade=_normValidade(lv.validade);}
-      b.set(db.collection('entries').doc(),Object.assign({},base(),{medicamentoId:med.id,medicamentoNome:med.nome,tipo:'entrada',quantidade:n,lote:lote,validade:validade,lotePendente:!!pend,entradaEspecial:'emprestimo',emprestimoId:id,emprestimoTipo:'recebido',parceiro:parceiro.trim(),observacao:resumo+(pend?' · lote/validade PENDENTES':'')}));
+      its.forEach(function(it,ix){var id=novoId()+ix;var lote='',validade='';
+        if(!it.pend){lote=it.lv.sl?_loteSL(it.lv.validade):it.lv.lote.trim();validade=_normValidade(it.lv.validade);}
+        b.set(db.collection('entries').doc(),Object.assign({},base(),{medicamentoId:it.med.id,medicamentoNome:it.med.nome,tipo:'entrada',quantidade:parseInt(it.qtd,10),lote:lote,validade:validade,lotePendente:!!it.pend,entradaEspecial:'emprestimo',emprestimoId:id,emprestimoTipo:'recebido',parceiro:parceiro.trim(),observacao:resumo+(it.pend?' · lote/validade PENDENTES':'')}));
+      });
     }
     setBusy(true);
-    b.commit().then(function(){setBusy(false);setOk(tipo==='cedido'?'Empréstimo registrado. Ficou em "Nos devem" até devolverem.':'Empréstimo registrado. Ficou em "Devemos" até devolvermos.');setMed(null);setQtd('');setLv({lote:'',validade:'',sl:false});setPend(false);setParceiro('');setObs('');}).catch(function(e){setBusy(false);setErr('Não foi possível registrar: '+((e&&e.message)||'erro'));});
+    b.commit().then(function(){setBusy(false);setOk(tipo==='cedido'?'Empréstimo registrado. Ficou em "Nos devem" até devolverem.':'Empréstimo registrado. Ficou em "Devemos" até devolvermos.');setIts([_itemVazio()]);setParceiro('');setObs('');}).catch(function(e){setBusy(false);setErr('Não foi possível registrar: '+((e&&e.message)||'erro'));});
   }
   function devolver(L,sim){
     var n=parseInt(dev.qtd,10);
@@ -7756,17 +7820,19 @@ function Emprestimos(props){
       <div><div style={lbl}>Data</div><input className="inp" type="date" value={data} max={todayStr()} onChange={function(e){setData(e.target.value);}} style={{marginBottom:0}}/></div>
       <div><div style={lbl}>{tipo==='cedido'?'Emprestado a *':'Recebido de *'}</div><input className="inp" data-fc="emp-parceiro" value={parceiro} onChange={function(e){setParceiro(e.target.value);}} placeholder="Ex.: Hospital / outro município" style={{marginBottom:0}}/></div>
     </div>
-    <div style={card}>
-      <MedPickerSimples user={user} meds={meds} value={med} dataFc="emp-busca" onChange={function(m){setMed(m);}}/>
-      {med&&<div style={{marginTop:8}}>
+    {its.map(function(it,idx){var disp=it.med&&tipo==='cedido'?_ubsDisp(entries,it.med.id):null;return(<div key={it.key} style={card}>
+      <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}><div style={{fontSize:11,fontWeight:700,color:'#94A3B8'}}>Item {idx+1}</div>{its.length>1&&<button type="button" data-fc={_fcIdx('emp-remover',idx)} onClick={function(){setIts(its.filter(function(x){return x.key!==it.key;}));}} style={{border:'none',background:'none',color:'#C2362D',fontWeight:700,fontSize:12,cursor:'pointer'}}>Remover</button>}</div>
+      <MedPickerSimples user={user} meds={meds} value={it.med} dataFc={_fcIdx('emp-busca',idx)} onChange={function(m){setIt(it.key,{med:m});}}/>
+      {it.med&&<div style={{marginTop:8}}>
         {tipo==='cedido'&&<div style={{fontSize:12.5,color:'#475569',marginBottom:6}}>Disponível aqui: <b>{disp.total}</b></div>}
-        <div style={{width:130,marginBottom:8}}><div style={lbl}>Quantidade *</div><input className="inp" type="number" min="1" data-fc="emp-qtd" value={qtd} onChange={function(e){setQtd(e.target.value);}} style={{marginBottom:0}}/></div>
+        <div style={{width:130,marginBottom:8}}><div style={lbl}>Quantidade *</div><input className="inp" type="number" min="1" data-fc={_fcIdx('emp-qtd',idx)} value={it.qtd} onChange={function(e){setIt(it.key,{qtd:e.target.value});}} style={{marginBottom:0}}/></div>
         {tipo==='recebido'&&<div>
-          <label style={{display:'flex',alignItems:'center',gap:8,fontSize:13,marginBottom:8,cursor:'pointer'}}><input type="checkbox" data-fc="emp-pend" checked={pend} onChange={function(e){setPend(e.target.checked);}}/> Lote e validade <b>pendentes</b> (ainda não chegou / não sei)</label>
-          {!pend&&<LoteValidadeCampos dataFc="emp-ent" valor={lv} permiteSL obrigatorio onChange={setLv}/>}
+          <label style={{display:'flex',alignItems:'center',gap:8,fontSize:13,marginBottom:8,cursor:'pointer'}}><input type="checkbox" data-fc={_fcIdx('emp-pend',idx)} checked={it.pend} onChange={function(e){setIt(it.key,{pend:e.target.checked});}}/> Lote e validade <b>pendentes</b> (ainda não chegou / não sei)</label>
+          {!it.pend&&<LoteValidadeCampos dataFc={_fcIdx('emp-ent',idx)} valor={it.lv} permiteSL obrigatorio onChange={function(v){setIt(it.key,{lv:v});}}/>}
         </div>}
       </div>}
-    </div>
+    </div>);})}
+    <button type="button" data-fc="emp-outro" onClick={function(){setIts(its.concat([_itemVazio()]));}} style={{padding:'9px 14px',borderRadius:10,border:'1.5px dashed #94A3B8',background:'#fff',color:'#475569',fontWeight:700,cursor:'pointer',marginBottom:10}}>+ Outro medicamento</button>
     <input className="inp" placeholder="Observação (opcional)" value={obs} onChange={function(e){setObs(e.target.value);}}/>
     {err&&<div data-fc="ent-erro" className="er">{err}</div>}
     {ok&&<div data-fc="ent-ok" className="ok">{ok}</div>}
@@ -7830,46 +7896,60 @@ function EntradaEspecial(props){
   var _err=useState('');var err=_err[0],setErr=_err[1];
   var _ok=useState('');var ok=_ok[0],setOk=_ok[1];
   var _bu=useState(false);var busy=_bu[0],setBusy=_bu[1];
-  // doação
+  // doação (recebida ou feita)
+  var _sent=useState('recebida');var sentido=_sent[0],setSentido=_sent[1];
   var _itD=useState([{key:1,med:null,qtd:'',lv:{lote:'',validade:'',sl:false}}]);var itD=_itD[0],setItD=_itD[1];
-  // permuta
-  var _sai=useState({med:null,qtd:''});var sai=_sai[0],setSai=_sai[1];
-  var _ent=useState({med:null,qtd:'',lv:{lote:'',validade:'',sl:false},pend:false});var ent=_ent[0],setEnt=_ent[1];
+  // permuta: vários itens que saíram e vários que chegaram
+  var _sai=useState([_itemVazio()]);var saiL=_sai[0],setSaiL=_sai[1];
+  var _ent=useState([_itemVazio()]);var entL=_ent[0],setEntL=_ent[1];
+  function setSaiIt(k,pt){setSaiL(saiL.map(function(i){return i.key===k?Object.assign({},i,pt):i;}));}
+  function setEntIt(k,pt){setEntL(entL.map(function(i){return i.key===k?Object.assign({},i,pt):i;}));}
   var _edP=useState(null);var edP=_edP[0],setEdP=_edP[1]; // pendência em edição {id,lv}
   function base(){return {criadoEm:new Date().toISOString(),date:data||todayStr(),autorId:user.uid,autorNome:user.name||user.email,autorCargo:user.role||'',tenant_id:tenantDe(user)};}
   function setItem(k,patch){setItD(itD.map(function(i){return i.key===k?Object.assign({},i,patch):i;}));}
-  function salvarDoacao(){
+  function salvarDoacao(sim){
     setErr('');setOk('');
-    if(origem.trim().length<2){setErr('Informe quem doou (origem da doação).');return;}
+    var feita=sentido==='feita';
+    if(origem.trim().length<2){setErr(feita?'Informe para quem doamos.':'Informe quem doou (origem da doação).');return;}
     for(var i=0;i<itD.length;i++){var it=itD[i];
       if(!it.med){setErr('Escolha o medicamento do item '+(i+1)+'.');return;}
       if(!(parseInt(it.qtd,10)>=1)){setErr('Informe a quantidade do item '+(i+1)+'.');return;}
-      var e=_validarLoteVal(it.lv);if(e){setErr('Item '+(i+1)+': '+e);return;}
+      if(!feita){var e=_validarLoteVal(it.lv);if(e){setErr('Item '+(i+1)+': '+e);return;}}
     }
+    var pn=null;
+    if(feita){pn=_planoSaidas(entries,itD);if(pn.erro){setErr(pn.erro);return;}
+      if(!sim){confirm2('Registrar doação','Doar para '+origem.trim()+':\n'+itD.map(function(x){return '• '+x.qtd+'x '+x.med.nome;}).join('\n')+'\nSai do estoque.',function(){salvarDoacao(true);},'warning','Registrar');return;}}
     setBusy(true);var b=db.batch();
     itD.forEach(function(it){
-      var lote=it.lv.sl?_loteSL(it.lv.validade):it.lv.lote.trim();
-      b.set(db.collection('entries').doc(),Object.assign({},base(),{medicamentoId:it.med.id,medicamentoNome:it.med.nome,tipo:'entrada',quantidade:parseInt(it.qtd,10),lote:lote,validade:_normValidade(it.lv.validade),entradaEspecial:'doacao',doador:origem.trim(),observacao:'Doação — '+origem.trim()+(obs.trim()?' · '+obs.trim():'')}));
+      if(feita){
+        var q=parseInt(it.qtd,10),pl=pn.planos[it.med.id],rest=q;
+        for(var k=0;k<pl.length&&rest>0;k++){var t=Math.min(pl[k].qty,rest);if(t>0){pl[k]=Object.assign({},pl[k],{qty:pl[k].qty-t});rest-=t;
+          b.set(db.collection('entries').doc(),Object.assign({},base(),{medicamentoId:it.med.id,medicamentoNome:it.med.nome,tipo:'saida',quantidade:t,lote:pl[k].lote,validade:pl[k].validade,destino:'doacao',destinoNome:'Doação',entradaEspecial:'doacao',doacaoFeita:true,parceiro:origem.trim(),observacao:'Doação feita a '+origem.trim()+(obs.trim()?' · '+obs.trim():'')}));}}
+      }else{
+        var lote=it.lv.sl?_loteSL(it.lv.validade):it.lv.lote.trim();
+        b.set(db.collection('entries').doc(),Object.assign({},base(),{medicamentoId:it.med.id,medicamentoNome:it.med.nome,tipo:'entrada',quantidade:parseInt(it.qtd,10),lote:lote,validade:_normValidade(it.lv.validade),entradaEspecial:'doacao',doador:origem.trim(),observacao:'Doação — '+origem.trim()+(obs.trim()?' · '+obs.trim():'')}));
+      }
     });
-    b.commit().then(function(){setBusy(false);setOk('Doação registrada: '+itD.length+' item(ns) entraram no estoque.');setItD([{key:Date.now(),med:null,qtd:'',lv:{lote:'',validade:'',sl:false}}]);setOrigem('');setObs('');}).catch(function(e){setBusy(false);setErr('Não foi possível registrar: '+((e&&e.message)||'erro'));});
+    b.commit().then(function(){setBusy(false);setOk(feita?'Doação registrada: '+itD.length+' item(ns) saíram do estoque.':'Doação registrada: '+itD.length+' item(ns) entraram no estoque.');setItD([{key:Date.now(),med:null,qtd:'',lv:{lote:'',validade:'',sl:false}}]);setOrigem('');setObs('');}).catch(function(e){setBusy(false);setErr('Não foi possível registrar: '+((e&&e.message)||'erro'));});
   }
-  var disp=sai.med?_ubsDisp(entries,sai.med.id):null;
   function salvarPermuta(sim){
     setErr('');setOk('');
     if(origem.trim().length<2){setErr('Informe com quem foi a permuta.');return;}
-    if(!sai.med||!(parseInt(sai.qtd,10)>=1)){setErr('Escolha o item que saiu e a quantidade.');return;}
-    var nq=parseInt(sai.qtd,10);
-    if(nq>disp.total){setErr('Quantidade que saiu maior que o disponível ('+disp.total+').');return;}
-    var pl=_ubsPlano(disp,nq,'');if(pl.falta>0){setErr('Os lotes dentro da validade não cobrem a quantidade que saiu.');return;}
-    if(!ent.med||!(parseInt(ent.qtd,10)>=1)){setErr('Escolha o item que chegou e a quantidade.');return;}
-    var lote='',validade='';
-    if(!ent.pend){var e=_validarLoteVal(ent.lv);if(e){setErr('Item que chegou: '+e+' Ou marque "Lote e validade pendentes".');return;}lote=ent.lv.sl?_loteSL(ent.lv.validade):ent.lv.lote.trim();validade=_normValidade(ent.lv.validade);}
-    if(!sim){confirm2('Registrar permuta','Registrar a permuta? Sai '+nq+'x '+sai.med.nome+' e entra '+ent.qtd+'x '+ent.med.nome+'.',function(){salvarPermuta(true);},'warning','Registrar');return;}
+    for(var i=0;i<saiL.length;i++){if(!saiL[i].med||!(parseInt(saiL[i].qtd,10)>=1)){setErr('Escolha o item que saiu e a quantidade (item '+(i+1)+').');return;}}
+    var pn=_planoSaidas(entries,saiL);if(pn.erro){setErr('Item que saiu — '+pn.erro);return;}
+    for(var j=0;j<entL.length;j++){var x=entL[j];
+      if(!x.med||!(parseInt(x.qtd,10)>=1)){setErr('Escolha o item que chegou e a quantidade (item '+(j+1)+').');return;}
+      if(!x.pend){var e=_validarLoteVal(x.lv);if(e){setErr('Item que chegou '+(j+1)+': '+e+' Ou marque "Lote e validade pendentes".');return;}}}
+    if(!sim){confirm2('Registrar permuta','Registrar a permuta?\nSai:\n'+saiL.map(function(s){return '• '+s.qtd+'x '+s.med.nome;}).join('\n')+'\nEntra:\n'+entL.map(function(s){return '• '+s.qtd+'x '+s.med.nome;}).join('\n'),function(){salvarPermuta(true);},'warning','Registrar');return;}
     setBusy(true);var pid='pm'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);var b=db.batch();
-    var resumo='Permuta com '+origem.trim()+': sai '+nq+'x '+sai.med.nome+' / entra '+parseInt(ent.qtd,10)+'x '+ent.med.nome;
-    pl.partes.forEach(function(pt){b.set(db.collection('entries').doc(),Object.assign({},base(),{medicamentoId:sai.med.id,medicamentoNome:sai.med.nome,tipo:'saida',quantidade:pt.qty,lote:pt.lote,validade:pt.validade,destino:'permuta',destinoNome:'Permuta',entradaEspecial:'permuta',permutaId:pid,parceiro:origem.trim(),observacao:resumo+(obs.trim()?' · '+obs.trim():'')}));});
-    b.set(db.collection('entries').doc(),Object.assign({},base(),{medicamentoId:ent.med.id,medicamentoNome:ent.med.nome,tipo:'entrada',quantidade:parseInt(ent.qtd,10),lote:lote,validade:validade,lotePendente:!!ent.pend,entradaEspecial:'permuta',permutaId:pid,parceiro:origem.trim(),observacao:resumo+(ent.pend?' · lote/validade PENDENTES':'')+(obs.trim()?' · '+obs.trim():'')}));
-    b.commit().then(function(){setBusy(false);setOk('Permuta registrada.'+(ent.pend?' Lembre de informar lote e validade quando chegarem (lista abaixo).':''));setSai({med:null,qtd:''});setEnt({med:null,qtd:'',lv:{lote:'',validade:'',sl:false},pend:false});setOrigem('');setObs('');}).catch(function(e){setBusy(false);setErr('Não foi possível registrar: '+((e&&e.message)||'erro'));});
+    var resumo='Permuta com '+origem.trim()+': sai '+saiL.map(function(s){return parseInt(s.qtd,10)+'x '+s.med.nome;}).join(', ')+' / entra '+entL.map(function(s){return parseInt(s.qtd,10)+'x '+s.med.nome;}).join(', ');
+    saiL.forEach(function(s){var rest=parseInt(s.qtd,10),pl=pn.planos[s.med.id];
+      for(var k=0;k<pl.length&&rest>0;k++){var t=Math.min(pl[k].qty,rest);if(t>0){pl[k]=Object.assign({},pl[k],{qty:pl[k].qty-t});rest-=t;
+        b.set(db.collection('entries').doc(),Object.assign({},base(),{medicamentoId:s.med.id,medicamentoNome:s.med.nome,tipo:'saida',quantidade:t,lote:pl[k].lote,validade:pl[k].validade,destino:'permuta',destinoNome:'Permuta',entradaEspecial:'permuta',permutaId:pid,parceiro:origem.trim(),observacao:resumo+(obs.trim()?' · '+obs.trim():'')}));}}});
+    var algumaPend=false;
+    entL.forEach(function(x){var lote='',validade='';if(!x.pend){lote=x.lv.sl?_loteSL(x.lv.validade):x.lv.lote.trim();validade=_normValidade(x.lv.validade);}else algumaPend=true;
+      b.set(db.collection('entries').doc(),Object.assign({},base(),{medicamentoId:x.med.id,medicamentoNome:x.med.nome,tipo:'entrada',quantidade:parseInt(x.qtd,10),lote:lote,validade:validade,lotePendente:!!x.pend,entradaEspecial:'permuta',permutaId:pid,parceiro:origem.trim(),observacao:resumo+(x.pend?' · lote/validade PENDENTES':'')+(obs.trim()?' · '+obs.trim():'')}));});
+    b.commit().then(function(){setBusy(false);setOk('Permuta registrada.'+(algumaPend?' Lembre de informar lote e validade quando chegarem (lista abaixo).':''));setSaiL([_itemVazio()]);setEntL([_itemVazio()]);setOrigem('');setObs('');}).catch(function(e){setBusy(false);setErr('Não foi possível registrar: '+((e&&e.message)||'erro'));});
   }
   function salvarPendencia(){
     var lv=edP.lv;var e=_validarLoteVal(lv);if(e){alert(e);return;}
@@ -7892,36 +7972,43 @@ function EntradaEspecial(props){
     </div>}
     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
       <div><div style={lbl}>Data</div><input className="inp" type="date" value={data} max={todayStr()} onChange={function(e){setData(e.target.value);}} style={{marginBottom:0}}/></div>
-      <div><div style={lbl}>{modo==='doacao'?'Quem doou *':'Permuta com *'}</div><input className="inp" data-fc="origem" value={origem} onChange={function(e){setOrigem(e.target.value);}} placeholder={modo==='doacao'?'Ex.: Secretaria de Saúde de ...':'Ex.: Hospital / outro município'} style={{marginBottom:0}}/></div>
+      <div><div style={lbl}>{modo==='doacao'?(sentido==='feita'?'Doado para *':'Quem doou *'):'Permuta com *'}</div><input className="inp" data-fc="origem" value={origem} onChange={function(e){setOrigem(e.target.value);}} placeholder={modo==='doacao'?(sentido==='feita'?'Ex.: Hospital / outro município':'Ex.: Secretaria de Saúde de ...'):'Ex.: Hospital / outro município'} style={{marginBottom:0}}/></div>
     </div>
     {modo==='doacao'&&<div>
-      {itD.map(function(it,idx){return(<div key={it.key} style={card}>
+      <div style={{display:'flex',gap:8,marginBottom:10}}>
+        {[['recebida','📥 Recebemos doação'],['feita','📤 Doamos']].map(function(o){return <button key={o[0]} type="button" data-fc={'doa-sentido-'+o[0]} onClick={function(){setSentido(o[0]);setErr('');setOk('');}} style={{flex:1,padding:'10px',borderRadius:10,border:'1.5px solid '+(sentido===o[0]?'#1351B4':'#E2E8F0'),background:sentido===o[0]?'#EFF6FF':'#fff',color:sentido===o[0]?'#1351B4':'#64748B',fontWeight:700,cursor:'pointer'}}>{o[1]}</button>;})}
+      </div>
+      <div style={{fontSize:12,color:'#64748B',marginBottom:10}}>{sentido==='feita'?'O produto sai do estoque agora, pelos lotes que vencem primeiro.':'O produto entra no estoque agora, com lote e validade.'}</div>
+      {itD.map(function(it,idx){var dispD=sentido==='feita'&&it.med?_ubsDisp(entries,it.med.id):null;return(<div key={it.key} style={card}>
         <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}><div style={{fontSize:11,fontWeight:700,color:'#94A3B8'}}>Item {idx+1}</div>{itD.length>1&&<button type="button" onClick={function(){setItD(itD.filter(function(x){return x.key!==it.key;}));}} style={{border:'none',background:'none',color:'#C2362D',fontWeight:700,fontSize:12,cursor:'pointer'}}>Remover</button>}</div>
         <MedPickerSimples user={user} meds={meds} value={it.med} dataFc={'doa-busca-'+idx} onChange={function(m){setItem(it.key,{med:m});}}/>
+        {dispD&&<div style={{fontSize:12.5,color:'#475569',marginTop:6}}>Disponível aqui: <b>{dispD.total}</b></div>}
         <div style={{display:'flex',gap:8,margin:'8px 0'}}><div style={{width:110}}><div style={lbl}>Quantidade *</div><input className="inp" type="number" min="1" data-fc={'doa-qtd-'+idx} value={it.qtd} onChange={function(e){setItem(it.key,{qtd:e.target.value});}} style={{marginBottom:0}}/></div></div>
-        <LoteValidadeCampos dataFc={'doa-'+idx} valor={it.lv} permiteSL obrigatorio onChange={function(v){setItem(it.key,{lv:v});}}/>
+        {sentido!=='feita'&&<LoteValidadeCampos dataFc={'doa-'+idx} valor={it.lv} permiteSL obrigatorio onChange={function(v){setItem(it.key,{lv:v});}}/>}
       </div>);})}
       <button type="button" onClick={function(){setItD(itD.concat([{key:Date.now(),med:null,qtd:'',lv:{lote:'',validade:'',sl:false}}]));}} style={{padding:'9px 14px',borderRadius:10,border:'1.5px dashed #94A3B8',background:'#fff',color:'#475569',fontWeight:700,cursor:'pointer',marginBottom:10}}>+ Outro item</button>
     </div>}
     {modo==='permuta'&&<div>
-      <div style={card}><div style={{fontWeight:800,fontSize:13,color:'#B91C1C',marginBottom:6}}>Item que SAIU</div>
-        <MedPickerSimples user={user} meds={meds} value={sai.med} dataFc="perm-sai-busca" onChange={function(m){setSai(Object.assign({},sai,{med:m}));}}/>
-        {sai.med&&<div style={{marginTop:8}}><div style={{fontSize:12.5,color:'#475569',marginBottom:6}}>Disponível aqui: <b>{disp.total}</b></div><div style={{width:130}}><div style={lbl}>Quantidade *</div><input className="inp" type="number" min="1" data-fc="perm-sai-qtd" value={sai.qtd} onChange={function(e){setSai(Object.assign({},sai,{qtd:e.target.value}));}} style={{marginBottom:0}}/></div></div>}
-      </div>
-      <div style={card}><div style={{fontWeight:800,fontSize:13,color:'#0B7A5F',marginBottom:6}}>Item que CHEGOU em troca</div>
-        <MedPickerSimples user={user} meds={meds} value={ent.med} dataFc="perm-ent-busca" onChange={function(m){setEnt(Object.assign({},ent,{med:m}));}}/>
-        {ent.med&&<div style={{marginTop:8}}>
-          <div style={{width:130,marginBottom:8}}><div style={lbl}>Quantidade *</div><input className="inp" type="number" min="1" data-fc="perm-ent-qtd" value={ent.qtd} onChange={function(e){setEnt(Object.assign({},ent,{qtd:e.target.value}));}} style={{marginBottom:0}}/></div>
-          <label style={{display:'flex',alignItems:'center',gap:8,fontSize:13,marginBottom:8,cursor:'pointer'}}><input type="checkbox" data-fc="perm-pend" checked={ent.pend} onChange={function(e){setEnt(Object.assign({},ent,{pend:e.target.checked}));}}/> Lote e validade <b>pendentes</b> (ainda não chegou / não sei)</label>
-          {!ent.pend&&<LoteValidadeCampos dataFc="perm-ent" valor={ent.lv} permiteSL obrigatorio onChange={function(v){setEnt(Object.assign({},ent,{lv:v}));}}/>}
-          {ent.pend&&<div style={{fontSize:12,color:'#92400E'}}>O estoque muda agora. Depois você informa lote e validade na lista de pendências.</div>}
+      {saiL.map(function(s,idx){var d=s.med?_ubsDisp(entries,s.med.id):null;return(<div key={s.key} style={card}><div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}><div style={{fontWeight:800,fontSize:13,color:'#B91C1C'}}>Item que SAIU{saiL.length>1?' '+(idx+1):''}</div>{saiL.length>1&&<button type="button" data-fc={_fcIdx('perm-sai-remover',idx)} onClick={function(){setSaiL(saiL.filter(function(x){return x.key!==s.key;}));}} style={{border:'none',background:'none',color:'#C2362D',fontWeight:700,fontSize:12,cursor:'pointer'}}>Remover</button>}</div>
+        <MedPickerSimples user={user} meds={meds} value={s.med} dataFc={_fcIdx('perm-sai-busca',idx)} onChange={function(m){setSaiIt(s.key,{med:m});}}/>
+        {s.med&&<div style={{marginTop:8}}><div style={{fontSize:12.5,color:'#475569',marginBottom:6}}>Disponível aqui: <b>{d.total}</b></div><div style={{width:130}}><div style={lbl}>Quantidade *</div><input className="inp" type="number" min="1" data-fc={_fcIdx('perm-sai-qtd',idx)} value={s.qtd} onChange={function(e){setSaiIt(s.key,{qtd:e.target.value});}} style={{marginBottom:0}}/></div></div>}
+      </div>);})}
+      <button type="button" data-fc="perm-sai-outro" onClick={function(){setSaiL(saiL.concat([_itemVazio()]));}} style={{padding:'9px 14px',borderRadius:10,border:'1.5px dashed #94A3B8',background:'#fff',color:'#475569',fontWeight:700,cursor:'pointer',marginBottom:10}}>+ Outro item que saiu</button>
+      {entL.map(function(x,idx){return(<div key={x.key} style={card}><div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}><div style={{fontWeight:800,fontSize:13,color:'#0B7A5F'}}>Item que CHEGOU em troca{entL.length>1?' '+(idx+1):''}</div>{entL.length>1&&<button type="button" data-fc={_fcIdx('perm-ent-remover',idx)} onClick={function(){setEntL(entL.filter(function(y){return y.key!==x.key;}));}} style={{border:'none',background:'none',color:'#C2362D',fontWeight:700,fontSize:12,cursor:'pointer'}}>Remover</button>}</div>
+        <MedPickerSimples user={user} meds={meds} value={x.med} dataFc={_fcIdx('perm-ent-busca',idx)} onChange={function(m){setEntIt(x.key,{med:m});}}/>
+        {x.med&&<div style={{marginTop:8}}>
+          <div style={{width:130,marginBottom:8}}><div style={lbl}>Quantidade *</div><input className="inp" type="number" min="1" data-fc={_fcIdx('perm-ent-qtd',idx)} value={x.qtd} onChange={function(e){setEntIt(x.key,{qtd:e.target.value});}} style={{marginBottom:0}}/></div>
+          <label style={{display:'flex',alignItems:'center',gap:8,fontSize:13,marginBottom:8,cursor:'pointer'}}><input type="checkbox" data-fc={_fcIdx('perm-pend',idx)} checked={x.pend} onChange={function(e){setEntIt(x.key,{pend:e.target.checked});}}/> Lote e validade <b>pendentes</b> (ainda não chegou / não sei)</label>
+          {!x.pend&&<LoteValidadeCampos dataFc={_fcIdx('perm-ent',idx)} valor={x.lv} permiteSL obrigatorio onChange={function(v){setEntIt(x.key,{lv:v});}}/>}
+          {x.pend&&<div style={{fontSize:12,color:'#92400E'}}>O estoque muda agora. Depois você informa lote e validade na lista de pendências.</div>}
         </div>}
-      </div>
+      </div>);})}
+      <button type="button" data-fc="perm-ent-outro" onClick={function(){setEntL(entL.concat([_itemVazio()]));}} style={{padding:'9px 14px',borderRadius:10,border:'1.5px dashed #94A3B8',background:'#fff',color:'#475569',fontWeight:700,cursor:'pointer',marginBottom:10}}>+ Outro item que chegou</button>
     </div>}
     <input className="inp" placeholder="Observação (opcional)" value={obs} onChange={function(e){setObs(e.target.value);}}/>
     {err&&<div data-fc="ent-erro" className="er">{err}</div>}
     {ok&&<div data-fc="ent-ok" className="ok">{ok}</div>}
-    <button type="button" data-fc="ent-salvar" disabled={busy} onClick={modo==='doacao'?salvarDoacao:function(){salvarPermuta();}} style={{width:'100%',padding:'13px',borderRadius:10,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,cursor:'pointer'}}>{busy?'Salvando…':(modo==='doacao'?'Registrar doação':'Registrar permuta')}</button>
+    <button type="button" data-fc="ent-salvar" disabled={busy} onClick={modo==='doacao'?function(){salvarDoacao();}:function(){salvarPermuta();}} style={{width:'100%',padding:'13px',borderRadius:10,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,cursor:'pointer'}}>{busy?'Salvando…':(modo==='doacao'?'Registrar doação':'Registrar permuta')}</button>
     {lista.length>0&&<div style={{marginTop:16}}><div style={{fontWeight:800,fontSize:13,marginBottom:6}}>Últimas permutas, doações e empréstimos</div>
       {lista.slice(0,15).map(function(e){return <div key={e.id} style={{display:'flex',gap:8,fontSize:12.5,padding:'6px 0',borderTop:'1px solid #F1F5F9'}}><span style={{width:62,fontWeight:700,color:e.entradaEspecial==='doacao'?'#0B7A5F':'#7C3AED'}}>{e.entradaEspecial==='doacao'?'Doação':e.entradaEspecial==='emprestimo'?'Empréstimo':'Permuta'}</span><span style={{flex:1}}>{e.tipo==='saida'?'Saiu ':'Entrou '}{e.quantidade}x {e.medicamentoNome}{e.lote?' · '+e.lote:''}{e.lotePendente?' · PENDENTE':''}</span><span style={{color:'#94A3B8'}}>{fmtD(e.criadoEm)}</span></div>;})}</div>}
   </div>);
@@ -8325,11 +8412,11 @@ function TabAjuda(props){
     return u;
   },[user&&user.uid]);
   var nq=_semAcento(q.trim());
-  var topicos=HELP_TOPICS.filter(function(t){
+  var topicos=HELP_TOPICS.filter(function(t){return !t.req||t.req(user);}).map(function(t){return _ajudaAjustar(t,user);}).filter(function(t){
     if(!nq)return true;
     return _semAcento([t.titulo,t.resumo].concat(t.passos,t.dicas).join(' ')).indexOf(nq)>=0;
   });
-  var faq=HELP_FAQ.filter(function(f){return !nq||_semAcento(f.q+' '+f.a).indexOf(nq)>=0;});
+  var faq=HELP_FAQ.filter(function(f){return (!f.req||f.req(user))&&(!nq||_semAcento(f.q+' '+f.a).indexOf(nq)>=0);});
   var zapUrl='https://wa.me/'+FC_SUPORTE.whats+'?text='+encodeURIComponent('Olá! Preciso de ajuda no FarmaControl.');
   function quando(iso){if(!iso)return '';var d=new Date(iso);if(isNaN(d))return '';return d.toLocaleDateString('pt-BR')+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}
   var card={background:'#fff',borderRadius:14,border:'1px solid #E2E8F0',padding:'14px 16px'};
