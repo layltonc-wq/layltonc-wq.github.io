@@ -7017,6 +7017,24 @@ var HELP_TOPICS=[
   {id:'previsao',tab:'previsao',titulo:'Previsão e pedido por ata',resumo:'Calcula quanto pedir de cada medicamento pelo consumo real e monta o pedido.',
     passos:['Escolha o período e veja a sugestão de pedido por medicamento.','Ajuste a quantidade onde precisar. O valor total é calculado pela ata.','Preencha os dados do pedido oficial e gere o PDF ou o Excel.','Ao "Fechar Pedido", o saldo das atas é descontado.','Em "Gerenciar Atas", importe a ata (Word ou Excel) e confira marca, fornecedor e CNPJ.'],
     dicas:['Pedido e atas são para gestor e técnico.']},
+  {id:'transferencia',tab:'transferencia',titulo:'CAF, Satélite, transferência e solicitação',req:function(u){return temLocais(u);},resumo:'Dois estoques separados, transferência entre eles e os pedidos do Satélite à CAF.',
+    passos:['Quem tem acesso aos dois locais escolhe CAF ou Satélite no topo da tela. Cada local tem o seu próprio estoque, e tudo o que você registrar vale para o local escolhido.','Na CAF, abra "Transferência CAF ⇄ Satélite": escolha o produto e a quantidade e envie. O estoque sai de um local e entra no outro, com o mesmo lote e validade.','No Satélite, a aba "Solicitação" tem "Pedir à CAF" (para pedir reposição) e "Devolver à CAF" (para devolver o que não vai usar).','Na CAF, os pedidos do Satélite aparecem em "Pedidos do Satélite": confira, informe o que será enviado e conclua.'],
+    dicas:['Conta só de consulta vê o estoque, mas não movimenta.','O histórico de cada transferência e de cada pedido fica logo abaixo.','No Satélite, toda saída é registrada como Emergência.']},
+  {id:'permuta',tab:'recebimento',titulo:'Permuta, Doação e Empréstimos',resumo:'Entradas e saídas que não são compra: troca com outro serviço, doação recebida e medicamento emprestado.',
+    passos:['Em Recebimento, escolha Permuta, Doação ou Empréstimos.','Permuta: informe com quem foi, o item que saiu (sai pelo lote que vence primeiro) e o que chegou em troca. Se lote e validade ainda não chegaram, marque "pendentes" e informe depois.','Doação: informe quem doou e, para cada item, a quantidade, o lote e a validade. Produto sem lote? Toque em SL.','Empréstimos: escolha "Emprestamos" (o produto sai e fica em "Nos devem") ou "Recebemos emprestado" (entra e fica em "Devemos").','Quando devolverem, ou quando devolvermos, toque em "Receber de volta" ou "Devolver". Dá para acertar em partes; ao zerar, vira "Acertado".','Se o medicamento não estiver cadastrado, toque em "+ Cadastrar … como novo medicamento" na busca.'],
+    dicas:['Permuta, doação e empréstimo não contam como consumo nos relatórios.','O que ainda não foi acertado fica à vista em "Nos devem" e "Devemos".']},
+  {id:'ubs',tab:'ubs',titulo:'Solicitações das UBS',req:function(u){return temModulo(u,'ubsSolicitacoes')&&!somenteLeitura(u)&&['gestor','tecnico','farmaceutico','auxiliar'].indexOf(u.role)>=0;},resumo:'Pedidos de materiais feitos pelas enfermeiras por um link único, com análise, separação e baixa no estoque.',
+    passos:['Envie às enfermeiras o link único das UBS (ele aparece na própria tela).','A enfermeira escolhe a UBS e o período, marca os materiais e envia. Cada UBS faz um envio por período, e cada pedido recebe um protocolo.','Abra o pedido, analise, ajuste a quantidade aprovada de cada item e separe.','Ao separar, o estoque baixa sozinho pelo lote que vence primeiro.','Use os relatórios para acompanhar e a aba Limpeza para apagar testes.'],
+    dicas:['Quem separa vê só o que foi aprovado.','Os pedidos antigos ficam guardados para consulta.']},
+  {id:'ubsmed',tab:'ubsmed',titulo:'UBS: validades',req:function(u){return temModulo(u,'destinos')&&!somenteLeitura(u);},resumo:'Mostra a validade dos medicamentos em cada UBS, para recolher o que vai vencer.',
+    passos:['Veja os cartões por faixa: vencidos, até 30, 60 e 90 dias. Filtre por UBS e por categoria.','Ao enviar para uma UBS um lote que vence em até 90 dias, a Saída avisa antes de confirmar.','As enfermeiras informam as validades pelo link de conferência, com um código de acesso definido nesta tela.','Exporte a lista em PDF ou Excel.'],
+    dicas:['Só gestor e técnico ativam ou desativam o link das enfermeiras.']},
+  {id:'pedidos',tab:'previsao',titulo:'Pedidos por ata e Conferir pedidos',req:function(u){return temModulo(u,'pedidoLista')&&(['gestor','tecnico'].indexOf(u.role)>=0||(u.role==='farmaceutico'&&temLocais(u)));},resumo:'Monta o pedido de várias atas de uma vez e confere o que chegou, com valores e a nota fiscal.',
+    passos:['Em Previsão/Pedido, abra "Pedidos". As atas aparecem por categoria: abra a ata e digite a quantidade de cada item (o valor unitário vem da ata e não pode ser mudado).','Use a lupa para achar itens dentro de uma ata ou em todas.','Toque em "Finalizar pedido" para ver só as atas e os itens escolhidos. "Ver todos os itens da ata" deixa acrescentar mais.','Use "PDF" para a Ordem de Fornecimento. "Fechar pedido" (ou "Fechar todos") desconta do saldo das atas.','Quando a mercadoria chegar, abra "Conferir pedidos": digite o que chegou de cada item e veja os valores e os totais.','Se tiver a nota fiscal, toque em "Importar nota (XML ou PDF)": o sistema compara quantidade e preço da nota com o pedido, com a ata e com o que chegou.','Chegou um item que não estava no pedido? Adicione em "extras" (a busca é na própria ata). O que não chegar e for encerrado volta para o saldo da ata.'],
+    dicas:['Entrega parcial: registre cada chegada e só encerre quando não vier mais nada.','Errou um pedido fechado? "Desfazer pedido" em Gerenciar Atas devolve o saldo.','O XML da nota é mais exato que o PDF.']},
+  {id:'medicos',tab:'medicos',titulo:'Médicos (CRM)',req:function(u){return !somenteLeitura(u);},resumo:'Cadastro simples de nome e CRM, só da sua prefeitura, para preencher mais rápido.',
+    passos:['No menu, abra "Médicos (CRM)" e cadastre o nome e o CRM.','Onde o app pede médico e CRM (ATB e saídas de controlados), digite o CRM completo ou o nome completo e o outro campo se completa sozinho. Com só o começo, toque na sugestão.','Para corrigir um cadastro, toque em Editar.'],
+    dicas:['O mesmo CRM não pode ser cadastrado duas vezes.','Só gestor e técnico removem médicos.']},
   {id:'relatorio',tab:'relatorio',titulo:'Relatórios',resumo:'Movimentações, resumos e saídas do dia, em PDF e Excel.',
     passos:['Escolha o período e o tipo (entradas, saídas ou todos).','Filtre por destino, categoria, responsável ou medicamento.','Veja o Resumo e as "Saídas do Dia". Exporte em PDF ou Excel.'],dicas:['Em "Saídas do Dia", o app mostra a última vez que o relatório foi puxado.']},
   {id:'saidasreg',tab:'saidasreg',titulo:'Saídas registradas',resumo:'Corrige o destino de várias saídas de uma vez.',
@@ -7029,8 +7047,36 @@ var HELP_FAQ=[
   {q:'Meu cadastro ainda não entrou.',a:'O gestor da sua farmácia precisa aprovar a conta. Peça a ele para abrir Gestão e aprovar o seu nome.'},
   {q:'O estoque não bate com o que tem na prateleira.',a:'Peça uma Conferência da categoria: a contagem física corrige o saldo e o lote.'},
   {q:'Registrei uma saída com o destino errado.',a:'Abra "Saídas registradas", marque a saída e troque o destino.'},
+  {q:'Quero escolher o lote da saída.',a:'Na Saída, depois de escolher o medicamento, toque em "Escolher o lote (opcional)" e toque no lote desejado. Sem escolher, sai o lote que vence primeiro.'},
+  {q:'Como cadastro um médico?',a:'No menu, abra "Médicos (CRM)", informe nome e CRM e toque em Cadastrar. Depois, nos formulários, é só digitar o CRM ou o começo do nome.'},
+  {q:'O medicamento da permuta, doação ou empréstimo não está cadastrado.',a:'Na busca do medicamento, toque em "+ Cadastrar … como novo medicamento", confirme o nome e a categoria e já pode usar.'},
+  {q:'Emprestei um medicamento. Como acompanho a devolução?',a:'Em Recebimento, abra Empréstimos: ele fica em "Nos devem" até você tocar em "Receber de volta". Se foi emprestado para nós, fica em "Devemos" até devolvermos.'},
+  {q:'Como peço produtos do Satélite à CAF?',req:function(u){return temLocais(u);},a:'No Satélite, abra "Solicitação" e toque em "Pedir à CAF". A CAF analisa e envia, e você acompanha em "Meus pedidos".'},
+  {q:'A mercadoria chegou diferente do pedido.',req:function(u){return temModulo(u,'pedidoLista');},a:'Em Previsão/Pedido, abra "Conferir pedidos", digite o que chegou e, se tiver a nota, importe o XML ou PDF para o sistema comparar. O que não chegar volta ao saldo da ata ao encerrar.'},
   {q:'A tela travou ou apareceu uma mensagem de erro.',a:'Feche e abra o app. Se continuar, use "Reportar um problema" aqui na Ajuda. O app também avisa o suporte dos erros automaticamente.'}
 ];
+// Ajusta o texto de alguns tópicos conforme a prefeitura (sem plantão em Itaquitinga, locais, pedidos por lista...).
+function _ajudaAjustar(t,u){
+  var c=Object.assign({},t,{passos:t.passos.slice(),dicas:t.dicas.slice()});
+  if(t.id==='inicio'){
+    if(!temPlantao(u)){c.passos=c.passos.filter(function(x){return x.indexOf('Plantão')<0;});c.dicas=c.dicas.filter(function(x){return x.indexOf('plantão')<0;});c.resumo='Visão do dia: saídas, entradas, vencimentos e estoque baixo.';}
+    c.passos.splice(c.passos.length>2?2:c.passos.length,0,'Toque em um quadrado (Saídas, Entradas, Vencimento ou Estoque baixo) para abrir direto a tela relacionada.');
+  }
+  if(t.id==='saida'){
+    c.passos.splice(3,0,'Se quiser escolher o lote (por exemplo, um mais antigo), toque em "Escolher o lote (opcional)" e escolha na lista. Se a quantidade passar do saldo desse lote, o resto sai dos próximos que vencem primeiro.');
+    if(temLocais(u))c.dicas.push('No Satélite, toda saída é registrada como Emergência.');
+  }
+  if(t.id==='recebimento')c.dicas.push('Em Recebimento também ficam Permuta, Doação e Empréstimos (veja o tópico "Permuta, Doação e Empréstimos").');
+  if(t.id==='atb'){
+    c.dicas.push('Em médico e CRM, digite o CRM completo ou o nome: se o médico já estiver em "Médicos (CRM)", o campo se completa.');
+    if(temLocais(u))c.dicas.push('Em Itaquitinga, o ATB fica disponível no Satélite.');
+  }
+  if(t.id==='previsao'){
+    if(temModulo(u,'pedidoLista'))c.passos.unshift('Em Itaquitinga o pedido é montado na aba "Pedidos", dentro desta tela (veja o tópico "Pedidos por ata e Conferir pedidos").');
+    if(temLocais(u))c.dicas=c.dicas.map(function(d){return d==='Pedido e atas são para gestor e técnico.'?'Pedido e atas são para gestor, técnico e farmacêutica.':d;});
+  }
+  return c;
+}
 function _semAcento(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');}
 
 function ReportarProblemaModal(props){
@@ -8325,11 +8371,11 @@ function TabAjuda(props){
     return u;
   },[user&&user.uid]);
   var nq=_semAcento(q.trim());
-  var topicos=HELP_TOPICS.filter(function(t){
+  var topicos=HELP_TOPICS.filter(function(t){return !t.req||t.req(user);}).map(function(t){return _ajudaAjustar(t,user);}).filter(function(t){
     if(!nq)return true;
     return _semAcento([t.titulo,t.resumo].concat(t.passos,t.dicas).join(' ')).indexOf(nq)>=0;
   });
-  var faq=HELP_FAQ.filter(function(f){return !nq||_semAcento(f.q+' '+f.a).indexOf(nq)>=0;});
+  var faq=HELP_FAQ.filter(function(f){return (!f.req||f.req(user))&&(!nq||_semAcento(f.q+' '+f.a).indexOf(nq)>=0);});
   var zapUrl='https://wa.me/'+FC_SUPORTE.whats+'?text='+encodeURIComponent('Olá! Preciso de ajuda no FarmaControl.');
   function quando(iso){if(!iso)return '';var d=new Date(iso);if(isNaN(d))return '';return d.toLocaleDateString('pt-BR')+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}
   var card={background:'#fff',borderRadius:14,border:'1px solid #E2E8F0',padding:'14px 16px'};
