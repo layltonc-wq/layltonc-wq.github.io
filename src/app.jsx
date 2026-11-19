@@ -1820,6 +1820,37 @@ function TabComparacaoPedido(props){
 // ===== Controle rigoroso de controlados (Morfina/Tramal): popup obrigatório na saída =====
 // Paciente + médico + CRM (sem validação de formato) + observação. Observação vira obrigatória quando já
 // existe saída do MESMO medicamento pro MESMO paciente HOJE (checagem via saidas_controladas).
+// Saída extra dentro do mesmo popup: outro paciente (e/ou outro médico e medicamento) liberado de uma vez.
+function ExtraSaidaControlada(props){
+  var v=props.v,set=props.onChange;
+  var _b=useState('');var busca=_b[0],setBusca=_b[1];
+  var _sv=useState(false);var salvando=_sv[0],setSalvando=_sv[1];
+  var bt=busca.trim();
+  var sug=(!v.pac&&bt)?props.pacientes.filter(function(p){return _norm(p.nome||'').indexOf(_norm(bt))>=0;}).slice(0,6):[];
+  var existe=props.pacientes.some(function(p){return (p.nome||'').trim().toLowerCase()===bt.toLowerCase();});
+  function cadastrar(){setSalvando(true);var u=props.user;
+    db.collection('pacientes_controlados').add({nome:bt,criadoEm:new Date().toISOString(),criadoPor:(u&&u.name)||'',tenant_id:tenantDe(u)})
+      .then(function(ref){set({pac:{id:ref.id,nome:bt}});setBusca('');setSalvando(false);}).catch(function(){setSalvando(false);});}
+  var lb={fontSize:12,fontWeight:700,color:'#475569',display:'block',marginBottom:5};
+  return(<div data-fc={'ctrl-extra-'+props.idx} style={{border:'1.5px solid #FDBA74',background:'#FFFBF5',borderRadius:14,padding:'12px',marginBottom:12}}>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}><div style={{fontWeight:800,fontSize:13,color:'#7C2D12'}}>Saída {props.idx+2}</div><button type="button" data-fc={'ctrl-extra-remover-'+props.idx} onClick={props.onRemove} style={{border:'none',background:'none',color:'#C2362D',fontWeight:700,fontSize:12,cursor:'pointer'}}>Remover</button></div>
+    <div style={{display:'grid',gridTemplateColumns:'1fr 90px',gap:10,marginBottom:10}}>
+      <div><label style={lb}>Medicamento *</label><select className="inp" data-fc={'ctrl-extra-med-'+props.idx} value={v.medId} onChange={function(e){set({medId:e.target.value});}} style={{marginBottom:0}}><option value="">Escolha…</option>{props.meds.map(function(m){return <option key={m.id} value={m.id}>{m.nome} (estoque {m.estoque})</option>;})}</select></div>
+      <div><label style={lb}>Qtd *</label><input className="inp" type="number" min="1" data-fc={'ctrl-extra-qtd-'+props.idx} value={v.qtd} onChange={function(e){set({qtd:e.target.value});}} style={{marginBottom:0}}/></div>
+    </div>
+    <label style={lb}>Paciente *</label>
+    {v.pac?<div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,background:'#F0FDF4',border:'1.5px solid #86EFAC',borderRadius:10,padding:'9px 12px',marginBottom:10}}><div style={{fontWeight:700,fontSize:13,color:'#0C6B3E'}}>👤 {v.pac.nome}</div><button type="button" onClick={function(){set({pac:null});}} style={{background:'#fff',border:'1px solid #86EFAC',borderRadius:8,padding:'4px 10px',fontSize:11,color:'#0C6B3E',cursor:'pointer',fontWeight:600}}>Trocar</button></div>
+      :<div style={{marginBottom:10}}><input className="inp" data-fc={'ctrl-extra-pac-'+props.idx} value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="Buscar paciente cadastrado..." style={{marginBottom:0}}/>
+        {bt&&<div style={{background:'#fff',border:'1.5px solid #E2E8F0',borderRadius:10,marginTop:4,maxHeight:160,overflowY:'auto'}}>
+          {sug.map(function(p){return <button type="button" key={p.id} data-fc="ctrl-extra-pac-pick" onClick={function(){set({pac:p});setBusca('');}} style={{width:'100%',textAlign:'left',padding:'9px 12px',border:'none',borderBottom:'1px solid #F1F5F9',background:'#fff',cursor:'pointer',fontSize:13}}>{p.nome}</button>;})}
+          {!existe&&<button type="button" data-fc={'ctrl-extra-pac-novo-'+props.idx} disabled={salvando} onClick={cadastrar} style={{width:'100%',textAlign:'left',padding:'9px 12px',border:'none',background:'#F0FDF4',cursor:'pointer',fontSize:13,color:'#0C6B3E',fontWeight:700}}>{salvando?'Cadastrando...':'+ Cadastrar "'+bt+'" como novo paciente'}</button>}
+        </div>}</div>}
+    <MedicoCrmCampos medicos={props.medicos} obrigatorio nome={v.medico} crm={v.crm} onNome={function(x){set({medico:x});}} onCrm={function(x){set({crm:x});}}/>
+    <div style={{height:8}}/>
+    <label style={lb}>Observação{props.obsObrig?' * (obrigatória — mesmo paciente e medicamento no mesmo dia)':''}</label>
+    <input className="inp" data-fc={'ctrl-extra-obs-'+props.idx} value={v.obs} onChange={function(e){set({obs:e.target.value});}} placeholder="Observações (opcional)" style={{marginBottom:0}}/>
+  </div>);
+}
 function ModalSaidaControlada(props){
   var data=props.data;var user=props.user;var onConfirm=props.onConfirm;var onClose=props.onClose;
   function fD(d){if(!d)return'';var p=String(d).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
@@ -1836,6 +1867,10 @@ function ModalSaidaControlada(props){
   var _checando=useState(false);var checando=_checando[0];var setChecando=_checando[1];
   var _erro=useState('');var erro=_erro[0];var setErro=_erro[1];
   var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];
+  var _ex=useState([]);var extras=_ex[0],setExtras=_ex[1]; // outras saídas liberadas no mesmo popup
+  var medsCtrl=props.meds||[];
+  function addExtra(){setExtras(extras.concat([{key:Date.now()+Math.random(),medId:data.medicamentoId||'',qtd:'',pac:null,medico:medico,crm:crm,obs:''}]));}
+  function setEx(k,pt){setExtras(extras.map(function(x){return x.key===k?Object.assign({},x,pt):x;}));}
 
   useEffect(function(){
     return db.collection('pacientes_controlados').where('tenant_id','==',tenantDe(user)).limit(2000).onSnapshot(function(sn){
@@ -1873,9 +1908,25 @@ function ModalSaidaControlada(props){
     if(!dataSaida){setErro('Informe a data da saída.');return;}
     if(dataSaida>todayStr()){setErro('A data da saída não pode ser no futuro.');return;}
     if(obsObrigatoria&&!obs.trim()){setErro('Já existe saída de '+data.medicamentoNome+' para '+pacSel.nome+' em '+fD(dataSaida)+' — a observação é obrigatória.');return;}
+    var exs=[];
+    for(var i=0;i<extras.length;i++){var x=extras[i],n=i+2;
+      var mx=medsCtrl.filter(function(m){return m.id===x.medId;})[0];
+      if(!mx){setErro('Saída '+n+': escolha o medicamento.');return;}
+      if(!(parseInt(x.qtd,10)>=1)){setErro('Saída '+n+': informe a quantidade.');return;}
+      if(!x.pac){setErro('Saída '+n+': selecione ou cadastre o paciente.');return;}
+      if(!x.medico.trim()||!x.crm.trim()){setErro('Saída '+n+': informe o médico e o CRM.');return;}
+      exs.push({pacienteId:x.pac.id,pacienteNome:x.pac.nome,medicamentoId:mx.id,medicamentoNome:mx.nome,quantidade:parseInt(x.qtd,10),medicoNome:x.medico.trim(),medicoCrm:x.crm.trim(),observacao:x.obs.trim(),liberadoPorUid:user.uid||'',liberadoPorNome:user.name||'',dataSaida:dataSaida,criadoEm:new Date().toISOString(),tenant_id:tenantDe(user)});
+    }
+    if(exs.length){
+      var soma={};soma[data.medicamentoId]=data.quantidade;exs.forEach(function(e){soma[e.medicamentoId]=(soma[e.medicamentoId]||0)+e.quantidade;});
+      for(var id in soma){var mm=medsCtrl.filter(function(m){return m.id===id;})[0];if(mm&&soma[id]>mm.estoque){setErro('Estoque insuficiente de '+mm.nome+': somando todas as saídas dá '+soma[id]+' e há '+mm.estoque+'.');return;}}
+      // mesmo paciente + mesmo medicamento repetido na própria tela exige observação
+      var vistos={};vistos[pacSel.id+'|'+data.medicamentoId]=1;
+      for(var k=0;k<exs.length;k++){var ch=exs[k].pacienteId+'|'+exs[k].medicamentoId;if(vistos[ch]&&!exs[k].observacao){setErro('Saída '+(k+2)+': mesmo paciente e medicamento já aparecem nesta tela — a observação é obrigatória.');return;}vistos[ch]=1;}
+    }
     setErro('');setSaving(true);
     var payload={pacienteId:pacSel.id,pacienteNome:pacSel.nome,medicamentoId:data.medicamentoId,medicamentoNome:data.medicamentoNome,quantidade:data.quantidade,medicoNome:medico.trim(),medicoCrm:crm.trim(),observacao:obs.trim(),liberadoPorUid:user.uid||'',liberadoPorNome:user.name||'',dataSaida:dataSaida,criadoEm:new Date().toISOString(),tenant_id:tenantDe(user)};
-    onConfirm(payload).then(function(){setSaving(false);}).catch(function(e){setErro('Erro: '+((e&&e.message)||e));setSaving(false);});
+    (exs.length?onConfirm(payload,exs):onConfirm(payload)).then(function(){setSaving(false);}).catch(function(e){setErro('Erro: '+((e&&e.message)||e));setSaving(false);});
   }
 
   return(<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.6)',zIndex:9500,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
@@ -1906,10 +1957,12 @@ function ModalSaidaControlada(props){
       <Lbl c={obsObrigatoria?'Observação * (obrigatória — já houve saída nessa data)':'Observação'}/>
       <textarea value={obs} onChange={function(e){setObs(e.target.value);}} rows={3} className="inp" placeholder={obsObrigatoria?'Justifique a nova saída do mesmo medicamento pro mesmo paciente hoje...':'Observações (opcional)'} style={{resize:'vertical',lineHeight:1.6,border:(obsObrigatoria&&!obs.trim())?'1.5px solid #FCA5A5':undefined}}/>
       {checando&&<div style={{fontSize:11,color:'#94A3B8',marginTop:4}}>Verificando histórico do paciente...</div>}
+      {extras.length>0&&<div style={{marginTop:14}}>{extras.map(function(x,i){return <ExtraSaidaControlada key={x.key} idx={i} v={x} user={user} pacientes={pacientes} meds={medsCtrl} medicos={medicosCrm} obsObrig={false} onChange={function(pt){setEx(x.key,pt);}} onRemove={function(){setExtras(extras.filter(function(y){return y.key!==x.key;}));}}/>;})}</div>}
+      {data.medicamentoId&&medsCtrl.length>0&&<button type="button" data-fc="ctrl-add-saida" onClick={addExtra} style={{width:'100%',marginTop:10,padding:'11px',borderRadius:12,border:'1.5px dashed #FB923C',background:'#fff',color:'#9A3412',fontWeight:700,fontSize:13,cursor:'pointer'}}>+ Adicionar outra saída (outro paciente / médico / medicamento)</button>}
       {erro&&<div className="er" style={{marginTop:8}}>{erro}</div>}
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginTop:14}}>
         <button onClick={onClose} disabled={saving} style={{padding:'13px',background:'#F1F5F9',border:'none',borderRadius:12,color:'#475569',fontWeight:700,fontSize:14,cursor:saving?'default':'pointer'}}>Cancelar</button>
-        <button onClick={confirmar} disabled={saving||checando} style={{padding:'13px',background:(saving||checando)?'#94A3B8':'#DC2626',border:'none',borderRadius:12,color:'#fff',fontWeight:800,fontSize:14,cursor:(saving||checando)?'default':'pointer'}}>{saving?'Liberando...':'🔒 Liberar Saída'}</button>
+        <button onClick={confirmar} disabled={saving||checando} style={{padding:'13px',background:(saving||checando)?'#94A3B8':'#DC2626',border:'none',borderRadius:12,color:'#fff',fontWeight:800,fontSize:14,cursor:(saving||checando)?'default':'pointer'}}>{saving?'Liberando...':(extras.length?'🔒 Liberar '+(extras.length+1)+' saídas':'🔒 Liberar Saída')}</button>
       </div>
     </div>
   </div>);
@@ -2007,15 +2060,25 @@ var temaItaq=true;// identidade visual v2 agora é o padrão pra todos os munic�
     var saveFn=(!canMove&&isGuest&&props.onSolicitar)?props.onSolicitar:onSave;var _saveP=(saveFn===onSave&&plano.partes.length>1)?gravarPartes(data,plano.partes,saveFn):saveFn(data);_saveP.then(function(){if(q>500)db.collection('alertas').add({tipo:'saida_excessiva',medicamentoNome:sel.nome,quantidade:q,estoqueAntes:cur,autorNome:user.name,justificativa:obs.trim(),criadoEm:new Date().toISOString(),lido:false,tenant_id:tenantDe(user)}).catch(function(){});playSound('success');setOk((!canMove&&isGuest)?'Solicitação enviada!':'Saida de '+q+'x '+sel.nome+' registrada! ('+infoD.curto+(pedeUbs&&ubsSel?' · '+ubsSel:'')+(plano.partes.length>1?' · lotes: '+plano.resumo:'')+')');setQty('');setLote('');setVal('');setObs('');setWarn('');setTimeout(function(){setOk('');},4000);setSaving(false);}).catch(function(e){setErr('Erro: '+(e.message||'tente novamente'));setSaving(false);});}
   // Confirma a saída de controlado: grava a entry normal (afeta estoque) + o registro de auditoria em
   // saidas_controladas. Só chega aqui depois do popup validar paciente/médico/CRM/observação.
-  function confirmarSaidaControlada(payload){
+  function confirmarSaidaControlada(payload,extras){
     var saveFn=(!canMove&&isGuest&&props.onSolicitar)?props.onSolicitar:onSave;
-    return saveFn(controladoData).then(function(){
-      return db.collection('saidas_controladas').add(payload);
-    }).then(function(){
+    extras=extras||[];
+    var cd=controladoData;
+    // outras saídas do mesmo popup: o lote vem do que sobra depois das anteriores (FEFO)
+    var feitas=[{medicamentoId:cd.medicamentoId,tipo:'saida',quantidade:cd.quantidade,lote:cd.lote||'',validade:cd.validade||''}];
+    var jobs=extras.map(function(ex){
+      var md=medications.filter(function(m){return m.id===ex.medicamentoId;})[0]||{};
+      var pl=planoLotes(ex.medicamentoId,ex.quantidade,'',feitas.filter(function(f){return f.medicamentoId===ex.medicamentoId;}));
+      pl.partes.forEach(function(pt){feitas.push({medicamentoId:ex.medicamentoId,tipo:'saida',quantidade:pt.qty,lote:pt.lote,validade:pt.validade});});
+      return {ex:ex,partes:pl.partes,base:{medicamentoId:ex.medicamentoId,medicamentoNome:ex.medicamentoNome,ean:md.ean||'',tipo:'saida',observacao:ex.observacao||'',destino:'emergencia',destinoNome:DESTINOS.emergencia.label}};
+    });
+    var cadeia=saveFn(cd).then(function(){return db.collection('saidas_controladas').add(payload);});
+    jobs.forEach(function(j){cadeia=cadeia.then(function(){return gravarPartes(j.base,j.partes,saveFn);}).then(function(){return db.collection('saidas_controladas').add(j.ex);});});
+    return cadeia.then(function(){
       playSound('success');
       setShowControlado(false);setControladoData(null);
       setQty('');setLote('');setVal('');setObs('');setWarn('');setSel(null);setSearch('');
-      setOk((!canMove&&isGuest)?'Solicitação enviada!':'Saida controlada de '+controladoData.quantidade+'x '+controladoData.medicamentoNome+' registrada!');
+      setOk((!canMove&&isGuest)?'Solicitação enviada!':(jobs.length?'Saídas controladas registradas: '+(jobs.length+1)+'.':'Saida controlada de '+cd.quantidade+'x '+cd.medicamentoNome+' registrada!'));
       setTimeout(function(){setOk('');},4500);
     });
   }
@@ -2217,7 +2280,7 @@ return(
   )}
 
   <button data-tour="saida-demo-controlado" aria-hidden="true" tabIndex={-1} onClick={abrirDemoControlado} style={{position:'fixed',width:1,height:1,opacity:0,pointerEvents:'none',overflow:'hidden'}}/>
-  {showControlado&&controladoData&&<ModalSaidaControlada data={controladoData} user={user} onConfirm={demoControlado?demoConfirmControlado:confirmarSaidaControlada} onClose={function(){setShowControlado(false);setControladoData(null);setDemoControlado(false);}}/>}
+  {showControlado&&controladoData&&<ModalSaidaControlada data={controladoData} user={user} meds={medications.filter(function(m){return !m.inativo&&_ehMedControlado(m.nome)&&(stock[m.id]||0)>0;}).map(function(m){return {id:m.id,nome:m.nome,estoque:stock[m.id]||0};})} onConfirm={demoControlado?demoConfirmControlado:confirmarSaidaControlada} onClose={function(){setShowControlado(false);setControladoData(null);setDemoControlado(false);}}/>}
 </div>);}
 
 function HistModal(props){
