@@ -8674,6 +8674,61 @@ function TabHistoricoNotas(props){
 
 // ===== Pedidos (Itaquitinga): todas as atas com seus itens; digita-se a quantidade em cada ata, depois "Finalizar pedido" =====
 // Ver TabPrevisao > sub-aba 'lista'. Quantidades ficam em lp.itens ({id,key,medId,itemIdx,nome,qtd,ataId}), guardadas no aparelho.
+// ===== Conferir pedidos: leitura da nota fiscal (XML da NF-e ou PDF/DANFE) e comparação com o pedido =====
+// Mesmo leitor da aba "Importar Notas" (ver _parsearPDFNotaConciliacao). Devolve {nNF,dataEmissao,fornecedor,valorTotal,itens:[{descricao,qtd,unidade,vUnit,lote,validade}],arquivo}.
+async function lerNotaArquivo(file,onProg){
+  var nome=String(file&&file.name||'').toLowerCase();
+  if(nome.endsWith('.xml')){
+    var txt=await new Promise(function(res,rej){var rd=new FileReader();rd.onload=function(ev){res(ev.target.result);};rd.onerror=function(){rej(new Error('Não foi possível abrir o arquivo.'));};rd.readAsText(file,'UTF-8');});
+    var xml=new DOMParser().parseFromString(txt,'text/xml');
+    if(xml.querySelector('parsererror'))throw new Error('O XML está inválido ou corrompido.');
+    var get=function(sel){var el=xml.querySelector(sel);return el?el.textContent.trim():'';};
+    var itens=[];
+    xml.querySelectorAll('det').forEach(function(det){
+      var g=function(s){var e=det.querySelector(s);return e?e.textContent.trim():'';};
+      var rastro=det.querySelector('rastro');
+      itens.push({descricao:g('xProd'),qtd:parseFloat(g('qCom'))||0,unidade:g('uCom')||'UN',vUnit:parseFloat(g('vUnCom'))||0,lote:rastro&&rastro.querySelector('nLote')?rastro.querySelector('nLote').textContent.trim():'',validade:rastro&&rastro.querySelector('dVal')?rastro.querySelector('dVal').textContent.trim():''});
+    });
+    if(!itens.length)throw new Error('Não encontrei itens nesse XML.');
+    var dh=get('dhEmi')||get('dEmi');
+    return {nNF:get('nNF'),dataEmissao:dh?dh.substring(0,10):'',fornecedor:get('emit xNome'),valorTotal:parseFloat(get('vNF')||get('vProd'))||0,itens:itens,arquivo:file.name,tipo:'xml'};
+  }
+  if(nome.endsWith('.pdf')){
+    try{await window.__garantirPdfJs();}catch(e){throw new Error('Não foi possível carregar o leitor de PDF. Confira a internet.');}
+    var pdfLib=window.pdfjsLib;if(!pdfLib)throw new Error('Leitor de PDF não carregado. Recarregue a página.');
+    pdfLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    var pdf=await pdfLib.getDocument({data:await file.arrayBuffer()}).promise;
+    var linhas=await _extrairLinhasPDF(pdf);
+    if(linhas.join(' ').trim().length<30){
+      try{await window.__garantirTesseract();}catch(e){}
+      if(!window.Tesseract)throw new Error('Parece uma nota escaneada e o leitor de imagem não carregou.');
+      if(onProg)onProg('Nota escaneada: lendo a imagem (pode demorar)…');
+      linhas=await _ocrPaginasPDF(pdf,function(pr){if(onProg)onProg('Lendo a imagem: '+pr);});
+    }
+    var pr2=_parsearPDFNotaConciliacao(linhas);
+    if(!pr2.itens.length)throw new Error('Não identifiquei itens nessa nota. Se puder, use o XML da nota.');
+    return {nNF:pr2.nNF,dataEmissao:pr2.dataEmissao,fornecedor:'',valorTotal:parseFloat(pr2.valorTotal)||0,itens:pr2.itens.map(function(it){return {descricao:it.descricao,qtd:Number(it.qtd)||0,unidade:it.unidade||'',vUnit:Number(it.vUnit)||0,lote:it.lote||'',validade:it.validade||''};}),arquivo:file.name,tipo:'pdf'};
+  }
+  throw new Error('Escolha o arquivo da nota em XML ou PDF.');
+}
+// Casa cada linha da nota com um item do pedido (ou, se não for do pedido, com outro item da MESMA ata).
+function _cfCasarNota(nota,ata,deltas){
+  var noPedido={};deltas.forEach(function(d){noPedido[d.idx]=true;});
+  var poolPed=deltas.map(function(d){return {nome:((ata.itens||[])[d.idx]||{}).descricao||'',idx:d.idx};});
+  var poolAta=(ata.itens||[]).map(function(it,idx){return {nome:it.descricao||'',idx:idx};}).filter(function(x){return !noPedido[x.idx];});
+  var porIdx={},extras={},naoIdent=[];
+  (nota.itens||[]).forEach(function(li){
+    var q=Number(li.qtd)||0,v=Number(li.vUnit)||0;
+    var c1=_matchItemMeds(li.descricao,poolPed,1)[0];
+    if(c1&&c1.score>=60){var k=c1.m.idx;var o=porIdx[k]||(porIdx[k]={q:0,t:0,v:v,lote:li.lote||'',validade:li.validade||''});o.q+=q;o.t+=q*v;return;}
+    var c2=_matchItemMeds(li.descricao,poolAta,1)[0];
+    if(c2&&c2.score>=75){var k2=c2.m.idx;var o2=extras[k2]||(extras[k2]={q:0,t:0,v:v,desc:li.descricao});o2.q+=q;o2.t+=q*v;return;}
+    naoIdent.push({descricao:li.descricao,qtd:q,vUnit:v});
+  });
+  return {porIdx:porIdx,extras:extras,naoIdent:naoIdent};
+}
+function _cfQ(n){return String(Math.round((Number(n)||0)*100)/100).replace('.',',');}
+function _cfR(n){return 'R$ '+_fmtNumBR(Number(n)||0);}
 function TabPrevisao(props){
   var user=props.user;var entries=props.entries;var medications=props.medications;var stock=props.stock;var db=props.db;
   var temaItaq=true;// identidade visual v2 agora é o padrão pra todos os municípios (Itaquitinga + Vicência)
@@ -10137,7 +10192,9 @@ function TabPrevisao(props){
     ks0.forEach(function(k){var v=_parseQtdInput(extrasIn[k]||'');if(v<=0)return;algum=true;extras[k]=v;if(resp.extra[k])extraAbate[k]=v;});
     if(!algum){setMsg('e:Digite quanto chegou em pelo menos um item.');return;}
     var agora=new Date().toISOString();
-    conf.chegadas.push({em:agora,por:user.name||'',itens:itens,extras:extras});
+    var notaReg=null;
+    if(cfAberto&&cfAberto.nota&&cfAberto.nota.casado){var nn=cfAberto.nota;var ni={};Object.keys(nn.casado.porIdx).forEach(function(k){ni[k]={q:nn.casado.porIdx[k].q,v:nn.casado.porIdx[k].v};});notaReg={nNF:nn.nNF||'',fornecedor:nn.fornecedor||'',valorTotal:nn.valorTotal||0,arquivo:nn.arquivo||'',itens:ni};}
+    conf.chegadas.push(Object.assign({em:agora,por:user.name||'',itens:itens,extras:extras},notaReg?{nota:notaReg}:{}));
     conf.extrasAbatidos=Object.assign({},conf.extrasAbatidos||{});
     var novos=(ata.itens||[]).map(function(it){return Object.assign({},it);});
     Object.keys(excesso).forEach(function(k){conf.excessos[k]=(Number(conf.excessos[k])||0)+excesso[k];if(novos[k])novos[k].pedidoAcumulado=(Number(novos[k].pedidoAcumulado)||0)+excesso[k];});
@@ -10158,6 +10215,32 @@ function TabPrevisao(props){
     conf.status='encerrado';conf.encerradoEm=agora;conf.encerradoPor=user.name||'';
     cfGravar(ata,r,conf,novos,tot>0?'Pedido encerrado — '+tot+' un. voltaram para o saldo da ata.':'Pedido encerrado.');
   }
+  function cfV(ata,idx){var it=(ata.itens||[])[idx];return Number(it&&it.vUnit)||0;}
+  function cfTotais(r,ata,c){
+    var T={pedQ:0,pedV:0,jaQ:0,jaV:0,agoraQ:0,agoraV:0,devQ:0,devV:0,exQ:0,exV:0,notaQ:0,notaV:0};
+    var inp=(c&&c.inputs)||{};
+    r.deltas.forEach(function(d){
+      var v=cfV(ata,d.idx);T.pedQ+=d.qtd;T.pedV+=d.qtd*v;
+      var ch=cfChegou(r,d.idx);T.jaQ+=ch;T.jaV+=ch*v;
+      var dig=_parseQtdInput(inp[d.idx]||'');T.agoraQ+=dig;T.agoraV+=dig*v;
+      var dev=Number(r.conf&&r.conf.devolvidos&&r.conf.devolvidos[d.idx])||0;T.devQ+=dev;T.devV+=dev*v;
+      var nt=c&&c.nota&&c.nota.casado&&c.nota.casado.porIdx[d.idx];if(nt){T.notaQ+=nt.q;T.notaV+=nt.t;}
+    });
+    ((r.conf&&r.conf.chegadas)||[]).forEach(function(ch){Object.keys(ch.extras||{}).forEach(function(k){T.exQ+=Number(ch.extras[k])||0;T.exV+=(Number(ch.extras[k])||0)*cfV(ata,Number(k));});});
+    Object.keys((c&&c.extras)||{}).forEach(function(k){var q=_parseQtdInput(c.extras[k]||'');T.exQ+=q;T.exV+=q*cfV(ata,Number(k));});
+    T.chQ=T.jaQ+T.agoraQ;T.chV=T.jaV+T.agoraV;
+    T.faltaQ=Math.max(0,T.pedQ-T.chQ-T.devQ);T.faltaV=Math.max(0,T.pedV-T.chV-T.devV);
+    return T;
+  }
+  function cfImportarNota(ata,r,file){
+    if(!file)return;
+    var atual=function(fn){setCfAberto(function(c){if(!c||c.regId!==r.id)return c;return fn(c);});};
+    atual(function(c){return Object.assign({},c,{notaBusy:'Lendo a nota…',notaErro:''});});
+    lerNotaArquivo(file,function(m){atual(function(c){return Object.assign({},c,{notaBusy:m});});}).then(function(nota){
+      var cas=_cfCasarNota(nota,ata,r.deltas);
+      atual(function(c){return Object.assign({},c,{notaBusy:'',nota:Object.assign({},nota,{casado:cas})});});
+    }).catch(function(e){atual(function(c){return Object.assign({},c,{notaBusy:'',notaErro:(e&&e.message)||'Não foi possível ler a nota.'});});});
+  }
   function chegadaTela(){
     var Bz='#1351B4';
     var lista=cfLista();
@@ -10177,25 +10260,52 @@ function TabPrevisao(props){
         var r=x.r,ata=x.ata,st=cfStatus(r),bc=badgeCor[st];
         var totPed=r.deltas.reduce(function(s,d){return s+d.qtd;},0);
         var totCh=r.deltas.reduce(function(s,d){return s+cfChegou(r,d.idx);},0);
+        var totVal=r.deltas.reduce(function(s,d){return s+d.qtd*cfV(ata,d.idx);},0);
         var aberto=cfAberto&&cfAberto.regId===r.id&&cfAberto.ataId===ata.id;
         return(<div key={ata.id+r.id} data-fc="cf-pedido" style={{background:'#fff',border:'1.5px solid '+(aberto?Bz:'#E2E8F0'),borderRadius:14,padding:'12px 14px',marginBottom:10}}>
           <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
-            <div style={{flex:1,minWidth:150}}><div style={{fontWeight:800,fontSize:14,color:'#1E293B'}}>{ata.nome}</div><div style={{fontSize:11.5,color:'#64748B'}}>Pedido de {fmtD(r.em)} · {r.deltas.length} item(ns) · chegaram {totCh} de {totPed} un.</div></div>
+            <div style={{flex:1,minWidth:150}}><div style={{fontWeight:800,fontSize:14,color:'#1E293B'}}>{ata.nome}</div><div style={{fontSize:11.5,color:'#64748B'}}>Pedido de {fmtD(r.em)} · {r.deltas.length} item(ns) · chegaram {totCh} de {totPed} un. · <b>{_cfR(totVal)}</b></div></div>
             <span style={{background:bc[0],color:bc[1],fontWeight:800,fontSize:11.5,padding:'4px 10px',borderRadius:99}}>{bc[2]}</span>
             <button type="button" data-fc="cf-abrir" onClick={function(){setCfAberto(aberto?null:{ataId:ata.id,regId:r.id,inputs:{}});}} style={Object.assign({},btn,{background:'#EFF6FF',color:Bz})}>{aberto?'Fechar':(st==='feito'?'Ver':'Conferir')}</button>
           </div>
           {aberto&&<div style={{marginTop:10}}>
+            {st!=='feito'&&(function(){
+              var nt=cfAberto.nota;var cs=nt&&nt.casado;
+              return(<div data-fc="cf-nota-box" style={{background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:12,padding:'10px 12px',marginBottom:10}}>
+                <div style={{fontWeight:800,fontSize:12.5,color:'#334155',marginBottom:6}}>Nota fiscal (para comparar)</div>
+                {!nt&&<div>
+                  <label style={Object.assign({},btn,{display:'inline-block',background:'#EFF6FF',color:Bz,cursor:'pointer'})}>Importar nota (XML ou PDF)<input data-fc="cf-nota-arq" type="file" accept=".xml,.pdf" onChange={function(ev){var f=ev.target.files&&ev.target.files[0];ev.target.value='';cfImportarNota(ata,r,f);}} style={{display:'none'}}/></label>
+                  <div style={{fontSize:11.5,color:'#64748B',marginTop:6}}>O sistema lê a nota, acha cada item do pedido e compara quantidade e preço. O XML da nota é o mais exato.</div>
+                </div>}
+                {cfAberto.notaBusy&&<div style={{fontSize:12.5,color:'#1E40AF',marginTop:6}}>{cfAberto.notaBusy}</div>}
+                {cfAberto.notaErro&&<div data-fc="cf-nota-erro" className="er" style={{marginTop:6}}>{cfAberto.notaErro}</div>}
+                {nt&&<div>
+                  <div style={{fontSize:12.5,color:'#334155'}}><b>Nota {nt.nNF?'nº '+nt.nNF:''}</b>{nt.fornecedor?' · '+nt.fornecedor:''}{nt.dataEmissao?' · '+fmtD(nt.dataEmissao):''} · total da nota <b>{_cfR(nt.valorTotal)}</b> <span style={{color:'#94A3B8'}}>({nt.arquivo})</span></div>
+                  <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:8}}>
+                    <button type="button" data-fc="cf-nota-preencher" onClick={function(){var i2={};r.deltas.forEach(function(d){var n2=cs.porIdx[d.idx];if(n2)i2[d.idx]=String(Math.round(n2.q));});setCfAberto(function(c){return Object.assign({},c,{inputs:i2});});}} style={Object.assign({},btn,{background:Bz,color:'#fff'})}>Preencher "Chegou" com a nota</button>
+                    <button type="button" data-fc="cf-nota-remover" onClick={function(){setCfAberto(function(c){var c2=Object.assign({},c);delete c2.nota;return c2;});}} style={Object.assign({},btn,{background:'#F1F5F9',color:'#334155'})}>Tirar a nota</button>
+                  </div>
+                  {Object.keys(cs.extras).length>0&&<div data-fc="cf-nota-extras" style={{marginTop:8,fontSize:12.5,color:'#92400E'}}>Itens da nota que <b>não estão no pedido</b> (mas são desta ata):
+                    {Object.keys(cs.extras).map(function(k){var e=cs.extras[k];var ja=(cfAberto.extras||{})[k]!==undefined;return(<div key={k} style={{display:'flex',alignItems:'center',gap:8,padding:'5px 0'}}><div style={{flex:1,color:'#1E293B'}}>{cfNomeItem(ata,Number(k))} · nota: {_cfQ(e.q)} × {_cfR(e.v)}</div>{!ja&&<button type="button" data-fc="cf-nota-add-extra" onClick={function(){setCfAberto(function(c){var e2=Object.assign({},c.extras);e2[k]=String(Math.round(e.q));return Object.assign({},c,{extras:e2});});}} style={Object.assign({},btn,{background:'#EFF6FF',color:Bz})}>+ adicionar</button>}</div>);})}
+                  </div>}
+                  {cs.naoIdent.length>0&&<div data-fc="cf-nota-nao" style={{marginTop:8,fontSize:12,color:'#B91C1C'}}>Não consegui identificar na ata: {cs.naoIdent.map(function(x){return x.descricao+' ('+_cfQ(x.qtd)+')';}).join(' · ')}</div>}
+                </div>}
+              </div>);
+            })()}
             {r.deltas.map(function(d){
               var ch=cfChegou(r,d.idx),rs=cfResta(r,d),dev=Number(r.conf&&r.conf.devolvidos&&r.conf.devolvidos[d.idx])||0,ex=Number(r.conf&&r.conf.excessos&&r.conf.excessos[d.idx])||0;
               var dig=_parseQtdInput((cfAberto.inputs||{})[d.idx]||'');
-              var dif=dig>0?(dig-rs):0;
+              var dif=dig>0?(dig-rs):0;var v=cfV(ata,d.idx);
+              var nt=cfAberto.nota&&cfAberto.nota.casado?cfAberto.nota.casado.porIdx[d.idx]:null;var temNota=!!cfAberto.nota;
               return(<div key={d.idx} data-fc="cf-item" style={{padding:'9px 0',borderTop:'1px solid #F1F5F9'}}>
                 <div style={{display:'flex',alignItems:'center',gap:8}}>
                   <div style={{flex:1,minWidth:0}}><div style={{fontWeight:700,fontSize:13}}>{cfNomeItem(ata,d.idx)}</div>
-                    <div style={{fontSize:11.5,color:'#64748B'}}>Pedido {d.qtd} · chegou {ch}{dev>0?' · voltou ao saldo '+dev:''}{ex>0?' · excesso abatido '+ex:''}{st!=='feito'?' · falta '+rs:''}</div></div>
-                  {st!=='feito'&&<input data-fc="cf-qtd" inputMode="numeric" placeholder="Chegou" value={(cfAberto.inputs||{})[d.idx]||''} onChange={function(ev){var v=ev.target.value.replace(/[^0-9]/g,'');setCfAberto(function(c){var i=Object.assign({},c.inputs);i[d.idx]=v;return Object.assign({},c,{inputs:i});});}} style={{width:90,padding:'8px',borderRadius:8,border:'1.5px solid #CBD5E1',fontSize:15,fontWeight:700,textAlign:'center'}}/>}
+                    <div data-fc="cf-valores" style={{fontSize:11.5,color:'#475569'}}>Pedido {d.qtd} × {_cfR(v)} = <b>{_cfR(d.qtd*v)}</b></div>
+                    <div style={{fontSize:11.5,color:'#64748B'}}>Já chegou {ch}{dev>0?' · voltou ao saldo '+dev:''}{ex>0?' · excesso abatido '+ex:''}{st!=='feito'?' · falta '+rs:''}</div></div>
+                  {st!=='feito'&&<input data-fc="cf-qtd" inputMode="numeric" placeholder="Chegou" value={(cfAberto.inputs||{})[d.idx]||''} onChange={function(ev){var v2=ev.target.value.replace(/[^0-9]/g,'');setCfAberto(function(c){var i=Object.assign({},c.inputs);i[d.idx]=v2;return Object.assign({},c,{inputs:i});});}} style={{width:90,padding:'8px',borderRadius:8,border:'1.5px solid #CBD5E1',fontSize:15,fontWeight:700,textAlign:'center'}}/>}
                 </div>
-                {st!=='feito'&&dig>0&&<div style={{fontSize:11.5,marginTop:3,fontWeight:700,color:dif===0?'#166534':(dif<0?'#B45309':'#1E40AF')}}>{dif===0?'✓ bate com o pedido':(dif<0?'faltam '+(-dif)+' (ainda pode chegar)':'chegou '+dif+' a mais')}</div>}
+                {st!=='feito'&&temNota&&<div data-fc="cf-nota-linha" style={{fontSize:11.5,marginTop:3,color:nt?'#1E3A8A':'#B91C1C'}}>{nt?<span>Nota: {_cfQ(nt.q)} × {_cfR(nt.v)} = <b>{_cfR(nt.t)}</b>{Math.abs(nt.q-d.qtd)>0.0001?<b style={{color:'#B45309'}}> · quantidade da nota ({_cfQ(nt.q)}) diferente do pedido ({d.qtd})</b>:<span style={{color:'#166534'}}> · quantidade bate com o pedido</span>}{v>0&&Math.abs(nt.v-v)>0.005?<b style={{color:'#B45309'}}> · preço da nota diferente da ata ({_cfR(v)})</b>:null}{dig>0&&Math.abs(nt.q-dig)>0.0001?<b style={{color:'#B45309'}}> · nota diz {_cfQ(nt.q)}, chegou {dig}</b>:null}</span>:'Este item não consta na nota.'}</div>}
+                {st!=='feito'&&dig>0&&<div data-fc="cf-chegou-v" style={{fontSize:11.5,marginTop:3,fontWeight:700,color:dif===0?'#166534':(dif<0?'#B45309':'#1E40AF')}}>Chegou agora: {dig} × {_cfR(v)} = {_cfR(dig*v)} · {dif===0?'✓ bate com o pedido':(dif<0?'faltam '+(-dif)+' ('+_cfR(-dif*v)+', ainda pode chegar)':'chegou '+dif+' a mais')}</div>}
               </div>);
             })}
             {st!=='feito'&&(function(){
@@ -10220,7 +10330,26 @@ function TabPrevisao(props){
                 {!q&&cand.length>8&&<div style={{fontSize:11.5,color:'#64748B',paddingTop:6}}>Digite o nome para achar o item entre os {cand.length} da ata.</div>}
               </div>);
             })()}
-            {(((r.conf&&r.conf.chegadas)||[]).length>0)&&<div style={{fontSize:11.5,color:'#64748B',marginTop:8}}>Chegadas: {r.conf.chegadas.map(function(c){var ex=Object.keys(c.extras||{}).map(function(k){return '+'+c.extras[k]+' '+cfNomeItem(ata,Number(k));});return fmtD(c.em)+(c.por?' ('+c.por+')':'')+(ex.length?' · extras: '+ex.join(', '):'');}).join(' · ')}{r.conf.status==='encerrado'?' · encerrado em '+fmtD(r.conf.encerradoEm):''}</div>}
+            {(function(){
+              var T=cfTotais(r,ata,st!=='feito'?cfAberto:null);var temNota=st!=='feito'&&!!cfAberto.nota;
+              var lin=function(rot,q,v,cor,extra){return(<tr><td style={{padding:'4px 0',color:cor||'#334155'}}>{rot}</td><td style={{padding:'4px 0',textAlign:'right',fontWeight:700,whiteSpace:'nowrap'}}>{_cfQ(q)} un.</td><td style={{padding:'4px 0 4px 12px',textAlign:'right',fontWeight:800,whiteSpace:'nowrap',color:cor||'#0F172A'}}>{_cfR(v)}</td></tr>);};
+              return(<div data-fc="cf-resumo" style={{marginTop:10,background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:12,padding:'10px 12px'}}>
+                <div style={{fontWeight:800,fontSize:12.5,color:'#334155',marginBottom:4}}>Resumo da conferência</div>
+                <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}><tbody>
+                  {lin('Total do pedido',T.pedQ,T.pedV)}
+                  {temNota&&lin('Total da nota (itens do pedido)',T.notaQ,T.notaV,'#1E3A8A')}
+                  {lin('Chegou (total)',T.chQ,T.chV,'#166534')}
+                  {T.exQ>0&&lin('Itens extras que chegaram',T.exQ,T.exV,'#92400E')}
+                  {lin('Faltou',T.faltaQ,T.faltaV,T.faltaQ>0?'#B45309':'#166534')}
+                  {T.devQ>0&&lin('Voltou ao saldo da ata',T.devQ,T.devV,'#475569')}
+                </tbody></table>
+                {temNota&&<div data-fc="cf-resumo-nota" style={{fontSize:12,marginTop:6,color:'#334155'}}>
+                  Nota × pedido: <b style={{color:Math.abs(T.notaV-T.pedV)<0.005?'#166534':'#B45309'}}>{Math.abs(T.notaV-T.pedV)<0.005?'valores iguais':(T.notaV>T.pedV?'a nota é '+_cfR(T.notaV-T.pedV)+' maior':'a nota é '+_cfR(T.pedV-T.notaV)+' menor')}</b>
+                  {' · '}Nota × chegou: <b style={{color:Math.abs(T.notaV-T.chV)<0.005?'#166534':'#B45309'}}>{Math.abs(T.notaV-T.chV)<0.005?'valores iguais':(T.notaV>T.chV?'a nota cobra '+_cfR(T.notaV-T.chV)+' a mais do que chegou':'chegou '+_cfR(T.chV-T.notaV)+' a mais do que a nota')}</b>
+                </div>}
+              </div>);
+            })()}
+            {(((r.conf&&r.conf.chegadas)||[]).length>0)&&<div style={{fontSize:11.5,color:'#64748B',marginTop:8}}>Chegadas: {r.conf.chegadas.map(function(c){var ex=Object.keys(c.extras||{}).map(function(k){return '+'+c.extras[k]+' '+cfNomeItem(ata,Number(k));});return fmtD(c.em)+(c.por?' ('+c.por+')':'')+(c.nota?' · nota '+(c.nota.nNF||'')+' ('+_cfR(c.nota.valorTotal)+')':'')+(ex.length?' · extras: '+ex.join(', '):'');}).join(' · ')}{r.conf.status==='encerrado'?' · encerrado em '+fmtD(r.conf.encerradoEm):''}</div>}
             {st!=='feito'&&<div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:10}}>
               <button type="button" data-fc="cf-tudo" onClick={function(){var i={};r.deltas.forEach(function(d){var rs=cfResta(r,d);if(rs>0)i[d.idx]=String(rs);});setCfAberto(function(c){return Object.assign({},c,{inputs:i});});}} style={Object.assign({},btn,{background:'#F1F5F9',color:'#334155'})}>Chegou tudo</button>
               <button type="button" data-fc="cf-registrar" onClick={function(){cfRegistrar(ata,r);}} style={Object.assign({},btn,{background:Bz,color:'#fff',flex:1})}>Registrar chegada</button>
