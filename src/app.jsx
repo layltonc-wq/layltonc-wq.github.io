@@ -1820,6 +1820,37 @@ function TabComparacaoPedido(props){
 // ===== Controle rigoroso de controlados (Morfina/Tramal): popup obrigatório na saída =====
 // Paciente + médico + CRM (sem validação de formato) + observação. Observação vira obrigatória quando já
 // existe saída do MESMO medicamento pro MESMO paciente HOJE (checagem via saidas_controladas).
+// Saída extra dentro do mesmo popup: outro paciente (e/ou outro médico e medicamento) liberado de uma vez.
+function ExtraSaidaControlada(props){
+  var v=props.v,set=props.onChange;
+  var _b=useState('');var busca=_b[0],setBusca=_b[1];
+  var _sv=useState(false);var salvando=_sv[0],setSalvando=_sv[1];
+  var bt=busca.trim();
+  var sug=(!v.pac&&bt)?props.pacientes.filter(function(p){return _norm(p.nome||'').indexOf(_norm(bt))>=0;}).slice(0,6):[];
+  var existe=props.pacientes.some(function(p){return (p.nome||'').trim().toLowerCase()===bt.toLowerCase();});
+  function cadastrar(){setSalvando(true);var u=props.user;
+    db.collection('pacientes_controlados').add({nome:bt,criadoEm:new Date().toISOString(),criadoPor:(u&&u.name)||'',tenant_id:tenantDe(u)})
+      .then(function(ref){set({pac:{id:ref.id,nome:bt}});setBusca('');setSalvando(false);}).catch(function(){setSalvando(false);});}
+  var lb={fontSize:12,fontWeight:700,color:'#475569',display:'block',marginBottom:5};
+  return(<div data-fc={'ctrl-extra-'+props.idx} style={{border:'1.5px solid #FDBA74',background:'#FFFBF5',borderRadius:14,padding:'12px',marginBottom:12}}>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}><div style={{fontWeight:800,fontSize:13,color:'#7C2D12'}}>Saída {props.idx+2}</div><button type="button" data-fc={'ctrl-extra-remover-'+props.idx} onClick={props.onRemove} style={{border:'none',background:'none',color:'#C2362D',fontWeight:700,fontSize:12,cursor:'pointer'}}>Remover</button></div>
+    <div style={{display:'grid',gridTemplateColumns:'1fr 90px',gap:10,marginBottom:10}}>
+      <div><label style={lb}>Medicamento *</label><select className="inp" data-fc={'ctrl-extra-med-'+props.idx} value={v.medId} onChange={function(e){set({medId:e.target.value});}} style={{marginBottom:0}}><option value="">Escolha…</option>{props.meds.map(function(m){return <option key={m.id} value={m.id}>{m.nome} (estoque {m.estoque})</option>;})}</select></div>
+      <div><label style={lb}>Qtd *</label><input className="inp" type="number" min="1" data-fc={'ctrl-extra-qtd-'+props.idx} value={v.qtd} onChange={function(e){set({qtd:e.target.value});}} style={{marginBottom:0}}/></div>
+    </div>
+    <label style={lb}>Paciente *</label>
+    {v.pac?<div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,background:'#F0FDF4',border:'1.5px solid #86EFAC',borderRadius:10,padding:'9px 12px',marginBottom:10}}><div style={{fontWeight:700,fontSize:13,color:'#0C6B3E'}}>👤 {v.pac.nome}</div><button type="button" onClick={function(){set({pac:null});}} style={{background:'#fff',border:'1px solid #86EFAC',borderRadius:8,padding:'4px 10px',fontSize:11,color:'#0C6B3E',cursor:'pointer',fontWeight:600}}>Trocar</button></div>
+      :<div style={{marginBottom:10}}><input className="inp" data-fc={'ctrl-extra-pac-'+props.idx} value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="Buscar paciente cadastrado..." style={{marginBottom:0}}/>
+        {bt&&<div style={{background:'#fff',border:'1.5px solid #E2E8F0',borderRadius:10,marginTop:4,maxHeight:160,overflowY:'auto'}}>
+          {sug.map(function(p){return <button type="button" key={p.id} data-fc="ctrl-extra-pac-pick" onClick={function(){set({pac:p});setBusca('');}} style={{width:'100%',textAlign:'left',padding:'9px 12px',border:'none',borderBottom:'1px solid #F1F5F9',background:'#fff',cursor:'pointer',fontSize:13}}>{p.nome}</button>;})}
+          {!existe&&<button type="button" data-fc={'ctrl-extra-pac-novo-'+props.idx} disabled={salvando} onClick={cadastrar} style={{width:'100%',textAlign:'left',padding:'9px 12px',border:'none',background:'#F0FDF4',cursor:'pointer',fontSize:13,color:'#0C6B3E',fontWeight:700}}>{salvando?'Cadastrando...':'+ Cadastrar "'+bt+'" como novo paciente'}</button>}
+        </div>}</div>}
+    <MedicoCrmCampos medicos={props.medicos} obrigatorio nome={v.medico} crm={v.crm} onNome={function(x){set({medico:x});}} onCrm={function(x){set({crm:x});}}/>
+    <div style={{height:8}}/>
+    <label style={lb}>Observação{props.obsObrig?' * (obrigatória — mesmo paciente e medicamento no mesmo dia)':''}</label>
+    <input className="inp" data-fc={'ctrl-extra-obs-'+props.idx} value={v.obs} onChange={function(e){set({obs:e.target.value});}} placeholder="Observações (opcional)" style={{marginBottom:0}}/>
+  </div>);
+}
 function ModalSaidaControlada(props){
   var data=props.data;var user=props.user;var onConfirm=props.onConfirm;var onClose=props.onClose;
   function fD(d){if(!d)return'';var p=String(d).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
@@ -1836,6 +1867,10 @@ function ModalSaidaControlada(props){
   var _checando=useState(false);var checando=_checando[0];var setChecando=_checando[1];
   var _erro=useState('');var erro=_erro[0];var setErro=_erro[1];
   var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];
+  var _ex=useState([]);var extras=_ex[0],setExtras=_ex[1]; // outras saídas liberadas no mesmo popup
+  var medsCtrl=props.meds||[];
+  function addExtra(){setExtras(extras.concat([{key:Date.now()+Math.random(),medId:data.medicamentoId||'',qtd:'',pac:null,medico:medico,crm:crm,obs:''}]));}
+  function setEx(k,pt){setExtras(extras.map(function(x){return x.key===k?Object.assign({},x,pt):x;}));}
 
   useEffect(function(){
     return db.collection('pacientes_controlados').where('tenant_id','==',tenantDe(user)).limit(2000).onSnapshot(function(sn){
@@ -1873,9 +1908,25 @@ function ModalSaidaControlada(props){
     if(!dataSaida){setErro('Informe a data da saída.');return;}
     if(dataSaida>todayStr()){setErro('A data da saída não pode ser no futuro.');return;}
     if(obsObrigatoria&&!obs.trim()){setErro('Já existe saída de '+data.medicamentoNome+' para '+pacSel.nome+' em '+fD(dataSaida)+' — a observação é obrigatória.');return;}
+    var exs=[];
+    for(var i=0;i<extras.length;i++){var x=extras[i],n=i+2;
+      var mx=medsCtrl.filter(function(m){return m.id===x.medId;})[0];
+      if(!mx){setErro('Saída '+n+': escolha o medicamento.');return;}
+      if(!(parseInt(x.qtd,10)>=1)){setErro('Saída '+n+': informe a quantidade.');return;}
+      if(!x.pac){setErro('Saída '+n+': selecione ou cadastre o paciente.');return;}
+      if(!x.medico.trim()||!x.crm.trim()){setErro('Saída '+n+': informe o médico e o CRM.');return;}
+      exs.push({pacienteId:x.pac.id,pacienteNome:x.pac.nome,medicamentoId:mx.id,medicamentoNome:mx.nome,quantidade:parseInt(x.qtd,10),medicoNome:x.medico.trim(),medicoCrm:x.crm.trim(),observacao:x.obs.trim(),liberadoPorUid:user.uid||'',liberadoPorNome:user.name||'',dataSaida:dataSaida,criadoEm:new Date().toISOString(),tenant_id:tenantDe(user)});
+    }
+    if(exs.length){
+      var soma={};soma[data.medicamentoId]=data.quantidade;exs.forEach(function(e){soma[e.medicamentoId]=(soma[e.medicamentoId]||0)+e.quantidade;});
+      for(var id in soma){var mm=medsCtrl.filter(function(m){return m.id===id;})[0];if(mm&&soma[id]>mm.estoque){setErro('Estoque insuficiente de '+mm.nome+': somando todas as saídas dá '+soma[id]+' e há '+mm.estoque+'.');return;}}
+      // mesmo paciente + mesmo medicamento repetido na própria tela exige observação
+      var vistos={};vistos[pacSel.id+'|'+data.medicamentoId]=1;
+      for(var k=0;k<exs.length;k++){var ch=exs[k].pacienteId+'|'+exs[k].medicamentoId;if(vistos[ch]&&!exs[k].observacao){setErro('Saída '+(k+2)+': mesmo paciente e medicamento já aparecem nesta tela — a observação é obrigatória.');return;}vistos[ch]=1;}
+    }
     setErro('');setSaving(true);
     var payload={pacienteId:pacSel.id,pacienteNome:pacSel.nome,medicamentoId:data.medicamentoId,medicamentoNome:data.medicamentoNome,quantidade:data.quantidade,medicoNome:medico.trim(),medicoCrm:crm.trim(),observacao:obs.trim(),liberadoPorUid:user.uid||'',liberadoPorNome:user.name||'',dataSaida:dataSaida,criadoEm:new Date().toISOString(),tenant_id:tenantDe(user)};
-    onConfirm(payload).then(function(){setSaving(false);}).catch(function(e){setErro('Erro: '+((e&&e.message)||e));setSaving(false);});
+    (exs.length?onConfirm(payload,exs):onConfirm(payload)).then(function(){setSaving(false);}).catch(function(e){setErro('Erro: '+((e&&e.message)||e));setSaving(false);});
   }
 
   return(<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.6)',zIndex:9500,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
@@ -1906,10 +1957,12 @@ function ModalSaidaControlada(props){
       <Lbl c={obsObrigatoria?'Observação * (obrigatória — já houve saída nessa data)':'Observação'}/>
       <textarea value={obs} onChange={function(e){setObs(e.target.value);}} rows={3} className="inp" placeholder={obsObrigatoria?'Justifique a nova saída do mesmo medicamento pro mesmo paciente hoje...':'Observações (opcional)'} style={{resize:'vertical',lineHeight:1.6,border:(obsObrigatoria&&!obs.trim())?'1.5px solid #FCA5A5':undefined}}/>
       {checando&&<div style={{fontSize:11,color:'#94A3B8',marginTop:4}}>Verificando histórico do paciente...</div>}
+      {extras.length>0&&<div style={{marginTop:14}}>{extras.map(function(x,i){return <ExtraSaidaControlada key={x.key} idx={i} v={x} user={user} pacientes={pacientes} meds={medsCtrl} medicos={medicosCrm} obsObrig={false} onChange={function(pt){setEx(x.key,pt);}} onRemove={function(){setExtras(extras.filter(function(y){return y.key!==x.key;}));}}/>;})}</div>}
+      {data.medicamentoId&&medsCtrl.length>0&&<button type="button" data-fc="ctrl-add-saida" onClick={addExtra} style={{width:'100%',marginTop:10,padding:'11px',borderRadius:12,border:'1.5px dashed #FB923C',background:'#fff',color:'#9A3412',fontWeight:700,fontSize:13,cursor:'pointer'}}>+ Adicionar outra saída (outro paciente / médico / medicamento)</button>}
       {erro&&<div className="er" style={{marginTop:8}}>{erro}</div>}
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginTop:14}}>
         <button onClick={onClose} disabled={saving} style={{padding:'13px',background:'#F1F5F9',border:'none',borderRadius:12,color:'#475569',fontWeight:700,fontSize:14,cursor:saving?'default':'pointer'}}>Cancelar</button>
-        <button onClick={confirmar} disabled={saving||checando} style={{padding:'13px',background:(saving||checando)?'#94A3B8':'#DC2626',border:'none',borderRadius:12,color:'#fff',fontWeight:800,fontSize:14,cursor:(saving||checando)?'default':'pointer'}}>{saving?'Liberando...':'🔒 Liberar Saída'}</button>
+        <button onClick={confirmar} disabled={saving||checando} style={{padding:'13px',background:(saving||checando)?'#94A3B8':'#DC2626',border:'none',borderRadius:12,color:'#fff',fontWeight:800,fontSize:14,cursor:(saving||checando)?'default':'pointer'}}>{saving?'Liberando...':(extras.length?'🔒 Liberar '+(extras.length+1)+' saídas':'🔒 Liberar Saída')}</button>
       </div>
     </div>
   </div>);
@@ -2007,15 +2060,25 @@ var temaItaq=true;// identidade visual v2 agora é o padrão pra todos os munic�
     var saveFn=(!canMove&&isGuest&&props.onSolicitar)?props.onSolicitar:onSave;var _saveP=(saveFn===onSave&&plano.partes.length>1)?gravarPartes(data,plano.partes,saveFn):saveFn(data);_saveP.then(function(){if(q>500)db.collection('alertas').add({tipo:'saida_excessiva',medicamentoNome:sel.nome,quantidade:q,estoqueAntes:cur,autorNome:user.name,justificativa:obs.trim(),criadoEm:new Date().toISOString(),lido:false,tenant_id:tenantDe(user)}).catch(function(){});playSound('success');setOk((!canMove&&isGuest)?'Solicitação enviada!':'Saida de '+q+'x '+sel.nome+' registrada! ('+infoD.curto+(pedeUbs&&ubsSel?' · '+ubsSel:'')+(plano.partes.length>1?' · lotes: '+plano.resumo:'')+')');setQty('');setLote('');setVal('');setObs('');setWarn('');setTimeout(function(){setOk('');},4000);setSaving(false);}).catch(function(e){setErr('Erro: '+(e.message||'tente novamente'));setSaving(false);});}
   // Confirma a saída de controlado: grava a entry normal (afeta estoque) + o registro de auditoria em
   // saidas_controladas. Só chega aqui depois do popup validar paciente/médico/CRM/observação.
-  function confirmarSaidaControlada(payload){
+  function confirmarSaidaControlada(payload,extras){
     var saveFn=(!canMove&&isGuest&&props.onSolicitar)?props.onSolicitar:onSave;
-    return saveFn(controladoData).then(function(){
-      return db.collection('saidas_controladas').add(payload);
-    }).then(function(){
+    extras=extras||[];
+    var cd=controladoData;
+    // outras saídas do mesmo popup: o lote vem do que sobra depois das anteriores (FEFO)
+    var feitas=[{medicamentoId:cd.medicamentoId,tipo:'saida',quantidade:cd.quantidade,lote:cd.lote||'',validade:cd.validade||''}];
+    var jobs=extras.map(function(ex){
+      var md=medications.filter(function(m){return m.id===ex.medicamentoId;})[0]||{};
+      var pl=planoLotes(ex.medicamentoId,ex.quantidade,'',feitas.filter(function(f){return f.medicamentoId===ex.medicamentoId;}));
+      pl.partes.forEach(function(pt){feitas.push({medicamentoId:ex.medicamentoId,tipo:'saida',quantidade:pt.qty,lote:pt.lote,validade:pt.validade});});
+      return {ex:ex,partes:pl.partes,base:{medicamentoId:ex.medicamentoId,medicamentoNome:ex.medicamentoNome,ean:md.ean||'',tipo:'saida',observacao:ex.observacao||'',destino:'emergencia',destinoNome:DESTINOS.emergencia.label}};
+    });
+    var cadeia=saveFn(cd).then(function(){return db.collection('saidas_controladas').add(payload);});
+    jobs.forEach(function(j){cadeia=cadeia.then(function(){return gravarPartes(j.base,j.partes,saveFn);}).then(function(){return db.collection('saidas_controladas').add(j.ex);});});
+    return cadeia.then(function(){
       playSound('success');
       setShowControlado(false);setControladoData(null);
       setQty('');setLote('');setVal('');setObs('');setWarn('');setSel(null);setSearch('');
-      setOk((!canMove&&isGuest)?'Solicitação enviada!':'Saida controlada de '+controladoData.quantidade+'x '+controladoData.medicamentoNome+' registrada!');
+      setOk((!canMove&&isGuest)?'Solicitação enviada!':(jobs.length?'Saídas controladas registradas: '+(jobs.length+1)+'.':'Saida controlada de '+cd.quantidade+'x '+cd.medicamentoNome+' registrada!'));
       setTimeout(function(){setOk('');},4500);
     });
   }
@@ -2217,7 +2280,7 @@ return(
   )}
 
   <button data-tour="saida-demo-controlado" aria-hidden="true" tabIndex={-1} onClick={abrirDemoControlado} style={{position:'fixed',width:1,height:1,opacity:0,pointerEvents:'none',overflow:'hidden'}}/>
-  {showControlado&&controladoData&&<ModalSaidaControlada data={controladoData} user={user} onConfirm={demoControlado?demoConfirmControlado:confirmarSaidaControlada} onClose={function(){setShowControlado(false);setControladoData(null);setDemoControlado(false);}}/>}
+  {showControlado&&controladoData&&<ModalSaidaControlada data={controladoData} user={user} meds={medications.filter(function(m){return !m.inativo&&_ehMedControlado(m.nome)&&(stock[m.id]||0)>0;}).map(function(m){return {id:m.id,nome:m.nome,estoque:stock[m.id]||0};})} onConfirm={demoControlado?demoConfirmControlado:confirmarSaidaControlada} onClose={function(){setShowControlado(false);setControladoData(null);setDemoControlado(false);}}/>}
 </div>);}
 
 function HistModal(props){
@@ -2463,6 +2526,9 @@ var _limEst=useState(40);var limEst=_limEst[0];var setLimEst=_limEst[1];
   var _verifDescartes=useState(null);var verifDescartes=_verifDescartes[0];var setVerifDescartes=_verifDescartes[1];
   var _descarteLoteSel=useState(null);var descarteLoteSel=_descarteLoteSel[0];var setDescarteLoteSel=_descarteLoteSel[1];
   var _salvandoBaixa=useState(false);var salvandoBaixa=_salvandoBaixa[0];var setSalvandoBaixa=_salvandoBaixa[1];var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];var _importStatus=useState('');var importStatus=_importStatus[0];var setImportStatus=_importStatus[1];var _importing=useState(false);var importing=_importing[0];var setImporting=_importing[1];var _filtCat=useState('todos');var filtCat=_filtCat[0];var setFiltCat=_filtCat[1];var _ajusteId=useState(null);var ajusteId=_ajusteId[0];var setAjusteId=_ajusteId[1];var _ajusteQty=useState('');var ajusteQty=_ajusteQty[0];var setAjusteQty=_ajusteQty[1];var _ajusteMotivo=useState('');var ajusteMotivo=_ajusteMotivo[0];var setAjusteMotivo=_ajusteMotivo[1];var _ajusteMed=useState(null);var ajusteMed=_ajusteMed[0];var setAjusteMed=_ajusteMed[1];var _loteSel=useState(null);var loteSel=_loteSel[0];var setLoteSel=_loteSel[1];var _editLote=useState(null);var editLote=_editLote[0];var setEditLote=_editLote[1];var _editLoteVal=useState('');var editLoteVal=_editLoteVal[0];var setEditLoteVal=_editLoteVal[1];var _editLoteData=useState('');var editLoteData=_editLoteData[0];var setEditLoteData=_editLoteData[1];
+  var _ajNovo=useState(false);var ajNovo=_ajNovo[0];var setAjNovo=_ajNovo[1];// balanço de LOTE NOVO (lote e validade obrigatórios)
+  var _ajNovoLv=useState({lote:'',validade:'',sl:false});var ajNovoLv=_ajNovoLv[0];var setAjNovoLv=_ajNovoLv[1];
+  useEffect(function(){setAjNovo(false);setAjNovoLv({lote:'',validade:'',sl:false});},[ajusteId]);
 var isManager=(user.role==='gestor'||user.role==='tecnico');var hoje=new Date();
 function getDiasVal(val){var d=_dataValidade(val);if(!d)return null;return Math.ceil((d-hoje)/86400000);}
 // PERF: índice de lotes por medicamento em UMA passada (2 varreduras de entries), memoizado.
@@ -2612,6 +2678,17 @@ function delMed(id){if(!confirm('Excluir medicamento?'))return;db.collection('me
 // os lançamentos de entrada daquele lote, igual já faz o editor de lote do histórico (HistModal).
 function salvarEditLote(){if(bloqueadoRO())return;if(!editLote)return;setSaving(true);var ps=[];if(editLote.medId)ps.push(db.collection('medicamentos').doc(editLote.medId).update({loteAtual:editLoteVal.trim(),validadeAtual:_normValidade(editLoteData)}));var _kEd=loteKey(editLote.lote);var entsDoLote=(editLote.medId&&_kEd)?entries.filter(function(e){return e.medicamentoId===editLote.medId&&(e.tipo==='entrada'||e.tipo==='saida')&&loteKey(e.lote)===_kEd;}):[];/* entradas E saídas: senão as saídas viram órfãs */entsDoLote.forEach(function(e){ps.push(db.collection('entries').doc(e.id).update({lote:editLoteVal.trim(),validade:_normValidade(editLoteData)}));});Promise.all(ps).then(function(){if(entsDoLote.length>0)_bumpEntriesVersion(user,entsDoLote.map(function(e){return e.id;}));setEditLote(null);setSaving(false);}).catch(function(e){alert('Erro: '+e.message);setSaving(false);});}
 function salvarAjuste(){if(bloqueadoRO())return;if(!ajusteMed)return;var nq=parseInt(ajusteQty);if(isNaN(nq)||nq<0){alert('Quantidade inválida.');return;}if(!ajusteMotivo.trim()){alert('Informe o motivo.');return;}
+  // O balanço SEMPRE precisa de um lote: ou um lote que já existe (escolhido na lista) ou um lote novo (lote e validade
+  // obrigatórios). Sem isso a quantidade virava "sem lote" e gerava saídas fantasmas.
+  var _lotesEx=lotesDisponiveis(entriesPorMed(entries)[ajusteMed.id]||[]);var _novo=ajNovo||_lotesEx.length===0;
+  if(_novo){
+    if(!(nq>=1)){alert('Informe a quantidade do lote novo.');return;}
+    var _e=_validarLoteVal(ajNovoLv);if(_e){alert(_e);return;}
+    var _lt=ajNovoLv.sl?_loteSL(ajNovoLv.validade):ajNovoLv.lote.trim();
+    if(_lotesEx.some(function(l){return loteKey(l.lote)===loteKey(_lt);})){alert('O lote '+_lt+' já existe neste medicamento. Selecione-o na lista de lotes para fazer o balanço dele.');return;}
+    setSaving(true);db.collection('entries').add({medicamentoId:ajusteMed.id,medicamentoNome:ajusteMed.nome,ean:ajusteMed.ean||'',tipo:'entrada',quantidade:nq,lote:_lt,validade:_normValidade(ajNovoLv.validade),observacao:'Balanço (lote novo): '+ajusteMotivo.trim()+' (era 0, passou a '+nq+')',criadoEm:new Date().toISOString(),date:todayStr(),autorId:user.uid,autorNome:user.name,autorCargo:user.role,autorColor:user.color||B,isAjuste:true,tenant_id:tenantDe(user)}).then(function(){setAjusteId(null);setAjusteMed(null);setAjusteQty('');setAjusteMotivo('');setLoteSel(null);setSaving(false);}).catch(function(e){alert(e.message);setSaving(false);});
+    return;}
+  if(!loteSel){alert('Selecione qual lote está sendo ajustado (ou escolha "Lote novo").');return;}
   // Usa o saldo BRUTO (sem zerar negativo) como base do ajuste — se não usasse, um medicamento com saída
   // registrada a mais que entrada (saldo real negativo, mas exibido como "0") nunca fecharia o balanço:
   // o ajuste calcularia a diferença a partir do "0" fictício, e o déficit escondido continuaria por baixo.
@@ -2691,27 +2768,28 @@ function darBaixaVencido(){if(bloqueadoRO())return;
 {editLote&&(<Modal onClose={function(){setEditLote(null);}} title="Editar Lote e Validade"><div className="inf" style={{marginBottom:12}}>Medicamento: <strong>{editLote.nome}</strong></div><Lbl c="Lote"/><input value={editLoteVal} onChange={function(e){setEditLoteVal(e.target.value);}} placeholder="Ex: ABC1234" className="inp" autoFocus/><Lbl c="Validade (MM/AAAA)"/><input value={editLoteData} onChange={function(e){setEditLoteData(e.target.value);}} placeholder="Ex: 03/2027" className="inp"/><div style={{display:'flex',gap:10}}><button onClick={function(){setEditLote(null);}} className="bs" style={{flex:1}}>Cancelar</button><button onClick={salvarEditLote} disabled={saving} className="bp" style={{flex:2,opacity:saving?0.7:1}}>{saving?'Salvando...':'Salvar'}</button></div></Modal>)}
 {ajusteId&&ajusteMed&&(function(){
   var lotesAjuste=lotesDisponiveis(entriesPorMed(entries)[ajusteMed.id]||[]);
-  var qAtual=loteSel?loteSel.qty:(stock[ajusteMed.id]||0);
+  var _modoNovo=ajNovo||lotesAjuste.length===0;var _semLote=!_modoNovo&&!loteSel;
+  var qAtual=_modoNovo?0:(loteSel?loteSel.qty:0);
   return <Modal onClose={function(){setAjusteId(null);setAjusteMed(null);setLoteSel(null);setAjusteQty('');setAjusteMotivo('');}} title="Balanço de Estoque">
     <div style={{fontWeight:700,color:B,fontSize:15,marginBottom:12}}>{ajusteMed.nome}</div>
-    {lotesAjuste.length>0&&<div style={{marginBottom:14}}>
-      <Lbl c="Selecione o lote (opcional)"/>
+    {(function(){var modoNovo=ajNovo||lotesAjuste.length===0;var sel=function(on){return {padding:'10px 12px',borderRadius:10,border:'1.5px solid '+(on?B:'#E2E8F0'),background:on?'#EFF6FF':'#F8FAFC',fontWeight:on?700:500,fontSize:12,cursor:'pointer',textAlign:'left',color:on?B:'#1E293B',display:'flex',justifyContent:'space-between',alignItems:'center'};};
+      return <div style={{marginBottom:14}} data-fc="balanco-lotes">
+      <Lbl c={lotesAjuste.length>0?'Qual lote está sendo ajustado? *':'Este medicamento ainda não tem lote com saldo *'}/>
       <div style={{display:'flex',flexDirection:'column',gap:6}}>
-        <button onClick={function(){setLoteSel(null);setAjusteQty('');}} style={{padding:'10px 12px',borderRadius:10,border:'1.5px solid '+(loteSel===null?B:'#E2E8F0'),background:loteSel===null?'#EFF6FF':'#F8FAFC',fontWeight:loteSel===null?700:500,fontSize:12,cursor:'pointer',textAlign:'left',color:loteSel===null?B:'#64748B'}}>
-          🗂 Todos os lotes (estoque geral: {stock[ajusteMed.id]||0} un.)
-        </button>
-        {lotesAjuste.map(function(l,i){return <button key={i} onClick={function(){setLoteSel(l);setAjusteQty('');}} style={{padding:'10px 12px',borderRadius:10,border:'1.5px solid '+(loteSel&&loteSel.lote===l.lote?B:'#E2E8F0'),background:loteSel&&loteSel.lote===l.lote?'#EFF6FF':'#F8FAFC',fontWeight:loteSel&&loteSel.lote===l.lote?700:500,fontSize:12,cursor:'pointer',textAlign:'left',color:loteSel&&loteSel.lote===l.lote?B:'#1E293B',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-          <span>📦 Lote {l.lote}{l.validade?' · Val: '+l.validade:''}</span>
-          <span style={{fontWeight:800,color:loteSel&&loteSel.lote===l.lote?B:'#059669'}}>{l.qty} un.</span>
+        {lotesAjuste.map(function(l,i){var on=!modoNovo&&loteSel&&loteSel.lote===l.lote;return <button key={i} data-fc="balanco-lote" onClick={function(){setAjNovo(false);setLoteSel(l);setAjusteQty('');}} style={sel(on)}>
+          <span>📦 {l.lote?'Lote '+l.lote:'Sem lote (corrigir)'}{l.validade?' · Val: '+l.validade:''}</span>
+          <span style={{fontWeight:800,color:on?B:'#059669'}}>{l.qty} un.</span>
         </button>;})}
+        {lotesAjuste.length>0&&<button data-fc="balanco-lote-novo" onClick={function(){setAjNovo(true);setLoteSel(null);setAjusteQty('');}} style={sel(modoNovo)}><span>➕ Lote novo (não está na lista)</span></button>}
       </div>
-    </div>}
+      {modoNovo&&<div style={{marginTop:10,background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:10,padding:'10px 12px'}}><div style={{fontSize:12,color:'#64748B',marginBottom:6}}>Lote novo: informe o lote e a validade (obrigatórios).</div><LoteValidadeCampos dataFc="balanco-novo" valor={ajNovoLv} permiteSL obrigatorio onChange={setAjNovoLv}/></div>}
+    </div>;})()}
     <div style={{background:'#EFF6FF',borderRadius:10,padding:'10px 14px',marginBottom:12,display:'flex',justifyContent:'space-between',alignItems:'center',border:'1px solid #BFDBFE'}}>
-      <span style={{fontSize:12,color:'#64748B'}}>{loteSel?'Lote '+loteSel.lote+':':'Estoque atual:'}</span>
+      <span style={{fontSize:12,color:'#64748B'}}>{_modoNovo?'Lote novo — saldo atual:':(loteSel?(loteSel.lote?'Lote '+loteSel.lote+':':'Sem lote:'):'Escolha o lote acima')}</span>
       <span style={{fontSize:28,fontWeight:900,color:B}}>{qAtual}</span>
     </div>
-    <Lbl c="Quantidade real na prateleira"/>
-    <input value={ajusteQty} onChange={function(e){setAjusteQty(e.target.value.replace(/[^0-9]/g,''));}} placeholder="Digite a quantidade correta" className="inp" style={{fontSize:24,fontWeight:800,textAlign:'center'}} autoFocus/>
+    <Lbl c={_modoNovo?'Quantidade do lote novo (na prateleira)':'Quantidade real na prateleira'}/>
+    <input value={ajusteQty} disabled={_semLote} onChange={function(e){setAjusteQty(e.target.value.replace(/[^0-9]/g,''));}} placeholder={_semLote?'Escolha o lote primeiro':'Digite a quantidade correta'} className="inp" style={{fontSize:24,fontWeight:800,textAlign:'center'}}/>
     {ajusteQty!==''&&parseInt(ajusteQty)!==qAtual&&<div style={{textAlign:'center',marginBottom:8,fontWeight:800,color:parseInt(ajusteQty)>qAtual?'#059669':'#DC2626',fontSize:15}}>
       Diferença: {parseInt(ajusteQty)>qAtual?'+':''}{parseInt(ajusteQty)-qAtual}
     </div>}
@@ -2719,7 +2797,7 @@ function darBaixaVencido(){if(bloqueadoRO())return;
     <textarea value={ajusteMotivo} onChange={function(e){setAjusteMotivo(e.target.value);}} rows={2} className="inp" placeholder="Ex: Contagem física divergente" style={{resize:'none'}}/>
     <div style={{display:'flex',gap:10}}>
       <button onClick={function(){setAjusteId(null);setAjusteMed(null);setLoteSel(null);setAjusteQty('');setAjusteMotivo('');}} className="bs" style={{flex:1}}>Cancelar</button>
-      <button onClick={salvarAjuste} disabled={saving||!ajusteMotivo.trim()||ajusteQty===''} className="br" style={{flex:2,opacity:(saving||!ajusteMotivo.trim()||ajusteQty==='')?0.45:1}}>{saving?'Ajustando...':'Confirmar Balanço'}</button>
+      <button onClick={salvarAjuste} disabled={saving||_semLote||!ajusteMotivo.trim()||ajusteQty===''} className="br" style={{flex:2,opacity:(saving||_semLote||!ajusteMotivo.trim()||ajusteQty==='')?0.45:1}}>{saving?'Ajustando...':'Confirmar Balanço'}</button>
     </div>
   </Modal>;})()}
 <div className="tab-sw">{subTabs.map(function(t){return <button key={t.id} onClick={function(){setSub(t.id);}} className={sub===t.id?'on':''}>{t.label}</button>;})}</div>
@@ -2735,7 +2813,7 @@ function darBaixaVencido(){if(bloqueadoRO())return;
   var acoes=[
     can(user.role,'editar')&&{ic:'edit',cor:'#1351B4',bg:'#EFF6FF',title:'Editar',fn:function(){setEditId(m.id);setEditNome(m.nome);setEditMin(m.minEstoque||'');setEditTipo(m.cat||'medicamento');}},
     can(user.role,'editar')&&{ic:'trash',cor:'#DC2626',bg:'#FEE2E2',title:'Excluir',fn:function(){delMed(m.id);}},
-    !ro&&{ic:'scale',cor:'#B45309',bg:'#FEF3C7',title:'Balanço',fn:function(){setAjusteId(m.id);setAjusteMed(m);setAjusteQty(String(m.est));}},
+    !ro&&{ic:'scale',cor:'#B45309',bg:'#FEF3C7',title:'Balanço',fn:function(){setAjusteId(m.id);setAjusteMed(m);setAjusteQty('');setLoteSel(null);}},
     !ro&&{ic:'recycle',cor:'#DC2626',bg:'#FEE2E2',title:'Descarte por vencimento',fn:function(){setDescarteMed(m);setDescarteLoteSel(m.lotes&&m.lotes.length===1?m.lotes[0]:null);var loteInicial=m.lotes&&m.lotes.length===1?m.lotes[0]:null;setShowBaixa({id:m.id,medId:m.id,nome:m.nome,lote:loteInicial?loteInicial.lote:(m.info.lote||''),validade:loteInicial?loteInicial.validade:(m.info.validade||''),est:loteInicial?loteInicial.qty:m.est});setQtdBaixa('');}},
     !ro&&{ic:'calendar',cor:'#0C6B3E',bg:'#F0FDF4',title:'Lote/validade',fn:function(){var li=m.lotes&&m.lotes.length>0?m.lotes[0]:{lote:m.info.lote||'',validade:m.info.validade||''};setEditLote({medId:m.id,nome:m.nome,lote:li.lote||''});setEditLoteVal(li.lote||'');setEditLoteData(li.validade||'');}}
   ].filter(Boolean);
