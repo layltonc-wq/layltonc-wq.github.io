@@ -24,7 +24,7 @@ async function rodar(br, T, ok) {
   ok(r.errs.filter((e) => !e.includes('ERR_FAILED')).length === 0, 'Itaquitinga: sem erros JS ' + r.errs.join('|'));
   await r.pg.context().close();
   r = await rodar(br, 'vicencia-pe', ok);
-  ok(r.t.includes('Permuta, Doação e Empréstimos') && !r.t.includes('Pedidos por ata e Conferir pedidos') && !r.t.includes('CAF, Satélite'), 'Vicência: só os tópicos que valem para ela');
+  ok(r.t.includes('Permuta, Doação e Empréstimos') && r.t.includes('Pedidos por ata e Conferir pedidos') && !r.t.includes('CAF, Satélite'), 'Vicência: tem Pedidos por ata, mas não CAF/Satélite');
   ok(r.errs.filter((e) => !e.includes('ERR_FAILED')).length === 0, 'Vicência: sem erros JS ' + r.errs.join('|'));
   await r.pg.context().close();
   await fim(br);
