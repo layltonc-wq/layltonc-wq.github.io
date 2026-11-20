@@ -48,7 +48,7 @@ const ok = (c, m) => { console.log((c ? 'OK  ' : 'FALHA ') + m); if (!c) falhas+
   r = await avisos.avisar(db, 'chamado', { tipo: 'problema', nome: 'Ana', texto: 'Não consigo entrar', tenant_id: 'vicencia-pe' }, deps(base));
   ok(r.enviado, 'chamado de suporte sempre avisa');
   r = await avisos.avisar(db, 'erro', { teste: true, mensagem: 'Teste' }, deps(base));
-  ok(r.enviado && emails[emails.length - 1].text.includes('teste de aviso'), 'o aviso de teste ignora o teto');
+  ok(r.enviado && /teste de aviso/i.test(emails[emails.length - 1].text), 'o aviso de teste ignora o teto');
 
   // chave desligada
   await db.collection('config_avisos').doc('principal').set({ avisarErros: false }, { merge: true });
