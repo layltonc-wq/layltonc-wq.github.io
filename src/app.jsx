@@ -7097,7 +7097,7 @@ var HELP_TOPICS=[
     passos:['Escolha o período e veja a sugestão de pedido por medicamento.','Ajuste a quantidade onde precisar. O valor total é calculado pela ata.','Preencha os dados do pedido oficial e gere o PDF ou o Excel.','Ao "Fechar Pedido", o saldo das atas é descontado.','Em "Gerenciar Atas", importe a ata (Word ou Excel) e confira marca, fornecedor e CNPJ.'],
     dicas:['Pedido e atas são para gestor e técnico.']},
   {id:'transferencia',tab:'transferencia',titulo:'CAF, Satélite, transferência e solicitação',req:function(u){return temLocais(u);},resumo:'Dois estoques separados, transferência entre eles e os pedidos do Satélite à CAF.',
-    passos:['Quem tem acesso aos dois locais escolhe CAF ou Satélite no topo da tela. Cada local tem o seu próprio estoque, e tudo o que você registrar vale para o local escolhido.','Na CAF, abra "Transferência CAF ⇄ Satélite": escolha o produto e a quantidade e envie. O estoque sai de um local e entra no outro, com o mesmo lote e validade.','No Satélite, a aba "Solicitação" tem "Pedir à CAF" (para pedir reposição) e "Devolver à CAF" (para devolver o que não vai usar).','Na CAF, os pedidos do Satélite aparecem em "Pedidos do Satélite": confira, informe o que será enviado e conclua.'],
+    passos:['Quem tem acesso aos dois locais escolhe CAF ou Satélite no topo da tela. Cada local tem o seu próprio estoque, e tudo o que você registrar vale para o local escolhido.','Na CAF, abra "Transferência CAF ⇄ Satélite": escolha o produto e a quantidade e envie. O estoque sai de um local e entra no outro, com o mesmo lote e validade.','No Satélite, a aba "Solicitação" tem "Pedir à CAF" (para pedir reposição) e "Devolver à CAF" (para devolver o que não vai usar).','Na CAF, os pedidos do Satélite aparecem em "Pedidos do Satélite": confira, informe o que será enviado e conclua.','Gestor e técnico têm no menu "Estoque CAF + Satélite": os dois locais lado a lado e a soma, com busca, filtros e Excel (só consulta).'],
     dicas:['Conta só de consulta vê o estoque, mas não movimenta.','O histórico de cada transferência e de cada pedido fica logo abaixo.','No Satélite, toda saída é registrada como Emergência.']},
   {id:'permuta',tab:'recebimento',titulo:'Permuta, Doação e Empréstimos',resumo:'Entradas e saídas que não são compra: troca com outro serviço, doação recebida e medicamento emprestado.',
     passos:['Em Recebimento, escolha Permuta, Doação ou Empréstimos.','Permuta: informe com quem foi, o item que saiu (sai pelo lote que vence primeiro) e o que chegou em troca. Se lote e validade ainda não chegaram, marque "pendentes" e informe depois.','Doação: informe quem doou e, para cada item, a quantidade, o lote e a validade. Produto sem lote? Toque em SL.','Empréstimos: escolha "Emprestamos" (o produto sai e fica em "Nos devem") ou "Recebemos emprestado" (entra e fica em "Devemos").','Quando devolverem, ou quando devolvermos, toque em "Receber de volta" ou "Devolver". Dá para acertar em partes; ao zerar, vira "Acertado".','Se o medicamento não estiver cadastrado, toque em "+ Cadastrar … como novo medicamento" na busca.'],
@@ -8091,6 +8091,68 @@ function EntradaEspecial(props){
       {lista.slice(0,15).map(function(e){return <div key={e.id} style={{display:'flex',gap:8,fontSize:12.5,padding:'6px 0',borderTop:'1px solid #F1F5F9'}}><span style={{width:62,fontWeight:700,color:e.entradaEspecial==='doacao'?'#0B7A5F':'#7C3AED'}}>{e.entradaEspecial==='doacao'?'Doação':e.entradaEspecial==='emprestimo'?'Empréstimo':'Permuta'}</span><span style={{flex:1}}>{e.tipo==='saida'?'Saiu ':'Entrou '}{e.quantidade}x {e.medicamentoNome}{e.lote?' · '+e.lote:''}{e.lotePendente?' · PENDENTE':''}</span><span style={{color:'#94A3B8'}}>{fmtD(e.criadoEm)}</span></div>;})}</div>}
   </div>);
 }
+// ===== Visão somada CAF + Satélite (só consulta) =====
+// Usa os saldos que já existem em cada medicamento: estoqueAtual = total da prefeitura e estoqueLocal.satelite = parte do
+// Satélite; CAF = total - Satélite (mesma regra do app inteiro). Nada é gravado aqui.
+function TabVisaoSomada(props){
+  var meds=props.medications||[];
+  var _q=useState('');var q=_q[0],setQ=_q[1];
+  var _cat=useState('todos');var cat=_cat[0],setCat=_cat[1];
+  var _f=useState('com');var filtro=_f[0],setFiltro=_f[1];// 'com' (com estoque) | 'todos' | 'baixo'
+  var linhas=meds.filter(function(m){return !m.inativo;}).map(function(m){
+    var tot=Math.max(0,m.estoqueAtual||0),sat=Math.max(0,(m.estoqueLocal&&m.estoqueLocal.satelite)||0);
+    if(sat>tot)sat=tot;
+    return {id:m.id,nome:m.nome||'',cat:m.categoria||'medicamento',caf:tot-sat,sat:sat,tot:tot,min:m.minEstoque||0};
+  });
+  var nq=_semAcento(q);
+  var lista=linhas.filter(function(l){
+    if(cat!=='todos'&&l.cat!==cat)return false;
+    if(nq&&_semAcento(l.nome).indexOf(nq)<0)return false;
+    if(filtro==='com'&&l.tot<=0)return false;
+    if(filtro==='baixo'&&!(l.min>0&&l.tot<=l.min))return false;
+    return true;
+  }).sort(function(x,y){return x.nome.localeCompare(y.nome,'pt-BR');});
+  var somaCaf=lista.reduce(function(s,l){return s+l.caf;},0),somaSat=lista.reduce(function(s,l){return s+l.sat;},0);
+  var baixos=linhas.filter(function(l){return l.min>0&&l.tot<=l.min;}).length;
+  var comCaf=linhas.filter(function(l){return l.caf>0;}).length,comSat=linhas.filter(function(l){return l.sat>0;}).length;
+  function exportar(){
+    var rows=[['Categoria','Medicamento','CAF','Satélite','Total','Mínimo']];
+    lista.forEach(function(l){rows.push([(TIPOS[l.cat]||TIPOS.medicamento).label,l.nome,l.caf,l.sat,l.tot,l.min||'']);});
+    rows.push(['','TOTAL (lista filtrada)',somaCaf,somaSat,somaCaf+somaSat,'']);
+    var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'CAF + Satélite');XLSX.writeFile(wb,'estoque_caf_satelite_'+todayStr()+'.xlsx');
+  }
+  function pill(on,t,fn,fc){return <button type="button" data-fc={fc} onClick={fn} className={'pill'+(on?' on':'')}>{t}</button>;}
+  var card={background:'#fff',border:'1px solid #E2E8F0',borderRadius:12,padding:'10px 12px'};
+  var num={textAlign:'right',fontVariantNumeric:'tabular-nums'};
+  return(<div data-fc="visao-somada" style={{maxWidth:860,margin:'0 auto',padding:'16px 12px 90px'}}>
+    <div style={{fontWeight:800,fontSize:20,color:'#1E293B',marginBottom:2}}>Estoque CAF + Satélite</div>
+    <div style={{fontSize:13,color:'#64748B',marginBottom:12}}>Os dois locais lado a lado. Só consulta: para movimentar, escolha o local no topo.</div>
+    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))',gap:8,marginBottom:12}}>
+      <div style={card}><div style={{fontSize:11.5,color:'#64748B'}}>Itens com saldo na CAF</div><div data-fc="vs-caf" style={{fontWeight:800,fontSize:22,color:'#1351B4'}}>{comCaf}</div></div>
+      <div style={card}><div style={{fontSize:11.5,color:'#64748B'}}>Itens com saldo no Satélite</div><div data-fc="vs-sat" style={{fontWeight:800,fontSize:22,color:'#0B7A5F'}}>{comSat}</div></div>
+      <div style={card}><div style={{fontSize:11.5,color:'#64748B'}}>No mínimo ou abaixo (soma)</div><div data-fc="vs-baixo" style={{fontWeight:800,fontSize:22,color:baixos?'#C2362D':'#0B7A5F'}}>{baixos}</div></div>
+    </div>
+    <div style={{display:'flex',gap:8,marginBottom:8,flexWrap:'wrap'}}>
+      <input className="inp" data-fc="vs-busca" value={q} onChange={function(e){setQ(e.target.value);}} placeholder="Buscar medicamento..." style={{marginBottom:0,flex:1,minWidth:160}}/>
+      <button type="button" data-fc="vs-excel" onClick={exportar} className="bs" style={{whiteSpace:'nowrap',padding:'0 14px',width:'auto'}}>Baixar Excel</button>
+    </div>
+    <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:10}}>
+      {pill(filtro==='com','Com estoque',function(){setFiltro('com');},'vs-f-com')}{pill(filtro==='baixo','No mínimo ou abaixo',function(){setFiltro('baixo');},'vs-f-baixo')}{pill(filtro==='todos','Todos',function(){setFiltro('todos');},'vs-f-todos')}
+      <span style={{width:8}}/>
+      {pill(cat==='todos','Todas as categorias',function(){setCat('todos');},'vs-c-todos')}{Object.keys(TIPOS).map(function(k){return <span key={k}>{pill(cat===k,TIPOS[k].label,function(){setCat(k);},'vs-c-'+k)}</span>;})}
+    </div>
+    <div style={{background:'#fff',border:'1px solid #E2E8F0',borderRadius:12,overflow:'hidden'}}>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 64px 74px 64px',gap:6,padding:'9px 12px',background:'#F8FAFC',fontSize:11.5,fontWeight:800,color:'#475569'}}><span>Medicamento</span><span style={num}>CAF</span><span style={num}>Satélite</span><span style={num}>Total</span></div>
+      {lista.length===0&&<div style={{padding:'16px 12px',fontSize:13,color:'#94A3B8'}}>Nenhum item encontrado.</div>}
+      {lista.map(function(l){var baixo=l.min>0&&l.tot<=l.min;return(<div key={l.id} data-fc="vs-linha" style={{display:'grid',gridTemplateColumns:'1fr 64px 74px 64px',gap:6,padding:'8px 12px',borderTop:'1px solid #F1F5F9',fontSize:13,alignItems:'center'}}>
+        <span>{l.nome}{baixo&&<span style={{marginLeft:6,fontSize:10.5,fontWeight:800,color:'#C2362D',background:'#FDECEA',borderRadius:99,padding:'2px 7px'}}>mínimo {l.min}</span>}</span>
+        <span style={Object.assign({},num,{color:l.caf?'#1351B4':'#94A3B8',fontWeight:700})}>{l.caf}</span>
+        <span style={Object.assign({},num,{color:l.sat?'#0B7A5F':'#94A3B8',fontWeight:700})}>{l.sat}</span>
+        <span style={Object.assign({},num,{fontWeight:800})}>{l.tot}</span></div>);})}
+      <div data-fc="vs-total" style={{display:'grid',gridTemplateColumns:'1fr 64px 74px 64px',gap:6,padding:'9px 12px',borderTop:'2px solid #E2E8F0',background:'#F8FAFC',fontSize:12.5,fontWeight:800}}><span>Total da lista ({lista.length} itens)</span><span style={num}>{somaCaf}</span><span style={num}>{somaSat}</span><span style={num}>{somaCaf+somaSat}</span></div>
+    </div>
+  </div>);
+}
 // ===== Pedidos de reposição do Satélite à CAF =====
 // O Satélite escolhe produtos (só os NOMES, sem saldo da CAF) e as quantidades; o CAF vê o pedido, confere o estoque dele,
 // ajusta, devolve, cancela ou atende (a transferência acontece na hora, com lote/validade, e fica ligada ao pedido).
@@ -8564,6 +8626,64 @@ function TabAjuda(props){
   </div>);
 }
 
+// Avisos por e-mail e WhatsApp (administrador do FarmaControl): configuração em config_avisos/principal; quem envia é a
+// Cloud Function (functions/avisos.js) quando entra um erro (erros_app) ou um chamado (chamados_suporte).
+function AvisosConfig(){
+  var VAZIO={ativo:false,avisarErros:true,avisarChamados:true,emailPara:'',emailDe:'',emailSenha:'',whatsappFone:'',whatsappChave:''};
+  var _f=useState(VAZIO);var f=_f[0],setF=_f[1];
+  var _res=useState(null);var res=_res[0],setRes=_res[1];
+  var _msg=useState('');var msg=_msg[0],setMsg=_msg[1];
+  var _b=useState(false);var busy=_b[0],setBusy=_b[1];
+  var _sv=useState(false);var carregou=_sv[0],setCarregou=_sv[1];
+  useEffect(function(){return db.collection('config_avisos').doc('principal').onSnapshot(function(sn){
+    var d=sn.exists?sn.data():{};
+    setRes(d.ultimoResultado||null);
+    setF(function(old){return carregou?old:Object.assign({},VAZIO,d);});
+    setCarregou(true);
+  },function(){setCarregou(true);});},[]);
+  function set(k,v){var o={};o[k]=v;setF(Object.assign({},f,o));setMsg('');}
+  function salvar(){
+    setBusy(true);setMsg('');
+    var d={ativo:!!f.ativo,avisarErros:!!f.avisarErros,avisarChamados:!!f.avisarChamados,emailPara:f.emailPara.trim(),emailDe:f.emailDe.trim(),emailSenha:f.emailSenha.trim(),whatsappFone:f.whatsappFone.trim(),whatsappChave:f.whatsappChave.trim(),atualizadoEm:new Date().toISOString()};
+    db.collection('config_avisos').doc('principal').set(d,{merge:true}).then(function(){setBusy(false);setMsg('ok:Configuração salva.');}).catch(function(e){setBusy(false);setMsg('e:Não foi possível salvar: '+((e&&e.message)||'erro'));});
+  }
+  function testar(){
+    setBusy(true);setMsg('');
+    db.collection('erros_app').add(Object.assign({mensagem:'Teste de aviso',teste:true,origem:'teste',criadoEm:new Date().toISOString()},_fcInfoTecnica()))
+      .then(function(){setBusy(false);setMsg('ok:Teste enviado. Em até 1 minuto chega no e-mail e no WhatsApp; o resultado aparece abaixo.');}).catch(function(e){setBusy(false);setMsg('e:Não foi possível enviar o teste: '+((e&&e.message)||'erro'));});
+  }
+  function quando(iso){if(!iso)return '';var d=new Date(iso);if(isNaN(d))return '';return d.toLocaleDateString('pt-BR')+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}
+  var lb={fontSize:11.5,fontWeight:700,color:'#64748B',display:'block',marginBottom:3};
+  var card={background:'#fff',borderRadius:12,border:'1px solid #E2E8F0',padding:'12px'};
+  function chk(k,t){return <label style={{display:'flex',alignItems:'center',gap:8,fontSize:13,marginBottom:6,cursor:'pointer'}}><input type="checkbox" data-fc={'aviso-'+k} checked={!!f[k]} onChange={function(e){set(k,e.target.checked);}}/> {t}</label>;}
+  return(<div data-fc="avisos-config" style={Object.assign({},card,{marginTop:12})}>
+    <div style={{fontWeight:800,fontSize:13,color:'#334155',marginBottom:2}}>Avisos por e-mail e WhatsApp</div>
+    <div style={{fontSize:12,color:'#64748B',marginBottom:10}}>Quando o app registrar um erro ou alguém abrir um chamado, você recebe uma mensagem. O mesmo erro só avisa 1 vez por hora e há no máximo 10 avisos por hora.</div>
+    {chk('ativo','Avisos ligados')}
+    {chk('avisarErros','Avisar quando o app registrar um erro')}
+    {chk('avisarChamados','Avisar quando abrirem um chamado de suporte')}
+    <div style={{fontWeight:700,fontSize:12.5,color:'#1351B4',margin:'10px 0 6px'}}>E-mail (Gmail)</div>
+    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+      <div><label style={lb}>Receber em</label><input className="inp" data-fc="aviso-emailPara" value={f.emailPara} onChange={function(e){set('emailPara',e.target.value);}} placeholder="seu@email.com" style={{marginBottom:0}}/></div>
+      <div><label style={lb}>Enviar pelo Gmail</label><input className="inp" data-fc="aviso-emailDe" value={f.emailDe} onChange={function(e){set('emailDe',e.target.value);}} placeholder="conta@gmail.com" style={{marginBottom:0}}/></div>
+    </div>
+    <div style={{marginTop:8}}><label style={lb}>Senha de app do Gmail (16 letras)</label><input className="inp" type="password" data-fc="aviso-emailSenha" value={f.emailSenha} onChange={function(e){set('emailSenha',e.target.value);}} placeholder="xxxx xxxx xxxx xxxx" style={{marginBottom:0}} autoComplete="off"/></div>
+    <div style={{fontSize:11.5,color:'#64748B',marginTop:4}}>Na conta Google: Segurança → Verificação em duas etapas → Senhas de app → criar uma chamada "FarmaControl". Não use a senha normal do e-mail.</div>
+    <div style={{fontWeight:700,fontSize:12.5,color:'#1351B4',margin:'12px 0 6px'}}>WhatsApp (CallMeBot, gratuito)</div>
+    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+      <div><label style={lb}>Seu WhatsApp com DDD</label><input className="inp" data-fc="aviso-whatsappFone" value={f.whatsappFone} onChange={function(e){set('whatsappFone',e.target.value);}} placeholder="+55 81 99999-0000" style={{marginBottom:0}}/></div>
+      <div><label style={lb}>Chave do CallMeBot</label><input className="inp" data-fc="aviso-whatsappChave" value={f.whatsappChave} onChange={function(e){set('whatsappChave',e.target.value);}} placeholder="123456" style={{marginBottom:0}} autoComplete="off"/></div>
+    </div>
+    <div style={{fontSize:11.5,color:'#64748B',marginTop:4}}>Para ter a chave: no WhatsApp, salve o contato +34 644 51 95 23 e envie a ele a mensagem "I allow callmebot to send me messages". Ele responde com a sua chave.</div>
+    {msg&&<div className={msg.indexOf('ok:')===0?'ok':'er'} data-fc="aviso-msg" style={{marginTop:10}}>{msg.slice(msg.indexOf(':')+1)}</div>}
+    <div style={{display:'flex',gap:8,marginTop:12}}>
+      <button type="button" data-fc="aviso-salvar" disabled={busy} onClick={salvar} style={{flex:1,padding:'11px',borderRadius:10,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,cursor:'pointer'}}>Salvar</button>
+      <button type="button" data-fc="aviso-testar" disabled={busy||!f.ativo} onClick={testar} style={{flex:1,padding:'11px',borderRadius:10,border:'1.5px solid #1351B4',background:'#fff',color:'#1351B4',fontWeight:700,cursor:'pointer',opacity:f.ativo?1:0.5}}>Enviar aviso de teste</button>
+    </div>
+    {!f.ativo&&<div style={{fontSize:11.5,color:'#94A3B8',marginTop:6}}>Ligue os avisos e salve antes de testar.</div>}
+    {res&&<div data-fc="aviso-resultado" style={{fontSize:12,color:'#475569',marginTop:10}}>Último envio{res.teste?' (teste)':''}: {quando(res.em)} · E-mail: <b>{res.email||'—'}</b> · WhatsApp: <b>{res.whatsapp||'—'}</b></div>}
+  </div>);
+}
 // Painel do administrador do FarmaControl: chamados recebidos e erros automáticos de todas as prefeituras.
 function SuporteAdmin(props){
   var _c=useState([]);var chamados=_c[0],setChamados=_c[1];
@@ -8587,7 +8707,8 @@ function SuporteAdmin(props){
       <span style={{fontSize:12,fontWeight:700,color:abertos.length||erros.length?'#B91C1C':'#166534'}}>{abertos.length} chamado(s) aberto(s) · {erros.length} erro(s)</span>
     </button>
     {aberto&&<div style={{marginTop:10}}>
-      <div style={{fontWeight:800,fontSize:13,color:'#334155',margin:'6px 0'}}>Chamados</div>
+      <AvisosConfig/>
+      <div style={{fontWeight:800,fontSize:13,color:'#334155',margin:'12px 0 6px'}}>Chamados</div>
       {chamados.length===0&&<div style={{fontSize:12,color:'#94A3B8'}}>Nenhum chamado.</div>}
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
         {chamados.map(function(c){var fechado=c.status==='resolvido';return(<div key={c.id} style={card}>
@@ -8898,6 +9019,7 @@ function TabPrevisao(props){
   var user=props.user;var entries=props.entries;var medications=props.medications;var stock=props.stock;var db=props.db;
   var temaItaq=true;// identidade visual v2 agora é o padrão pra todos os municípios (Itaquitinga + Vicência)
   var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};
+  var alert2=props.alert2||function(m){window.alert(m);};
   var isMan=user.role==='gestor'||user.role==='tecnico';
   var _atas=useState([]);var atas=_atas[0];var setAtas=_atas[1];
   var _sub=useState(temModulo(user,'pedidoLista')?'lista':'previsao');var sub=_sub[0];var setSub=_sub[1];
@@ -9465,9 +9587,10 @@ function TabPrevisao(props){
     setEditItemIdx(-1);setEditItemDraft(null);
   }
   function excluirItemImport(i){
-    if(!window.confirm('Remover este item da lista importada?'))return;
-    setImportPreview(function(arr){return arr.filter(function(_,idx){return idx!==i;});});
-    if(editItemIdx===i){setEditItemIdx(-1);setEditItemDraft(null);}
+    confirm2('Remover item','Remover este item da lista importada?',function(){
+      setImportPreview(function(arr){return arr.filter(function(_,idx){return idx!==i;});});
+      if(editItemIdx===i){setEditItemIdx(-1);setEditItemDraft(null);}
+    },'warning','Remover');
   }
   // Importa VÁRIAS ATAs de uma vez a partir de uma planilha Excel que já vem organizada com uma aba
   // por fornecedor/ATA (formato observado: aba "Planilha Geral" com o total consolidado + uma aba
@@ -9568,7 +9691,7 @@ function TabPrevisao(props){
       if(v&&marca&&!x.cnpj&&_norm(x.marca||'').trim()===marca){copiados++;return Object.assign({},x,{cnpj:v});}
       return x;
     });
-    db.collection('atas').doc(ata.id).update({itens:novos}).then(function(){if(copiados>0)alert('CNPJ também aplicado a mais '+copiados+' item(ns) da mesma marca nesta ata.');}).catch(function(){});
+    db.collection('atas').doc(ata.id).update({itens:novos}).then(function(){if(copiados>0)alert2('CNPJ também aplicado a mais '+copiados+' item(ns) da mesma marca nesta ata.','CNPJ aplicado','info');}).catch(function(){});
   }
   // Marca/fornecedor clicável: ao tocar mostra o CNPJ (ou avisa que não foi cadastrado).
   function _chipMarca(key,it){
@@ -9621,10 +9744,11 @@ function TabPrevisao(props){
     }).catch(function(e){setMsg('e:'+e.message);});
   }
   function excluirAta(ata){
-    if(!window.confirm('Excluir a ata "'+ata.nome+'"? Os medicamentos ficarão sem ata.'))return;
-    var meds=medsDaAta(ata.id);var i=0;
-    function nx(){if(i>=meds.length){db.collection('atas').doc(ata.id).delete();return;}var m=meds[i++];db.collection('medicamentos').doc(m.id).update({ataId:''}).then(nx).catch(nx);}
-    nx();
+    confirm2('Excluir ata','Excluir a ata "'+ata.nome+'"? Os medicamentos ficarão sem ata.',function(){
+      var meds=medsDaAta(ata.id);var i=0;
+      function nx(){if(i>=meds.length){db.collection('atas').doc(ata.id).delete();return;}var m=meds[i++];db.collection('medicamentos').doc(m.id).update({ataId:''}).then(nx).catch(nx);}
+      nx();
+    },'danger','Excluir');
   }
   function vincular(){
     if(!vincMed||!vincAta)return;
@@ -9677,8 +9801,9 @@ function TabPrevisao(props){
   }
   // Remove um item do rascunho de itens da ata (rascunho local).
   function removerItemEditDraft(idx){
-    if(!window.confirm('Remover este item da ata?'))return;
-    setEditItens(function(prev){return prev?prev.filter(function(_,i){return i!==idx;}):prev;});
+    confirm2('Remover item','Remover este item da ata?',function(){
+      setEditItens(function(prev){return prev?prev.filter(function(_,i){return i!==idx;}):prev;});
+    },'warning','Remover');
   }
   // Edita um campo (descricao/qtdTeto/unidade/vUnit) de um item do rascunho.
   function editarCampoItemDraft(idx,campo,valor){
@@ -11384,7 +11509,7 @@ function TabPrevisao(props){
                     <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8,flexWrap:'wrap'}}>
                       <span style={{fontSize:11,color:'#64748B'}}>Pedido acumulado:</span>
                       <input type="number" defaultValue={it.pedidoAcumulado||0} onBlur={function(e){atualizarItemAta(ata.id,ata.itens,{pedidoAcumulado:parseInt(e.target.value)||0},idxIt).catch(function(){});}} style={{width:80,padding:'5px 8px',border:'1.5px solid #CBD5E1',borderRadius:8,fontSize:13,textAlign:'center'}}/>
-                      <button onClick={function(){if(!window.confirm('Zerar pedido acumulado de "'+it.descricao+'"?'))return;atualizarItemAta(ata.id,ata.itens,{pedidoAcumulado:0},idxIt).catch(function(){});}} style={{background:'#F1F5F9',border:'none',borderRadius:6,padding:'5px 10px',fontSize:11,color:'#64748B',cursor:'pointer'}}>↺ Zerar</button>
+                      <button onClick={function(){confirm2('Zerar pedido acumulado','Zerar pedido acumulado de "'+it.descricao+'"?',function(){atualizarItemAta(ata.id,ata.itens,{pedidoAcumulado:0},idxIt).catch(function(){});},'warning','Zerar');}} style={{background:'#F1F5F9',border:'none',borderRadius:6,padding:'5px 10px',fontSize:11,color:'#64748B',cursor:'pointer'}}>↺ Zerar</button>
                     </div>
                     <div style={{borderTop:'1px dashed #E2E8F0',paddingTop:8,fontSize:12}}>
                       {medV?(<div style={{display:'flex',alignItems:'center',gap:8}}>
@@ -14937,7 +15062,7 @@ function menuIconName(id){
   var m={dashboard:'home',saida:'pill',recebimento:'truck',antibiotico:'vial',pedidosjudiciais:'scale',
     visaogeral:'trendUp',comparapedido:'search',estoque:'package',pacientes:'lock',conferencia:'clipboard',
     leites:'droplet',saidasreg:'edit',relatorio:'barChart',gestao:'users',log:'lock',histnotas:'folder',previsao:'clipboard',
-    histcontas:'clipboard',admin:'gear',superadmin:'gear',perfil:'users',ajuda:'help',ubs:'package',transferencia:'truck',ubsmed:'calendar',medicos:'users'};
+    histcontas:'clipboard',admin:'gear',superadmin:'gear',perfil:'users',ajuda:'help',ubs:'package',transferencia:'truck',visaosomada:'barChart',ubsmed:'calendar',medicos:'users'};
   return m[id]||'folder';
 }
 // Para gestor/técnico em Itaquitinga, o slot de maior destaque da navegação (sempre visível) troca
@@ -15045,7 +15170,7 @@ return(
         {tab==='gestao'&&can(user.role,'gestao')&&<TabGestao currentUser={user} entries={entries}/>}
         {tab==='log'&&can(user.role,'log')&&<TabLog user={user}/>}
         {tab==='histnotas'&&(user.role==='gestor'||user.role==='tecnico')&&<ErrBoundary><TabHistoricoNotas user={user} entries={entries} medications={meds} db={db}/></ErrBoundary>}
-        {tab==='previsao'&&podePedidos&&<ErrBoundary><TabPrevisao user={user} entries={entries} medications={meds} stock={stock} db={db} confirm2={confirm2}/></ErrBoundary>}
+        {tab==='previsao'&&podePedidos&&<ErrBoundary><TabPrevisao user={user} entries={entries} medications={meds} stock={stock} db={db} confirm2={confirm2} alert2={alert2}/></ErrBoundary>}
         {tab==='histcontas'&&can(user.role,'log')&&<TabHistContas user={user}/>}
         {!ro&&tab==='antibiotico'&&<TabAntibiotico user={user} medications={meds} stock={stock} allUsers={allUsers}/>}
         {tab==='pedidosjudiciais'&&!ro&&!ehSat&&temModulo(user,'judicial')&&isManagerRole&&<ErrBoundary><TabPedidosJudiciais user={user} medications={meds} stock={stock} entries={entries} onSave={addEntryStable} confirm2={confirm2} alert2={alert2} allUsers={allUsers}/></ErrBoundary>}
@@ -15057,6 +15182,7 @@ return(
         {ro&&TABS_MOVIMENTO.indexOf(tab)>=0&&<div style={{maxWidth:520,margin:'40px auto',padding:'0 16px',textAlign:'center',color:'#64748B'}}><div style={{fontSize:16,fontWeight:800,color:'#1E293B',marginBottom:6}}>Acesso somente consulta</div>Sua conta pode ver o estoque da CAF e fazer pedidos, mas não movimenta o estoque.</div>}
         {tab==='medicos'&&!ro&&<ErrBoundary><TabMedicos user={user} confirm2={confirm2}/></ErrBoundary>}
         {tab==='ubsmed'&&!ro&&temModulo(user,'destinos')&&<ErrBoundary><TabUbsValidades user={user} entries={entries} medications={meds}/></ErrBoundary>}
+        {tab==='visaosomada'&&acessoLocal==='ambos'&&<ErrBoundary><TabVisaoSomada user={user} medications={meds}/></ErrBoundary>}
         {tab==='transferencia'&&!ro&&localAtivo&&<ErrBoundary><TabTransferencia user={user} entries={entries} medications={meds} medsCaf={medsSemLeite} localAtivo={localAtivo}/></ErrBoundary>}
         {tab==='ajuda'&&<ErrBoundary><TabAjuda user={user} onIr={function(t){setTab(t);}}/></ErrBoundary>}
         {tab==='superadmin'&&user.isSuper&&<ErrBoundary><TabSuperAdmin user={user}/></ErrBoundary>}
@@ -15125,6 +15251,7 @@ return(
               {id:'medicos',icon:'🩺',label:'Médicos (CRM)',show:!ro},
               {id:'ubsmed',icon:'📅',label:'UBS: validades',show:!ro&&temModulo(user,'destinos')},
               {id:'transferencia',icon:'🔁',label:(ehSat?'Solicitação':'Transferência CAF ⇄ Satélite')+(repoNovos>0&&localAtivo==='caf'?' ('+repoNovos+')':''),show:!ro&&!!localAtivo},
+              {id:'visaosomada',icon:'🧮',label:'Estoque CAF + Satélite',show:acessoLocal==='ambos'},
               {id:'ubs',icon:'🏥',label:'Solicitações das UBS',show:!ro&&!ehSat&&temModulo(user,'ubsSolicitacoes')&&['gestor','tecnico','farmaceutico','auxiliar'].indexOf(user.role)>=0},
               {id:'relatorio',icon:'📊',label:'Relatório',show:true},
               {id:'gestao',icon:'👥',label:'Gestão',badge:badge,show:can(user.role,'gestao')},
@@ -15173,7 +15300,7 @@ return(
             <div style={{fontSize:11,color:temaItaq?'var(--itq-faint)':'rgba(255,255,255,0.5)',marginTop:2}}>{ROLES[user.role]||user.role}</div>
           </div>
           <div style={{flex:1,overflowY:'auto',padding:'8px 0'}}>
-            {[{id:'estoque',icon:'📦',label:'Estoque'},{id:'recebimento',icon:'🚚',label:'Recebimento'},{id:'pacientes',icon:'🔒',label:'Pacientes (Controlados)'},{id:'conferencia',icon:'🧾',label:'Conferência'},{id:'leites',icon:'🍼',label:'Leites'},{id:'saidasreg',icon:'🧾',label:'Saídas registradas'},{id:'ubsmed',icon:'📅',label:'UBS: validades'},{id:'transferencia',icon:'🔁',label:(ehSat?'Solicitação':'Transferência CAF ⇄ Satélite')+(repoNovos>0&&localAtivo==='caf'?' ('+repoNovos+')':'')},{id:'antibiotico',icon:'🧬',label:'ATB'},{id:'medicos',icon:'🩺',label:'Médicos (CRM)'},{id:'ubs',icon:'🏥',label:'Solicitações das UBS'},{id:'relatorio',icon:'📊',label:'Relatório'},{id:'previsao',icon:'📋',label:'Previsão / Pedido'},{id:'ajuda',icon:'❓',label:'Ajuda'}].filter(function(t){return t.id!=='pacientes'||temModulo(user,'controlados');}).filter(function(t){if(t.id==='ubsmed')return !ro&&temModulo(user,'destinos');if(t.id==='medicos')return !ro;if(t.id==='antibiotico')return ehSat&&!ro;if(t.id==='transferencia')return !ro&&!!localAtivo;if(t.id==='ubs')return !ro&&!ehSat&&temModulo(user,'ubsSolicitacoes');if(ehSat&&TABS_SAT_OCULTAS.indexOf(t.id)>=0)return false;if(t.id==='previsao')return podePedidos;return !(ro&&TABS_MOVIMENTO.indexOf(t.id)>=0);}).map(function(t){return(
+            {[{id:'estoque',icon:'📦',label:'Estoque'},{id:'recebimento',icon:'🚚',label:'Recebimento'},{id:'pacientes',icon:'🔒',label:'Pacientes (Controlados)'},{id:'conferencia',icon:'🧾',label:'Conferência'},{id:'leites',icon:'🍼',label:'Leites'},{id:'saidasreg',icon:'🧾',label:'Saídas registradas'},{id:'ubsmed',icon:'📅',label:'UBS: validades'},{id:'transferencia',icon:'🔁',label:(ehSat?'Solicitação':'Transferência CAF ⇄ Satélite')+(repoNovos>0&&localAtivo==='caf'?' ('+repoNovos+')':'')},{id:'visaosomada',icon:'🧮',label:'Estoque CAF + Satélite'},{id:'antibiotico',icon:'🧬',label:'ATB'},{id:'medicos',icon:'🩺',label:'Médicos (CRM)'},{id:'ubs',icon:'🏥',label:'Solicitações das UBS'},{id:'relatorio',icon:'📊',label:'Relatório'},{id:'previsao',icon:'📋',label:'Previsão / Pedido'},{id:'ajuda',icon:'❓',label:'Ajuda'}].filter(function(t){return t.id!=='pacientes'||temModulo(user,'controlados');}).filter(function(t){if(t.id==='ubsmed')return !ro&&temModulo(user,'destinos');if(t.id==='medicos')return !ro;if(t.id==='antibiotico')return ehSat&&!ro;if(t.id==='transferencia')return !ro&&!!localAtivo;if(t.id==='visaosomada')return acessoLocal==='ambos';if(t.id==='ubs')return !ro&&!ehSat&&temModulo(user,'ubsSolicitacoes');if(ehSat&&TABS_SAT_OCULTAS.indexOf(t.id)>=0)return false;if(t.id==='previsao')return podePedidos;return !(ro&&TABS_MOVIMENTO.indexOf(t.id)>=0);}).map(function(t){return(
               <button key={t.id} data-tour={'nav-'+t.id} className={temaItaq?'menu-drawer-item'+(tab===t.id?' on':''):''} onClick={function(){setTab(t.id);setMenuAberto(false);}} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'13px 20px',border:'none',background:temaItaq?undefined:(tab===t.id?'#EFF6FF':'transparent'),cursor:'pointer',borderLeft:temaItaq?undefined:(tab===t.id?'3px solid #1351B4':'3px solid transparent')}}>
                 <span className={temaItaq?'menu-drawer-ic':''} style={{fontSize:20}}>{temaItaq?<Icon name={menuIconName(t.id)} size={18}/>:t.icon}</span>
                 <span className={temaItaq?'menu-drawer-lbl':''} style={{fontSize:14,fontWeight:tab===t.id?700:500,color:temaItaq?undefined:(tab===t.id?'#1351B4':'#1E293B')}}>{t.label}</span>

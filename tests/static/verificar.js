@@ -27,7 +27,7 @@ try {
 } finally { try { fs.unlinkSync(tmp); } catch (e) {} }
 
 // 2) sintaxe
-['functions/index.js', 'functions/ubs.js'].forEach((f) => {
+['functions/index.js', 'functions/ubs.js', 'functions/avisos.js'].forEach((f) => {
   try { execFileSync(process.execPath, ['--check', path.join(ROOT, f)], { stdio: 'pipe' }); ok(true, 'sintaxe de ' + f); }
   catch (e) { ok(false, 'sintaxe de ' + f + ': ' + String(e.stderr).slice(0, 300)); }
 });
