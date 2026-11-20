@@ -150,3 +150,18 @@ exports.ubsApi = onRequest(
     res.status(r.status).json(r.json);
   }
 );
+
+// ===== Avisos por e-mail / WhatsApp quando o app registra um erro ou abre um chamado (ver functions/avisos.js) =====
+const { onDocumentCreated } = require('firebase-functions/v2/firestore');
+const avisos = require('./avisos');
+exports.avisarErroApp = onDocumentCreated('erros_app/{id}', async (event) => {
+  const d = event.data && event.data.data();
+  if (!d) return;
+  await avisos.avisar(db, 'erro', d, { logger });
+  if (d.teste) { try { await event.data.ref.delete(); } catch (e) { /* o teste some sozinho; se não der, o administrador apaga na lista */ } }
+});
+exports.avisarChamadoSuporte = onDocumentCreated('chamados_suporte/{id}', async (event) => {
+  const d = event.data && event.data.data();
+  if (!d) return;
+  await avisos.avisar(db, 'chamado', d, { logger });
+});

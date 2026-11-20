@@ -294,6 +294,14 @@ service cloud.firestore {
       allow read: if logado() && (ehSuperAdmin() || (aprovado() && resource.data.uid == request.auth.uid));
       allow update, delete: if ehSuperAdmin();
     }
+    // Configuração dos avisos por e-mail/WhatsApp (guarda a senha de app do e-mail): só o administrador do FarmaControl.
+    // A Cloud Function lê e grava pelo Admin SDK (ignora as regras). avisos_estado é só controle interno da função.
+    match /config_avisos/{id} {
+      allow read, write: if ehSuperAdmin();
+    }
+    match /avisos_estado/{id} {
+      allow read, write: if false;
+    }
     match /erros_app/{id} {
       allow create: if membro() && tenantOk(request.resource.data)
                     && request.resource.data.mensagem is string && request.resource.data.mensagem.size() <= 400;
