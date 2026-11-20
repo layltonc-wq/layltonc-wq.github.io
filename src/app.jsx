@@ -8142,14 +8142,14 @@ function TabVisaoSomada(props){
       {pill(cat==='todos','Todas as categorias',function(){setCat('todos');},'vs-c-todos')}{Object.keys(TIPOS).map(function(k){return <span key={k}>{pill(cat===k,TIPOS[k].label,function(){setCat(k);},'vs-c-'+k)}</span>;})}
     </div>
     <div style={{background:'#fff',border:'1px solid #E2E8F0',borderRadius:12,overflow:'hidden'}}>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 64px 74px 64px',gap:6,padding:'9px 12px',background:'#F8FAFC',fontSize:11.5,fontWeight:800,color:'#475569'}}><span>Medicamento</span><span style={num}>CAF</span><span style={num}>Satélite</span><span style={num}>Total</span></div>
+      <div style={{display:'grid',gridTemplateColumns:'minmax(0,1fr) 52px 62px 52px',gap:6,padding:'9px 12px',background:'#F8FAFC',fontSize:11.5,fontWeight:800,color:'#475569'}}><span>Medicamento</span><span style={num}>CAF</span><span style={num}>Satélite</span><span style={num}>Total</span></div>
       {lista.length===0&&<div style={{padding:'16px 12px',fontSize:13,color:'#94A3B8'}}>Nenhum item encontrado.</div>}
-      {lista.map(function(l){var baixo=l.min>0&&l.tot<=l.min;return(<div key={l.id} data-fc="vs-linha" style={{display:'grid',gridTemplateColumns:'1fr 64px 74px 64px',gap:6,padding:'8px 12px',borderTop:'1px solid #F1F5F9',fontSize:13,alignItems:'center'}}>
+      {lista.map(function(l){var baixo=l.min>0&&l.tot<=l.min;return(<div key={l.id} data-fc="vs-linha" style={{display:'grid',gridTemplateColumns:'minmax(0,1fr) 52px 62px 52px',gap:6,padding:'8px 12px',borderTop:'1px solid #F1F5F9',fontSize:13,alignItems:'center'}}>
         <span>{l.nome}{baixo&&<span style={{marginLeft:6,fontSize:10.5,fontWeight:800,color:'#C2362D',background:'#FDECEA',borderRadius:99,padding:'2px 7px'}}>mínimo {l.min}</span>}</span>
         <span style={Object.assign({},num,{color:l.caf?'#1351B4':'#94A3B8',fontWeight:700})}>{l.caf}</span>
         <span style={Object.assign({},num,{color:l.sat?'#0B7A5F':'#94A3B8',fontWeight:700})}>{l.sat}</span>
         <span style={Object.assign({},num,{fontWeight:800})}>{l.tot}</span></div>);})}
-      <div data-fc="vs-total" style={{display:'grid',gridTemplateColumns:'1fr 64px 74px 64px',gap:6,padding:'9px 12px',borderTop:'2px solid #E2E8F0',background:'#F8FAFC',fontSize:12.5,fontWeight:800}}><span>Total da lista ({lista.length} itens)</span><span style={num}>{somaCaf}</span><span style={num}>{somaSat}</span><span style={num}>{somaCaf+somaSat}</span></div>
+      <div data-fc="vs-total" style={{display:'grid',gridTemplateColumns:'minmax(0,1fr) 52px 62px 52px',gap:6,padding:'9px 12px',borderTop:'2px solid #E2E8F0',background:'#F8FAFC',fontSize:12.5,fontWeight:800}}><span>Total da lista ({lista.length} itens)</span><span style={num}>{somaCaf}</span><span style={num}>{somaSat}</span><span style={num}>{somaCaf+somaSat}</span></div>
     </div>
   </div>);
 }
