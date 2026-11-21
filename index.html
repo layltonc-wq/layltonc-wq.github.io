@@ -39,7 +39,7 @@ window.addEventListener('appinstalled',function(){window.__fcInstallEvt=null;try
 // caso a página NUNCA recarrega sozinha, então sem isso ela ficava presa na versão antiga até
 // fechar e abrir o app de verdade), e (3) a cada 5 minutos enquanto ficar aberta, pro caso raro
 // de o próprio celular manter a aba viva em segundo plano por muito tempo sem trocar de app.
-window.__FC_VERSION=1795233392;
+window.__FC_VERSION=1795235825;
 (function(){
   function checarVersaoNova(){
     try{
@@ -371,6 +371,11 @@ select.inp{cursor:pointer}
 @keyframes fcsShine{to{left:130%}}
 @keyframes fcsUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 @keyframes fcsDot{0%,100%{opacity:.3;transform:scale(.8)}50%{opacity:.9;transform:scale(1.15)}}
+/* App instalado: o Android acabou de mostrar o ícone, então o quadrado com o FC já aparece pronto e só o resto entra. */
+#fc-splash.sa .sq{animation:none}
+#fc-splash.sa .fc b{animation:none;opacity:1}
+#fc-splash.sa .arc{animation-duration:.4s;animation-delay:0s}
+#fc-splash.sa .nome{animation-delay:.12s}#fc-splash.sa .sub{animation-delay:.28s}#fc-splash.sa .pts{animation-delay:.45s}#fc-splash.sa .shine{animation-delay:.55s}
 @media (prefers-reduced-motion:reduce){#fc-splash *{animation:none!important}#fc-splash .fc b,#fc-splash .nome,#fc-splash .sub,#fc-splash .pts,#fc-splash .arc{opacity:1}#fc-splash{transition:opacity .2s}}
 </style>
 </head>
@@ -378,12 +383,13 @@ select.inp{cursor:pointer}
 <div id="fc-splash" aria-hidden="true"><i class="arc a1"></i><i class="arc a2"></i><i class="arc a3"></i><i class="arc a4"></i>
   <div class="sq"><span class="fc"><b>F</b><b>C</b></span><span class="shine"></span></div>
   <div class="nome">FarmaControl</div><div class="sub">Sistema de Controle Farmacêutico</div><div class="pts"><i></i><i></i><i></i></div></div>
+<script>try{if((window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true)document.getElementById('fc-splash').classList.add('sa');}catch(e){}</script>
 <script>
 // Some quando a primeira tela do app aparece (mínimo ~1,6 s para a animação terminar; nunca prende mais que 9 s).
 (function(){
   var ini=Date.now(),el=document.getElementById('fc-splash'),fechado=false;
   function fechar(){if(fechado||!el)return;fechado=true;el.classList.add('fim');setTimeout(function(){try{el.parentNode.removeChild(el);var c=document.getElementById('fc-splash-css');if(c)c.parentNode.removeChild(c);}catch(e){}},700);}
-  function tentar(){var r=document.getElementById('root');if(r&&r.children.length>0){var falta=Math.max(0,1700-(Date.now()-ini));setTimeout(fechar,falta);return true;}return false;}
+  function tentar(){var r=document.getElementById('root');if(r&&r.children.length>0){var falta=Math.max(0,(el&&el.classList.contains('sa')?1200:1700)-(Date.now()-ini));setTimeout(fechar,falta);return true;}return false;}
   function observar(){var r=document.getElementById('root');if(!r){setTimeout(observar,50);return;}if(tentar())return;try{var mo=new MutationObserver(function(){if(tentar())mo.disconnect();});mo.observe(r,{childList:true});}catch(e){setTimeout(fechar,3000);}}
   observar();setTimeout(fechar,9000);
 })();
