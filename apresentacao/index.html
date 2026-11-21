@@ -14,8 +14,51 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta property="og:url" content="https://www.farmacontrol.app.br/apresentacao/">
 <meta name="theme-color" content="#1351B4">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/pwa/favicon-32.png">
+<link rel="apple-touch-icon" href="/assets/pwa/apple-touch-icon.png">
+<style id="fc-splash-css">
+/* Tela de abertura: mesmo visual da tela de login (degradê azul, arcos, quadrado de vidro com FC em serifa, nome e subtítulo).
+   Aparece na hora, antes do app carregar, e some com um fade quando a primeira tela está pronta. */
+#fc-splash{position:fixed;inset:0;z-index:99999;background:linear-gradient(160deg,#0D1B4B 0%,#1351B4 55%,#1A6FD4 100%);display:flex;align-items:center;justify-content:center;flex-direction:column;overflow:hidden;text-align:center;transition:opacity .45s ease,transform .45s ease,visibility 0s linear .45s}
+#fc-splash.fim{opacity:0;transform:scale(1.04);visibility:hidden;pointer-events:none}
+#fc-splash .arc{position:absolute;border-radius:50%;border:1px solid rgba(255,255,255,.06);opacity:0;animation:fcsArc 1.2s ease-out forwards}
+#fc-splash .a1{width:320px;height:320px;top:-100px;right:-100px}
+#fc-splash .a2{width:220px;height:220px;top:-60px;right:-60px;animation-delay:.15s}
+#fc-splash .a3{width:200px;height:200px;bottom:-80px;left:-80px;animation-delay:.3s}
+#fc-splash .a4{width:420px;height:420px;bottom:-190px;right:-150px;animation-delay:.2s}
+#fc-splash .sq{position:relative;width:104px;height:104px;border-radius:27px;background:rgba(255,255,255,.13);border:1.5px solid rgba(255,255,255,.28);box-shadow:0 8px 32px rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;margin-bottom:20px;overflow:hidden;animation:fcsPop .8s cubic-bezier(.2,1.2,.4,1) both}
+#fc-splash .fc{font-family:'Playfair Display',Georgia,serif;font-size:46px;font-weight:900;color:#fff;letter-spacing:-2px;line-height:1;display:flex}
+#fc-splash .fc b{font-weight:inherit;display:inline-block;opacity:0;animation:fcsLetter .55s cubic-bezier(.2,.9,.3,1) forwards}
+#fc-splash .fc b:nth-child(1){animation-delay:.5s}#fc-splash .fc b:nth-child(2){animation-delay:.72s}
+#fc-splash .shine{position:absolute;top:-20%;bottom:-20%;width:36%;left:-60%;background:linear-gradient(100deg,rgba(255,255,255,0),rgba(255,255,255,.28),rgba(255,255,255,0));transform:skewX(-14deg);animation:fcsShine .9s 1.35s ease-in-out forwards}
+#fc-splash .nome{font:800 32px/1.1 'Segoe UI',system-ui,-apple-system,Roboto,sans-serif;color:#fff;letter-spacing:-.02em;opacity:0;animation:fcsUp .6s 1s ease-out forwards}
+#fc-splash .sub{font:400 12px/1.3 'Segoe UI',system-ui,-apple-system,Roboto,sans-serif;color:rgba(255,255,255,.5);margin-top:7px;letter-spacing:.14em;text-transform:uppercase;opacity:0;animation:fcsUp .6s 1.2s ease-out forwards}
+#fc-splash .pts{margin-top:26px;display:flex;gap:7px;opacity:0;animation:fcsUp .5s 1.45s ease-out forwards}
+#fc-splash .pts i{width:6px;height:6px;border-radius:50%;background:#fff;animation:fcsDot 1.1s ease-in-out infinite}
+#fc-splash .pts i:nth-child(2){animation-delay:.16s}#fc-splash .pts i:nth-child(3){animation-delay:.32s}
+@keyframes fcsPop{0%{opacity:0;transform:translateY(14px) scale(.6)}100%{opacity:1;transform:none}}
+@keyframes fcsLetter{from{opacity:0;transform:translateY(12px) scale(.9)}to{opacity:1;transform:none}}
+@keyframes fcsArc{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:none}}
+@keyframes fcsShine{to{left:130%}}
+@keyframes fcsUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes fcsDot{0%,100%{opacity:.3;transform:scale(.8)}50%{opacity:.9;transform:scale(1.15)}}
+@media (prefers-reduced-motion:reduce){#fc-splash *{animation:none!important}#fc-splash .fc b,#fc-splash .nome,#fc-splash .sub,#fc-splash .pts,#fc-splash .arc{opacity:1}#fc-splash{transition:opacity .2s}}
+</style>
 </head>
 <body style="margin:0;background:#F5F7FB">
+<div id="fc-splash" aria-hidden="true"><i class="arc a1"></i><i class="arc a2"></i><i class="arc a3"></i><i class="arc a4"></i>
+  <div class="sq"><span class="fc"><b>F</b><b>C</b></span><span class="shine"></span></div>
+  <div class="nome">FarmaControl</div><div class="sub">Sistema de Controle Farmacêutico</div><div class="pts"><i></i><i></i><i></i></div></div>
+<script>
+// Some quando a página terminou de carregar (mínimo ~1,7 s para a animação terminar; nunca prende mais que 6 s).
+(function(){
+  var ini=Date.now(),el=document.getElementById('fc-splash'),fechado=false;
+  function fechar(){if(fechado||!el)return;fechado=true;el.classList.add('fim');setTimeout(function(){try{el.parentNode.removeChild(el);var c=document.getElementById('fc-splash-css');if(c)c.parentNode.removeChild(c);}catch(e){}},700);}
+  function pronto(){setTimeout(fechar,Math.max(0,1700-(Date.now()-ini)));}
+  if(document.readyState==='complete')pronto();else window.addEventListener('load',pronto);
+  setTimeout(fechar,6000);
+})();
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
