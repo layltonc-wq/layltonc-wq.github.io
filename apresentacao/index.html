@@ -42,6 +42,11 @@
 @keyframes fcsShine{to{left:130%}}
 @keyframes fcsUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 @keyframes fcsDot{0%,100%{opacity:.3;transform:scale(.8)}50%{opacity:.9;transform:scale(1.15)}}
+/* App instalado: o Android acabou de mostrar o ícone, então o quadrado com o FC já aparece pronto e só o resto entra. */
+#fc-splash.sa .sq{animation:none}
+#fc-splash.sa .fc b{animation:none;opacity:1}
+#fc-splash.sa .arc{animation-duration:.4s;animation-delay:0s}
+#fc-splash.sa .nome{animation-delay:.12s}#fc-splash.sa .sub{animation-delay:.28s}#fc-splash.sa .pts{animation-delay:.45s}#fc-splash.sa .shine{animation-delay:.55s}
 @media (prefers-reduced-motion:reduce){#fc-splash *{animation:none!important}#fc-splash .fc b,#fc-splash .nome,#fc-splash .sub,#fc-splash .pts,#fc-splash .arc{opacity:1}#fc-splash{transition:opacity .2s}}
 </style>
 </head>
@@ -49,12 +54,13 @@
 <div id="fc-splash" aria-hidden="true"><i class="arc a1"></i><i class="arc a2"></i><i class="arc a3"></i><i class="arc a4"></i>
   <div class="sq"><span class="fc"><b>F</b><b>C</b></span><span class="shine"></span></div>
   <div class="nome">FarmaControl</div><div class="sub">Sistema de Controle Farmacêutico</div><div class="pts"><i></i><i></i><i></i></div></div>
+<script>try{if((window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true)document.getElementById('fc-splash').classList.add('sa');}catch(e){}</script>
 <script>
 // Some quando a página terminou de carregar (mínimo ~1,7 s para a animação terminar; nunca prende mais que 6 s).
 (function(){
   var ini=Date.now(),el=document.getElementById('fc-splash'),fechado=false;
   function fechar(){if(fechado||!el)return;fechado=true;el.classList.add('fim');setTimeout(function(){try{el.parentNode.removeChild(el);var c=document.getElementById('fc-splash-css');if(c)c.parentNode.removeChild(c);}catch(e){}},700);}
-  function pronto(){setTimeout(fechar,Math.max(0,1700-(Date.now()-ini)));}
+  function pronto(){setTimeout(fechar,Math.max(0,(el&&el.classList.contains('sa')?1200:1700)-(Date.now()-ini)));}
   if(document.readyState==='complete')pronto();else window.addEventListener('load',pronto);
   setTimeout(fechar,6000);
 })();
