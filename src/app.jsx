@@ -6274,7 +6274,8 @@ function TabPedidosJudiciais(props){
     </Modal>}
   </div>);
 }
-function TabAntibiotico({user,medications,stock,allUsers}){
+function TabAntibiotico({user,medications,stock,allUsers,confirm2:confirm2Prop}){
+  var confirm2=confirm2Prop||function(t,m,fn){if(window.confirm(m))fn();};
   var sl=React.useState,ef=React.useEffect,B='#1351B4';
   var _tr=sl([]);var tratamentos=_tr[0];var setTratamentos=_tr[1];
   var _ld=sl(true);var loading=_ld[0];var setLoading=_ld[1];
@@ -6495,7 +6496,14 @@ function TabAntibiotico({user,medications,stock,allUsers}){
   }
   async function finalizar(t){if(!window.confirm('Concluir tratamento de '+t.pacienteNome+'?'))return;await db.collection('tratamentos_atb').doc(t.id).update({status:'finalizado',finalizadoEm:new Date().toISOString(),finalizadoPor:user.name});setShowDet(null);}
   async function reabrir(t){if(!window.confirm('Reabrir tratamento de '+t.pacienteNome+'?'))return;await db.collection('tratamentos_atb').doc(t.id).update({status:'ativo',reabertoPor:user.name,reabertoEm:new Date().toISOString()});setShowDet(null);}
-  async function excluir(t){if(!window.confirm('EXCLUIR permanentemente '+t.pacienteNome+'?'))return;await db.collection('tratamentos_atb').doc(t.id).delete();setShowDet(null);}
+  // Só gestor e técnico (as regras do banco também exigem isso). Remove o tratamento da lista e do histórico, sem marcar como desistência.
+  // As baixas de estoque já feitas (espera e doses) continuam nas saídas: o que foi dispensado não volta ao estoque.
+  function excluir(t){
+    if(!canManage)return;
+    confirm2('Excluir tratamento','Excluir o tratamento de '+t.pacienteNome+'?\n\nEle some da lista e não conta como desistência. As ampolas que já saíram do estoque continuam registradas nas saídas e não voltam ao estoque.',function(){
+      db.collection('tratamentos_atb').doc(t.id).delete().then(function(){setShowDet(null);}).catch(function(e){alert('Não foi possível excluir: '+((e&&e.message)||'erro'));});
+    },'danger','Excluir');
+  }
   async function desistir(t){await db.collection('tratamentos_atb').doc(t.id).update({status:'desistiu',obsDesistencia:obsDesist,desistiuEm:new Date().toISOString(),desistiuRegistradoPor:user.name});setShowDet(null);setObsDesist('');}
   async function salvarEdit(t){
     if(editMed&&editCrm)cadastrarMedicoSeNovo(user,medicosCrm,editMed,editCrm);
@@ -6638,6 +6646,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
                   {s!=='espera'&&s!=='dose_ataque'&&totalDias>0&&<div style={{fontSize:11,color:'#94A3B8',marginTop:2}}>Inicio: {fD(t.dataInicio)} · {totalDias} dias{dpd(t)>1?' · '+dpd(t)+' doses/dia':''}</div>}
                 </div>
                 <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:4}}>
+                  {canManage&&<button type="button" data-fc="atb-excluir" title="Excluir tratamento" onClick={function(e){e.stopPropagation();excluir(t);}} style={{background:'#fff',border:'1px solid #FECACA',color:'#DC2626',borderRadius:8,padding:'3px 9px',fontSize:11,fontWeight:700,cursor:'pointer'}}>Excluir</button>}
                   <span style={{background:cCor(s)+'18',color:cCor(s),fontSize:11,fontWeight:700,padding:'3px 10px',borderRadius:20,border:'1px solid '+cCor(s)+'40',display:'inline-flex',alignItems:'center',gap:4}}><Icon name={cIconName(s)} size={11}/> {cLbl(s)}</span>
                   {interr&&<span style={{background:'#FEE2E2',color:'#DC2626',fontWeight:800,fontSize:10,padding:'3px 8px',borderRadius:20,border:'1px solid #FECACA'}}>{faltou} dia{faltou>1?'s':''} sem dose</span>}
                   {atrasadas>0&&<span style={{background:'#FEF3C7',color:'#B45309',fontWeight:800,fontSize:10,padding:'3px 8px',borderRadius:20,border:'1px solid #FDE68A'}}>{atrasadas} dose{atrasadas>1?'s':''} atrasada{atrasadas>1?'s':''}</span>}
@@ -15210,7 +15219,7 @@ return(
         {tab==='histnotas'&&(user.role==='gestor'||user.role==='tecnico')&&<ErrBoundary><TabHistoricoNotas user={user} entries={entries} medications={meds} db={db}/></ErrBoundary>}
         {tab==='previsao'&&podePedidos&&<ErrBoundary><TabPrevisao user={user} entries={entries} medications={meds} stock={stock} db={db} confirm2={confirm2} alert2={alert2}/></ErrBoundary>}
         {tab==='histcontas'&&can(user.role,'log')&&<TabHistContas user={user}/>}
-        {!ro&&tab==='antibiotico'&&<TabAntibiotico user={user} medications={meds} stock={stock} allUsers={allUsers}/>}
+        {!ro&&tab==='antibiotico'&&<TabAntibiotico user={user} medications={meds} stock={stock} allUsers={allUsers} confirm2={confirm2}/>}
         {tab==='pedidosjudiciais'&&!ro&&!ehSat&&temModulo(user,'judicial')&&isManagerRole&&<ErrBoundary><TabPedidosJudiciais user={user} medications={meds} stock={stock} entries={entries} onSave={addEntryStable} confirm2={confirm2} alert2={alert2} allUsers={allUsers}/></ErrBoundary>}
         {!ro&&tab==='recebimento'&&<ErrBoundary><TabRecebimento user={user} confirm2={confirm2} medications={ehSat?medsSemLeite:meds} onSave={addEntry} stock={stock} entries={entries} localAtivo={localAtivo}/></ErrBoundary>}
         {tab==='pacientes'&&!ro&&temModulo(user,'controlados')&&<ErrBoundary><TabPacientes user={user} entries={entries} onSave={addEntryStable} confirm2={confirm2} alert2={alert2}/></ErrBoundary>}
