@@ -1845,8 +1845,12 @@ function ExtraSaidaControlada(props){
           {sug.map(function(p){return <button type="button" key={p.id} data-fc="ctrl-extra-pac-pick" onClick={function(){set({pac:p});setBusca('');}} style={{width:'100%',textAlign:'left',padding:'9px 12px',border:'none',borderBottom:'1px solid #F1F5F9',background:'#fff',cursor:'pointer',fontSize:13}}>{p.nome}</button>;})}
           {!existe&&<button type="button" data-fc={'ctrl-extra-pac-novo-'+props.idx} disabled={salvando} onClick={cadastrar} style={{width:'100%',textAlign:'left',padding:'9px 12px',border:'none',background:'#F0FDF4',cursor:'pointer',fontSize:13,color:'#0C6B3E',fontWeight:700}}>{salvando?'Cadastrando...':'+ Cadastrar "'+bt+'" como novo paciente'}</button>}
         </div>}</div>}
-    <MedicoCrmCampos medicos={props.medicos} obrigatorio nome={v.medico} crm={v.crm} onNome={function(x){set({medico:x});}} onCrm={function(x){set({crm:x});}}/>
+    <MedicoCrmCampos user={props.user} medicos={props.medicos} obrigatorio nome={v.medico} crm={v.crm} onNome={function(x){set({medico:x});}} onCrm={function(x){set({crm:x});}}/>
     <div style={{height:8}}/>
+    <div style={{display:'grid',gridTemplateColumns:'170px 1fr',gap:10,alignItems:'start',marginBottom:8}}>
+      <div><label style={lb}>Data da saída *</label><input type="date" className="inp" data-fc={'ctrl-extra-data-'+props.idx} value={v.dataSaida||''} max={todayStr()} onChange={function(e){set({dataSaida:e.target.value});}} style={{marginBottom:0}}/></div>
+      <div style={{fontSize:11.5,color:'#B45309',paddingTop:22}}>{v.dataSaida&&v.dataSaida<todayStr()?'Retroativa: use quando a receita foi encontrada de um dia anterior.':''}</div>
+    </div>
     <label style={lb}>Observação{props.obsObrig?' * (obrigatória — mesmo paciente e medicamento no mesmo dia)':''}</label>
     <input className="inp" data-fc={'ctrl-extra-obs-'+props.idx} value={v.obs} onChange={function(e){set({obs:e.target.value});}} placeholder="Observações (opcional)" style={{marginBottom:0}}/>
   </div>);
@@ -1869,7 +1873,7 @@ function ModalSaidaControlada(props){
   var _saving=useState(false);var saving=_saving[0];var setSaving=_saving[1];
   var _ex=useState([]);var extras=_ex[0],setExtras=_ex[1]; // outras saídas liberadas no mesmo popup
   var medsCtrl=props.meds||[];
-  function addExtra(){setExtras(extras.concat([{key:Date.now()+Math.random(),medId:data.medicamentoId||'',qtd:'',pac:null,medico:medico,crm:crm,obs:''}]));}
+  function addExtra(){setExtras(extras.concat([{key:Date.now()+Math.random(),medId:data.medicamentoId||'',qtd:'',pac:null,medico:medico,crm:crm,obs:'',dataSaida:dataSaida||todayStr()}]));}
   function setEx(k,pt){setExtras(extras.map(function(x){return x.key===k?Object.assign({},x,pt):x;}));}
 
   useEffect(function(){
@@ -1915,16 +1919,19 @@ function ModalSaidaControlada(props){
       if(!(parseInt(x.qtd,10)>=1)){setErro('Saída '+n+': informe a quantidade.');return;}
       if(!x.pac){setErro('Saída '+n+': selecione ou cadastre o paciente.');return;}
       if(!x.medico.trim()||!x.crm.trim()){setErro('Saída '+n+': informe o médico e o CRM.');return;}
-      exs.push({pacienteId:x.pac.id,pacienteNome:x.pac.nome,medicamentoId:mx.id,medicamentoNome:mx.nome,quantidade:parseInt(x.qtd,10),medicoNome:x.medico.trim(),medicoCrm:x.crm.trim(),observacao:x.obs.trim(),liberadoPorUid:user.uid||'',liberadoPorNome:user.name||'',dataSaida:dataSaida,criadoEm:new Date().toISOString(),tenant_id:tenantDe(user)});
+      if(!x.dataSaida){setErro('Saída '+n+': informe a data da saída.');return;}
+      if(x.dataSaida>todayStr()){setErro('Saída '+n+': a data da saída não pode ser no futuro.');return;}
+      exs.push({pacienteId:x.pac.id,pacienteNome:x.pac.nome,medicamentoId:mx.id,medicamentoNome:mx.nome,quantidade:parseInt(x.qtd,10),medicoNome:x.medico.trim(),medicoCrm:x.crm.trim(),observacao:x.obs.trim(),liberadoPorUid:user.uid||'',liberadoPorNome:user.name||'',dataSaida:x.dataSaida,criadoEm:new Date().toISOString(),tenant_id:tenantDe(user)});
     }
     if(exs.length){
       var soma={};soma[data.medicamentoId]=data.quantidade;exs.forEach(function(e){soma[e.medicamentoId]=(soma[e.medicamentoId]||0)+e.quantidade;});
       for(var id in soma){var mm=medsCtrl.filter(function(m){return m.id===id;})[0];if(mm&&soma[id]>mm.estoque){setErro('Estoque insuficiente de '+mm.nome+': somando todas as saídas dá '+soma[id]+' e há '+mm.estoque+'.');return;}}
       // mesmo paciente + mesmo medicamento repetido na própria tela exige observação
-      var vistos={};vistos[pacSel.id+'|'+data.medicamentoId]=1;
-      for(var k=0;k<exs.length;k++){var ch=exs[k].pacienteId+'|'+exs[k].medicamentoId;if(vistos[ch]&&!exs[k].observacao){setErro('Saída '+(k+2)+': mesmo paciente e medicamento já aparecem nesta tela — a observação é obrigatória.');return;}vistos[ch]=1;}
+      var vistos={};vistos[pacSel.id+'|'+data.medicamentoId+'|'+dataSaida]=1;
+      for(var k=0;k<exs.length;k++){var ch=exs[k].pacienteId+'|'+exs[k].medicamentoId+'|'+exs[k].dataSaida;if(vistos[ch]&&!exs[k].observacao){setErro('Saída '+(k+2)+': mesmo paciente, medicamento e dia já aparecem nesta tela — a observação é obrigatória.');return;}vistos[ch]=1;}
     }
     setErro('');setSaving(true);
+    cadastrarMedicoSeNovo(user,medicosCrm,medico,crm);exs.forEach(function(e){cadastrarMedicoSeNovo(user,medicosCrm,e.medicoNome,e.medicoCrm);});
     var payload={pacienteId:pacSel.id,pacienteNome:pacSel.nome,medicamentoId:data.medicamentoId,medicamentoNome:data.medicamentoNome,quantidade:data.quantidade,medicoNome:medico.trim(),medicoCrm:crm.trim(),observacao:obs.trim(),liberadoPorUid:user.uid||'',liberadoPorNome:user.name||'',dataSaida:dataSaida,criadoEm:new Date().toISOString(),tenant_id:tenantDe(user)};
     (exs.length?onConfirm(payload,exs):onConfirm(payload)).then(function(){setSaving(false);}).catch(function(e){setErro('Erro: '+((e&&e.message)||e));setSaving(false);});
   }
@@ -1949,7 +1956,7 @@ function ModalSaidaControlada(props){
           </div>}
         </div>}
 
-      <MedicoCrmCampos medicos={medicosCrm} obrigatorio nome={medico} crm={crm} onNome={setMedico} onCrm={setCrm}/>
+      <MedicoCrmCampos user={user} medicos={medicosCrm} obrigatorio nome={medico} crm={crm} onNome={setMedico} onCrm={setCrm}/>
       <div style={{height:10}}/>
       <Lbl c="Data da saída *"/>
       <input type="date" value={dataSaida} max={todayStr()} onChange={function(e){setDataSaida(e.target.value);}} className="inp"/>
@@ -6448,6 +6455,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
       doses=[{data:hj,hora:hr,responsavel:user.name,responsavelCor:user.color||B,qtd:qtdEsp,doseEspera:true}];
       await _addSaidaFEFO({tipo:'saida',destino:'emergencia',medicamentoId:medSel,medicamentoNome:mO.nome||'',autorNome:user.name,autorCor:user.color||B,autorId:user.uid,obs:'Espera ATB - '+nomePac.trim(),criadoEm:new Date().toISOString(),date:hj,tenant_id:tenantDe(user)},medSel,qtdEsp,tenantDe(user));
     }
+    if(nomeMed&&crmMed)cadastrarMedicoSeNovo(user,medicosCrm,nomeMed,crmMed);
     await db.collection('tratamentos_atb').add({pacienteNome:nomePac.trim(),diasTratamento:parseInt(diasTrat)||0,dataInicio:dataInicioCalc,dosesPorDia:dPorDia,qtdPorDose:qDose,medicamentoId:medSel,medicamentoNome:mO.nome||'',nomeMedico:nomeMed.trim(),crmMedico:crmMed.trim(),obs:obsForm.trim(),telefone:telefone.trim(),telefoneDono:telDono,responsavelNome:telDono==='responsavel'?respNome.trim():'',doses:doses,status:statusIni,criadoPor:user.name,criadoEm:new Date().toISOString(),tenant_id:tenantDe(user)});
     setSaving(false);setShowForm(false);rForm();
   }
@@ -6490,6 +6498,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
   async function excluir(t){if(!window.confirm('EXCLUIR permanentemente '+t.pacienteNome+'?'))return;await db.collection('tratamentos_atb').doc(t.id).delete();setShowDet(null);}
   async function desistir(t){await db.collection('tratamentos_atb').doc(t.id).update({status:'desistiu',obsDesistencia:obsDesist,desistiuEm:new Date().toISOString(),desistiuRegistradoPor:user.name});setShowDet(null);setObsDesist('');}
   async function salvarEdit(t){
+    if(editMed&&editCrm)cadastrarMedicoSeNovo(user,medicosCrm,editMed,editCrm);
     var u={pacienteNome:editNome,diasTratamento:parseInt(editDias)||t.diasTratamento,dataInicio:editIni||t.dataInicio,obs:editObs,nomeMedico:editMed,crmMedico:editCrm,editadoPor:user.name,editadoEm:new Date().toISOString()};
     if(t._esp)u.status='ativo';
     await db.collection('tratamentos_atb').doc(t.id).update(u);
@@ -6683,7 +6692,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
               <label style={{fontSize:12,fontWeight:700,color:'#475569',display:'block',marginBottom:5}}>Nome do Paciente *</label>
               <input value={nomePac} onChange={function(e){setNomePac(e.target.value);}} placeholder="Nome completo" className="inp"/>
             </div>
-            <MedicoCrmCampos medicos={medicosCrm} nome={nomeMed} crm={crmMed} onNome={setNomeMed} onCrm={setCrmMed}/>
+            <MedicoCrmCampos user={user} medicos={medicosCrm} nome={nomeMed} crm={crmMed} onNome={setNomeMed} onCrm={setCrmMed}/>
             <div style={{background:'#F0FDF4',borderRadius:14,padding:14,border:'1.5px solid #BBF7D0'}}>
               <div style={{fontSize:12,fontWeight:800,color:'#059669',marginBottom:2,display:'flex',alignItems:'center',gap:5}}><Icon name="bell" size={12}/> Lembretes por WhatsApp <span style={{fontWeight:600,color:'#94A3B8'}}>(opcional)</span></div>
               <div style={{fontSize:11,color:'#64748B',marginBottom:10}}>Preencha se quiser enviar lembretes de dose ao paciente ou responsável.</div>
@@ -6941,7 +6950,7 @@ function TabAntibiotico({user,medications,stock,allUsers}){
               <label style={{fontSize:12,fontWeight:700,color:'#475569',display:'block',marginBottom:5}}>Nome</label>
               <input value={editNome} onChange={function(e){setEditNome(e.target.value);}} className="inp"/>
             </div>
-            <MedicoCrmCampos medicos={medicosCrm} nome={editMed} crm={editCrm} onNome={setEditMed} onCrm={setEditCrm}/>
+            <MedicoCrmCampos user={user} medicos={medicosCrm} nome={editMed} crm={editCrm} onNome={setEditMed} onCrm={setEditCrm}/>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
               <div>
                 <label style={{fontSize:12,fontWeight:700,color:'#475569',display:'block',marginBottom:5}}>Total de Dias *</label>
@@ -8166,8 +8175,32 @@ function useMedicosCrm(user){
   useEffect(function(){return db.collection('medicos_crm').where('tenant_id','==',tenantDe(user)).limit(1000).onSnapshot(function(sn){var a=sn.docs.map(function(d){return Object.assign({id:d.id},d.data());});a.sort(function(x,y){return String(x.nome||'').localeCompare(String(y.nome||''),'pt-BR');});setLista(a);},function(){});},[tenantDe(user)]);
   return lista;
 }
+// Cadastro rápido de médico dentro das telas de Controlados e ATB: se o nome e o CRM digitados ainda não estão no cadastro,
+// dá para cadastrar na hora (botão) e, ao registrar a saída/tratamento, o médico novo é cadastrado sozinho.
+function _crmChave(s){return _norm(s||'').replace(/[^a-z0-9]/g,'');}
+var _medCadRecentes={};
+function medicoEhNovo(medicos,nome,crm){
+  var k=_crmChave(crm);if(String(nome||'').trim().length<3||k.length<3)return false;
+  return !(medicos||[]).some(function(m){return _crmChave(m.crm)===k;});
+}
+function cadastrarMedicoCrm(user,nome,crm){
+  var t=tenantDe(user),k=t+'|'+_crmChave(crm);
+  if(_medCadRecentes[k])return Promise.resolve(false);
+  _medCadRecentes[k]=1;
+  return db.collection('medicos_crm').add({nome:String(nome).trim(),crm:String(crm).trim(),criadoEm:new Date().toISOString(),criadoPor:(user&&user.name)||'',tenant_id:t}).then(function(){return true;}).catch(function(e){delete _medCadRecentes[k];throw e;});
+}
+function cadastrarMedicoSeNovo(user,medicos,nome,crm){ // usado ao registrar: não atrapalha a saída se falhar
+  try{if(medicoEhNovo(medicos,nome,crm))return cadastrarMedicoCrm(user,nome,crm).catch(function(){return false;});}catch(e){}
+  return Promise.resolve(false);
+}
 function MedicoCrmCampos(props){
   var medicos=props.medicos||[];
+  var _cad=useState({busy:false,err:'',ok:false});var cad=_cad[0],setCad=_cad[1];
+  var ehNovo=!!props.user&&medicoEhNovo(medicos,props.nome,props.crm);
+  function cadastrarAgora(){
+    setCad({busy:true,err:'',ok:false});
+    cadastrarMedicoCrm(props.user,props.nome,props.crm).then(function(){setCad({busy:false,err:'',ok:true});}).catch(function(e){setCad({busy:false,err:'Não foi possível cadastrar: '+((e&&e.message)||'erro'),ok:false});});
+  }
   var _f=useState('');var foco=_f[0],setFoco=_f[1];
   var termo=foco==='crm'?props.crm:props.nome;
   var nt=_norm(termo||'').trim();
@@ -8183,6 +8216,11 @@ function MedicoCrmCampos(props){
       <div><label style={lbl}>Médico(a){ast}</label><input data-fc="medico-nome" value={props.nome} onFocus={function(){setFoco('nome');}} onBlur={function(){setTimeout(function(){setFoco('');},180);}} onChange={function(e){mudouNome(e.target.value);}} placeholder="Dr(a). Nome" className="inp" style={{marginBottom:0}}/></div>
       <div><label style={lbl}>CRM{ast}</label><input data-fc="medico-crm" value={props.crm} onFocus={function(){setFoco('crm');}} onBlur={function(){setTimeout(function(){setFoco('');},180);}} onChange={function(e){mudouCrm(e.target.value);}} placeholder="00000" className="inp" style={{marginBottom:0}}/></div>
     </div>
+    {ehNovo&&<div data-fc="medico-novo" style={{background:'#FFF8E6',border:'1px solid #FCD34D',borderRadius:10,padding:'9px 12px',marginTop:6,fontSize:12.5,color:'#92400E'}}>
+      <div>Esse médico ainda não está no cadastro. Ele será cadastrado sozinho ao registrar, ou você pode cadastrar agora.</div>
+      <button type="button" data-fc="medico-cadastrar" disabled={cad.busy} onClick={cadastrarAgora} style={{marginTop:6,padding:'7px 12px',borderRadius:8,border:'none',background:'#B45309',color:'#fff',fontWeight:700,fontSize:12.5,cursor:'pointer'}}>{cad.busy?'Cadastrando…':'Cadastrar '+props.nome.trim()+' (CRM '+props.crm.trim()+')'}</button>
+      {cad.err&&<div style={{color:'#C2362D',marginTop:4}}>{cad.err}</div>}</div>}
+    {!ehNovo&&cad.ok&&<div data-fc="medico-cadastrado" style={{background:'#E2F6EF',color:'#0B7A5F',borderRadius:10,padding:'7px 12px',marginTop:6,fontSize:12.5,fontWeight:700}}>Médico cadastrado.</div>}
     {achados.length>0&&<div data-fc="medico-sugestoes" style={{border:'1px solid #E2E8F0',borderRadius:10,background:'#fff',marginTop:4,overflow:'hidden'}}>
       {achados.map(function(m){return <button type="button" key={m.id} data-fc="medico-pick" onMouseDown={function(e){e.preventDefault();}} onClick={function(){props.onNome(m.nome);props.onCrm(m.crm);setFoco('');}} style={{display:'block',width:'100%',textAlign:'left',padding:'9px 12px',border:'none',borderTop:'1px solid #F1F5F9',background:'#fff',cursor:'pointer',fontSize:13.5}}><b>{m.nome}</b> <span style={{color:'#64748B'}}>· CRM {m.crm}</span></button>;})}
     </div>}
