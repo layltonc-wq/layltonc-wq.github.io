@@ -13,10 +13,10 @@ async function pick(pg, fc, termo, nome) {
   await pg.click('[data-fc="pick"]:has-text("' + nome + '")'); await pg.waitForTimeout(150);
 }
 const confirmar = async (pg, rotulo) => { const b = await pg.$$('button:has-text("' + rotulo + '")'); await b[b.length - 1].dispatchEvent('click'); await pg.waitForTimeout(500); };
-async function rodar(br, T, ok, orgTxt) {
-  const user = { uid: 't1', name: 'Tec', role: 'tecnico' };
+async function rodar(br, T, ok, orgTxt, role, cargo) {
+  const user = { uid: 't1', name: 'Fulana Silva', role: role, crf: '12345-PE' };
   const o = { store: seed(T, orgTxt), uid: user.uid, tenant: T, user: Object.assign({ status: 'approved', tenant_id: T, homeTenant: T, color: '#1351B4', email: 'x@x', sessionTimeout: 12 }, user) };
-  o.store.users[user.uid] = { name: user.name, role: user.role, status: 'approved', tenant_id: T };
+  o.store.users[user.uid] = { name: user.name, role: user.role, status: 'approved', tenant_id: T, crf: user.crf };
   const { pg, errs } = await H.abrir(br, o);
   await pg.waitForSelector('[data-tour="nav-menu"]', { timeout: 15000 });
   await pg.evaluate(() => { const ap = Node.prototype.appendChild; Node.prototype.appendChild = function (n) { const r = ap.call(this, n); if (n && n.tagName === 'IFRAME') { const d = n.contentWindow.document; const w = d.write.bind(d); d.write = function (h) { if (typeof h === 'string' && h.indexOf('<title>Comprovante') >= 0) window.__ultHtml = h; return w(h); }; } return r; }; });
@@ -34,7 +34,10 @@ async function rodar(br, T, ok, orgTxt) {
   let h = await html();
   ok(h.includes('Comprovante de Doação Realizada') && h.includes('Hospital Y') && h.includes('Dipirona 500mg') && h.includes('Paracetamol 750mg') && h.includes('L1'), T + ': comprovante da doação com parceiro, itens e lote');
   ok(h.includes(orgTxt) && /<img src="data:image/.test(h), T + ': traz o cabeçalho e o logo da prefeitura (' + orgTxt + ')');
-  ok(/TOTAL/.test(h) && /<td class="num" style="font-weight:700;background:#F8FAFC">13<\/td>/.test(h), T + ': soma o total (13 unidades)');
+  ok(/TOTAL/.test(h) && /<tfoot><tr><td colspan="4">TOTAL[^<]*<\/td><td class="num">13<\/td>/.test(h), T + ': soma o total (13 unidades)');
+  ok(h.includes('>' + cargo) && !/COORDENADOR/.test(h), T + ': assina com o cargo real de quem imprime (' + cargo + '), não o de coordenador');
+  ok(/Nº <b>DOF-\d{8}-[0-9A-F]{4}<\/b>/.test(h) && h.includes('Data da assinatura'), T + ': traz número do documento e campo de data da assinatura');
+  if (role === 'farmaceutico') ok(h.includes('CRF 12345-PE'), T + ': mostra o CRF da farmacêutica');
   // ---- permuta
   await pg.click('[data-fc="modo-permuta"]'); await pg.waitForTimeout(200);
   await pg.fill('[data-fc="origem"]', 'Hospital Z');
@@ -69,7 +72,7 @@ async function rodar(br, T, ok, orgTxt) {
 (async () => {
   const { ok, fim } = H.verificador();
   const br = await H.launch();
-  await rodar(br, 'itaquitinga-pe', ok, 'Prefeitura Municipal de Itaquitinga');
-  await rodar(br, 'vicencia-pe', ok, 'Fundo Municipal de Saúde de Vicência');
+  await rodar(br, 'itaquitinga-pe', ok, 'Prefeitura Municipal de Itaquitinga', 'farmaceutico', 'Farmacêutico');
+  await rodar(br, 'vicencia-pe', ok, 'Fundo Municipal de Saúde de Vicência', 'tecnico', 'Técnico');
   await fim(br);
 })().catch((e) => { console.error(e); process.exit(2); });
