@@ -7795,6 +7795,46 @@ function _emprestimosDe(entries){
   return Object.keys(mp).map(function(k){var L=mp[k];L.pendente=Math.max(0,L.total-L.devolvido);return L;}).filter(function(L){return L.tipo&&L.total>0;})
     .sort(function(x,y){return String(y.criadoEm).localeCompare(String(x.criadoEm));});
 }
+// ===== Comprovante em PDF de permuta, doação e empréstimo (logo e cabeçalho da prefeitura, no padrão dos outros PDFs) =====
+// m = {tipo, data:'AAAA-MM-DD', parceiro, obs, itens:[{lado:'saiu'|'entrou'|'', nome, qtd, lote, validade, pendente}]}
+var _MOV_TIT={permuta:'Comprovante de Permuta',doacao_recebida:'Comprovante de Doação Recebida',doacao_feita:'Comprovante de Doação Realizada',emprestimo_cedido:'Comprovante de Empréstimo — Saída',emprestimo_recebido:'Comprovante de Empréstimo — Recebimento',devolucao_recebida:'Comprovante de Devolução Recebida',devolucao_feita:'Comprovante de Devolução Realizada'};
+var _MOV_PARC={permuta:'Permuta com',doacao_recebida:'Doador',doacao_feita:'Doado para',emprestimo_cedido:'Emprestado a',emprestimo_recebido:'Recebido de',devolucao_recebida:'Devolvido por',devolucao_feita:'Devolvido a'};
+function _dataBR(s){var p=String(s||'').slice(0,10).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:String(s||'');}
+function comprovanteMovHtml(user,m){
+  var C=tcfg(user);
+  var css='<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;font-size:12px;color:#111}.pagina{padding:26px 30px}'+
+    '.cab{text-align:center;margin-bottom:14px}.cab img{height:64px;margin-bottom:4px}.cab .l1{font-family:Georgia,"Times New Roman",serif;font-weight:700;font-size:15px;color:#1351B4}.cab .l2{font-family:Georgia,"Times New Roman",serif;font-size:12px;color:#111}'+
+    '.titulo{text-align:center;font-weight:700;font-size:14px;margin:14px 0 12px;text-transform:uppercase}'+
+    '.dados{margin:0 auto 14px;font-size:12px;line-height:1.8;max-width:520px}.dados b{font-weight:700}'+
+    'h3{font-size:12px;margin:14px 0 5px;text-transform:uppercase;letter-spacing:.3px}'+
+    'table{width:100%;border-collapse:collapse;font-size:11.5px;margin-bottom:6px}th{border:1px solid #333;background:#F1F5F9;padding:6px 5px;font-weight:700;text-align:left}td{border:1px solid #333;padding:6px 5px;vertical-align:top}td.num{text-align:right;white-space:nowrap}'+
+    '.obs{margin-top:10px;font-size:11.5px;border:1px solid #CBD5E1;border-radius:4px;padding:8px 10px}'+
+    '.ass{display:flex;gap:40px;margin-top:64px}.ass div{flex:1;border-top:1px solid #111;padding-top:5px;text-align:center;font-size:11px}'+
+    '.rodape{margin-top:34px;font-size:9.5px;color:#64748B;text-align:center;line-height:1.6}@media print{.pagina{padding:14px 18px}}</style>';
+  function tabela(lista,tit){
+    if(!lista.length)return '';
+    var t=(tit?'<h3>'+_escHtml(tit)+'</h3>':'')+'<table><thead><tr><th style="width:34px">Nº</th><th>Medicamento</th><th style="width:100px">Lote</th><th style="width:70px">Validade</th><th style="width:60px">Qtd</th></tr></thead><tbody>';
+    var total=0;
+    lista.forEach(function(it,i){total+=parseInt(it.qtd,10)||0;t+='<tr><td class="num">'+(i+1)+'</td><td>'+_escHtml(it.nome)+'</td><td>'+_escHtml(it.pendente?'pendente':(it.lote||'—'))+'</td><td class="num">'+_escHtml(it.pendente?'pendente':(it.validade||'—'))+'</td><td class="num">'+(parseInt(it.qtd,10)||0)+'</td></tr>';});
+    return t+'</tbody><tfoot><tr><td colspan="4" style="font-weight:700;background:#F8FAFC">TOTAL</td><td class="num" style="font-weight:700;background:#F8FAFC">'+total+'</td></tr></tfoot></table>';
+  }
+  var itens=m.itens||[];
+  var corpo=m.tipo==='permuta'?tabela(itens.filter(function(i){return i.lado==='saiu';}),'Saiu da farmácia')+tabela(itens.filter(function(i){return i.lado==='entrou';}),'Entrou na farmácia'):tabela(itens,'Medicamentos');
+  var saiu=m.tipo==='doacao_feita'||m.tipo==='emprestimo_cedido'||m.tipo==='devolucao_feita'||m.tipo==='permuta';
+  var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+_escHtml(_MOV_TIT[m.tipo]||'Comprovante')+'</title>'+css+'</head><body><div class="pagina">';
+  html+='<div class="cab">'+(C.logoPrint?'<img src="'+C.logoPrint+'"/>':'')+'<div class="l1">'+_escHtml(C.org.l1||'')+'</div><div class="l2">'+_escHtml(C.org.l2||'')+'</div></div>';
+  html+='<div class="titulo">'+_escHtml(_MOV_TIT[m.tipo]||'Comprovante')+'</div>';
+  html+='<div class="dados"><b>Data:</b> '+_escHtml(_dataBR(m.data))+'<br><b>'+_escHtml(_MOV_PARC[m.tipo]||'Com')+':</b> '+_escHtml(m.parceiro||'—')+'<br><b>Registrado por:</b> '+_escHtml((user&&user.name)||'—')+'</div>';
+  html+=corpo;
+  if(m.obs)html+='<div class="obs"><b>Observação:</b> '+_escHtml(m.obs)+'</div>';
+  html+='<div class="ass"><div>'+_escHtml((user&&user.name)||'')+'<br>'+_escHtml(C.assinatura||'Responsável')+'<br>'+(saiu?'(entregou)':'(recebeu)')+'</div><div>'+_escHtml(m.parceiro||'')+'<br>'+(saiu?'(recebeu)':'(entregou)')+'</div></div>';
+  html+='<div class="rodape">'+(C.org.rodape||'')+'<br>Comprovante gerado pelo FarmaControl em '+_escHtml(new Date().toLocaleString('pt-BR'))+'</div>';
+  return html+'</div></body></html>';
+}
+function imprimirComprovanteMov(user,m,alerta){
+  if(!_imprimirDoc(comprovanteMovHtml(user,m)))(alerta||window.alert)('Não foi possível abrir a impressão do comprovante.');
+}
+function _botaoComprovante(onClick){return <button type="button" data-fc="imprimir-comprovante" onClick={onClick} style={{display:'inline-flex',alignItems:'center',gap:6,padding:'9px 14px',borderRadius:10,border:'1.5px solid #1351B4',background:'#fff',color:'#1351B4',fontWeight:700,fontSize:13,cursor:'pointer',margin:'0 0 10px'}}>Imprimir comprovante (PDF)</button>;}
 function _itemVazio(){return {key:Date.now()+Math.random(),med:null,qtd:'',lv:{lote:'',validade:'',sl:false},pend:false};}
 function _fcIdx(base,i){return i?base+'-'+i:base;}
 // Soma as quantidades por medicamento e confere com o estoque (FEFO). Devolve {erro} ou {planos:{medId:[partes]}}.
@@ -7810,6 +7850,7 @@ function _planoSaidas(entries,itens){
 function Emprestimos(props){
   var user=props.user,meds=props.medications,entries=props.entries||[];
   var confirm2=props.confirm2||function(t,m,fn){if(window.confirm(m))fn();};
+  var alert2=function(m){window.alert(m);};
   var _tp=useState('cedido');var tipo=_tp[0],setTipo=_tp[1];
   var _par=useState('');var parceiro=_par[0],setParceiro=_par[1];
   var _its=useState([_itemVazio()]);var its=_its[0],setIts=_its[1];
@@ -7819,6 +7860,7 @@ function Emprestimos(props){
   var _err=useState('');var err=_err[0],setErr=_err[1];
   var _ok=useState('');var ok=_ok[0],setOk=_ok[1];
   var _bu=useState(false);var busy=_bu[0],setBusy=_bu[1];
+  var _mv=useState(null);var movUlt=_mv[0],setMovUlt=_mv[1];// último empréstimo registrado (para imprimir o comprovante)
   var _dev=useState(null);var dev=_dev[0],setDev=_dev[1]; // devolução em andamento {id,qtd,lv,pend,err}
   var lista=_emprestimosDe(entries);
   var nosDevem=lista.filter(function(L){return L.tipo==='cedido'&&L.pendente>0;});
@@ -7834,7 +7876,7 @@ function Emprestimos(props){
       if(!(parseInt(it.qtd,10)>=1)){setErr('Informe a quantidade do item '+(i+1)+'.');return;}
       if(tipo==='recebido'&&!it.pend){var e=_validarLoteVal(it.lv);if(e){setErr('Item '+(i+1)+': '+e+' Ou marque "Lote e validade pendentes".');return;}}
     }
-    var b=db.batch();var resumo=(tipo==='cedido'?'Empréstimo a ':'Empréstimo recebido de ')+parceiro.trim()+(obs.trim()?' · '+obs.trim():'');
+    var b=db.batch();var movItens=[];var resumo=(tipo==='cedido'?'Empréstimo a ':'Empréstimo recebido de ')+parceiro.trim()+(obs.trim()?' · '+obs.trim():'');
     if(tipo==='cedido'){
       var pn=_planoSaidas(entries,its);if(pn.erro){setErr(pn.erro);return;}
       if(!sim){confirm2('Emprestar','Emprestar a '+parceiro.trim()+':\n'+its.map(function(x){return '• '+x.qtd+'x '+x.med.nome;}).join('\n')+'\nSai do estoque e fica como pendência até devolverem.',function(){registrar(true);},'warning','Emprestar');return;}
@@ -7842,16 +7884,17 @@ function Emprestimos(props){
         // cada item tem o seu empréstimo, para acertar separadamente; a parte de cada lote vem do plano somado
         var partes=[],rest=q,pl=pn.planos[it.med.id];
         for(var k=0;k<pl.length&&rest>0;k++){var t=Math.min(pl[k].qty,rest);if(t>0){partes.push({qty:t,lote:pl[k].lote,validade:pl[k].validade});pl[k]=Object.assign({},pl[k],{qty:pl[k].qty-t});rest-=t;}}
-        partes.forEach(function(pt){b.set(db.collection('entries').doc(),Object.assign({},base(),{medicamentoId:it.med.id,medicamentoNome:it.med.nome,tipo:'saida',quantidade:pt.qty,lote:pt.lote,validade:pt.validade,destino:'emprestimo',destinoNome:'Empréstimo',entradaEspecial:'emprestimo',emprestimoId:id,emprestimoTipo:'cedido',parceiro:parceiro.trim(),observacao:resumo}));});
+        partes.forEach(function(pt){movItens.push({lado:'',nome:it.med.nome,qtd:pt.qty,lote:pt.lote,validade:pt.validade});b.set(db.collection('entries').doc(),Object.assign({},base(),{medicamentoId:it.med.id,medicamentoNome:it.med.nome,tipo:'saida',quantidade:pt.qty,lote:pt.lote,validade:pt.validade,destino:'emprestimo',destinoNome:'Empréstimo',entradaEspecial:'emprestimo',emprestimoId:id,emprestimoTipo:'cedido',parceiro:parceiro.trim(),observacao:resumo}));});
       });
     }else{
       its.forEach(function(it,ix){var id=novoId()+ix;var lote='',validade='';
         if(!it.pend){lote=it.lv.sl?_loteSL(it.lv.validade):it.lv.lote.trim();validade=_normValidade(it.lv.validade);}
+        movItens.push({lado:'',nome:it.med.nome,qtd:parseInt(it.qtd,10),lote:lote,validade:validade,pendente:!!it.pend});
         b.set(db.collection('entries').doc(),Object.assign({},base(),{medicamentoId:it.med.id,medicamentoNome:it.med.nome,tipo:'entrada',quantidade:parseInt(it.qtd,10),lote:lote,validade:validade,lotePendente:!!it.pend,entradaEspecial:'emprestimo',emprestimoId:id,emprestimoTipo:'recebido',parceiro:parceiro.trim(),observacao:resumo+(it.pend?' · lote/validade PENDENTES':'')}));
       });
     }
-    setBusy(true);
-    b.commit().then(function(){setBusy(false);setOk(tipo==='cedido'?'Empréstimo registrado. Ficou em "Nos devem" até devolverem.':'Empréstimo registrado. Ficou em "Devemos" até devolvermos.');setIts([_itemVazio()]);setParceiro('');setObs('');}).catch(function(e){setBusy(false);setErr('Não foi possível registrar: '+((e&&e.message)||'erro'));});
+    setBusy(true);var movFinal={tipo:tipo==='cedido'?'emprestimo_cedido':'emprestimo_recebido',data:data||todayStr(),parceiro:parceiro.trim(),obs:obs.trim(),itens:movItens};
+    b.commit().then(function(){setMovUlt(movFinal);setBusy(false);setOk(tipo==='cedido'?'Empréstimo registrado. Ficou em "Nos devem" até devolverem.':'Empréstimo registrado. Ficou em "Devemos" até devolvermos.');setIts([_itemVazio()]);setParceiro('');setObs('');}).catch(function(e){setBusy(false);setErr('Não foi possível registrar: '+((e&&e.message)||'erro'));});
   }
   function devolver(L,sim){
     var n=parseInt(dev.qtd,10);
@@ -7882,6 +7925,7 @@ function Emprestimos(props){
       <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
         <div style={{flex:1,minWidth:150,fontSize:13}}><b>{feito?L.total:L.pendente}x {L.nome}</b>
           <div style={{fontSize:11.5,color:'#64748B'}}>{cedido?'Emprestado a ':'Recebido de '}{L.parceiro} · {fmtD(L.criadoEm)}{!feito&&L.devolvido>0?' · já acertado '+L.devolvido+' de '+L.total:''}</div></div>
+        <button type="button" data-fc={'emp-imprimir-'+L.id} onClick={function(){var ents=entries.filter(function(x){return x.emprestimoId===L.id&&!x.emprestimoDev;});imprimirComprovanteMov(user,{tipo:cedido?'emprestimo_cedido':'emprestimo_recebido',data:String(L.criadoEm||'').slice(0,10),parceiro:L.parceiro,obs:'',itens:ents.map(function(x){return {lado:'',nome:x.medicamentoNome,qtd:x.quantidade,lote:x.lote,validade:x.validade,pendente:!!x.lotePendente};})},alert2);}} style={{border:'none',background:'none',color:'#1351B4',fontWeight:700,fontSize:12,cursor:'pointer',padding:'4px 6px'}}>Imprimir</button>
         {feito?<span style={{background:'#E2F6EF',color:'#0B7A5F',fontWeight:800,fontSize:12,padding:'4px 10px',borderRadius:99}}>✓ Acertado</span>
           :(!aberto&&<button type="button" data-fc={'emp-acertar-'+L.id} onClick={function(){setDev({id:L.id,qtd:String(L.pendente),lv:{lote:'',validade:'',sl:false},pend:false,err:''});}} style={{padding:'8px 12px',borderRadius:8,border:'none',background:cedido?'#0B7A5F':'#B45309',color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>{cedido?'Receber de volta':'Devolver'}</button>)}
       </div>
@@ -7932,6 +7976,7 @@ function Emprestimos(props){
     <input className="inp" placeholder="Observação (opcional)" value={obs} onChange={function(e){setObs(e.target.value);}}/>
     {err&&<div data-fc="ent-erro" className="er">{err}</div>}
     {ok&&<div data-fc="ent-ok" className="ok">{ok}</div>}
+    {ok&&movUlt&&_botaoComprovante(function(){imprimirComprovanteMov(user,movUlt,alert2);})}
     <button type="button" data-fc="emp-salvar" disabled={busy} onClick={function(){registrar();}} style={{width:'100%',padding:'13px',borderRadius:10,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,cursor:'pointer'}}>{busy?'Salvando…':'Registrar empréstimo'}</button>
     {acertados.length>0&&<div data-fc="emp-acertados" style={{marginTop:16}}><div style={{fontWeight:800,fontSize:13,marginBottom:2}}>Acertados</div>{acertados.slice(0,15).map(linha)}</div>}
   </div>);
@@ -7992,6 +8037,7 @@ function EntradaEspecial(props){
   var _err=useState('');var err=_err[0],setErr=_err[1];
   var _ok=useState('');var ok=_ok[0],setOk=_ok[1];
   var _bu=useState(false);var busy=_bu[0],setBusy=_bu[1];
+  var _mv=useState(null);var movUlt=_mv[0],setMovUlt=_mv[1];// último registro feito (para imprimir o comprovante)
   // doação (recebida ou feita)
   var _sent=useState('recebida');var sentido=_sent[0],setSentido=_sent[1];
   var _itD=useState([{key:1,med:null,qtd:'',lv:{lote:'',validade:'',sl:false}}]);var itD=_itD[0],setItD=_itD[1];
@@ -8012,7 +8058,7 @@ function EntradaEspecial(props){
       if(!(parseInt(it.qtd,10)>=1)){setErr('Informe a quantidade do item '+(i+1)+'.');return;}
       if(!feita){var e=_validarLoteVal(it.lv);if(e){setErr('Item '+(i+1)+': '+e);return;}}
     }
-    var pn=null;
+    var pn=null;var movItens=[];var doacaoId='dc'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
     if(feita){pn=_planoSaidas(entries,itD);if(pn.erro){setErr(pn.erro);return;}
       if(!sim){confirm2('Registrar doação','Doar para '+origem.trim()+':\n'+itD.map(function(x){return '• '+x.qtd+'x '+x.med.nome;}).join('\n')+'\nSai do estoque.',function(){salvarDoacao(true);},'warning','Registrar');return;}}
     setBusy(true);var b=db.batch();
@@ -8020,13 +8066,15 @@ function EntradaEspecial(props){
       if(feita){
         var q=parseInt(it.qtd,10),pl=pn.planos[it.med.id],rest=q;
         for(var k=0;k<pl.length&&rest>0;k++){var t=Math.min(pl[k].qty,rest);if(t>0){pl[k]=Object.assign({},pl[k],{qty:pl[k].qty-t});rest-=t;
-          b.set(db.collection('entries').doc(),Object.assign({},base(),{medicamentoId:it.med.id,medicamentoNome:it.med.nome,tipo:'saida',quantidade:t,lote:pl[k].lote,validade:pl[k].validade,destino:'doacao',destinoNome:'Doação',entradaEspecial:'doacao',doacaoFeita:true,parceiro:origem.trim(),observacao:'Doação feita a '+origem.trim()+(obs.trim()?' · '+obs.trim():'')}));}}
+          movItens.push({lado:'',nome:it.med.nome,qtd:t,lote:pl[k].lote,validade:pl[k].validade});
+          b.set(db.collection('entries').doc(),Object.assign({},base(),{medicamentoId:it.med.id,medicamentoNome:it.med.nome,tipo:'saida',quantidade:t,lote:pl[k].lote,validade:pl[k].validade,destino:'doacao',destinoNome:'Doação',entradaEspecial:'doacao',doacaoId:doacaoId,doacaoFeita:true,parceiro:origem.trim(),observacao:'Doação feita a '+origem.trim()+(obs.trim()?' · '+obs.trim():'')}));}}
       }else{
         var lote=it.lv.sl?_loteSL(it.lv.validade):it.lv.lote.trim();
-        b.set(db.collection('entries').doc(),Object.assign({},base(),{medicamentoId:it.med.id,medicamentoNome:it.med.nome,tipo:'entrada',quantidade:parseInt(it.qtd,10),lote:lote,validade:_normValidade(it.lv.validade),entradaEspecial:'doacao',doador:origem.trim(),observacao:'Doação — '+origem.trim()+(obs.trim()?' · '+obs.trim():'')}));
+        movItens.push({lado:'',nome:it.med.nome,qtd:parseInt(it.qtd,10),lote:lote,validade:_normValidade(it.lv.validade)});
+        b.set(db.collection('entries').doc(),Object.assign({},base(),{medicamentoId:it.med.id,medicamentoNome:it.med.nome,tipo:'entrada',quantidade:parseInt(it.qtd,10),lote:lote,validade:_normValidade(it.lv.validade),entradaEspecial:'doacao',doacaoId:doacaoId,doador:origem.trim(),observacao:'Doação — '+origem.trim()+(obs.trim()?' · '+obs.trim():'')}));
       }
     });
-    b.commit().then(function(){setBusy(false);setOk(feita?'Doação registrada: '+itD.length+' item(ns) saíram do estoque.':'Doação registrada: '+itD.length+' item(ns) entraram no estoque.');setItD([{key:Date.now(),med:null,qtd:'',lv:{lote:'',validade:'',sl:false}}]);setOrigem('');setObs('');}).catch(function(e){setBusy(false);setErr('Não foi possível registrar: '+((e&&e.message)||'erro'));});
+    b.commit().then(function(){setMovUlt({tipo:feita?'doacao_feita':'doacao_recebida',data:data||todayStr(),parceiro:origem.trim(),obs:obs.trim(),itens:movItens});setBusy(false);setOk(feita?'Doação registrada: '+itD.length+' item(ns) saíram do estoque.':'Doação registrada: '+itD.length+' item(ns) entraram no estoque.');setItD([{key:Date.now(),med:null,qtd:'',lv:{lote:'',validade:'',sl:false}}]);setOrigem('');setObs('');}).catch(function(e){setBusy(false);setErr('Não foi possível registrar: '+((e&&e.message)||'erro'));});
   }
   function salvarPermuta(sim){
     setErr('');setOk('');
@@ -8039,13 +8087,15 @@ function EntradaEspecial(props){
     if(!sim){confirm2('Registrar permuta','Registrar a permuta?\nSai:\n'+saiL.map(function(s){return '• '+s.qtd+'x '+s.med.nome;}).join('\n')+'\nEntra:\n'+entL.map(function(s){return '• '+s.qtd+'x '+s.med.nome;}).join('\n'),function(){salvarPermuta(true);},'warning','Registrar');return;}
     setBusy(true);var pid='pm'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);var b=db.batch();
     var resumo='Permuta com '+origem.trim()+': sai '+saiL.map(function(s){return parseInt(s.qtd,10)+'x '+s.med.nome;}).join(', ')+' / entra '+entL.map(function(s){return parseInt(s.qtd,10)+'x '+s.med.nome;}).join(', ');
+    var movItensSaiu=[];
     saiL.forEach(function(s){var rest=parseInt(s.qtd,10),pl=pn.planos[s.med.id];
-      for(var k=0;k<pl.length&&rest>0;k++){var t=Math.min(pl[k].qty,rest);if(t>0){pl[k]=Object.assign({},pl[k],{qty:pl[k].qty-t});rest-=t;
+      for(var k=0;k<pl.length&&rest>0;k++){var t=Math.min(pl[k].qty,rest);if(t>0){movItensSaiu.push({lado:'saiu',nome:s.med.nome,qtd:t,lote:pl[k].lote,validade:pl[k].validade});pl[k]=Object.assign({},pl[k],{qty:pl[k].qty-t});rest-=t;
         b.set(db.collection('entries').doc(),Object.assign({},base(),{medicamentoId:s.med.id,medicamentoNome:s.med.nome,tipo:'saida',quantidade:t,lote:pl[k].lote,validade:pl[k].validade,destino:'permuta',destinoNome:'Permuta',entradaEspecial:'permuta',permutaId:pid,parceiro:origem.trim(),observacao:resumo+(obs.trim()?' · '+obs.trim():'')}));}}});
-    var algumaPend=false;
+    var algumaPend=false;var movItens=[];
     entL.forEach(function(x){var lote='',validade='';if(!x.pend){lote=x.lv.sl?_loteSL(x.lv.validade):x.lv.lote.trim();validade=_normValidade(x.lv.validade);}else algumaPend=true;
+      movItens.push({lado:'entrou',nome:x.med.nome,qtd:parseInt(x.qtd,10),lote:lote,validade:validade,pendente:!!x.pend});
       b.set(db.collection('entries').doc(),Object.assign({},base(),{medicamentoId:x.med.id,medicamentoNome:x.med.nome,tipo:'entrada',quantidade:parseInt(x.qtd,10),lote:lote,validade:validade,lotePendente:!!x.pend,entradaEspecial:'permuta',permutaId:pid,parceiro:origem.trim(),observacao:resumo+(x.pend?' · lote/validade PENDENTES':'')+(obs.trim()?' · '+obs.trim():'')}));});
-    b.commit().then(function(){setBusy(false);setOk('Permuta registrada.'+(algumaPend?' Lembre de informar lote e validade quando chegarem (lista abaixo).':''));setSaiL([_itemVazio()]);setEntL([_itemVazio()]);setOrigem('');setObs('');}).catch(function(e){setBusy(false);setErr('Não foi possível registrar: '+((e&&e.message)||'erro'));});
+    b.commit().then(function(){setMovUlt({tipo:'permuta',data:data||todayStr(),parceiro:origem.trim(),obs:obs.trim(),itens:movItensSaiu.concat(movItens)});setBusy(false);setOk('Permuta registrada.'+(algumaPend?' Lembre de informar lote e validade quando chegarem (lista abaixo).':''));setSaiL([_itemVazio()]);setEntL([_itemVazio()]);setOrigem('');setObs('');}).catch(function(e){setBusy(false);setErr('Não foi possível registrar: '+((e&&e.message)||'erro'));});
   }
   function salvarPendencia(){
     var lv=edP.lv;var e=_validarLoteVal(lv);if(e){alert(e);return;}
@@ -8104,10 +8154,23 @@ function EntradaEspecial(props){
     <input className="inp" placeholder="Observação (opcional)" value={obs} onChange={function(e){setObs(e.target.value);}}/>
     {err&&<div data-fc="ent-erro" className="er">{err}</div>}
     {ok&&<div data-fc="ent-ok" className="ok">{ok}</div>}
+    {ok&&movUlt&&_botaoComprovante(function(){imprimirComprovanteMov(user,movUlt,alert);})}
     <button type="button" data-fc="ent-salvar" disabled={busy} onClick={modo==='doacao'?function(){salvarDoacao();}:function(){salvarPermuta();}} style={{width:'100%',padding:'13px',borderRadius:10,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,cursor:'pointer'}}>{busy?'Salvando…':(modo==='doacao'?'Registrar doação':'Registrar permuta')}</button>
     {lista.length>0&&<div style={{marginTop:16}}><div style={{fontWeight:800,fontSize:13,marginBottom:6}}>Últimas permutas, doações e empréstimos</div>
-      {lista.slice(0,15).map(function(e){return <div key={e.id} style={{display:'flex',gap:8,fontSize:12.5,padding:'6px 0',borderTop:'1px solid #F1F5F9'}}><span style={{width:62,fontWeight:700,color:e.entradaEspecial==='doacao'?'#0B7A5F':'#7C3AED'}}>{e.entradaEspecial==='doacao'?'Doação':e.entradaEspecial==='emprestimo'?'Empréstimo':'Permuta'}</span><span style={{flex:1}}>{e.tipo==='saida'?'Saiu ':'Entrou '}{e.quantidade}x {e.medicamentoNome}{e.lote?' · '+e.lote:''}{e.lotePendente?' · PENDENTE':''}</span><span style={{color:'#94A3B8'}}>{fmtD(e.criadoEm)}</span></div>;})}</div>}
+      {lista.slice(0,15).map(function(e){return <div key={e.id} style={{display:'flex',gap:8,fontSize:12.5,padding:'6px 0',borderTop:'1px solid #F1F5F9'}}><span style={{width:62,fontWeight:700,color:e.entradaEspecial==='doacao'?'#0B7A5F':'#7C3AED'}}>{e.entradaEspecial==='doacao'?'Doação':e.entradaEspecial==='emprestimo'?'Empréstimo':'Permuta'}</span><span style={{flex:1}}>{e.tipo==='saida'?'Saiu ':'Entrou '}{e.quantidade}x {e.medicamentoNome}{e.lote?' · '+e.lote:''}{e.lotePendente?' · PENDENTE':''}</span><span style={{color:'#94A3B8'}}>{fmtD(e.criadoEm)}</span><button type="button" data-fc="reimprimir-mov" onClick={function(){imprimirComprovanteMov(user,_movDoEntry(e,entries),alert);}} style={{border:'none',background:'none',color:'#1351B4',fontWeight:700,fontSize:12,cursor:'pointer',padding:0}}>Imprimir</button></div>;})}</div>}
   </div>);
+}
+// Monta o comprovante de um lançamento já gravado (junta os itens da mesma permuta/doação; empréstimo e lançamentos antigos saem item a item).
+function _movDoEntry(e,entries){
+  var grupo=[e];
+  if(e.permutaId)grupo=entries.filter(function(x){return x.permutaId===e.permutaId;});
+  else if(e.doacaoId)grupo=entries.filter(function(x){return x.doacaoId===e.doacaoId;});
+  var it=function(x,lado){return {lado:lado,nome:x.medicamentoNome,qtd:x.quantidade,lote:x.lote,validade:x.validade,pendente:!!x.lotePendente};};
+  var data=String(e.date||e.criadoEm||'').slice(0,10);
+  if(e.entradaEspecial==='permuta')return {tipo:'permuta',data:data,parceiro:e.parceiro||'',obs:'',itens:grupo.map(function(x){return it(x,x.tipo==='saida'?'saiu':'entrou');})};
+  if(e.entradaEspecial==='doacao')return {tipo:e.doacaoFeita?'doacao_feita':'doacao_recebida',data:data,parceiro:e.parceiro||e.doador||'',obs:'',itens:grupo.map(function(x){return it(x,'');})};
+  var ced=e.emprestimoTipo==='cedido';
+  return {tipo:e.emprestimoDev?(ced?'devolucao_recebida':'devolucao_feita'):(ced?'emprestimo_cedido':'emprestimo_recebido'),data:data,parceiro:e.parceiro||'',obs:'',itens:[it(e,'')]};
 }
 // ===== Visão somada CAF + Satélite (só consulta) =====
 // Usa os saldos que já existem em cada medicamento: estoqueAtual = total da prefeitura e estoqueLocal.satelite = parte do
