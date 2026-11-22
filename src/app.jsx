@@ -7835,17 +7835,48 @@ function imprimirComprovanteMov(user,m,alerta){
   if(!_imprimirDoc(comprovanteMovHtml(user,m)))(alerta||window.alert)('Não foi possível abrir a impressão do comprovante.');
 }
 function _botaoComprovante(onClick){return <button type="button" data-fc="imprimir-comprovante" onClick={onClick} style={{display:'inline-flex',alignItems:'center',gap:6,padding:'9px 14px',borderRadius:10,border:'1.5px solid #1351B4',background:'#fff',color:'#1351B4',fontWeight:700,fontSize:13,cursor:'pointer',margin:'0 0 10px'}}>Imprimir comprovante (PDF)</button>;}
-function _itemVazio(){return {key:Date.now()+Math.random(),med:null,qtd:'',lv:{lote:'',validade:'',sl:false},pend:false};}
+function _itemVazio(){return {key:Date.now()+Math.random(),med:null,qtd:'',lote:'',lv:{lote:'',validade:'',sl:false},pend:false};}
 function _fcIdx(base,i){return i?base+'-'+i:base;}
 // Soma as quantidades por medicamento e confere com o estoque (FEFO). Devolve {erro} ou {planos:{medId:[partes]}}.
 function _planoSaidas(entries,itens){
-  var need={},nomes={};itens.forEach(function(it){need[it.med.id]=(need[it.med.id]||0)+parseInt(it.qtd,10);nomes[it.med.id]=it.med.nome;});
-  var planos={};
-  for(var id in need){var d=_ubsDisp(entries,id);
-    if(need[id]>d.total)return {erro:nomes[id]+': quantidade maior que o disponível ('+d.total+').'};
-    var pl=_ubsPlano(d,need[id],'');if(pl.falta>0)return {erro:nomes[id]+': os lotes dentro da validade não cobrem essa quantidade.'};
-    planos[id]=pl.partes;}
-  return {planos:planos};
+  // Cada item pode trazer o lote escolhido (it.lote). Sem escolha, sai pelo que vence primeiro. Vários itens do mesmo medicamento
+  // consomem o mesmo saldo, em ordem. Devolve as partes (lote/validade/qty) de cada item em porItem[indice].
+  var disp={},porItem=[];
+  for(var i=0;i<itens.length;i++){
+    var it=itens[i],id=it.med.id,q=parseInt(it.qtd,10);
+    if(!disp[id]){var d0=_ubsDisp(entries,id);disp[id]={total:d0.total,semLote:d0.semLote,lotes:d0.lotes.map(function(l){return Object.assign({},l);})};}
+    var d=disp[id];
+    if(q>d.total)return {erro:it.med.nome+': quantidade maior que o disponível ('+d.total+').'};
+    if(it.lote){
+      var l=d.lotes.filter(function(x){return loteKey(x.lote)===loteKey(it.lote);})[0];
+      if(!l)return {erro:it.med.nome+': o lote '+it.lote+' não tem saldo.'};
+      if(l.vencido)return {erro:it.med.nome+': o lote '+it.lote+' está vencido e não pode sair.'};
+      if(q>l.qty)return {erro:it.med.nome+': o lote '+it.lote+' tem só '+l.qty+' un. Diminua a quantidade ou escolha outro lote.'};
+    }
+    var pl=_ubsPlano(d,q,it.lote||'');
+    if(pl.falta>0)return {erro:it.med.nome+': os lotes dentro da validade não cobrem essa quantidade.'};
+    pl.partes.forEach(function(pt){
+      if(pt.lote===''||pt.lote==null){d.semLote-=pt.qty;}else{var lt=d.lotes.filter(function(x){return loteKey(x.lote)===loteKey(pt.lote);})[0];if(lt)lt.qty-=pt.qty;}
+      d.total-=pt.qty;
+    });
+    porItem.push(pl.partes);
+  }
+  return {porItem:porItem};
+}
+// Mostra o estoque do medicamento e deixa escolher de qual lote vai sair (opcional; sem escolher, sai o que vence primeiro).
+function LoteSaidaPicker(props){
+  var _o=useState(false);var aberto=_o[0],setAberto=_o[1];
+  var d=_ubsDisp(props.entries,props.med.id);
+  var lotes=d.lotes;
+  var temSL=d.semLote>0;
+  return(<div data-fc={props.dataFc+'-lotes'} style={{marginBottom:8}}>
+    <div style={{fontSize:12.5,color:'#475569',marginBottom:6}}>Em estoque: <b data-fc={props.dataFc+'-estoque'}>{d.total}</b> un.{props.value?<span> · saindo do lote <b>{props.value}</b></span>:<span> · sai o lote que vence primeiro</span>}</div>
+    {(lotes.length>0||temSL)&&<button type="button" data-fc={props.dataFc+'-escolher'} onClick={function(){setAberto(!aberto);}} style={{padding:'7px 12px',borderRadius:8,border:'1.5px solid '+(props.value?'#1351B4':'#CBD5E1'),background:props.value?'#EFF6FF':'#fff',color:props.value?'#1351B4':'#475569',fontWeight:700,fontSize:12,cursor:'pointer'}}>{aberto?'Fechar lotes':(props.value?'Trocar o lote':'Escolher o lote (opcional)')}</button>}
+    {aberto&&<div style={{marginTop:6,display:'grid',gap:5}}>
+      {lotes.map(function(l,i){var on=props.value&&loteKey(props.value)===loteKey(l.lote);return(<button type="button" key={i} data-fc={props.dataFc+'-lote-op'} disabled={l.vencido} onClick={function(){props.onChange(on?'':l.lote);setAberto(false);}} style={{display:'flex',justifyContent:'space-between',gap:8,textAlign:'left',padding:'8px 10px',borderRadius:8,border:'1.5px solid '+(on?'#1351B4':'#E2E8F0'),background:on?'#EFF6FF':(l.vencido?'#F8FAFC':'#fff'),color:l.vencido?'#94A3B8':'#1E293B',fontSize:12.5,cursor:l.vencido?'not-allowed':'pointer'}}>
+        <span>Lote {l.lote||'sem lote'}{l.validade?' · val. '+l.validade:''}{l.vencido?' · VENCIDO':''}</span><b>{l.qty} un.</b></button>);})}
+    </div>}
+  </div>);
 }
 function Emprestimos(props){
   var user=props.user,meds=props.medications,entries=props.entries||[];
@@ -7882,8 +7913,7 @@ function Emprestimos(props){
       if(!sim){confirm2('Emprestar','Emprestar a '+parceiro.trim()+':\n'+its.map(function(x){return '• '+x.qtd+'x '+x.med.nome;}).join('\n')+'\nSai do estoque e fica como pendência até devolverem.',function(){registrar(true);},'warning','Emprestar');return;}
       its.forEach(function(it,ix){var id=novoId()+ix;var q=parseInt(it.qtd,10);
         // cada item tem o seu empréstimo, para acertar separadamente; a parte de cada lote vem do plano somado
-        var partes=[],rest=q,pl=pn.planos[it.med.id];
-        for(var k=0;k<pl.length&&rest>0;k++){var t=Math.min(pl[k].qty,rest);if(t>0){partes.push({qty:t,lote:pl[k].lote,validade:pl[k].validade});pl[k]=Object.assign({},pl[k],{qty:pl[k].qty-t});rest-=t;}}
+        var partes=pn.porItem[ix];
         partes.forEach(function(pt){movItens.push({lado:'',nome:it.med.nome,qtd:pt.qty,lote:pt.lote,validade:pt.validade});b.set(db.collection('entries').doc(),Object.assign({},base(),{medicamentoId:it.med.id,medicamentoNome:it.med.nome,tipo:'saida',quantidade:pt.qty,lote:pt.lote,validade:pt.validade,destino:'emprestimo',destinoNome:'Empréstimo',entradaEspecial:'emprestimo',emprestimoId:id,emprestimoTipo:'cedido',parceiro:parceiro.trim(),observacao:resumo}));});
       });
     }else{
@@ -7962,9 +7992,9 @@ function Emprestimos(props){
     </div>
     {its.map(function(it,idx){var disp=it.med&&tipo==='cedido'?_ubsDisp(entries,it.med.id):null;return(<div key={it.key} style={card}>
       <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}><div style={{fontSize:11,fontWeight:700,color:'#94A3B8'}}>Item {idx+1}</div>{its.length>1&&<button type="button" data-fc={_fcIdx('emp-remover',idx)} onClick={function(){setIts(its.filter(function(x){return x.key!==it.key;}));}} style={{border:'none',background:'none',color:'#C2362D',fontWeight:700,fontSize:12,cursor:'pointer'}}>Remover</button>}</div>
-      <MedPickerSimples user={user} meds={meds} value={it.med} dataFc={_fcIdx('emp-busca',idx)} onChange={function(m){setIt(it.key,{med:m});}}/>
+      <MedPickerSimples user={user} meds={meds} value={it.med} dataFc={_fcIdx('emp-busca',idx)} onChange={function(m){setIt(it.key,{med:m,lote:''});}} entries={tipo==='cedido'?entries:null}/>
       {it.med&&<div style={{marginTop:8}}>
-        {tipo==='cedido'&&<div style={{fontSize:12.5,color:'#475569',marginBottom:6}}>Disponível aqui: <b>{disp.total}</b></div>}
+        {tipo==='cedido'&&<LoteSaidaPicker entries={entries} med={it.med} dataFc={_fcIdx('emp',idx)} value={it.lote} onChange={function(l){setIt(it.key,{lote:l});}}/>}
         <div style={{width:130,marginBottom:8}}><div style={lbl}>Quantidade *</div><input className="inp" type="number" min="1" data-fc={_fcIdx('emp-qtd',idx)} value={it.qtd} onChange={function(e){setIt(it.key,{qtd:e.target.value});}} style={{marginBottom:0}}/></div>
         {tipo==='recebido'&&<div>
           <label style={{display:'flex',alignItems:'center',gap:8,fontSize:13,marginBottom:8,cursor:'pointer'}}><input type="checkbox" data-fc={_fcIdx('emp-pend',idx)} checked={it.pend} onChange={function(e){setIt(it.key,{pend:e.target.checked});}}/> Lote e validade <b>pendentes</b> (ainda não chegou / não sei)</label>
@@ -8011,7 +8041,7 @@ function MedPickerSimples(props){
       {novo.err&&<div className="er">{novo.err}</div>}
       <div style={{display:'flex',gap:8}}><button type="button" data-fc="novo-med-salvar" disabled={novo.busy} onClick={cadastrar} style={{flex:1,padding:'10px',borderRadius:10,border:'none',background:'#1351B4',color:'#fff',fontWeight:700,cursor:'pointer'}}>{novo.busy?'Cadastrando…':'Cadastrar e usar'}</button><button type="button" onClick={function(){setNovo(null);}} style={{padding:'10px 14px',borderRadius:10,border:'1px solid #CBD5E1',background:'#fff',cursor:'pointer'}}>Cancelar</button></div>
     </div>}
-    {achados.map(function(m){return <button type="button" key={m.id} data-fc="pick" onClick={function(){props.onChange(m);setQ('');}} style={{display:'block',width:'100%',textAlign:'left',padding:'9px 12px',border:'none',borderTop:'1px solid #F1F5F9',background:'#fff',cursor:'pointer',fontSize:13.5}}>{m.nome}</button>;})}</div>);
+    {achados.map(function(m){return <button type="button" key={m.id} data-fc="pick" onClick={function(){props.onChange(m);setQ('');}} style={{display:'flex',justifyContent:'space-between',gap:8,width:'100%',textAlign:'left',padding:'9px 12px',border:'none',borderTop:'1px solid #F1F5F9',background:'#fff',cursor:'pointer',fontSize:13.5}}><span>{m.nome}</span>{props.entries&&<b style={{color:'#475569',fontSize:12,whiteSpace:'nowrap'}}>estoque {_ubsDisp(props.entries,m.id).total}</b>}</button>;})}</div>);
 }
 function LoteValidadeCampos(props){
   var v=props.valor;
@@ -8040,7 +8070,7 @@ function EntradaEspecial(props){
   var _mv=useState(null);var movUlt=_mv[0],setMovUlt=_mv[1];// último registro feito (para imprimir o comprovante)
   // doação (recebida ou feita)
   var _sent=useState('recebida');var sentido=_sent[0],setSentido=_sent[1];
-  var _itD=useState([{key:1,med:null,qtd:'',lv:{lote:'',validade:'',sl:false}}]);var itD=_itD[0],setItD=_itD[1];
+  var _itD=useState([{key:1,med:null,qtd:'',lote:'',lv:{lote:'',validade:'',sl:false}}]);var itD=_itD[0],setItD=_itD[1];
   // permuta: vários itens que saíram e vários que chegaram
   var _sai=useState([_itemVazio()]);var saiL=_sai[0],setSaiL=_sai[1];
   var _ent=useState([_itemVazio()]);var entL=_ent[0],setEntL=_ent[1];
@@ -8062,19 +8092,18 @@ function EntradaEspecial(props){
     if(feita){pn=_planoSaidas(entries,itD);if(pn.erro){setErr(pn.erro);return;}
       if(!sim){confirm2('Registrar doação','Doar para '+origem.trim()+':\n'+itD.map(function(x){return '• '+x.qtd+'x '+x.med.nome;}).join('\n')+'\nSai do estoque.',function(){salvarDoacao(true);},'warning','Registrar');return;}}
     setBusy(true);var b=db.batch();
-    itD.forEach(function(it){
+    itD.forEach(function(it,ix){
       if(feita){
-        var q=parseInt(it.qtd,10),pl=pn.planos[it.med.id],rest=q;
-        for(var k=0;k<pl.length&&rest>0;k++){var t=Math.min(pl[k].qty,rest);if(t>0){pl[k]=Object.assign({},pl[k],{qty:pl[k].qty-t});rest-=t;
-          movItens.push({lado:'',nome:it.med.nome,qtd:t,lote:pl[k].lote,validade:pl[k].validade});
-          b.set(db.collection('entries').doc(),Object.assign({},base(),{medicamentoId:it.med.id,medicamentoNome:it.med.nome,tipo:'saida',quantidade:t,lote:pl[k].lote,validade:pl[k].validade,destino:'doacao',destinoNome:'Doação',entradaEspecial:'doacao',doacaoId:doacaoId,doacaoFeita:true,parceiro:origem.trim(),observacao:'Doação feita a '+origem.trim()+(obs.trim()?' · '+obs.trim():'')}));}}
+        pn.porItem[ix].forEach(function(pt){var t=pt.qty;
+          movItens.push({lado:'',nome:it.med.nome,qtd:t,lote:pt.lote,validade:pt.validade});
+          b.set(db.collection('entries').doc(),Object.assign({},base(),{medicamentoId:it.med.id,medicamentoNome:it.med.nome,tipo:'saida',quantidade:t,lote:pt.lote,validade:pt.validade,destino:'doacao',destinoNome:'Doação',entradaEspecial:'doacao',doacaoId:doacaoId,doacaoFeita:true,parceiro:origem.trim(),observacao:'Doação feita a '+origem.trim()+(obs.trim()?' · '+obs.trim():'')}));});
       }else{
         var lote=it.lv.sl?_loteSL(it.lv.validade):it.lv.lote.trim();
         movItens.push({lado:'',nome:it.med.nome,qtd:parseInt(it.qtd,10),lote:lote,validade:_normValidade(it.lv.validade)});
         b.set(db.collection('entries').doc(),Object.assign({},base(),{medicamentoId:it.med.id,medicamentoNome:it.med.nome,tipo:'entrada',quantidade:parseInt(it.qtd,10),lote:lote,validade:_normValidade(it.lv.validade),entradaEspecial:'doacao',doacaoId:doacaoId,doador:origem.trim(),observacao:'Doação — '+origem.trim()+(obs.trim()?' · '+obs.trim():'')}));
       }
     });
-    b.commit().then(function(){setMovUlt({tipo:feita?'doacao_feita':'doacao_recebida',data:data||todayStr(),parceiro:origem.trim(),obs:obs.trim(),itens:movItens});setBusy(false);setOk(feita?'Doação registrada: '+itD.length+' item(ns) saíram do estoque.':'Doação registrada: '+itD.length+' item(ns) entraram no estoque.');setItD([{key:Date.now(),med:null,qtd:'',lv:{lote:'',validade:'',sl:false}}]);setOrigem('');setObs('');}).catch(function(e){setBusy(false);setErr('Não foi possível registrar: '+((e&&e.message)||'erro'));});
+    b.commit().then(function(){setMovUlt({tipo:feita?'doacao_feita':'doacao_recebida',data:data||todayStr(),parceiro:origem.trim(),obs:obs.trim(),itens:movItens});setBusy(false);setOk(feita?'Doação registrada: '+itD.length+' item(ns) saíram do estoque.':'Doação registrada: '+itD.length+' item(ns) entraram no estoque.');setItD([{key:Date.now(),med:null,qtd:'',lote:'',lv:{lote:'',validade:'',sl:false}}]);setOrigem('');setObs('');}).catch(function(e){setBusy(false);setErr('Não foi possível registrar: '+((e&&e.message)||'erro'));});
   }
   function salvarPermuta(sim){
     setErr('');setOk('');
@@ -8088,9 +8117,9 @@ function EntradaEspecial(props){
     setBusy(true);var pid='pm'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);var b=db.batch();
     var resumo='Permuta com '+origem.trim()+': sai '+saiL.map(function(s){return parseInt(s.qtd,10)+'x '+s.med.nome;}).join(', ')+' / entra '+entL.map(function(s){return parseInt(s.qtd,10)+'x '+s.med.nome;}).join(', ');
     var movItensSaiu=[];
-    saiL.forEach(function(s){var rest=parseInt(s.qtd,10),pl=pn.planos[s.med.id];
-      for(var k=0;k<pl.length&&rest>0;k++){var t=Math.min(pl[k].qty,rest);if(t>0){movItensSaiu.push({lado:'saiu',nome:s.med.nome,qtd:t,lote:pl[k].lote,validade:pl[k].validade});pl[k]=Object.assign({},pl[k],{qty:pl[k].qty-t});rest-=t;
-        b.set(db.collection('entries').doc(),Object.assign({},base(),{medicamentoId:s.med.id,medicamentoNome:s.med.nome,tipo:'saida',quantidade:t,lote:pl[k].lote,validade:pl[k].validade,destino:'permuta',destinoNome:'Permuta',entradaEspecial:'permuta',permutaId:pid,parceiro:origem.trim(),observacao:resumo+(obs.trim()?' · '+obs.trim():'')}));}}});
+    saiL.forEach(function(s,ix){
+      pn.porItem[ix].forEach(function(pt){var t=pt.qty;movItensSaiu.push({lado:'saiu',nome:s.med.nome,qtd:t,lote:pt.lote,validade:pt.validade});
+        b.set(db.collection('entries').doc(),Object.assign({},base(),{medicamentoId:s.med.id,medicamentoNome:s.med.nome,tipo:'saida',quantidade:t,lote:pt.lote,validade:pt.validade,destino:'permuta',destinoNome:'Permuta',entradaEspecial:'permuta',permutaId:pid,parceiro:origem.trim(),observacao:resumo+(obs.trim()?' · '+obs.trim():'')}));});});
     var algumaPend=false;var movItens=[];
     entL.forEach(function(x){var lote='',validade='';if(!x.pend){lote=x.lv.sl?_loteSL(x.lv.validade):x.lv.lote.trim();validade=_normValidade(x.lv.validade);}else algumaPend=true;
       movItens.push({lado:'entrou',nome:x.med.nome,qtd:parseInt(x.qtd,10),lote:lote,validade:validade,pendente:!!x.pend});
@@ -8127,17 +8156,17 @@ function EntradaEspecial(props){
       <div style={{fontSize:12,color:'#64748B',marginBottom:10}}>{sentido==='feita'?'O produto sai do estoque agora, pelos lotes que vencem primeiro.':'O produto entra no estoque agora, com lote e validade.'}</div>
       {itD.map(function(it,idx){var dispD=sentido==='feita'&&it.med?_ubsDisp(entries,it.med.id):null;return(<div key={it.key} style={card}>
         <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}><div style={{fontSize:11,fontWeight:700,color:'#94A3B8'}}>Item {idx+1}</div>{itD.length>1&&<button type="button" onClick={function(){setItD(itD.filter(function(x){return x.key!==it.key;}));}} style={{border:'none',background:'none',color:'#C2362D',fontWeight:700,fontSize:12,cursor:'pointer'}}>Remover</button>}</div>
-        <MedPickerSimples user={user} meds={meds} value={it.med} dataFc={'doa-busca-'+idx} onChange={function(m){setItem(it.key,{med:m});}}/>
-        {dispD&&<div style={{fontSize:12.5,color:'#475569',marginTop:6}}>Disponível aqui: <b>{dispD.total}</b></div>}
+        <MedPickerSimples user={user} meds={meds} value={it.med} dataFc={'doa-busca-'+idx} onChange={function(m){setItem(it.key,{med:m,lote:''});}} entries={sentido==='feita'?entries:null}/>
+        {dispD&&<div style={{marginTop:6}}><LoteSaidaPicker entries={entries} med={it.med} dataFc={'doa-'+idx} value={it.lote} onChange={function(l){setItem(it.key,{lote:l});}}/></div>}
         <div style={{display:'flex',gap:8,margin:'8px 0'}}><div style={{width:110}}><div style={lbl}>Quantidade *</div><input className="inp" type="number" min="1" data-fc={'doa-qtd-'+idx} value={it.qtd} onChange={function(e){setItem(it.key,{qtd:e.target.value});}} style={{marginBottom:0}}/></div></div>
         {sentido!=='feita'&&<LoteValidadeCampos dataFc={'doa-'+idx} valor={it.lv} permiteSL obrigatorio onChange={function(v){setItem(it.key,{lv:v});}}/>}
       </div>);})}
-      <button type="button" onClick={function(){setItD(itD.concat([{key:Date.now(),med:null,qtd:'',lv:{lote:'',validade:'',sl:false}}]));}} style={{padding:'9px 14px',borderRadius:10,border:'1.5px dashed #94A3B8',background:'#fff',color:'#475569',fontWeight:700,cursor:'pointer',marginBottom:10}}>+ Outro item</button>
+      <button type="button" onClick={function(){setItD(itD.concat([{key:Date.now(),med:null,qtd:'',lote:'',lv:{lote:'',validade:'',sl:false}}]));}} style={{padding:'9px 14px',borderRadius:10,border:'1.5px dashed #94A3B8',background:'#fff',color:'#475569',fontWeight:700,cursor:'pointer',marginBottom:10}}>+ Outro item</button>
     </div>}
     {modo==='permuta'&&<div>
       {saiL.map(function(s,idx){var d=s.med?_ubsDisp(entries,s.med.id):null;return(<div key={s.key} style={card}><div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}><div style={{fontWeight:800,fontSize:13,color:'#B91C1C'}}>Item que SAIU{saiL.length>1?' '+(idx+1):''}</div>{saiL.length>1&&<button type="button" data-fc={_fcIdx('perm-sai-remover',idx)} onClick={function(){setSaiL(saiL.filter(function(x){return x.key!==s.key;}));}} style={{border:'none',background:'none',color:'#C2362D',fontWeight:700,fontSize:12,cursor:'pointer'}}>Remover</button>}</div>
-        <MedPickerSimples user={user} meds={meds} value={s.med} dataFc={_fcIdx('perm-sai-busca',idx)} onChange={function(m){setSaiIt(s.key,{med:m});}}/>
-        {s.med&&<div style={{marginTop:8}}><div style={{fontSize:12.5,color:'#475569',marginBottom:6}}>Disponível aqui: <b>{d.total}</b></div><div style={{width:130}}><div style={lbl}>Quantidade *</div><input className="inp" type="number" min="1" data-fc={_fcIdx('perm-sai-qtd',idx)} value={s.qtd} onChange={function(e){setSaiIt(s.key,{qtd:e.target.value});}} style={{marginBottom:0}}/></div></div>}
+        <MedPickerSimples user={user} meds={meds} value={s.med} dataFc={_fcIdx('perm-sai-busca',idx)} onChange={function(m){setSaiIt(s.key,{med:m,lote:''});}} entries={entries}/>
+        {s.med&&<div style={{marginTop:8}}><LoteSaidaPicker entries={entries} med={s.med} dataFc={_fcIdx('perm-sai',idx)} value={s.lote} onChange={function(l){setSaiIt(s.key,{lote:l});}}/><div style={{width:130}}><div style={lbl}>Quantidade *</div><input className="inp" type="number" min="1" data-fc={_fcIdx('perm-sai-qtd',idx)} value={s.qtd} onChange={function(e){setSaiIt(s.key,{qtd:e.target.value});}} style={{marginBottom:0}}/></div></div>}
       </div>);})}
       <button type="button" data-fc="perm-sai-outro" onClick={function(){setSaiL(saiL.concat([_itemVazio()]));}} style={{padding:'9px 14px',borderRadius:10,border:'1.5px dashed #94A3B8',background:'#fff',color:'#475569',fontWeight:700,cursor:'pointer',marginBottom:10}}>+ Outro item que saiu</button>
       {entL.map(function(x,idx){return(<div key={x.key} style={card}><div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}><div style={{fontWeight:800,fontSize:13,color:'#0B7A5F'}}>Item que CHEGOU em troca{entL.length>1?' '+(idx+1):''}</div>{entL.length>1&&<button type="button" data-fc={_fcIdx('perm-ent-remover',idx)} onClick={function(){setEntL(entL.filter(function(y){return y.key!==x.key;}));}} style={{border:'none',background:'none',color:'#C2362D',fontWeight:700,fontSize:12,cursor:'pointer'}}>Remover</button>}</div>
