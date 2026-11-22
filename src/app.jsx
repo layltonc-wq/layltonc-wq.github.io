@@ -7800,35 +7800,62 @@ function _emprestimosDe(entries){
 var _MOV_TIT={permuta:'Comprovante de Permuta',doacao_recebida:'Comprovante de Doação Recebida',doacao_feita:'Comprovante de Doação Realizada',emprestimo_cedido:'Comprovante de Empréstimo — Saída',emprestimo_recebido:'Comprovante de Empréstimo — Recebimento',devolucao_recebida:'Comprovante de Devolução Recebida',devolucao_feita:'Comprovante de Devolução Realizada'};
 var _MOV_PARC={permuta:'Permuta com',doacao_recebida:'Doador',doacao_feita:'Doado para',emprestimo_cedido:'Emprestado a',emprestimo_recebido:'Recebido de',devolucao_recebida:'Devolvido por',devolucao_feita:'Devolvido a'};
 function _dataBR(s){var p=String(s||'').slice(0,10).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:String(s||'');}
+function _movCodigo(m){
+  var s=(m.tipo||'')+'|'+(m.data||'')+'|'+(m.parceiro||'')+'|'+(m.itens||[]).map(function(i){return (i.nome||'')+(i.qtd||'')+(i.lote||'');}).join(',');
+  var h=0;for(var k=0;k<s.length;k++){h=((h<<5)-h+s.charCodeAt(k))|0;}
+  var pref={permuta:'PER',doacao_recebida:'DOR',doacao_feita:'DOF',emprestimo_cedido:'EMS',emprestimo_recebido:'EMR',devolucao_recebida:'DVR',devolucao_feita:'DVF'}[m.tipo]||'MOV';
+  return pref+'-'+String(m.data||'').replace(/-/g,'')+'-'+(Math.abs(h)%65536).toString(16).toUpperCase().padStart(4,'0');
+}
 function comprovanteMovHtml(user,m){
   var C=tcfg(user);
-  var css='<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;font-size:12px;color:#111}.pagina{padding:26px 30px}'+
-    '.cab{text-align:center;margin-bottom:14px}.cab img{height:64px;margin-bottom:4px}.cab .l1{font-family:Georgia,"Times New Roman",serif;font-weight:700;font-size:15px;color:#1351B4}.cab .l2{font-family:Georgia,"Times New Roman",serif;font-size:12px;color:#111}'+
-    '.titulo{text-align:center;font-weight:700;font-size:14px;margin:14px 0 12px;text-transform:uppercase}'+
-    '.dados{margin:0 auto 14px;font-size:12px;line-height:1.8;max-width:520px}.dados b{font-weight:700}'+
-    'h3{font-size:12px;margin:14px 0 5px;text-transform:uppercase;letter-spacing:.3px}'+
-    'table{width:100%;border-collapse:collapse;font-size:11.5px;margin-bottom:6px}th{border:1px solid #333;background:#F1F5F9;padding:6px 5px;font-weight:700;text-align:left}td{border:1px solid #333;padding:6px 5px;vertical-align:top}td.num{text-align:right;white-space:nowrap}'+
-    '.obs{margin-top:10px;font-size:11.5px;border:1px solid #CBD5E1;border-radius:4px;padding:8px 10px}'+
-    '.ass{display:flex;gap:40px;margin-top:64px}.ass div{flex:1;border-top:1px solid #111;padding-top:5px;text-align:center;font-size:11px}'+
-    '.rodape{margin-top:34px;font-size:9.5px;color:#64748B;text-align:center;line-height:1.6}@media print{.pagina{padding:14px 18px}}</style>';
-  function tabela(lista,tit){
-    if(!lista.length)return '';
-    var t=(tit?'<h3>'+_escHtml(tit)+'</h3>':'')+'<table><thead><tr><th style="width:34px">Nº</th><th>Medicamento</th><th style="width:100px">Lote</th><th style="width:70px">Validade</th><th style="width:60px">Qtd</th></tr></thead><tbody>';
-    var total=0;
-    lista.forEach(function(it,i){total+=parseInt(it.qtd,10)||0;t+='<tr><td class="num">'+(i+1)+'</td><td>'+_escHtml(it.nome)+'</td><td>'+_escHtml(it.pendente?'pendente':(it.lote||'—'))+'</td><td class="num">'+_escHtml(it.pendente?'pendente':(it.validade||'—'))+'</td><td class="num">'+(parseInt(it.qtd,10)||0)+'</td></tr>';});
-    return t+'</tbody><tfoot><tr><td colspan="4" style="font-weight:700;background:#F8FAFC">TOTAL</td><td class="num" style="font-weight:700;background:#F8FAFC">'+total+'</td></tr></tfoot></table>';
-  }
+  // Quem assina é quem está imprimindo, com o cargo real da conta (e o CRF, se for farmacêutico e tiver informado).
+  var cargo=(typeof ROLES!=='undefined'&&ROLES[user&&user.role])||'Responsável';
+  var cargoTxt=cargo+(user&&user.crf?' · CRF '+user.crf:'');
   var itens=m.itens||[];
-  var corpo=m.tipo==='permuta'?tabela(itens.filter(function(i){return i.lado==='saiu';}),'Saiu da farmácia')+tabela(itens.filter(function(i){return i.lado==='entrou';}),'Entrou na farmácia'):tabela(itens,'Medicamentos');
+  var unidades=itens.reduce(function(s,i){return s+(parseInt(i.qtd,10)||0);},0);
   var saiu=m.tipo==='doacao_feita'||m.tipo==='emprestimo_cedido'||m.tipo==='devolucao_feita'||m.tipo==='permuta';
+  var css='<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#0F172A;-webkit-print-color-adjust:exact;print-color-adjust:exact}'+
+    '.pagina{padding:24px 30px}'+
+    '.cab{text-align:center;padding-bottom:10px;border-bottom:3px solid #1351B4;margin-bottom:14px}.cab img{height:70px;margin-bottom:5px}'+
+    '.cab .l1{font-family:Georgia,"Times New Roman",serif;font-weight:700;font-size:16px;color:#1351B4}.cab .l2{font-family:Georgia,"Times New Roman",serif;font-size:12px;color:#334155;margin-top:1px}'+
+    '.faixa{display:flex;justify-content:space-between;align-items:center;gap:12px;background:#1351B4;color:#fff;border-radius:6px;padding:10px 14px;margin-bottom:12px}'+
+    '.faixa .t{font-weight:700;font-size:14px;text-transform:uppercase;letter-spacing:.04em}.faixa .n{font-size:11px;opacity:.9;white-space:nowrap}.faixa .n b{font-size:12px;letter-spacing:.05em}'+
+    '.info{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}'+
+    '.info div{border:1px solid #CBD5E1;border-radius:6px;padding:7px 10px;background:#F8FAFC}'+
+    '.info small{display:block;font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;color:#64748B;margin-bottom:2px}.info span{font-weight:700;font-size:12.5px}'+
+    '.sec{display:flex;align-items:center;gap:8px;margin:14px 0 6px}.sec b{font-size:12px;text-transform:uppercase;letter-spacing:.05em}.sec i{display:inline-block;width:10px;height:10px;border-radius:50%}'+
+    'table{width:100%;border-collapse:collapse;font-size:11.5px}th{background:#1351B4;color:#fff;padding:7px 6px;text-align:left;font-weight:700;border:1px solid #1351B4}td{border:1px solid #CBD5E1;padding:7px 6px;vertical-align:top}tbody tr:nth-child(even) td{background:#F8FAFC}td.num{text-align:right;white-space:nowrap}'+
+    'tfoot td{background:#E8F0FD;font-weight:700;border-color:#BFD3F6}'+
+    '.obs{margin-top:12px;font-size:11.5px;border-left:4px solid #1351B4;background:#F1F5F9;border-radius:0 6px 6px 0;padding:8px 12px}'+
+    '.decl{margin-top:14px;font-size:10.5px;color:#475569;line-height:1.55}'+
+    '.ass{display:grid;grid-template-columns:1fr 1fr;gap:34px;margin-top:58px}.ass .c{border-top:1.5px solid #0F172A;padding-top:6px;text-align:center;font-size:11px;line-height:1.5}.ass .c b{font-size:12px}.ass .c small{display:block;color:#475569;font-size:10px}'+
+    '.data{margin-top:18px;font-size:11px;color:#334155}'+
+    '.rodape{margin-top:26px;padding-top:8px;border-top:1px solid #CBD5E1;font-size:9.5px;color:#64748B;text-align:center;line-height:1.6}@media print{.pagina{padding:12px 16px}}</style>';
+  function tabela(lista,tit,cor){
+    if(!lista.length)return '';
+    var tt=0;
+    var t=(tit?'<div class="sec"><i style="background:'+cor+'"></i><b>'+_escHtml(tit)+'</b></div>':'')+'<table><thead><tr><th style="width:32px">Nº</th><th>Medicamento</th><th style="width:100px">Lote</th><th style="width:72px">Validade</th><th style="width:58px">Qtd</th></tr></thead><tbody>';
+    lista.forEach(function(it,i){tt+=parseInt(it.qtd,10)||0;t+='<tr><td class="num">'+(i+1)+'</td><td><b>'+_escHtml(it.nome)+'</b></td><td>'+_escHtml(it.pendente?'pendente':(it.lote||'—'))+'</td><td class="num">'+_escHtml(it.pendente?'pendente':(it.validade||'—'))+'</td><td class="num"><b>'+(parseInt(it.qtd,10)||0)+'</b></td></tr>';});
+    return t+'</tbody><tfoot><tr><td colspan="4">TOTAL'+(tit?' — '+_escHtml(tit.toLowerCase()):'')+'</td><td class="num">'+tt+'</td></tr></tfoot></table>';
+  }
+  var corpo=m.tipo==='permuta'?tabela(itens.filter(function(i){return i.lado==='saiu';}),'Saiu da farmácia','#DC2626')+tabela(itens.filter(function(i){return i.lado==='entrou';}),'Entrou na farmácia','#0B7A5F'):tabela(itens,'Medicamentos',saiu?'#DC2626':'#0B7A5F');
+  var local=(typeof _fcLocalAtivo!=='undefined'&&_fcLocalAtivo)?nomeLocal(_fcLocalAtivo):'';
+  var autor=m.autorNome||(user&&user.name)||'—';
   var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+_escHtml(_MOV_TIT[m.tipo]||'Comprovante')+'</title>'+css+'</head><body><div class="pagina">';
   html+='<div class="cab">'+(C.logoPrint?'<img src="'+C.logoPrint+'"/>':'')+'<div class="l1">'+_escHtml(C.org.l1||'')+'</div><div class="l2">'+_escHtml(C.org.l2||'')+'</div></div>';
-  html+='<div class="titulo">'+_escHtml(_MOV_TIT[m.tipo]||'Comprovante')+'</div>';
-  html+='<div class="dados"><b>Data:</b> '+_escHtml(_dataBR(m.data))+'<br><b>'+_escHtml(_MOV_PARC[m.tipo]||'Com')+':</b> '+_escHtml(m.parceiro||'—')+'<br><b>Registrado por:</b> '+_escHtml((user&&user.name)||'—')+'</div>';
+  html+='<div class="faixa"><div class="t">'+_escHtml(_MOV_TIT[m.tipo]||'Comprovante')+'</div><div class="n">Nº <b>'+_escHtml(_movCodigo(m))+'</b></div></div>';
+  html+='<div class="info">'+
+    '<div><small>Data</small><span>'+_escHtml(_dataBR(m.data))+'</span></div>'+
+    '<div><small>'+_escHtml(_MOV_PARC[m.tipo]||'Com')+'</small><span>'+_escHtml(m.parceiro||'—')+'</span></div>'+
+    '<div><small>Registrado por</small><span>'+_escHtml(autor)+'</span></div>'+
+    '<div><small>Resumo</small><span>'+itens.length+' linha(s) · '+unidades+' unidade(s)'+(local?' · '+_escHtml(local):'')+'</span></div></div>';
   html+=corpo;
   if(m.obs)html+='<div class="obs"><b>Observação:</b> '+_escHtml(m.obs)+'</div>';
-  html+='<div class="ass"><div>'+_escHtml((user&&user.name)||'')+'<br>'+_escHtml(C.assinatura||'Responsável')+'<br>'+(saiu?'(entregou)':'(recebeu)')+'</div><div>'+_escHtml(m.parceiro||'')+'<br>'+(saiu?'(recebeu)':'(entregou)')+'</div></div>';
-  html+='<div class="rodape">'+(C.org.rodape||'')+'<br>Comprovante gerado pelo FarmaControl em '+_escHtml(new Date().toLocaleString('pt-BR'))+'</div>';
+  html+='<div class="decl">Documento emitido para fins de controle e prestação de contas da assistência farmacêutica municipal. '+(m.tipo==='permuta'?'Os medicamentos relacionados foram trocados entre a farmácia e o parceiro':'Os medicamentos relacionados foram '+(saiu?'entregues pela farmácia ao destinatário':'recebidos pela farmácia'))+', conforme os lotes e quantidades acima.</div>';
+  html+='<div class="ass"><div class="c"><b>'+_escHtml((user&&user.name)||'')+'</b><small>'+_escHtml(cargoTxt)+'</small><small>'+(saiu?'Entregou':'Recebeu')+' — '+_escHtml(C.nomeFarmacia||'Farmácia Municipal')+'</small></div>'+
+    '<div class="c"><b>'+_escHtml(m.parceiro||'')+'</b><small>Nome legível, cargo e documento</small><small>'+(saiu?'Recebeu':'Entregou')+'</small></div></div>';
+  html+='<div class="data">Data da assinatura: ____ / ____ / ________</div>';
+  html+='<div class="rodape">'+(C.org.rodape||'')+'<br>Comprovante gerado pelo FarmaControl em '+_escHtml(new Date().toLocaleString('pt-BR'))+' · impresso por '+_escHtml((user&&user.name)||'')+'</div>';
   return html+'</div></body></html>';
 }
 function imprimirComprovanteMov(user,m,alerta){
@@ -8196,10 +8223,10 @@ function _movDoEntry(e,entries){
   else if(e.doacaoId)grupo=entries.filter(function(x){return x.doacaoId===e.doacaoId;});
   var it=function(x,lado){return {lado:lado,nome:x.medicamentoNome,qtd:x.quantidade,lote:x.lote,validade:x.validade,pendente:!!x.lotePendente};};
   var data=String(e.date||e.criadoEm||'').slice(0,10);
-  if(e.entradaEspecial==='permuta')return {tipo:'permuta',data:data,parceiro:e.parceiro||'',obs:'',itens:grupo.map(function(x){return it(x,x.tipo==='saida'?'saiu':'entrou');})};
-  if(e.entradaEspecial==='doacao')return {tipo:e.doacaoFeita?'doacao_feita':'doacao_recebida',data:data,parceiro:e.parceiro||e.doador||'',obs:'',itens:grupo.map(function(x){return it(x,'');})};
+  if(e.entradaEspecial==='permuta')return {tipo:'permuta',data:data,parceiro:e.parceiro||'',obs:'',autorNome:e.autorNome||'',itens:grupo.map(function(x){return it(x,x.tipo==='saida'?'saiu':'entrou');})};
+  if(e.entradaEspecial==='doacao')return {tipo:e.doacaoFeita?'doacao_feita':'doacao_recebida',data:data,parceiro:e.parceiro||e.doador||'',obs:'',autorNome:e.autorNome||'',itens:grupo.map(function(x){return it(x,'');})};
   var ced=e.emprestimoTipo==='cedido';
-  return {tipo:e.emprestimoDev?(ced?'devolucao_recebida':'devolucao_feita'):(ced?'emprestimo_cedido':'emprestimo_recebido'),data:data,parceiro:e.parceiro||'',obs:'',itens:[it(e,'')]};
+  return {tipo:e.emprestimoDev?(ced?'devolucao_recebida':'devolucao_feita'):(ced?'emprestimo_cedido':'emprestimo_recebido'),data:data,parceiro:e.parceiro||'',obs:'',autorNome:e.autorNome||'',itens:[it(e,'')]};
 }
 // ===== Visão somada CAF + Satélite (só consulta) =====
 // Usa os saldos que já existem em cada medicamento: estoqueAtual = total da prefeitura e estoqueLocal.satelite = parte do
