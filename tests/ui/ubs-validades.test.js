@@ -11,7 +11,7 @@ function seed(){
  ent.e0={medicamentoId:'m1',medicamentoNome:'Dipirona',tipo:'entrada',quantidade:500,lote:'L1',validade:'01/2030',criadoEm:t0,date:t0.slice(0,10),tenant_id:T};
  ent.s1=sa('s1','m1','Dipirona',100,'L1',mesAno(-40),'João Ramos',new Date(Date.now()-30*864e5).toISOString());   // vencido
  ent.s2=sa('s2','m2','Amoxicilina',60,'A1',mesAno(0),'João Ramos',new Date(Date.now()-20*864e5).toISOString());   // <=30
- ent.s3=sa('s3','m3','Losartana',40,'LS1',mesAno(70),'Agrovila',new Date(Date.now()-10*864e5).toISOString());      // <=90
+ ent.s3=sa('s3','m3','Losartana',40,'LS1',mesAno(50),'Agrovila',new Date(Date.now()-10*864e5).toISOString());      // <=90
  ent.s4=sa('s4','m4','Captopril',25,'C1',mesAno(400),'Agrovila',new Date(Date.now()-10*864e5).toISOString());      // em dia
  ent.s5=Object.assign(sa('s5','m1','Dipirona',999,'L1',mesAno(-40),'João Ramos',new Date().toISOString()),{descarte:true});
  return {tenants:{[T]:{nome:'Vicência',ativo:true}},
