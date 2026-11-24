@@ -10149,8 +10149,8 @@ function TabPrevisao(props){
   }
   // Cabeçalho oficial do pedido (com estilos inline, auto-contido) — usado no consolidado E no PDF por ATA,
   // garantindo que ambos tenham EXATAMENTE o mesmo cabeçalho.
-  function montarCabecalhoPedido(){
-    var h=new Date();
+  function montarCabecalhoPedido(opts){
+    var h=(opts&&opts.data)||new Date();
     var dataHoje=h.toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'}).replace(' de ',' DE ').toUpperCase();
     var info=infoPedidoTenant();
     var s='';
@@ -10159,11 +10159,11 @@ function TabPrevisao(props){
     if(info.logo)s+='<img src="'+info.logo+'" style="height:56px;object-fit:contain"/>';
     s+='<div><div style="font-size:14px;font-weight:700;color:'+info.cor+'">'+info.orgLinha1+'</div><div style="font-size:11px;color:#444;margin-top:2px">'+info.orgLinha2+'</div></div>';
     s+='</div>';
-    s+='<div style="font-size:16px;font-weight:900;color:'+info.cor+';text-align:right">PEDIDO Nº '+numPedido+'/'+h.getFullYear()+'</div>';
+    s+='<div style="font-size:16px;font-weight:900;color:'+info.cor+';text-align:right">PEDIDO Nº '+(opts&&opts.numTxt!==undefined?opts.numTxt:numPedido)+'/'+h.getFullYear()+(opts&&opts.segundaVia?'<div style="font-size:11px;font-weight:700;color:#B45309">2ª VIA</div>':'')+'</div>';
     s+='</div>';
     s+='<div style="text-align:right;font-size:11px;margin-bottom:14px">'+info.cidadeUf+', '+dataHoje+'.</div>';
     s+='<div style="font-size:11px;font-weight:700;margin-bottom:10px">PARA: CENTRAL DE COMPRAS DO MUNICÍPIO</div>';
-    if(info.mostrarBoxEmpresa)s+='<div style="border:1.5px solid #222;padding:10px 14px;margin:12px 0;font-size:11px;line-height:1.7"><b>À EMPRESA: '+(empresa.trim()||'_______________________________________________')+'</b><br>CNPJ: '+(cnpjEmpresa.trim()||'___________________________________')+'<br>NÚMERO P/ CONTATO: ______________________</div>';
+    if(info.mostrarBoxEmpresa)s+='<div style="border:1.5px solid #222;padding:10px 14px;margin:12px 0;font-size:11px;line-height:1.7"><b>À EMPRESA: '+(((opts&&opts.empresa!==undefined?opts.empresa:empresa)||'').trim()||'_______________________________________________')+'</b><br>CNPJ: '+(((opts&&opts.cnpj!==undefined?opts.cnpj:cnpjEmpresa)||'').trim()||'___________________________________')+'<br>NÚMERO P/ CONTATO: ______________________</div>';
     s+='<div style="font-size:11px;font-weight:700;margin:14px 0 8px;text-transform:uppercase">ASSUNTO: PEDIDO DE FORNECIMENTO DE INSUMOS COM O OBJETIVO DE ATENDEREM AS DEMANDAS DE ACORDO COM AS NECESSIDADES CLÍNICAS DOS PACIENTES NO ÂMBITO HOSPITALAR.</div>';
     s+='<div style="font-size:11px;margin-bottom:12px;line-height:1.6">Caro Sr.(a):<br><br>Venho por meio deste, solicitar o fornecimento do(s) seguinte(s) insumo(s) e sua respectiva quantidade para atender as necessidades do Município.</div>';
     return s;
@@ -10196,6 +10196,7 @@ function TabPrevisao(props){
       try{var tid=tenantDe(user);localStorage.setItem('fc_farm_nome_'+tid,nome);localStorage.setItem('fc_farm_crf_'+tid,crf);}catch(e){}
       var alvo=farmModal.alvo;
       setFarmModal(null);
+      if(alvo&&alvo._reimp){reimprimirPedidoReg(alvo._reimp.ata,alvo._reimp.r,{nome:nome,crf:crf});return;}
       gerarOrdensFornecimento(alvo,undefined,{nome:nome,crf:crf});
     }catch(e){
       setMsg('e:Não foi possível continuar ('+((e&&e.message)||e)+'). Avise o suporte com o nome da ATA.');
@@ -10267,7 +10268,7 @@ function TabPrevisao(props){
   }
   // Monta e imprime o(s) documento(s) já com tudo classificado — separado só pra poder ser chamado
   // de novo, direto, depois que o painel ofModal confirma as escolhas.
-  function _imprimirOrdensFornecimento(porAta,farmInfo){
+  function _imprimirOrdensFornecimento(porAta,farmInfo,opts){
     var css='<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;font-size:12px;color:#111}'+
       '.pagina{padding:26px 30px;page-break-after:always}.pagina:last-child{page-break-after:auto}'+
       '.cab{text-align:center;margin-bottom:14px}.cab img{height:64px;margin-bottom:4px}'+
@@ -10289,8 +10290,8 @@ function TabPrevisao(props){
     var atasParaAtualizarContador=[];
     porAta.forEach(function(x){
       var ata=x.ata;
-      var numeroOrdem=_ordinalFem((ata.ordemFornecimentoContador||0)+1);
-      atasParaAtualizarContador.push({id:ata.id,novo:(ata.ordemFornecimentoContador||0)+1});
+      var numeroOrdem=opts&&opts.segundaVia?'':_ordinalFem((ata.ordemFornecimentoContador||0)+1);
+      if(!(opts&&opts.segundaVia))atasParaAtualizarContador.push({id:ata.id,novo:(ata.ordemFornecimentoContador||0)+1});
       ORDENS_FORNECIMENTO.forEach(function(of){
         var linhasSecao=x.grupos[of.v];
         if(!linhasSecao||linhasSecao.length===0)return;
@@ -10303,7 +10304,7 @@ function TabPrevisao(props){
         if(ata.cnpj||ata.nome)idInfo.push('EMPRESA: '+_escHtml(ata.nome||''));
         if(ata.ataSRP)idInfo.push('ATA-SRP Nº '+_escHtml(ata.ataSRP));
         if(idInfo.length>0)html+='<div class="processo">'+idInfo.join('<br>')+'</div>';
-        html+='<div class="titulo">'+numeroOrdem+' Ordem de Fornecimento — '+of.titulo+'</div>';
+        html+='<div class="titulo">'+(numeroOrdem?numeroOrdem+' ':'')+'Ordem de Fornecimento — '+of.titulo+(opts&&opts.segundaVia?' <span style="color:#B45309">(2ª VIA — pedido de '+_escHtml(opts.segundaVia)+')</span>':'')+'</div>';
         html+='<table><thead><tr><th style="width:40px">ITEM</th><th>DESCRIÇÃO</th><th style="width:70px">CATMAT</th><th style="width:60px">QUANT.</th><th style="width:80px">UND. MEDIDA</th><th style="width:80px">VALOR UNITÁRIO</th><th style="width:85px">VALOR TOTAL</th><th style="width:110px">MARCA/FABRICANTE</th></tr></thead><tbody>';
         linhasSecao.forEach(function(l){
           var lvU=Number(l.vUnit)||0,lvT=Number(l.vTotal)||0;
@@ -10356,18 +10357,18 @@ function TabPrevisao(props){
     setOfModal(null);
     gerarOrdensFornecimento(listaParaGerar,extras,farmInfoAtual);
   }
-  function gerarPDFAta(ata,grupoMeds,catKey){
+  function gerarPDFAta(ata,grupoMeds,catKey,opts){
     // Itaquitinga usa as Ordens de Fornecimento oficiais (ver gerarOrdensFornecimento) no lugar
     // deste formato genérico — substituição completa, por pedido explícito da usuária. Antes de gerar,
     // abre o painel pra escolher o farmacêutico que assina (ver abrirFarmModal).
-    if(temModulo(user,'ordemFornecimento'))return abrirFarmModal(ata);
+    if(temModulo(user,'ordemFornecimento')&&!opts)return abrirFarmModal(ata);
     var hoje=new Date().toLocaleDateString('pt-BR');
     var nomeAta=ata.nome||'ATA';
     var info=infoPedidoTenant();
     // Fonte única: TODOS os medicamentos vinculados à ATA com qtd>0 (qtd manual ou automática).
     // Ignora o grupoMeds recebido da tela (que só tinha os visíveis) — corrige o bug de perder a
     // quantidade manual de medicamentos vinculados por ataId que não estavam em ata.itens.
-    var grupoPedir=linhasPedidoAta(ata);
+    var grupoPedir=(opts&&opts.linhas)||linhasPedidoAta(ata);
     var totalUn=grupoPedir.reduce(function(s,x){return s+x.qtd;},0);
     var totalVal=grupoPedir.reduce(function(s,x){return s+x.vTotal;},0);
     var linhas=grupoPedir.map(function(x){
@@ -10401,7 +10402,7 @@ function TabPrevisao(props){
       '.info{display:flex;gap:24px;margin-bottom:12px;font-size:11px;color:#475569}'+
       '.info b{color:#1E293B}</style></head><body>'+
       marcaDaguaPedido(info)+
-      montarCabecalhoPedido()+
+      montarCabecalhoPedido(opts&&opts.cab)+
       '<div style="text-align:center;font-size:13px;font-weight:900;padding:8px;border:1px solid #222;background:#f0f0f0;margin-top:16px;margin-bottom:8px;letter-spacing:.05em">'+nomeAta.toUpperCase()+'</div>'+
       '<table><thead><tr>'+
       '<th style="width:50px">Item</th><th>Descrição</th><th style="width:60px">Unid.</th>'+
@@ -10416,6 +10417,35 @@ function TabPrevisao(props){
       '</td>'+(info.mostrarColunaMarca?'<td style="padding:7px 8px;border:1px solid #ddd"></td>':'')+
       '</tr></tfoot></table></body></html>';
     if(!_imprimirDoc(html)){setMsg('e:Não foi possível abrir a impressão. Tente de novo.');return;}
+  }
+  // Reimprime (2ª via) um pedido JÁ FECHADO, a partir do registro do histórico da ata: usa as quantidades daquele dia
+  // e o valor unitário atual do item da ata. Não mexe no saldo nem no contador das Ordens de Fornecimento.
+  function reimprimirPedidoReg(ata,r,farmInfo){
+    try{
+      var itensAta=ata.itens||[];
+      var linhas=(r.deltas||[]).map(function(d){
+        var it=itensAta[d.idx];if(!it||!(d.qtd>0))return null;
+        var vU=Number(cfV(ata,d.idx))||0;
+        return {med:null,item:it,qtd:d.qtd,vUnit:vU,vTotal:d.qtd*vU,desc:it.descricao||'(sem descrição)',unidade:it.unidade||'UN',num:it.num||'',marca:it.marca||'',naoVinculado:false};
+      }).filter(Boolean);
+      if(linhas.length===0){setMsg('e:Esse pedido não tem itens para reimprimir.');return;}
+      var dia=fmtD(r.em);
+      if(temModulo(user,'ordemFornecimento')){
+        var grupos={},semOF=0;
+        linhas.forEach(function(l){var of=l.item.ordemFornecimento;if(of){(grupos[of]=grupos[of]||[]).push(l);}else semOF++;});
+        if(semOF===0){_imprimirOrdensFornecimento([{ata:ata,grupos:grupos}],farmInfo||{nome:'',crf:''},{segundaVia:dia});return;}
+      }
+      gerarPDFAta(ata,null,null,{linhas:linhas,cab:{data:new Date(r.em),numTxt:'____',empresa:ata.nome||'',cnpj:ata.cnpj||'',segundaVia:true}});
+    }catch(e){setMsg('e:Não foi possível reimprimir o pedido ('+((e&&e.message)||e)+').');}
+  }
+  function reimprimirPedido(ata,r){
+    if(temModulo(user,'ordemFornecimento')){
+      var salvo=_farmSalvo();
+      if(salvo.nome&&salvo.crf){reimprimirPedidoReg(ata,r,salvo);return;}
+      setFarmModal({alvo:{_reimp:{ata:ata,r:r}},nome:salvo.nome||(user.role==='farmaceutico'?(user.name||''):''),crf:salvo.crf||user.crf||''});
+      return;
+    }
+    reimprimirPedidoReg(ata,r,null);
   }
   // Fecha (desconta do saldo) o pedido de UMA ata — ação explícita e separada de gerar/imprimir o PDF.
   // Usa a MESMA fonte de linhas (linhasPedidoAta) pra garantir que o que é descontado é exatamente o
@@ -10722,6 +10752,7 @@ function TabPrevisao(props){
           <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
             <div style={{flex:1,minWidth:150}}><div style={{fontWeight:800,fontSize:14,color:'#1E293B'}}>{ata.nome}</div><div style={{fontSize:11.5,color:'#64748B'}}>Pedido de {fmtD(r.em)} · {r.deltas.length} item(ns) · chegaram {totCh} de {totPed} un. · <b>{_cfR(totVal)}</b></div></div>
             <span style={{background:bc[0],color:bc[1],fontWeight:800,fontSize:11.5,padding:'4px 10px',borderRadius:99}}>{bc[2]}</span>
+            <button type="button" data-fc="cf-reimprimir" onClick={function(){reimprimirPedido(ata,r);}} style={Object.assign({},btn,{background:'#fff',color:Bz,border:'1.5px solid '+Bz})}>Reimprimir pedido</button>
             <button type="button" data-fc="cf-abrir" onClick={function(){setCfAberto(aberto?null:{ataId:ata.id,regId:r.id,inputs:{}});}} style={Object.assign({},btn,{background:'#EFF6FF',color:Bz})}>{aberto?'Fechar':(st==='feito'?'Ver':'Conferir')}</button>
           </div>
           {aberto&&<div style={{marginTop:10}}>
