@@ -9198,6 +9198,7 @@ function TabPrevisao(props){
   var _lpMais=useState({});var lpMais=_lpMais[0];var setLpMais=_lpMais[1];// ata -> {aberto,busca}
   var _cfgAtas=useState(false);var cfgAtas=_cfgAtas[0];var setCfgAtas=_cfgAtas[1];
   var _cfFiltro=useState('pend');var cfFiltro=_cfFiltro[0];var setCfFiltro=_cfFiltro[1];
+  var _edPed=useState(null);var edPed=_edPed[0];var setEdPed=_edPed[1];// editar pedido fechado: {ataId,regId,ordem:[idx],qtds:{idx:'qtd'},busca:'',erro:''}
   var _cfAberto=useState(null);var cfAberto=_cfAberto[0];var setCfAberto=_cfAberto[1];// {ataId,regId,inputs:{idx:'qtd'},extras:{idx:'qtd'},busca:''}
   var _diasPrev=useState(30);var diasPrev=_diasPrev[0];var setDiasPrev=_diasPrev[1];
   var _ajustes=useState({});var ajustes=_ajustes[0];var setAjustes=_ajustes[1];
@@ -10196,7 +10197,7 @@ function TabPrevisao(props){
       try{var tid=tenantDe(user);localStorage.setItem('fc_farm_nome_'+tid,nome);localStorage.setItem('fc_farm_crf_'+tid,crf);}catch(e){}
       var alvo=farmModal.alvo;
       setFarmModal(null);
-      if(alvo&&alvo._reimp){reimprimirPedidoReg(alvo._reimp.ata,alvo._reimp.r,{nome:nome,crf:crf});return;}
+      if(alvo&&alvo._reimp){reimprimirPedidoReg(alvo._reimp.ata,alvo._reimp.r,{nome:nome,crf:crf},alvo._reimp.revisada?{revisada:true}:undefined);return;}
       gerarOrdensFornecimento(alvo,undefined,{nome:nome,crf:crf});
     }catch(e){
       setMsg('e:Não foi possível continuar ('+((e&&e.message)||e)+'). Avise o suporte com o nome da ATA.');
@@ -10290,8 +10291,8 @@ function TabPrevisao(props){
     var atasParaAtualizarContador=[];
     porAta.forEach(function(x){
       var ata=x.ata;
-      var numeroOrdem=opts&&opts.segundaVia?'':_ordinalFem((ata.ordemFornecimentoContador||0)+1);
-      if(!(opts&&opts.segundaVia))atasParaAtualizarContador.push({id:ata.id,novo:(ata.ordemFornecimentoContador||0)+1});
+      var numeroOrdem=opts&&opts.segundaVia?'':(opts&&opts.revisada)?(opts.numFixo||''):_ordinalFem((ata.ordemFornecimentoContador||0)+1);
+      if(!(opts&&(opts.segundaVia||opts.revisada)))atasParaAtualizarContador.push({id:ata.id,novo:(ata.ordemFornecimentoContador||0)+1});
       // Ata de fórmulas/leites: o título diz "FÓRMULAS NUTRICIONAIS" em vez de "MEDICAMENTOS".
       var ehFormula=ata.categoria==='leite'||/f[oó]rmula|nutri[cç]|leite/i.test(_semAcento(ata.nome||''))||/f[oó]rmula|nutri[cç]|leite/i.test(ata.nome||'');
       ORDENS_FORNECIMENTO.forEach(function(of){
@@ -10422,7 +10423,8 @@ function TabPrevisao(props){
   }
   // Reimprime (2ª via) um pedido JÁ FECHADO, a partir do registro do histórico da ata: usa as quantidades daquele dia
   // e o valor unitário atual do item da ata. Não mexe no saldo nem no contador das Ordens de Fornecimento.
-  function reimprimirPedidoReg(ata,r,farmInfo){
+  function reimprimirPedidoReg(ata,r,farmInfo,opts){
+    var revisada=!!(opts&&opts.revisada);
     try{
       var itensAta=ata.itens||[];
       var linhas=(r.deltas||[]).map(function(d){
@@ -10435,9 +10437,14 @@ function TabPrevisao(props){
       if(temModulo(user,'ordemFornecimento')){
         var grupos={},semOF=0;
         linhas.forEach(function(l){var of=l.item.ordemFornecimento;if(of){(grupos[of]=grupos[of]||[]).push(l);}else semOF++;});
-        if(semOF===0){_imprimirOrdensFornecimento([{ata:ata,grupos:grupos}],farmInfo||{nome:'',crf:''},{segundaVia:dia});return;}
+        if(revisada&&semOF>0){setMsg('e:'+semOF+' item(ns) sem Ordem de Fornecimento definida. Defina em Atas > Editar e imprima de novo.');return;}
+        if(semOF===0){
+          var hist=historicoPedidosDaAta(ata),ult=hist[hist.length-1];
+          // pedido revisado: mesma OF (sem "2ª via"); leva o número da última OF da ata só se este for o pedido mais recente dela
+          var numFixo=(ult&&ult.id===r.id&&ata.ordemFornecimentoContador)?_ordinalFem(ata.ordemFornecimentoContador):'';
+          _imprimirOrdensFornecimento([{ata:ata,grupos:grupos}],farmInfo||{nome:'',crf:''},revisada?{revisada:true,numFixo:numFixo}:{segundaVia:dia});return;}
       }
-      gerarPDFAta(ata,null,null,{linhas:linhas,cab:{data:new Date(r.em),numTxt:'____',empresa:ata.nome||'',cnpj:ata.cnpj||'',segundaVia:true}});
+      gerarPDFAta(ata,null,null,{linhas:linhas,cab:{data:new Date(r.em),numTxt:'____',empresa:ata.nome||'',cnpj:ata.cnpj||'',segundaVia:!revisada}});
     }catch(e){setMsg('e:Não foi possível reimprimir o pedido ('+((e&&e.message)||e)+').');}
   }
   function reimprimirPedido(ata,r){
@@ -10448,6 +10455,53 @@ function TabPrevisao(props){
       return;
     }
     reimprimirPedidoReg(ata,r,null);
+  }
+  function imprimirPedidoRevisado(ata,r){
+    if(temModulo(user,'ordemFornecimento')){
+      var salvo=_farmSalvo();
+      if(salvo.nome&&salvo.crf){reimprimirPedidoReg(ata,r,salvo,{revisada:true});return;}
+      setFarmModal({alvo:{_reimp:{ata:ata,r:r,revisada:true}},nome:salvo.nome||(user.role==='farmaceutico'?(user.name||''):''),crf:salvo.crf||user.crf||''});
+      return;
+    }
+    reimprimirPedidoReg(ata,r,null,{revisada:true});
+  }
+  // ---- Editar um pedido já fechado (ainda sem chegada): muda quantidades, tira ou acrescenta itens da mesma ata.
+  // O saldo da ata acompanha a diferença (pedidoAcumulado), o pedido continua o mesmo (mesma data/posição) e pode ser reimpresso sem "2ª via".
+  function _edQtdAntiga(r,idx){return (r.deltas||[]).reduce(function(s,d){return s+(d.idx===idx?(Number(d.qtd)||0):0);},0);}
+  function abrirEditarPedido(ata,r){
+    var ordem=[],qtds={};
+    (r.deltas||[]).forEach(function(d){if(ordem.indexOf(d.idx)<0)ordem.push(d.idx);});
+    ordem.forEach(function(i){qtds[i]=String(_edQtdAntiga(r,i));});
+    setEdPed({ataId:ata.id,regId:r.id,ordem:ordem,qtds:qtds,busca:'',erro:''});
+  }
+  function salvarEdicaoPedido(imprimir){
+    if(!edPed)return;
+    var ata=atas.filter(function(a){return a.id===edPed.ataId;})[0];
+    var r=ata&&historicoPedidosDaAta(ata).filter(function(x){return x.id===edPed.regId;})[0];
+    if(!ata||!r){setEdPed(null);return;}
+    var erro=function(m){setEdPed(function(e){return e&&Object.assign({},e,{erro:m});});};
+    try{
+      var novoQ={},todos={};
+      edPed.ordem.forEach(function(i){var q=_parseQtdInput(edPed.qtds[i]||'');todos[i]=1;if(q>0)novoQ[i]=q;});
+      (r.deltas||[]).forEach(function(d){todos[d.idx]=1;});
+      var idxs=Object.keys(novoQ).map(Number).sort(function(a,b){return a-b;});
+      if(idxs.length===0){erro('O pedido ficou sem itens. Para cancelar o pedido inteiro use "Desfazer" em Pedidos.');return;}
+      var novos=(ata.itens||[]).map(function(it){return Object.assign({},it);});
+      for(var k=0;k<idxs.length;k++){
+        var i=idxs[k],it=novos[i];if(!it){erro('Item não encontrado na ata.');return;}
+        var teto=Number(it.qtdTeto)||0,acum=Number(it.pedidoAcumulado)||0,velho=_edQtdAntiga(r,i);
+        if(teto>0&&novoQ[i]>teto-acum+velho){erro('"'+(it.descricao||'Item')+'": o saldo da ata só permite até '+Math.max(0,teto-acum+velho)+' un.');return;}
+      }
+      Object.keys(todos).forEach(function(k2){var i2=Number(k2);if(!novos[i2])return;var dif=(novoQ[i2]||0)-_edQtdAntiga(r,i2);novos[i2].pedidoAcumulado=Math.max(0,(Number(novos[i2].pedidoAcumulado)||0)+dif);});
+      var deltas=idxs.map(function(i3){return {idx:i3,qtd:novoQ[i3]};});
+      var agora=new Date().toISOString();
+      var novoReg=Object.assign({},r,{deltas:deltas,editadoEm:agora,editadoPor:user.name||''});
+      var hist=historicoPedidosDaAta(ata).map(function(x){return x.id===r.id?novoReg:x;});
+      db.collection('atas').doc(ata.id).update({itens:_semUndefined(novos),historicoPedidos:_semUndefined(hist),ultimoPedido:firebase.firestore.FieldValue.delete()}).then(function(){
+        setEdPed(null);setMsg('ok:Pedido atualizado — saldo da ata ajustado.');setTimeout(function(){setMsg('');},4000);
+        if(imprimir)imprimirPedidoRevisado(Object.assign({},ata,{itens:novos,historicoPedidos:hist}),novoReg);
+      }).catch(function(e){erro('Não foi possível salvar: '+((e&&e.message)||e));});
+    }catch(e){erro('Não foi possível salvar: '+((e&&e.message)||e));}
   }
   // Fecha (desconta do saldo) o pedido de UMA ata — ação explícita e separada de gerar/imprimir o PDF.
   // Usa a MESMA fonte de linhas (linhasPedidoAta) pra garantir que o que é descontado é exatamente o
@@ -10754,6 +10808,7 @@ function TabPrevisao(props){
           <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
             <div style={{flex:1,minWidth:150}}><div style={{fontWeight:800,fontSize:14,color:'#1E293B'}}>{ata.nome}</div><div style={{fontSize:11.5,color:'#64748B'}}>Pedido de {fmtD(r.em)} · {r.deltas.length} item(ns) · chegaram {totCh} de {totPed} un. · <b>{_cfR(totVal)}</b></div></div>
             <span style={{background:bc[0],color:bc[1],fontWeight:800,fontSize:11.5,padding:'4px 10px',borderRadius:99}}>{bc[2]}</span>
+            {st==='aguardando'&&<button type="button" data-fc="cf-editar" onClick={function(){abrirEditarPedido(ata,r);}} style={Object.assign({},btn,{background:'#FEF3C7',color:'#92400E'})}>Editar pedido</button>}
             <button type="button" data-fc="cf-reimprimir" onClick={function(){reimprimirPedido(ata,r);}} style={Object.assign({},btn,{background:'#fff',color:Bz,border:'1.5px solid '+Bz})}>Reimprimir pedido</button>
             <button type="button" data-fc="cf-abrir" onClick={function(){setCfAberto(aberto?null:{ataId:ata.id,regId:r.id,inputs:{}});}} style={Object.assign({},btn,{background:'#EFF6FF',color:Bz})}>{aberto?'Fechar':(st==='feito'?'Ver':'Conferir')}</button>
           </div>
@@ -11803,6 +11858,44 @@ function TabPrevisao(props){
 
       {/* Painel pra escolher o farmacêutico responsável (só Itaquitinga) — abre ao clicar em "PDF",
           antes de gerar a Ordem de Fornecimento. Pré-preenchido com o último usado. */}
+      {edPed&&(function(){
+        var ata=atas.filter(function(a){return a.id===edPed.ataId;})[0];if(!ata)return null;
+        var r=historicoPedidosDaAta(ata).filter(function(x){return x.id===edPed.regId;})[0];if(!r)return null;
+        var q=_semAcento(edPed.busca||'').trim();
+        var cands=[];(ata.itens||[]).forEach(function(it,i){if(edPed.ordem.indexOf(i)>=0)return;if(q&&_semAcento(it.descricao||'').indexOf(q)<0)return;cands.push(i);});
+        var setE=function(f){setEdPed(function(e){return e&&Object.assign({},e,f(e));});};
+        var inp={border:'1.5px solid #CBD5E1',borderRadius:8,padding:'8px 10px',fontSize:14,width:'100%',boxSizing:'border-box'};
+        return(<div data-fc="ed-modal" style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.6)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={function(){setEdPed(null);}}>
+          <div style={{background:'#fff',borderRadius:20,padding:20,maxWidth:520,width:'100%',maxHeight:'88vh',display:'flex',flexDirection:'column',boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}} onClick={function(e){e.stopPropagation();}}>
+            <div style={{fontWeight:800,fontSize:16,color:'#1E293B',marginBottom:2}}>Editar pedido</div>
+            <div style={{fontSize:12,color:'#64748B',marginBottom:10}}>{ata.nome} · pedido de {fmtD(r.em)}. Mude a quantidade, deixe <b>0</b> para tirar o item ou acrescente outro da ata. O saldo da ata se ajusta sozinho.</div>
+            <div style={{overflowY:'auto',flex:1,paddingRight:2}}>
+              {edPed.ordem.map(function(i){
+                var it=(ata.itens||[])[i]||{};var teto=Number(it.qtdTeto)||0;var disp=teto>0?Math.max(0,teto-(Number(it.pedidoAcumulado)||0)+_edQtdAntiga(r,i)):null;
+                var v=edPed.qtds[i]||'';var zero=_parseQtdInput(v)<=0;
+                return(<div key={i} style={{background:zero?'#FEF2F2':'#F8FAFC',border:'1px solid '+(zero?'#FECACA':'#E2E8F0'),borderRadius:10,padding:10,marginBottom:8}}>
+                  <div style={{fontSize:12.5,fontWeight:700,color:'#1E293B'}}>{it.descricao||('Item '+(i+1))}</div>
+                  <div style={{fontSize:11,color:'#94A3B8',margin:'2px 0 6px'}}>{it.unidade||'UN'}{disp!==null?' · pode pedir até '+disp:''}{zero?' · será removido do pedido':''}</div>
+                  <input data-fc={'ed-qtd-'+i} type="text" inputMode="numeric" value={v} placeholder="Quantidade" onChange={function(e){var val=e.target.value;setE(function(x){var n=Object.assign({},x.qtds);n[i]=val;return {qtds:n,erro:''};});}} style={inp}/>
+                </div>);
+              })}
+              <div style={{fontWeight:800,fontSize:12.5,color:'#334155',margin:'12px 0 6px'}}>Acrescentar item da ata</div>
+              <input data-fc="ed-busca" type="text" value={edPed.busca||''} placeholder="Buscar item pelo nome" onChange={function(e){var val=e.target.value;setE(function(){return {busca:val};});}} style={inp}/>
+              <div style={{marginTop:6}}>
+                {cands.slice(0,8).map(function(i){var it=ata.itens[i];return(<button type="button" key={i} data-fc={'ed-add-'+i} onClick={function(){setE(function(x){var n=Object.assign({},x.qtds);n[i]='';return {ordem:x.ordem.concat([i]),qtds:n,busca:''};});}} style={{display:'block',width:'100%',textAlign:'left',background:'#fff',border:'1px solid #E2E8F0',borderRadius:8,padding:'8px 10px',marginBottom:4,fontSize:12.5,cursor:'pointer'}}>+ {it.descricao||('Item '+(i+1))}</button>);})}
+                {cands.length===0&&<div style={{fontSize:12,color:'#94A3B8'}}>Nenhum item encontrado.</div>}
+                {cands.length>8&&<div style={{fontSize:11.5,color:'#94A3B8'}}>Digite no campo acima para achar o item.</div>}
+              </div>
+            </div>
+            {edPed.erro&&<div data-fc="ed-erro" className="er" style={{marginTop:8}}>{edPed.erro}</div>}
+            <div style={{display:'flex',gap:8,marginTop:12,flexWrap:'wrap'}}>
+              <button type="button" onClick={function(){setEdPed(null);}} style={{flex:'1 1 90px',padding:'12px',background:'#F1F5F9',border:'none',borderRadius:12,fontWeight:700,fontSize:14,color:'#64748B',cursor:'pointer'}}>Cancelar</button>
+              <button type="button" data-fc="ed-salvar" onClick={function(){salvarEdicaoPedido(false);}} style={{flex:'1 1 90px',padding:'12px',background:'#EFF6FF',border:'1.5px solid #1351B4',borderRadius:12,fontWeight:700,fontSize:14,color:'#1351B4',cursor:'pointer'}}>Salvar</button>
+              <button type="button" data-fc="ed-salvar-imp" onClick={function(){salvarEdicaoPedido(true);}} style={{flex:'2 1 150px',padding:'12px',background:'#15803D',border:'none',borderRadius:12,fontWeight:700,fontSize:14,color:'#fff',cursor:'pointer'}}>Salvar e imprimir</button>
+            </div>
+          </div>
+        </div>);
+      })()}
       {farmModal&&<div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.6)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={function(){setFarmModal(null);}}>
         <div style={{background:'#fff',borderRadius:20,padding:20,maxWidth:420,width:'100%',boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}} onClick={function(e){e.stopPropagation();}}>
           <div style={{fontWeight:800,fontSize:16,color:'#1E293B',marginBottom:4}}>🧑‍⚕️ Farmacêutico(a) responsável</div>
