@@ -47,6 +47,7 @@ async function abrir(br, T, comOF) {
     await pg.click('[data-fc="cf-editar"]'); await pg.waitForTimeout(300);
     ok((await pg.inputValue('[data-fc="ed-qtd-0"]')) === '300', T + ': ao reabrir mostra as quantidades novas');
     if (comOF) { await pg.fill('input[placeholder="Nome completo"]', 'Dra. Ana Lima').catch(() => {}); }
+    if (process.env.NOVA) await pg.check('[data-fc="ed-nova"]');
     await pg.click('[data-fc="ed-salvar-imp"]'); await pg.waitForTimeout(500);
     if (comOF && !(await pg.evaluate(() => window.__ultHtml))) {
       await pg.fill('input[placeholder="Nome completo"]', 'Dra. Ana Lima'); await pg.fill('input[placeholder="Número do CRF"]', '98765-PE');
@@ -55,6 +56,7 @@ async function abrir(br, T, comOF) {
     const h = await pg.evaluate(() => window.__ultHtml || '');
     ok(h.includes('Losartana 50mg') && !h.includes('Amoxicilina 250mg') && h.includes('>300<') && h.includes('>40<'), T + ': impressão com os itens editados');
     ok(!h.includes('2ª VIA'), T + ': sai sem "2ª VIA"');
+    if (process.env.NOVA && comOF) { ok(h.includes('4ª Ordem de Fornecimento') && (await pg.evaluate(() => window.__store.atas.a1.ordemFornecimentoContador)) === 4, T + ': pedido ainda não impresso sai como Ordem nova (4ª) e sobe o contador'); }
     ok(errs.filter((e) => !e.includes('ERR_FAILED')).length === 0, T + ': sem erros JS ' + errs.join('|'));
     await pg.context().close();
   }

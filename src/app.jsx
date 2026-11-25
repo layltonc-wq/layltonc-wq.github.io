@@ -10197,7 +10197,7 @@ function TabPrevisao(props){
       try{var tid=tenantDe(user);localStorage.setItem('fc_farm_nome_'+tid,nome);localStorage.setItem('fc_farm_crf_'+tid,crf);}catch(e){}
       var alvo=farmModal.alvo;
       setFarmModal(null);
-      if(alvo&&alvo._reimp){reimprimirPedidoReg(alvo._reimp.ata,alvo._reimp.r,{nome:nome,crf:crf},alvo._reimp.revisada?{revisada:true}:undefined);return;}
+      if(alvo&&alvo._reimp){reimprimirPedidoReg(alvo._reimp.ata,alvo._reimp.r,{nome:nome,crf:crf},alvo._reimp.nova?{nova:true}:alvo._reimp.revisada?{revisada:true}:undefined);return;}
       gerarOrdensFornecimento(alvo,undefined,{nome:nome,crf:crf});
     }catch(e){
       setMsg('e:Não foi possível continuar ('+((e&&e.message)||e)+'). Avise o suporte com o nome da ATA.');
@@ -10424,7 +10424,7 @@ function TabPrevisao(props){
   // Reimprime (2ª via) um pedido JÁ FECHADO, a partir do registro do histórico da ata: usa as quantidades daquele dia
   // e o valor unitário atual do item da ata. Não mexe no saldo nem no contador das Ordens de Fornecimento.
   function reimprimirPedidoReg(ata,r,farmInfo,opts){
-    var revisada=!!(opts&&opts.revisada);
+    var revisada=!!(opts&&opts.revisada);var nova=!!(opts&&opts.nova);
     try{
       var itensAta=ata.itens||[];
       var linhas=(r.deltas||[]).map(function(d){
@@ -10437,14 +10437,14 @@ function TabPrevisao(props){
       if(temModulo(user,'ordemFornecimento')){
         var grupos={},semOF=0;
         linhas.forEach(function(l){var of=l.item.ordemFornecimento;if(of){(grupos[of]=grupos[of]||[]).push(l);}else semOF++;});
-        if(revisada&&semOF>0){setMsg('e:'+semOF+' item(ns) sem Ordem de Fornecimento definida. Defina em Atas > Editar e imprima de novo.');return;}
+        if((revisada||nova)&&semOF>0){setMsg('e:'+semOF+' item(ns) sem Ordem de Fornecimento definida. Defina em Atas > Editar e imprima de novo.');return;}
         if(semOF===0){
           var hist=historicoPedidosDaAta(ata),ult=hist[hist.length-1];
           // pedido revisado: mesma OF (sem "2ª via"); leva o número da última OF da ata só se este for o pedido mais recente dela
           var numFixo=(ult&&ult.id===r.id&&ata.ordemFornecimentoContador)?_ordinalFem(ata.ordemFornecimentoContador):'';
-          _imprimirOrdensFornecimento([{ata:ata,grupos:grupos}],farmInfo||{nome:'',crf:''},revisada?{revisada:true,numFixo:numFixo}:{segundaVia:dia});return;}
+          _imprimirOrdensFornecimento([{ata:ata,grupos:grupos}],farmInfo||{nome:'',crf:''},nova?{}:revisada?{revisada:true,numFixo:numFixo}:{segundaVia:dia});return;}
       }
-      gerarPDFAta(ata,null,null,{linhas:linhas,cab:{data:new Date(r.em),numTxt:'____',empresa:ata.nome||'',cnpj:ata.cnpj||'',segundaVia:!revisada}});
+      gerarPDFAta(ata,null,null,{linhas:linhas,cab:{data:new Date(r.em),numTxt:'____',empresa:ata.nome||'',cnpj:ata.cnpj||'',segundaVia:!(revisada||nova)}});
     }catch(e){setMsg('e:Não foi possível reimprimir o pedido ('+((e&&e.message)||e)+').');}
   }
   function reimprimirPedido(ata,r){
@@ -10456,14 +10456,15 @@ function TabPrevisao(props){
     }
     reimprimirPedidoReg(ata,r,null);
   }
-  function imprimirPedidoRevisado(ata,r){
+  function imprimirPedidoRevisado(ata,r,nova){
+    var o=nova?{nova:true}:{revisada:true};
     if(temModulo(user,'ordemFornecimento')){
       var salvo=_farmSalvo();
-      if(salvo.nome&&salvo.crf){reimprimirPedidoReg(ata,r,salvo,{revisada:true});return;}
-      setFarmModal({alvo:{_reimp:{ata:ata,r:r,revisada:true}},nome:salvo.nome||(user.role==='farmaceutico'?(user.name||''):''),crf:salvo.crf||user.crf||''});
+      if(salvo.nome&&salvo.crf){reimprimirPedidoReg(ata,r,salvo,o);return;}
+      setFarmModal({alvo:{_reimp:{ata:ata,r:r,revisada:true,nova:!!nova}},nome:salvo.nome||(user.role==='farmaceutico'?(user.name||''):''),crf:salvo.crf||user.crf||''});
       return;
     }
-    reimprimirPedidoReg(ata,r,null,{revisada:true});
+    reimprimirPedidoReg(ata,r,null,o);
   }
   // ---- Editar um pedido já fechado (ainda sem chegada): muda quantidades, tira ou acrescenta itens da mesma ata.
   // O saldo da ata acompanha a diferença (pedidoAcumulado), o pedido continua o mesmo (mesma data/posição) e pode ser reimpresso sem "2ª via".
@@ -10499,7 +10500,7 @@ function TabPrevisao(props){
       var hist=historicoPedidosDaAta(ata).map(function(x){return x.id===r.id?novoReg:x;});
       db.collection('atas').doc(ata.id).update({itens:_semUndefined(novos),historicoPedidos:_semUndefined(hist),ultimoPedido:firebase.firestore.FieldValue.delete()}).then(function(){
         setEdPed(null);setMsg('ok:Pedido atualizado — saldo da ata ajustado.');setTimeout(function(){setMsg('');},4000);
-        if(imprimir)imprimirPedidoRevisado(Object.assign({},ata,{itens:novos,historicoPedidos:hist}),novoReg);
+        if(imprimir)imprimirPedidoRevisado(Object.assign({},ata,{itens:novos,historicoPedidos:hist}),novoReg,!!edPed.nova);
       }).catch(function(e){erro('Não foi possível salvar: '+((e&&e.message)||e));});
     }catch(e){erro('Não foi possível salvar: '+((e&&e.message)||e));}
   }
@@ -11887,6 +11888,7 @@ function TabPrevisao(props){
                 {cands.length>8&&<div style={{fontSize:11.5,color:'#94A3B8'}}>Digite no campo acima para achar o item.</div>}
               </div>
             </div>
+            <label style={{display:'flex',gap:8,alignItems:'flex-start',marginTop:10,fontSize:12.5,color:'#334155',cursor:'pointer'}}><input data-fc="ed-nova" type="checkbox" checked={!!edPed.nova} onChange={function(e){var c=e.target.checked;setE(function(){return {nova:c};});}} style={{marginTop:2}}/><span>Este pedido <b>ainda não foi impresso</b>: imprimir como Ordem de Fornecimento nova, com número</span></label>
             {edPed.erro&&<div data-fc="ed-erro" className="er" style={{marginTop:8}}>{edPed.erro}</div>}
             <div style={{display:'flex',gap:8,marginTop:12,flexWrap:'wrap'}}>
               <button type="button" onClick={function(){setEdPed(null);}} style={{flex:'1 1 90px',padding:'12px',background:'#F1F5F9',border:'none',borderRadius:12,fontWeight:700,fontSize:14,color:'#64748B',cursor:'pointer'}}>Cancelar</button>
