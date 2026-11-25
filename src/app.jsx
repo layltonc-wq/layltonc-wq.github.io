@@ -10292,6 +10292,8 @@ function TabPrevisao(props){
       var ata=x.ata;
       var numeroOrdem=opts&&opts.segundaVia?'':_ordinalFem((ata.ordemFornecimentoContador||0)+1);
       if(!(opts&&opts.segundaVia))atasParaAtualizarContador.push({id:ata.id,novo:(ata.ordemFornecimentoContador||0)+1});
+      // Ata de fórmulas/leites: o título diz "FÓRMULAS NUTRICIONAIS" em vez de "MEDICAMENTOS".
+      var ehFormula=ata.categoria==='leite'||/f[oó]rmula|nutri[cç]|leite/i.test(_semAcento(ata.nome||''))||/f[oó]rmula|nutri[cç]|leite/i.test(ata.nome||'');
       ORDENS_FORNECIMENTO.forEach(function(of){
         var linhasSecao=x.grupos[of.v];
         if(!linhasSecao||linhasSecao.length===0)return;
@@ -10304,7 +10306,7 @@ function TabPrevisao(props){
         if(ata.cnpj||ata.nome)idInfo.push('EMPRESA: '+_escHtml(ata.nome||''));
         if(ata.ataSRP)idInfo.push('ATA-SRP Nº '+_escHtml(ata.ataSRP));
         if(idInfo.length>0)html+='<div class="processo">'+idInfo.join('<br>')+'</div>';
-        html+='<div class="titulo">'+(numeroOrdem?numeroOrdem+' ':'')+'Ordem de Fornecimento — '+of.titulo+(opts&&opts.segundaVia?' <span style="color:#B45309">(2ª VIA — pedido de '+_escHtml(opts.segundaVia)+')</span>':'')+'</div>';
+        html+='<div class="titulo">'+(numeroOrdem?numeroOrdem+' ':'')+'Ordem de Fornecimento — '+(ehFormula?of.titulo.replace(/^MEDICAMENTOS( CONTROLADOS)?/,'FÓRMULAS NUTRICIONAIS'):of.titulo)+(opts&&opts.segundaVia?' <span style="color:#B45309">(2ª VIA — pedido de '+_escHtml(opts.segundaVia)+')</span>':'')+'</div>';
         html+='<table><thead><tr><th style="width:40px">ITEM</th><th>DESCRIÇÃO</th><th style="width:70px">CATMAT</th><th style="width:60px">QUANT.</th><th style="width:80px">UND. MEDIDA</th><th style="width:80px">VALOR UNITÁRIO</th><th style="width:85px">VALOR TOTAL</th><th style="width:110px">MARCA/FABRICANTE</th></tr></thead><tbody>';
         linhasSecao.forEach(function(l){
           var lvU=Number(l.vUnit)||0,lvT=Number(l.vTotal)||0;
