@@ -10679,6 +10679,12 @@ function TabPrevisao(props){
     });
   }
 
+  function lpSetOrdem(ata,idx,v){
+    var novos=(ata.itens||[]).map(function(it){return Object.assign({},it);});
+    if(!novos[idx])return;
+    novos[idx].ordemFornecimento=v;
+    db.collection('atas').doc(ata.id).update({itens:novos}).catch(function(){setMsg('e:Não consegui salvar a ordem de fornecimento. Tente de novo.');});
+  }
   // atas que têm algo na lista (com quantidade > 0)
   function lpAtasComPedido(){return atas.filter(function(at){return lp.itens.some(function(x){return x.ataId===at.id&&_parseQtdInput(x.qtd)>0;});});}
   function lpFechar(listaAtas){
@@ -10975,6 +10981,7 @@ function TabPrevisao(props){
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontWeight:700,fontSize:13.5,color:'#1E293B'}}>{it.descricao||'(sem descrição)'}{it.marca?<span style={{fontWeight:400,color:'#64748B'}}> · {it.marca}</span>:null}</div>
                 <div style={{fontSize:11.5,color:passa?'#C2362D':'#64748B',marginTop:2}}>Saldo {saldo}{it.unidade?' '+it.unidade:''} · <span data-fc="lp-vunit">V. unit. R$ {_fmtNumBR(Number(it.vUnit)||0)}</span>{est!=null&&est!==undefined?' · estoque '+est:''}{passa?' ⚠ passa do saldo':''}</div>
+                {temModulo(user,'ordemFornecimento')&&<select data-fc="lp-of" className="inp" value={it.ordemFornecimento||''} onChange={function(ev){lpSetOrdem(ata,x.idx,ev.target.value);}} style={{margin:'5px 0 0',fontSize:12,padding:'5px 8px',maxWidth:'100%',color:it.ordemFornecimento?'#1E293B':'#B45309',fontWeight:it.ordemFornecimento?400:700}}><option value="">⚠️ Definir ordem de fornecimento</option>{ORDENS_FORNECIMENTO.map(function(o){return <option key={o.v} value={o.v}>{o.lbl}</option>;})}</select>}
               </div>
               <input data-fc="lp-qtd" inputMode="numeric" placeholder="Qtd" value={lpQtdItem(ata,x.idx)} onChange={function(ev){lpSetQtdItem(ata,x.idx,ev.target.value);}} style={Object.assign({},inp,passa?{borderColor:'#C2362D'}:{})}/>
             </div>);
