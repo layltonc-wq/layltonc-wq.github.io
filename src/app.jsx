@@ -592,6 +592,14 @@ function _maskValidade(v){var d=(v||'').replace(/\D/g,'').slice(0,6);return d.le
 // aviso de vencimento apontando pra um lote já totalmente consumido, com a quantidade TOTAL do
 // medicamento (não a do lote) grudada nele.
 function _dataValidade(val){if(!val)return null;var p=String(val).trim().split('/');var mes,ano;if(p.length===3){mes=parseInt(p[1],10);ano=_anoVal(p[2]);}else if(p.length===2){mes=parseInt(p[0],10);ano=_anoVal(p[1]);}else return null;if(isNaN(mes)||isNaN(ano))return null;return new Date(ano,mes,0);}
+// Vigência da ata (datas ISO AAAA-MM-DD): situação para o aviso de renovação. 90 dias antes = "próxima de vencer".
+function _fmtDataIso(v){var m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(v||''));return m?m[3]+'/'+m[2]+'/'+m[1]:'';}
+function _vigenciaAta(ata){
+  var m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String((ata&&ata.vigenciaAte)||''));if(!m)return null;
+  var fim=new Date(+m[1],+m[2]-1,+m[3]);var h=new Date();h.setHours(0,0,0,0);
+  var dias=Math.round((fim-h)/86400000);
+  return {dias:dias,status:dias<0?'vencida':dias<=90?'proxima':'ok',fim:ata.vigenciaAte};
+}
 function getDiasVal(val,hoje){var d=_dataValidade(val);if(!d)return null;return Math.ceil((d-(hoje||new Date()))/86400000);}
 // FEFO (First-Expired-First-Out): acha o lote com validade mais próxima que ainda tem saldo positivo
 // pra um medicamento, buscando direto no Firestore (em vez de depender do array `entries` inteiro já
@@ -9259,6 +9267,7 @@ function TabPrevisao(props){
   var _editSaldoRestante=useState('');var editSaldoRestante=_editSaldoRestante[0];var setEditSaldoRestante=_editSaldoRestante[1];// rascunho: ajuste manual do saldo restante (opcional — vazio = mantém automático)
   // Rascunhos só usados em Itaquitinga (Ordens de Fornecimento — ver gerarOrdensFornecimento):
   // identificação do processo/pregão/ata-SRP desta ata, pra imprimir no cabeçalho da ordem oficial.
+  var _editVig=useState({lic:'',ate:''});var editVig=_editVig[0];var setEditVig=_editVig[1];// datas da ata (AAAA-MM-DD)
   var _editProcesso=useState('');var editProcesso=_editProcesso[0];var setEditProcesso=_editProcesso[1];
   var _editPregao=useState('');var editPregao=_editPregao[0];var setEditPregao=_editPregao[1];
   var _editAtaSRP=useState('');var editAtaSRP=_editAtaSRP[0];var setEditAtaSRP=_editAtaSRP[1];
@@ -9949,6 +9958,7 @@ function TabPrevisao(props){
     setEditCat(ata.categoria||'controlado');
     setEditNome(ata.nome||'');
     setEditCnpj(ata.cnpj||'');
+    setEditVig({lic:ata.dataLicitacao||'',ate:ata.vigenciaAte||''});
     setEditValorTotal(ata.valorTotal!=null?_fmtNumBR(ata.valorTotal):'');
     setEditSaldoRestante(''); // vazio = mantém o saldo calculado automaticamente dos itens
     setEditProcesso(ata.processoLicitatorio||'');
@@ -9957,7 +9967,7 @@ function TabPrevisao(props){
     setEditBusca('');
   }
   // Fecha o editor DESCARTANDO o rascunho (não grava nada).
-  function fecharEditAta(){setEditAta(null);setEditDraft(null);setEditItens(null);setEditCat('');setEditNome('');setEditCnpj('');setEditValorTotal('');setEditSaldoRestante('');setEditProcesso('');setEditPregao('');setEditAtaSRP('');setEditBusca('');}
+  function fecharEditAta(){setEditVig({lic:'',ate:''});setEditAta(null);setEditDraft(null);setEditItens(null);setEditCat('');setEditNome('');setEditCnpj('');setEditValorTotal('');setEditSaldoRestante('');setEditProcesso('');setEditPregao('');setEditAtaSRP('');setEditBusca('');}
   // Adiciona um item NOVO em branco ao rascunho de itens da ata (rascunho local, só grava ao Salvar).
   function adicionarItemEditDraft(){
     setEditItens(function(prev){
@@ -10044,6 +10054,9 @@ function TabPrevisao(props){
     // mesmo nome (ex.: "MEDIAL" 2024 e "MEDIAL" 2025), sem precisar excluir e recriar a ata.
     if(editNome.trim()!==ata.nome)ataUpdate.nome=editNome.trim();
     if((editCnpj||'').trim()!==(ata.cnpj||''))ataUpdate.cnpj=(editCnpj||'').trim();
+    if((editVig.lic||'')!==(ata.dataLicitacao||''))ataUpdate.dataLicitacao=editVig.lic||'';
+    if((editVig.ate||'')!==(ata.vigenciaAte||''))ataUpdate.vigenciaAte=editVig.ate||'';
+    if(editVig.lic&&editVig.ate&&editVig.ate<editVig.lic){setMsg('e:A validade da ata não pode ser antes do dia da licitação.');setTimeout(function(){setMsg('');},3200);return;}
     // Identificação do processo/pregão/ata-SRP — só usado em Itaquitinga, pro cabeçalho das Ordens
     // de Fornecimento (ver gerarOrdensFornecimento).
     if((editProcesso||'').trim()!==(ata.processoLicitatorio||''))ataUpdate.processoLicitatorio=(editProcesso||'').trim();
@@ -11404,6 +11417,14 @@ function TabPrevisao(props){
 
         </div>}
         {/* Lista de atas existentes */}
+        {(function(){
+          var av=atas.map(function(a){return {a:a,v:_vigenciaAta(a)};}).filter(function(x){return x.v&&x.v.status!=='ok';}).sort(function(x,y){return x.v.dias-y.v.dias;});
+          if(!av.length)return null;
+          return(<div data-fc="atas-vig-banner" style={{background:'#FFFBEB',border:'1.5px solid #FCD34D',borderRadius:12,padding:'10px 12px',marginBottom:12}}>
+            <div style={{fontWeight:800,fontSize:13,color:'#92400E',marginBottom:4}}>⏳ Atas para renovar ({av.length})</div>
+            {av.map(function(x){return <div key={x.a.id} style={{fontSize:12.5,color:x.v.status==='vencida'?'#991B1B':'#78350F'}}>• <b>{x.a.nome}</b> — {x.v.status==='vencida'?'venceu em '+_fmtDataIso(x.v.fim)+' (há '+(-x.v.dias)+' dia(s))':'vence em '+_fmtDataIso(x.v.fim)+' (faltam '+x.v.dias+' dia(s))'}</div>;})}
+          </div>);
+        })()}
         <div style={{fontWeight:700,fontSize:14,color:'#1E293B',marginBottom:10}}>Atas Cadastradas ({atas.length})</div>
         <input value={buscaGestAta} onChange={function(e){setBuscaGestAta(e.target.value);}} placeholder="🔍 Buscar por ata ou por medicamento..." className="inp" style={{marginBottom:12}}/>
         {atas.length===0&&<div style={{textAlign:'center',padding:'24px 0',color:'#94A3B8',fontSize:13}}>Nenhuma ata criada ainda</div>}
@@ -11434,6 +11455,8 @@ function TabPrevisao(props){
               <div style={{flex:1}}>
                 <div style={{fontWeight:700,fontSize:14,color:'#1E293B'}}>{ata.nome}</div>
                 <div style={{fontSize:11,color:'#94A3B8'}}>{LBL[ata.categoria]||ata.categoria} · {meds.length} vinculado(s){ata.itens&&ata.itens.length?' · '+ata.itens.length+' itens da ata':''}</div>
+                {(ata.dataLicitacao||ata.vigenciaAte)&&<div data-fc="ata-datas" style={{fontSize:11,color:'#64748B',marginTop:2}}>{ata.dataLicitacao?'Licitação '+_fmtDataIso(ata.dataLicitacao):''}{ata.dataLicitacao&&ata.vigenciaAte?' · ':''}{ata.vigenciaAte?'Vigente até '+_fmtDataIso(ata.vigenciaAte):''}</div>}
+                {(function(){var v=_vigenciaAta(ata);if(!v||v.status==='ok')return null;var venc=v.status==='vencida';return <span data-fc="ata-vig-aviso" style={{display:'inline-block',marginTop:4,fontSize:10.5,fontWeight:800,padding:'2px 8px',borderRadius:99,background:venc?'#FEE2E2':'#FEF3C7',color:venc?'#991B1B':'#92400E'}}>{venc?'⛔ Vencida há '+(-v.dias)+' dia(s) — renovar':'⚠️ Vence em '+v.dias+' dia(s) — pensar na renovação'}</span>;})()}
               </div>
               {ata.itens&&ata.itens.length>0&&<button onClick={function(){setAtaDetalhe(ataDetalhe===ata.id?null:ata.id);}} style={{background:'#EFF6FF',border:'none',borderRadius:8,padding:'6px 12px',fontSize:12,color:'#1351B4',fontWeight:600,cursor:'pointer',marginRight:6}}>{ataDetalhe===ata.id?'▲ Fechar':'📋 Itens'}</button>}<button onClick={function(){excluirAta(ata);}} style={{background:'#FEE2E2',border:'none',borderRadius:8,padding:'6px 10px',fontSize:12,color:'#DC2626',fontWeight:600,cursor:'pointer'}}>🗑️</button>
             </div>
@@ -11451,7 +11474,11 @@ function TabPrevisao(props){
               <div style={{fontSize:11,fontWeight:600,color:'#64748B',marginBottom:4}}>Nome da ata:</div>
               <input type="text" value={editNome} onChange={function(e){setEditNome(e.target.value);}} placeholder="Ex: MEDIAL 2025" className="inp" style={{marginBottom:8}}/>
               <div style={{fontSize:11,fontWeight:600,color:'#64748B',marginBottom:4}}>CNPJ da empresa (opcional — ajuda a diferenciar atas com o mesmo nome):</div>
-              <input type="text" value={editCnpj} onChange={function(e){setEditCnpj(e.target.value);}} placeholder="00.000.000/0000-00" className="inp" style={{marginBottom:temModulo(user,'ordemFornecimento')?8:0,maxWidth:220}}/>
+              <input type="text" value={editCnpj} onChange={function(e){setEditCnpj(e.target.value);}} placeholder="00.000.000/0000-00" className="inp" style={{marginBottom:8,maxWidth:220}}/>
+              <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:temModulo(user,'ordemFornecimento')?8:0}}>
+                <div style={{flex:1,minWidth:150}}><div style={{fontSize:11,fontWeight:600,color:'#64748B',marginBottom:4}}>Dia da licitação:</div><input data-fc="ata-licitacao" type="date" value={editVig.lic} onChange={function(e){var v=e.target.value;setEditVig(function(x){return Object.assign({},x,{lic:v});});}} className="inp" style={{marginBottom:0}}/></div>
+                <div style={{flex:1,minWidth:150}}><div style={{fontSize:11,fontWeight:600,color:'#64748B',marginBottom:4}}>Vigente até (validade da ata):</div><input data-fc="ata-vigencia" type="date" value={editVig.ate} onChange={function(e){var v=e.target.value;setEditVig(function(x){return Object.assign({},x,{ate:v});});}} className="inp" style={{marginBottom:0}}/></div>
+              </div>
               {temModulo(user,'ordemFornecimento')&&<React.Fragment>
                 <div style={{fontSize:11,fontWeight:600,color:'#64748B',marginBottom:4}}>Processo licitatório / Pregão eletrônico / ATA-SRP (opcional — aparece no cabeçalho das Ordens de Fornecimento):</div>
                 <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
