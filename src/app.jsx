@@ -10307,8 +10307,8 @@ function TabPrevisao(props){
       if(!(opts&&(opts.segundaVia||opts.revisada)))atasParaAtualizarContador.push({id:ata.id,novo:(ata.ordemFornecimentoContador||0)+1});
       // Ata de fórmulas/leites: o título diz "FÓRMULAS NUTRICIONAIS" em vez de "MEDICAMENTOS".
       var ehFormula=ata.categoria==='leite'||/f[oó]rmula|nutri[cç]|leite/i.test(_semAcento(ata.nome||''))||/f[oó]rmula|nutri[cç]|leite/i.test(ata.nome||'');
-      var tipoAta=ata.tipoOrdem?String(ata.tipoOrdem).toUpperCase():(ehFormula?'FÓRMULAS NUTRICIONAIS':'');
       ORDENS_FORNECIMENTO.forEach(function(of){
+        var tipoAta=(ata.tipoOrdemPorOf&&ata.tipoOrdemPorOf[of.v])||ata.tipoOrdem||'';tipoAta=tipoAta?String(tipoAta).toUpperCase():(ehFormula?'FÓRMULAS NUTRICIONAIS':'');
         var linhasSecao=x.grupos[of.v];
         if(!linhasSecao||linhasSecao.length===0)return;
         var totalVal=linhasSecao.reduce(function(s,l){return s+l.vTotal;},0);
@@ -10684,6 +10684,16 @@ function TabPrevisao(props){
   function lpSetTipoOrdem(ata,v){
     db.collection('atas').doc(ata.id).update({tipoOrdem:v}).catch(function(){setMsg('e:Não consegui salvar o tipo. Tente de novo.');});
   }
+  function lpSetTipoOf(ata,of,v){
+    var m=Object.assign({},ata.tipoOrdemPorOf||{});
+    if(v)m[of]=v;else delete m[of];
+    db.collection('atas').doc(ata.id).update({tipoOrdemPorOf:m}).catch(function(){setMsg('e:Não consegui salvar o título. Tente de novo.');});
+  }
+  function tituloOF(ata,ofv){
+    var o=ORDENS_FORNECIMENTO.filter(function(x){return x.v===ofv;})[0];if(!o)return '';
+    var t=(ata.tipoOrdemPorOf&&ata.tipoOrdemPorOf[ofv])||ata.tipoOrdem||'';
+    return t?o.titulo.replace(/^MEDICAMENTOS/,String(t).toUpperCase()):o.titulo;
+  }
   function lpSetOrdem(ata,idx,v){
     var novos=(ata.itens||[]).map(function(it){return Object.assign({},it);});
     if(!novos[idx])return;
@@ -10963,6 +10973,23 @@ function TabPrevisao(props){
         return true;
       });
       var temPedido=escolhidos.length>0;
+      function itemRow(x){
+            var it=x.it;var saldo=(Number(it.qtdTeto)||0)-(Number(it.pedidoAcumulado)||0);var passa=x.q>saldo;
+            var med=it.medicamentoId?medications.filter(function(m){return m.id===it.medicamentoId;})[0]:null;
+            var est=med&&stock?stock[med.id]:null;
+            return(<div key={x.idx} data-fc="lp-item" style={{display:'flex',alignItems:'center',gap:8,padding:'9px 0',borderTop:'1px solid #F1F5F9'}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontWeight:700,fontSize:13.5,color:'#1E293B'}}>{it.descricao||'(sem descrição)'}{it.marca?<span style={{fontWeight:400,color:'#64748B'}}> · {it.marca}</span>:null}</div>
+                <div style={{fontSize:11.5,color:passa?'#C2362D':'#64748B',marginTop:2}}>Saldo {saldo}{it.unidade?' '+it.unidade:''} · <span data-fc="lp-vunit">V. unit. R$ {_fmtNumBR(Number(it.vUnit)||0)}</span>{est!=null&&est!==undefined?' · estoque '+est:''}{passa?' ⚠ passa do saldo':''}</div>
+                {temModulo(user,'ordemFornecimento')&&<select data-fc="lp-of" className="inp" value={it.ordemFornecimento||''} onChange={function(ev){lpSetOrdem(ata,x.idx,ev.target.value);}} style={{margin:'5px 0 0',fontSize:12,padding:'5px 8px',maxWidth:'100%',color:it.ordemFornecimento?'#1E293B':'#B45309',fontWeight:it.ordemFornecimento?400:700}}><option value="">⚠️ Definir ordem de fornecimento</option>{ORDENS_FORNECIMENTO.map(function(o){return <option key={o.v} value={o.v}>{o.lbl}</option>;})}</select>}
+              </div>
+              <input data-fc="lp-qtd" inputMode="numeric" placeholder="Qtd" value={lpQtdItem(ata,x.idx)} onChange={function(ev){lpSetQtdItem(ata,x.idx,ev.target.value);}} style={Object.assign({},inp,passa?{borderColor:'#C2362D'}:{})}/>
+            </div>);
+      }
+      var gruposOF=[];
+      (function(){var mp={};lista.forEach(function(x){var v=x.it.ordemFornecimento||'';(mp[v]=mp[v]||[]).push(x);});
+        if(mp[''])gruposOF.push({v:'',itens:mp['']});
+        ORDENS_FORNECIMENTO.forEach(function(o){if(mp[o.v])gruposOF.push({v:o.v,itens:mp[o.v]});});})();
       return(<div key={ata.id} data-fc="lp-ata" style={{background:'#fff',border:'1.5px solid '+(temPedido?Bz:'#E2E8F0'),borderRadius:14,padding:'12px 14px',marginBottom:12}}>
         <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
           <div data-fc="lp-ata-cab" onClick={revisar?undefined:function(){setUi(ata,{aberto:!u.aberto});}} style={{flex:1,minWidth:150,cursor:revisar?'default':'pointer'}}>
@@ -10982,19 +11009,18 @@ function TabPrevisao(props){
             <input className="inp" data-fc="lp-busca-ata" placeholder="Pesquisar item nesta ata…" value={u.busca||''} onChange={function(ev){setUi(ata,{busca:ev.target.value});}} style={{marginBottom:0}}/>
           </div>
           {lista.length===0&&<div style={{fontSize:12.5,color:'#94A3B8',padding:'8px 0'}}>{revisar&&!mostrarTodos?'Nenhum item escolhido.':'Nenhum item encontrado.'}</div>}
-          {lista.slice(0,80).map(function(x){
-            var it=x.it;var saldo=(Number(it.qtdTeto)||0)-(Number(it.pedidoAcumulado)||0);var passa=x.q>saldo;
-            var med=it.medicamentoId?medications.filter(function(m){return m.id===it.medicamentoId;})[0]:null;
-            var est=med&&stock?stock[med.id]:null;
-            return(<div key={x.idx} data-fc="lp-item" style={{display:'flex',alignItems:'center',gap:8,padding:'9px 0',borderTop:'1px solid #F1F5F9'}}>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontWeight:700,fontSize:13.5,color:'#1E293B'}}>{it.descricao||'(sem descrição)'}{it.marca?<span style={{fontWeight:400,color:'#64748B'}}> · {it.marca}</span>:null}</div>
-                <div style={{fontSize:11.5,color:passa?'#C2362D':'#64748B',marginTop:2}}>Saldo {saldo}{it.unidade?' '+it.unidade:''} · <span data-fc="lp-vunit">V. unit. R$ {_fmtNumBR(Number(it.vUnit)||0)}</span>{est!=null&&est!==undefined?' · estoque '+est:''}{passa?' ⚠ passa do saldo':''}</div>
-                {temModulo(user,'ordemFornecimento')&&<select data-fc="lp-of" className="inp" value={it.ordemFornecimento||''} onChange={function(ev){lpSetOrdem(ata,x.idx,ev.target.value);}} style={{margin:'5px 0 0',fontSize:12,padding:'5px 8px',maxWidth:'100%',color:it.ordemFornecimento?'#1E293B':'#B45309',fontWeight:it.ordemFornecimento?400:700}}><option value="">⚠️ Definir ordem de fornecimento</option>{ORDENS_FORNECIMENTO.map(function(o){return <option key={o.v} value={o.v}>{o.lbl}</option>;})}</select>}
+          {(revisar&&temModulo(user,'ordemFornecimento'))?gruposOF.map(function(g){
+            return(<div key={g.v||'sem'} data-fc="lp-grupo-of" style={{marginTop:10}}>
+              <div style={{background:g.v?'#F1F5F9':'#FFFBEB',border:'1px solid '+(g.v?'#E2E8F0':'#FCD34D'),borderRadius:10,padding:'8px 10px'}}>
+                <div style={{fontWeight:800,fontSize:12.5,color:g.v?'#1E293B':'#B45309'}}>{g.v?'Ordem de Fornecimento — '+tituloOF(ata,g.v):'⚠️ Sem ordem de fornecimento definida'}</div>
+                {g.v&&<div style={{display:'flex',gap:6,alignItems:'center',marginTop:6,fontSize:12,color:'#475569'}}>
+                  <span style={{fontWeight:700}}>Título:</span>
+                  <select data-fc="lp-tipo-of" className="inp" value={(ata.tipoOrdemPorOf&&ata.tipoOrdemPorOf[g.v])||''} onChange={function(ev){lpSetTipoOf(ata,g.v,ev.target.value);}} style={{margin:0,flex:1,fontSize:12,padding:'5px 8px'}}><option value="">{ata.tipoOrdem?ata.tipoOrdem+' (padrão da ata)':'MEDICAMENTOS (padrão)'}</option>{TIPOS_ORDEM.map(function(t){return <option key={t} value={t}>{t}</option>;})}</select>
+                </div>}
               </div>
-              <input data-fc="lp-qtd" inputMode="numeric" placeholder="Qtd" value={lpQtdItem(ata,x.idx)} onChange={function(ev){lpSetQtdItem(ata,x.idx,ev.target.value);}} style={Object.assign({},inp,passa?{borderColor:'#C2362D'}:{})}/>
+              {g.itens.map(itemRow)}
             </div>);
-          })}
+          }):lista.slice(0,80).map(itemRow)}
           {lista.length>80&&<div style={{fontSize:11.5,color:'#64748B',padding:'6px 0'}}>Mostrando 80 de {lista.length}. Use a pesquisa para achar o item.</div>}
           {revisar&&<button type="button" data-fc="lp-todos" onClick={function(){setUi(ata,{todos:!u.todos});}} style={{marginTop:8,border:'none',background:'none',color:Bz,fontWeight:700,fontSize:12.5,cursor:'pointer',padding:0}}>{u.todos?'▲ Mostrar só os escolhidos':'▼ Ver todos os itens da ata ('+itensAta.length+')'}</button>}
         </div>}
