@@ -38,8 +38,7 @@ function _padraoTenant(id){
     org:{l1:'Prefeitura Municipal de Itaquitinga',l2:'Secretaria Municipal de Saúde — Coordenação de Assistência Farmacêutica',rodape:'Secretaria Municipal de Saúde de Itaquitinga - PE'},
     logoPrint:PJ_LOGO_B64,logoPedidoPath:'/assets/itaquitinga-bandeira.png',
     pedido:{orgLinha1:'PREFEITURA DE ITAQUITINGA',orgLinha2:'Secretaria Municipal de Saúde — Coordenação de Assistência Farmacêutica',mostrarBoxEmpresa:false,autoDescontarAta:true,mostrarColunaMarca:true},
-    ordemDados:'FUNDO MUNICIPAL DE SAÚDE DE ITAQUITINGA<br>CNPJ/MF: 12.848.758/0001-63<br>'+
-      '<b>DADOS PARA ENTREGA:</b><br>Entregar na Farmácia Municipal ao lado UNIDADE MISTA ADELINA AZEVEDO<br>'+
+    ordemDados:'<b>DADOS PARA ENTREGA:</b><br>Entregar na Farmácia Municipal ao lado UNIDADE MISTA ADELINA AZEVEDO<br>'+
       'Rua da União, nº 347, Centro - Itaquitinga -PE, CEP: 55.950-000<br>Horário para entrega: de segunda a sexta-feira das 08h00 às 14h00.<br>'+
       '<b>DADOS PARA CONTATO:</b><br>E-mail: cafitaquitinga@hotmail.com<br>Fones: (81) 9.9168-8103',
     modulos:{atb:true,judicial:true,controlados:false,comparaPedido:false,ordemFornecimento:true,destinos:false,ubsSolicitacoes:true,plantao:false,locais:true,pedidoLista:true}
@@ -10308,6 +10307,7 @@ function TabPrevisao(props){
       if(!(opts&&(opts.segundaVia||opts.revisada)))atasParaAtualizarContador.push({id:ata.id,novo:(ata.ordemFornecimentoContador||0)+1});
       // Ata de fórmulas/leites: o título diz "FÓRMULAS NUTRICIONAIS" em vez de "MEDICAMENTOS".
       var ehFormula=ata.categoria==='leite'||/f[oó]rmula|nutri[cç]|leite/i.test(_semAcento(ata.nome||''))||/f[oó]rmula|nutri[cç]|leite/i.test(ata.nome||'');
+      var tipoAta=ata.tipoOrdem?String(ata.tipoOrdem).toUpperCase():(ehFormula?'FÓRMULAS NUTRICIONAIS':'');
       ORDENS_FORNECIMENTO.forEach(function(of){
         var linhasSecao=x.grupos[of.v];
         if(!linhasSecao||linhasSecao.length===0)return;
@@ -10320,7 +10320,7 @@ function TabPrevisao(props){
         if(ata.cnpj||ata.nome)idInfo.push('EMPRESA: '+_escHtml(ata.nome||''));
         if(ata.ataSRP)idInfo.push('ATA-SRP Nº '+_escHtml(ata.ataSRP));
         if(idInfo.length>0)html+='<div class="processo">'+idInfo.join('<br>')+'</div>';
-        html+='<div class="titulo">'+(numeroOrdem?numeroOrdem+' ':'')+'Ordem de Fornecimento — '+(ehFormula?of.titulo.replace(/^MEDICAMENTOS( CONTROLADOS)?/,'FÓRMULAS NUTRICIONAIS'):of.titulo)+(opts&&opts.segundaVia?' <span style="color:#B45309">(2ª VIA — pedido de '+_escHtml(opts.segundaVia)+')</span>':'')+'</div>';
+        html+='<div class="titulo">'+(numeroOrdem?numeroOrdem+' ':'')+'Ordem de Fornecimento — '+(tipoAta?of.titulo.replace(/^MEDICAMENTOS/,tipoAta):of.titulo)+(opts&&opts.segundaVia?' <span style="color:#B45309">(2ª VIA — pedido de '+_escHtml(opts.segundaVia)+')</span>':'')+'</div>';
         html+='<table><thead><tr><th style="width:40px">ITEM</th><th>DESCRIÇÃO</th><th style="width:70px">CATMAT</th><th style="width:60px">QUANT.</th><th style="width:80px">UND. MEDIDA</th><th style="width:80px">VALOR UNITÁRIO</th><th style="width:85px">VALOR TOTAL</th><th style="width:110px">MARCA/FABRICANTE</th></tr></thead><tbody>';
         linhasSecao.forEach(function(l){
           var lvU=Number(l.vUnit)||0,lvT=Number(l.vTotal)||0;
@@ -10330,7 +10330,8 @@ function TabPrevisao(props){
             '<td>'+_escHtml(l.marca||'')+'</td></tr>';
         });
         html+='</tbody><tfoot><tr class="total-row"><td colspan="6">TOTAL</td><td colspan="2">R$ '+_fmtNumBR(totalVal)+'</td></tr></tfoot></table>';
-        html+='<div class="dados"><b>DADOS PARA EMISSÃO DA NOTA FISCAL:</b><br>'+tcfg(user).ordemDados+'</div>';
+        var dadosOrdem=String(tcfg(user).ordemDados||'').split(/<br\s*\/?>/i).filter(function(ln){return ln.trim()&&!/CNPJ|^\s*FUNDO MUNICIPAL|EMISS[ÃA]O DA NOTA/i.test(ln);}).join('<br>');
+        if(dadosOrdem)html+='<div class="dados">'+dadosOrdem+'</div>';
         html+='<div style="margin-top:30px;font-size:12px">Atenciosamente,</div>';
         html+='<div class="assin"><div class="linha">'+_escHtml(farmInfo&&farmInfo.nome||'')+'<br>Farmacêutico(a) CRF: '+_escHtml(farmInfo&&farmInfo.crf||'')+'</div></div>';
         html+='</div>';
@@ -10679,6 +10680,10 @@ function TabPrevisao(props){
     });
   }
 
+  var TIPOS_ORDEM=['MEDICAMENTOS','INJETÁVEIS','MATERIAL MÉDICO-HOSPITALAR','MATERIAL DE LABORATÓRIO','FÓRMULAS NUTRICIONAIS'];
+  function lpSetTipoOrdem(ata,v){
+    db.collection('atas').doc(ata.id).update({tipoOrdem:v}).catch(function(){setMsg('e:Não consegui salvar o tipo. Tente de novo.');});
+  }
   function lpSetOrdem(ata,idx,v){
     var novos=(ata.itens||[]).map(function(it){return Object.assign({},it);});
     if(!novos[idx])return;
@@ -10968,6 +10973,10 @@ function TabPrevisao(props){
           <button type="button" data-fc="lp-fechar" disabled={!temPedido} onClick={function(){lpFechar([ata]);}} style={Object.assign({},btn,{background:Bz,color:'#fff',opacity:temPedido?1:.45})}>Fechar pedido</button>
         </div>
         {aberto&&<div style={{marginTop:8}}>
+          {temModulo(user,'ordemFornecimento')&&<div style={{display:'flex',gap:6,alignItems:'center',marginBottom:8,fontSize:12,color:'#475569'}}>
+            <span style={{fontWeight:700}}>Título da ordem:</span>
+            <select data-fc="lp-tipo" className="inp" value={ata.tipoOrdem||''} onChange={function(ev){lpSetTipoOrdem(ata,ev.target.value);}} style={{margin:0,flex:1,fontSize:12,padding:'5px 8px'}}><option value="">Automático (MEDICAMENTOS)</option>{TIPOS_ORDEM.map(function(t){return <option key={t} value={t}>{t}</option>;})}</select>
+          </div>}
           <div style={{display:'flex',gap:6,alignItems:'center',marginBottom:6}}>
             <span style={{display:'flex',color:'#64748B'}}><Icon name="search" size={17}/></span>
             <input className="inp" data-fc="lp-busca-ata" placeholder="Pesquisar item nesta ata…" value={u.busca||''} onChange={function(ev){setUi(ata,{busca:ev.target.value});}} style={{marginBottom:0}}/>
